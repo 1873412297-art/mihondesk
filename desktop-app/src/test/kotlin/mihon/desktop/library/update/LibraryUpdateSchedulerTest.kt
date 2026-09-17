@@ -40,6 +40,7 @@ class LibraryUpdateSchedulerTest {
                 preferenceStore = prefStore,
                 scope = scope,
                 clock = { simulatedTime },
+                startAutomatically = false,
             )
 
             // 1. Interval = 0 (Disabled/Manual)

@@ -194,15 +194,17 @@ class DesktopAppLockController(
         val hashBase64 = PinHasher.hashBase64(pin, saltBase64, PinHasher.DEFAULT_ITERATIONS)
             ?: return false
 
-        preferences = preferences.copy(
-            appLockEnabled = true,
-            appLockPinHash = hashBase64,
-            appLockPinSalt = saltBase64,
-            appLockPinIterations = PinHasher.DEFAULT_ITERATIONS,
-            appLockOnStartup = lockOnStartup,
-            appLockIdleTimeoutMinutes = normalizeTimeout(idleTimeoutMinutes),
-        )
-        preferenceStore.save(preferences)
+        preferences = preferenceStore.updatePreferences {
+            it.copy(
+                appLockEnabled = true,
+                appLockPinHash = hashBase64,
+                appLockPinSalt = saltBase64,
+                appLockPinIterations = PinHasher.DEFAULT_ITERATIONS,
+                appLockOnStartup = lockOnStartup,
+                appLockIdleTimeoutMinutes = normalizeTimeout(idleTimeoutMinutes),
+            )
+        }
+
         _isLocked.value = false
         lastActivityAt = clock()
         return true
@@ -216,8 +218,8 @@ class DesktopAppLockController(
     fun enableWithStoredPin(): Boolean {
         reloadPreferences()
         if (!isPinConfigured()) return false
-        preferences = preferences.copy(appLockEnabled = true)
-        preferenceStore.save(preferences)
+        preferences = preferenceStore.updatePreferences { it.copy(appLockEnabled = true) }
+
         _isLocked.value = false
         lastActivityAt = clock()
         return true
@@ -230,13 +232,15 @@ class DesktopAppLockController(
     @Synchronized
     fun disableLock() {
         reloadPreferences()
-        preferences = preferences.copy(
-            appLockEnabled = false,
-            appLockPinHash = "",
-            appLockPinSalt = "",
-            appLockPinIterations = 0,
-        )
-        preferenceStore.save(preferences)
+        preferences = preferenceStore.updatePreferences {
+            it.copy(
+                appLockEnabled = false,
+                appLockPinHash = "",
+                appLockPinSalt = "",
+                appLockPinIterations = 0,
+            )
+        }
+
         _isLocked.value = false
         lastActivityAt = clock()
     }
@@ -253,12 +257,14 @@ class DesktopAppLockController(
         val hashBase64 = PinHasher.hashBase64(newPin, saltBase64, PinHasher.DEFAULT_ITERATIONS)
             ?: return ChangePinResult.InvalidNewPin
 
-        preferences = preferences.copy(
-            appLockPinHash = hashBase64,
-            appLockPinSalt = saltBase64,
-            appLockPinIterations = PinHasher.DEFAULT_ITERATIONS,
-        )
-        preferenceStore.save(preferences)
+        preferences = preferenceStore.updatePreferences {
+            it.copy(
+                appLockPinHash = hashBase64,
+                appLockPinSalt = saltBase64,
+                appLockPinIterations = PinHasher.DEFAULT_ITERATIONS,
+            )
+        }
+
         lastActivityAt = clock()
         return ChangePinResult.Success
     }
@@ -267,8 +273,7 @@ class DesktopAppLockController(
     fun setLockOnStartup(enabled: Boolean) {
         reloadPreferences()
         if (preferences.appLockOnStartup == enabled) return
-        preferences = preferences.copy(appLockOnStartup = enabled)
-        preferenceStore.save(preferences)
+        preferences = preferenceStore.updatePreferences { it.copy(appLockOnStartup = enabled) }
     }
 
     @Synchronized
@@ -276,8 +281,8 @@ class DesktopAppLockController(
         reloadPreferences()
         val normalized = normalizeTimeout(minutes)
         if (preferences.appLockIdleTimeoutMinutes == normalized) return
-        preferences = preferences.copy(appLockIdleTimeoutMinutes = normalized)
-        preferenceStore.save(preferences)
+        preferences = preferenceStore.updatePreferences { it.copy(appLockIdleTimeoutMinutes = normalized) }
+
         lastActivityAt = clock()
     }
 

@@ -154,7 +154,7 @@ class DownloadAndReadOfflinePipelineTest {
         downloadedItem.status shouldBe DownloadStatus.COMPLETED
         downloadedItem.progress shouldBe 1.0f
 
-        val finalDir = diskProvider.getChapterDir(manga.sourceId, manga.title, chapter.name)
+        val finalDir = diskProvider.getChapterDir(manga.sourceId, manga.title, chapter.name, manga.id, chapter.id)
         Files.exists(finalDir) shouldBe true
         Files.exists(finalDir.resolve("001.jpg")) shouldBe true
         Files.exists(finalDir.resolve("002.jpg")) shouldBe true

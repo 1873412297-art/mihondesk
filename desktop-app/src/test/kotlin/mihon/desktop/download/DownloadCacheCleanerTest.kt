@@ -58,8 +58,8 @@ class DownloadCacheCleanerTest {
 
         val sourceId = 100L
         val mangaTitle = "Test Manga"
-        val ch1Dir = diskProvider.getChapterDir(sourceId, mangaTitle, "Chapter 1")
-        val ch2Dir = diskProvider.getChapterDir(sourceId, mangaTitle, "Chapter 2")
+        val ch1Dir = diskProvider.getChapterDir(sourceId, mangaTitle, "Chapter 1", 1, 101)
+        val ch2Dir = diskProvider.getChapterDir(sourceId, mangaTitle, "Chapter 2", 1, 102)
         Files.createDirectories(ch1Dir)
         Files.createDirectories(ch2Dir)
         Files.writeString(ch1Dir.resolve("page1.jpg"), "read_page_bytes_123")
@@ -154,7 +154,7 @@ class DownloadCacheCleanerTest {
             version = 1L,
             memoJson = "{}",
         )
-        val chapterDir = diskProvider.getChapterDir(manga.sourceId, manga.title, chapter.name)
+        val chapterDir = diskProvider.getChapterDir(manga.sourceId, manga.title, chapter.name, manga.id, chapter.id)
         Files.createDirectories(chapterDir)
         Files.writeString(chapterDir.resolve("001.jpg"), "bytes")
         val repository = fakeRepository(manga, listOf(chapter))
@@ -163,7 +163,13 @@ class DownloadCacheCleanerTest {
             deletedManga.id shouldBe manga.id
             deletedChapter.id shouldBe chapter.id
             coordinatedDeletes++
-            diskProvider.deleteChapter(deletedManga.sourceId, deletedManga.title, deletedChapter.name)
+            diskProvider.deleteChapter(
+                deletedManga.sourceId,
+                deletedManga.title,
+                deletedChapter.name,
+                deletedManga.id,
+                deletedChapter.id,
+            )
         }
 
         cleaner.deleteReadChapters().deletedChaptersCount shouldBe 1

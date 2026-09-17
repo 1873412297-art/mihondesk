@@ -205,7 +205,7 @@ class DesktopDownloaderTest {
             withTimeout(5_000) { while (downloader.isRunning.value) delay(10) }
             requests.get() shouldBe 1
             downloader.queueState.value.single().status shouldBe DownloadStatus.COMPLETED
-            disk.isChapterDownloaded(manga.sourceId, manga.title, chapter.name) shouldBe true
+            disk.isChapterDownloaded(manga.sourceId, manga.title, chapter.name, manga.id, chapter.id) shouldBe true
         }
     }
 
@@ -394,8 +394,9 @@ class DesktopDownloaderTest {
             item.downloadedImages shouldBe 2
             completedDownload.status shouldBe DownloadStatus.COMPLETED
 
-            diskProvider.isChapterDownloaded(manga.sourceId, manga.title, chapter.name) shouldBe true
-            val chapterDir = diskProvider.getChapterDir(manga.sourceId, manga.title, chapter.name)
+            diskProvider.isChapterDownloaded(manga.sourceId, manga.title, chapter.name, manga.id, chapter.id) shouldBe
+                true
+            val chapterDir = diskProvider.getChapterDir(manga.sourceId, manga.title, chapter.name, manga.id, chapter.id)
             Files.exists(chapterDir.resolve("001.jpg")) shouldBe true
             Files.exists(chapterDir.resolve("002.jpg")) shouldBe true
 
@@ -461,7 +462,13 @@ class DesktopDownloaderTest {
         val chapter = createChapter()
 
         // Simulate page 0 already existing in temp dir
-        val tempDirChapter = diskProvider.getTempChapterDir(manga.sourceId, manga.title, chapter.name)
+        val tempDirChapter = diskProvider.getTempChapterDir(
+            manga.sourceId,
+            manga.title,
+            chapter.name,
+            manga.id,
+            chapter.id,
+        )
         diskProvider.savePage(tempDirChapter, 0, validDownloadImage())
 
         val page2Url = "http://127.0.0.1:$serverPort/page2-resume.jpg"
@@ -494,7 +501,7 @@ class DesktopDownloaderTest {
         }
 
         page2RequestCount.get() shouldBe 1
-        diskProvider.isChapterDownloaded(manga.sourceId, manga.title, chapter.name) shouldBe true
+        diskProvider.isChapterDownloaded(manga.sourceId, manga.title, chapter.name, manga.id, chapter.id) shouldBe true
     }
 
     @Test

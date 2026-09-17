@@ -1,0 +1,12 @@
+CREATE TABLE IF NOT EXISTS local_chapter_storage (
+  chapter_id INTEGER NOT NULL PRIMARY KEY REFERENCES local_chapter_asset(chapter_id) ON DELETE CASCADE,
+  storage_path TEXT NOT NULL
+);
+
+INSERT OR IGNORE INTO local_chapter_storage(chapter_id, storage_path)
+SELECT local_chapter_asset.chapter_id, local_manga_entry.storage_path
+FROM local_chapter_asset
+JOIN chapter ON chapter.id = local_chapter_asset.chapter_id
+JOIN manga ON manga.id = chapter.manga_id
+JOIN local_manga_entry ON local_manga_entry.manga_id = manga.id
+WHERE manga.source_id != 0;

@@ -68,6 +68,14 @@ data class DesktopPreferences(
 
 class DesktopPreferenceStore(private val file: Path) {
 
+    /** Apply an edit to the latest snapshot under the same lock as other preference writers. */
+    @Synchronized
+    fun updatePreferences(transform: (DesktopPreferences) -> DesktopPreferences): DesktopPreferences {
+        val updated = transform(load())
+        save(updated)
+        return updated
+    }
+
     @Synchronized
     fun load(): DesktopPreferences {
         val properties = readProperties()

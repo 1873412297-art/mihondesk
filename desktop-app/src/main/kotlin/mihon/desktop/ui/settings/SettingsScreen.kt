@@ -313,9 +313,9 @@ private fun GeneralSettingsPane(
                         } else {
                             OutlinedButton(
                                 onClick = {
-                                    val updated = preferences.copy(language = lang)
+                                    val updated = preferenceStore.updatePreferences { it.copy(language = lang) }
                                     preferences = updated
-                                    preferenceStore.save(updated)
+
                                     onPreferencesChanged?.invoke(updated)
                                 },
                                 modifier = Modifier.testTag("language-button-${lang.name}"),
@@ -349,9 +349,9 @@ private fun GeneralSettingsPane(
                 androidx.compose.material3.Switch(
                     checked = preferences.incognitoMode,
                     onCheckedChange = { isChecked ->
-                        val updated = preferences.copy(incognitoMode = isChecked)
+                        val updated = preferenceStore.updatePreferences { it.copy(incognitoMode = isChecked) }
                         preferences = updated
-                        preferenceStore.save(updated)
+
                         onPreferencesChanged?.invoke(updated)
                     },
                     modifier = Modifier.testTag("incognito-switch"),
@@ -862,9 +862,9 @@ private fun AppearanceSettingsPane(
                         } else {
                             OutlinedButton(
                                 onClick = {
-                                    val updated = preferences.copy(themeMode = mode)
+                                    val updated = preferenceStore.updatePreferences { it.copy(themeMode = mode) }
                                     preferences = updated
-                                    preferenceStore.save(updated)
+
                                     onPreferencesChanged?.invoke(updated)
                                 },
                                 modifier = Modifier.testTag("theme-button-${mode.name}"),
@@ -898,9 +898,9 @@ private fun AppearanceSettingsPane(
                 Switch(
                     checked = preferences.themeDarkAmoled,
                     onCheckedChange = { isChecked ->
-                        val updated = preferences.copy(themeDarkAmoled = isChecked)
+                        val updated = preferenceStore.updatePreferences { it.copy(themeDarkAmoled = isChecked) }
                         preferences = updated
-                        preferenceStore.save(updated)
+
                         onPreferencesChanged?.invoke(updated)
                     },
                     modifier = Modifier.testTag("amoled-switch"),
@@ -939,9 +939,11 @@ private fun AppearanceSettingsPane(
                                         .weight(1f)
                                         .clip(RoundedCornerShape(12.dp))
                                         .clickable {
-                                            val updated = preferences.copy(appTheme = theme)
+                                            val updated = preferenceStore.updatePreferences {
+                                                it.copy(appTheme = theme)
+                                            }
                                             preferences = updated
-                                            preferenceStore.save(updated)
+
                                             onPreferencesChanged?.invoke(updated)
                                         }
                                         .testTag("theme-palette-${theme.name}"),
@@ -1249,9 +1251,9 @@ private fun DownloadsSettingsPane(
                     OutlinedTextField(
                         value = preferences.downloadStoragePath,
                         onValueChange = { path ->
-                            val updated = preferences.copy(downloadStoragePath = path)
+                            val updated = preferenceStore.updatePreferences { it.copy(downloadStoragePath = path) }
                             preferences = updated
-                            preferenceStore.save(updated)
+
                             onPreferencesChanged?.invoke(updated)
                         },
                         label = { Text(strings.settingsDownloadCustomPath) },
@@ -1266,9 +1268,11 @@ private fun DownloadsSettingsPane(
                                 activePath = downloadsDir,
                                 title = strings.settingsDownloadChooseFolder,
                             )?.let { selected ->
-                                val updated = preferences.copy(downloadStoragePath = selected.toString())
+                                val updated = preferenceStore.updatePreferences {
+                                    it.copy(downloadStoragePath = selected.toString())
+                                }
                                 preferences = updated
-                                preferenceStore.save(updated)
+
                                 onPreferencesChanged?.invoke(updated)
                             }
                         },
@@ -1280,9 +1284,9 @@ private fun DownloadsSettingsPane(
                 if (preferences.downloadStoragePath.isNotBlank()) {
                     TextButton(
                         onClick = {
-                            val updated = preferences.copy(downloadStoragePath = "")
+                            val updated = preferenceStore.updatePreferences { it.copy(downloadStoragePath = "") }
                             preferences = updated
-                            preferenceStore.save(updated)
+
                             onPreferencesChanged?.invoke(updated)
                         },
                         modifier = Modifier.testTag("download-storage-default"),
@@ -1315,9 +1319,11 @@ private fun DownloadsSettingsPane(
                         } else {
                             OutlinedButton(
                                 onClick = {
-                                    val updated = preferences.copy(downloadParallelCount = count)
+                                    val updated = preferenceStore.updatePreferences {
+                                        it.copy(downloadParallelCount = count)
+                                    }
                                     preferences = updated
-                                    preferenceStore.save(updated)
+
                                     onPreferencesChanged?.invoke(updated)
                                 },
                                 modifier = Modifier.testTag("parallel-downloads-$count"),
@@ -1342,9 +1348,11 @@ private fun DownloadsSettingsPane(
                         } else {
                             OutlinedButton(
                                 onClick = {
-                                    val updated = preferences.copy(downloadPageParallelCount = count)
+                                    val updated = preferenceStore.updatePreferences {
+                                        it.copy(downloadPageParallelCount = count)
+                                    }
                                     preferences = updated
-                                    preferenceStore.save(updated)
+
                                     onPreferencesChanged?.invoke(updated)
                                 },
                                 modifier = Modifier.testTag("parallel-pages-$count"),
@@ -1385,9 +1393,9 @@ private fun DownloadsSettingsPane(
                         } else {
                             OutlinedButton(
                                 onClick = {
-                                    val updated = preferences.copy(downloadAhead = count)
+                                    val updated = preferenceStore.updatePreferences { it.copy(downloadAhead = count) }
                                     preferences = updated
-                                    preferenceStore.save(updated)
+
                                     onPreferencesChanged?.invoke(updated)
                                 },
                                 modifier = Modifier.testTag("download-ahead-$count"),
@@ -1418,9 +1426,9 @@ private fun DownloadsSettingsPane(
                 Switch(
                     checked = preferences.deleteDownloadedRead,
                     onCheckedChange = { checked ->
-                        val updated = preferences.copy(deleteDownloadedRead = checked)
+                        val updated = preferenceStore.updatePreferences { it.copy(deleteDownloadedRead = checked) }
                         preferences = updated
-                        preferenceStore.save(updated)
+
                         onPreferencesChanged?.invoke(updated)
                     },
                     modifier = Modifier.testTag("delete-downloaded-read-switch"),
@@ -1633,9 +1641,11 @@ private fun BackupSettingsPane(
                             } else {
                                 OutlinedButton(
                                     onClick = {
-                                        val updated = preferences.copy(backupIntervalHours = hours)
+                                        val updated = preferenceStore.updatePreferences {
+                                            it.copy(backupIntervalHours = hours)
+                                        }
                                         preferences = updated
-                                        preferenceStore.save(updated)
+
                                         onPreferencesChanged?.invoke(updated)
                                     },
                                     modifier = Modifier.testTag("backup-interval-$hours"),
@@ -1653,9 +1663,9 @@ private fun BackupSettingsPane(
                     OutlinedTextField(
                         value = preferences.backupStoragePath,
                         onValueChange = { path ->
-                            val updated = preferences.copy(backupStoragePath = path)
+                            val updated = preferenceStore.updatePreferences { it.copy(backupStoragePath = path) }
                             preferences = updated
-                            preferenceStore.save(updated)
+
                             onPreferencesChanged?.invoke(updated)
                         },
                         label = { Text(strings.backupLocation) },
@@ -1681,9 +1691,11 @@ private fun BackupSettingsPane(
                             } else {
                                 OutlinedButton(
                                     onClick = {
-                                        val updated = preferences.copy(backupRetentionCount = count)
+                                        val updated = preferenceStore.updatePreferences {
+                                            it.copy(backupRetentionCount = count)
+                                        }
                                         preferences = updated
-                                        preferenceStore.save(updated)
+
                                         onPreferencesChanged?.invoke(updated)
                                     },
                                     modifier = Modifier.testTag("backup-retention-$count"),
@@ -1809,9 +1821,11 @@ private fun LibrarySettingsPane(
                             } else {
                                 OutlinedButton(
                                     onClick = {
-                                        val updated = preferences.copy(libraryUpdateIntervalHours = hours)
+                                        val updated = preferenceStore.updatePreferences {
+                                            it.copy(libraryUpdateIntervalHours = hours)
+                                        }
                                         preferences = updated
-                                        preferenceStore.save(updated)
+
                                         onPreferencesChanged?.invoke(updated)
                                     },
                                     modifier = Modifier.testTag("update-interval-$hours"),
@@ -1835,9 +1849,11 @@ private fun LibrarySettingsPane(
                     Switch(
                         checked = preferences.libraryUpdateSkipCompleted,
                         onCheckedChange = { checked ->
-                            val updated = preferences.copy(libraryUpdateSkipCompleted = checked)
+                            val updated = preferenceStore.updatePreferences {
+                                it.copy(libraryUpdateSkipCompleted = checked)
+                            }
                             preferences = updated
-                            preferenceStore.save(updated)
+
                             onPreferencesChanged?.invoke(updated)
                         },
                         modifier = Modifier.testTag("skip-completed-switch"),
@@ -1853,9 +1869,11 @@ private fun LibrarySettingsPane(
                     Switch(
                         checked = preferences.libraryUpdateSkipUnread,
                         onCheckedChange = { checked ->
-                            val updated = preferences.copy(libraryUpdateSkipUnread = checked)
+                            val updated = preferenceStore.updatePreferences {
+                                it.copy(libraryUpdateSkipUnread = checked)
+                            }
                             preferences = updated
-                            preferenceStore.save(updated)
+
                             onPreferencesChanged?.invoke(updated)
                         },
                         modifier = Modifier.testTag("skip-unread-switch"),
@@ -1871,9 +1889,11 @@ private fun LibrarySettingsPane(
                     Switch(
                         checked = preferences.libraryUpdateSkipStarted,
                         onCheckedChange = { checked ->
-                            val updated = preferences.copy(libraryUpdateSkipStarted = checked)
+                            val updated = preferenceStore.updatePreferences {
+                                it.copy(libraryUpdateSkipStarted = checked)
+                            }
                             preferences = updated
-                            preferenceStore.save(updated)
+
                             onPreferencesChanged?.invoke(updated)
                         },
                         modifier = Modifier.testTag("skip-started-switch"),
@@ -1883,9 +1903,11 @@ private fun LibrarySettingsPane(
                 OutlinedTextField(
                     value = preferences.libraryUpdateCategories.sorted().joinToString(","),
                     onValueChange = { value ->
-                        val updated = preferences.copy(libraryUpdateCategories = parsePositiveLongSet(value))
+                        val updated = preferenceStore.updatePreferences {
+                            it.copy(libraryUpdateCategories = parsePositiveLongSet(value))
+                        }
                         preferences = updated
-                        preferenceStore.save(updated)
+
                         onPreferencesChanged?.invoke(updated)
                     },
                     label = { Text(strings.text(UiText.IncludeCategoryIds)) },
@@ -1896,9 +1918,11 @@ private fun LibrarySettingsPane(
                 OutlinedTextField(
                     value = preferences.libraryUpdateCategoriesExclude.sorted().joinToString(","),
                     onValueChange = { value ->
-                        val updated = preferences.copy(libraryUpdateCategoriesExclude = parsePositiveLongSet(value))
+                        val updated = preferenceStore.updatePreferences {
+                            it.copy(libraryUpdateCategoriesExclude = parsePositiveLongSet(value))
+                        }
                         preferences = updated
-                        preferenceStore.save(updated)
+
                         onPreferencesChanged?.invoke(updated)
                     },
                     label = { Text(strings.text(UiText.ExcludeCategoryIds)) },
@@ -1918,9 +1942,11 @@ private fun LibrarySettingsPane(
                     Switch(
                         checked = preferences.autoDownloadNewChapters,
                         onCheckedChange = { checked ->
-                            val updated = preferences.copy(autoDownloadNewChapters = checked)
+                            val updated = preferenceStore.updatePreferences {
+                                it.copy(autoDownloadNewChapters = checked)
+                            }
                             preferences = updated
-                            preferenceStore.save(updated)
+
                             onPreferencesChanged?.invoke(updated)
                         },
                         modifier = Modifier.testTag("auto-download-new-switch"),
@@ -1937,9 +1963,11 @@ private fun LibrarySettingsPane(
                     Switch(
                         checked = preferences.desktopNotificationsEnabled,
                         onCheckedChange = { checked ->
-                            val updated = preferences.copy(desktopNotificationsEnabled = checked)
+                            val updated = preferenceStore.updatePreferences {
+                                it.copy(desktopNotificationsEnabled = checked)
+                            }
                             preferences = updated
-                            preferenceStore.save(updated)
+
                             onPreferencesChanged?.invoke(updated)
                         },
                         modifier = Modifier.testTag("desktop-notifications-switch"),
@@ -1955,9 +1983,11 @@ private fun LibrarySettingsPane(
                     Switch(
                         checked = preferences.desktopNotificationsHideContent,
                         onCheckedChange = { checked ->
-                            val updated = preferences.copy(desktopNotificationsHideContent = checked)
+                            val updated = preferenceStore.updatePreferences {
+                                it.copy(desktopNotificationsHideContent = checked)
+                            }
                             preferences = updated
-                            preferenceStore.save(updated)
+
                             onPreferencesChanged?.invoke(updated)
                         },
                         modifier = Modifier.testTag("desktop-notifications-hide-content-switch"),

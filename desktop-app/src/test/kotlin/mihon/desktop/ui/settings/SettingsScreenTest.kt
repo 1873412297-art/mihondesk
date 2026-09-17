@@ -23,6 +23,34 @@ import java.nio.file.Path
 
 class SettingsScreenTest {
 
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun `changing theme preserves settings changed while the pane was open`() = runComposeUiTest {
+        val store = DesktopPreferenceStore(tempDir.resolve("concurrent.properties"))
+        setContent {
+            Box(Modifier.requiredSize(1024.dp, 768.dp)) {
+                SettingsScreen(preferenceStore = store, readerSettingsStore = DesktopReaderSettingsStore(store))
+            }
+        }
+        onNodeWithTag("settings-section-Appearance").performClick()
+        runOnIdle {
+            store.update {
+                setProperty("library.filter_unread", "Include")
+                setProperty("download.storage_path", "D:/new-downloads")
+                setProperty("backup.last_epoch_millis", "123456")
+                setProperty("notifications.desktop_enabled", "false")
+            }
+        }
+        onNodeWithTag("theme-button-Dark").performClick()
+        store.load().run {
+            themeMode shouldBe ThemeMode.Dark
+            libraryFilterUnread shouldBe "Include"
+            downloadStoragePath shouldBe "D:/new-downloads"
+            lastAutoBackupEpochMillis shouldBe 123456L
+            desktopNotificationsEnabled shouldBe false
+        }
+    }
+
     @TempDir
     lateinit var tempDir: Path
 

@@ -77,6 +77,7 @@ class DesktopDownloader(
         }
     }
     private val activeDownloadJobs = ConcurrentHashMap<Long, Job>()
+    private val pendingCleanupJobs = ConcurrentHashMap<Long, Job>()
     private val sessionBytes = AtomicLong(0L)
     private val sessionGeneration = AtomicLong(0L)
     private var downloadJob: Job? = null
@@ -84,6 +85,7 @@ class DesktopDownloader(
 
     init {
         val restored = store.restore()
+        diskProvider.adoptLegacyDownloads(restored)
         _queueState.value = restored.map(::recoverMissingFiles)
         if (_queueState.value != restored) persistQueue()
     }
@@ -96,6 +98,8 @@ class DesktopDownloader(
             mangaTitle = download.mangaTitle,
             chapterName = download.chapterName,
             expectedPageIndexes = download.pages.map(DownloadPage::index),
+            mangaId = download.mangaId,
+            chapterId = download.chapterId,
         )
         if (inspection.isComplete) {
             val registrationError = runCatching {
@@ -179,36 +183,39 @@ class DesktopDownloader(
         autoStart: Boolean = true,
     ) {
         queueMutex.withLock {
-            val current = _queueState.value.toMutableList()
+            synchronized(this) {
+                val current = _queueState.value.toMutableList()
 
-            for (chapter in chapters) {
-                val existingIndex = current.indexOfFirst { it.chapterId == chapter.id }
-                if (existingIndex >= 0) {
-                    val existing = current[existingIndex]
-                    val recovered = recoverMissingFiles(existing)
-                    if (recovered != existing || existing.status == DownloadStatus.ERROR) {
-                        current[existingIndex] = recovered.copy(status = DownloadStatus.QUEUED, error = null)
+                for (chapter in chapters) {
+                    val existingIndex = current.indexOfFirst { it.chapterId == chapter.id }
+                    if (existingIndex >= 0) {
+                        val existing = current[existingIndex]
+                        val recovered = recoverMissingFiles(existing)
+                        if (recovered != existing || existing.status == DownloadStatus.ERROR) {
+                            current[existingIndex] = recovered.copy(status = DownloadStatus.QUEUED, error = null)
+                        }
+                        continue
                     }
-                    continue
+                    if (isChapterDownloaded(sourceId, mangaTitle, chapter.id, chapter.name, mangaId)) continue
+
+                    current.add(
+                        DesktopDownload(
+                            chapterId = chapter.id,
+                            mangaId = mangaId,
+                            sourceId = sourceId,
+                            mangaTitle = mangaTitle,
+                            chapterName = chapter.name,
+                            chapterUrl = chapter.url,
+                            status = DownloadStatus.QUEUED,
+                            storageLayoutVersion = 1,
+                        ),
+                    )
                 }
-                if (isChapterDownloaded(sourceId, mangaTitle, chapter.id, chapter.name)) continue
 
-                current.add(
-                    DesktopDownload(
-                        chapterId = chapter.id,
-                        mangaId = mangaId,
-                        sourceId = sourceId,
-                        mangaTitle = mangaTitle,
-                        chapterName = chapter.name,
-                        chapterUrl = chapter.url,
-                        status = DownloadStatus.QUEUED,
-                    ),
-                )
-            }
-
-            if (current != _queueState.value) {
-                _queueState.value = current
-                persistQueue()
+                if (current != _queueState.value) {
+                    _queueState.value = current
+                    persistQueue()
+                }
             }
         }
 
@@ -240,7 +247,7 @@ class DesktopDownloader(
         if (currentIndex < 0) return
 
         val nextChapters = sorted.drop(currentIndex + 1)
-            .filter { !it.read && !isChapterDownloaded(sourceId, mangaTitle, it.id, it.name) }
+            .filter { !it.read && !isChapterDownloaded(sourceId, mangaTitle, it.id, it.name, mangaId) }
             .take(count)
 
         if (nextChapters.isNotEmpty()) {
@@ -264,13 +271,34 @@ class DesktopDownloader(
         autoStart: Boolean = true,
     ) = checkAndDownloadAhead(manga.sourceId, manga.id, manga.title, currentChapter, allChapters, count, autoStart)
 
-    fun isChapterDownloaded(sourceId: Long, mangaTitle: String, chapterId: Long, chapterName: String): Boolean {
+    fun isChapterDownloaded(
+        sourceId: Long,
+        mangaTitle: String,
+        chapterId: Long,
+        chapterName: String,
+        mangaId: Long? = null,
+    ): Boolean {
         val queued = _queueState.value.firstOrNull { it.chapterId == chapterId }
         if (queued != null && queued.status != DownloadStatus.COMPLETED) return false
         return if (queued != null) {
-            diskProvider.isChapterDownloaded(queued.sourceId, queued.mangaTitle, queued.chapterName)
+            diskProvider.isChapterDownloaded(
+                queued.sourceId,
+                queued.mangaTitle,
+                queued.chapterName,
+                queued.mangaId,
+                queued.chapterId,
+            )
         } else {
-            diskProvider.isChapterDownloaded(sourceId, mangaTitle, chapterName)
+            diskProvider.isChapterDownloaded(
+                sourceId,
+                mangaTitle,
+                chapterName,
+                mangaId,
+                chapterId.takeIf {
+                    mangaId !=
+                        null
+                },
+            )
         }
     }
 
@@ -295,18 +323,33 @@ class DesktopDownloader(
         chapterName: String,
     ): Boolean {
         val saved = _queueState.value.firstOrNull { item ->
-            (chapterId != null && item.chapterId == chapterId) ||
-                (item.sourceId == sourceId && item.mangaTitle == mangaTitle && item.chapterName == chapterName)
+            if (chapterId != null) {
+                item.chapterId == chapterId
+            } else {
+                item.sourceId == sourceId && item.mangaTitle == mangaTitle && item.chapterName == chapterName
+            }
         }
         val effectiveSourceId = saved?.sourceId ?: sourceId
         val effectiveMangaId = saved?.mangaId ?: mangaId
         val effectiveMangaTitle = saved?.mangaTitle ?: mangaTitle
         val effectiveChapterId = saved?.chapterId ?: chapterId
         val effectiveChapterName = saved?.chapterName ?: chapterName
-        val chapterDir = diskProvider.findChapterDir(effectiveSourceId, effectiveMangaTitle, effectiveChapterName)
+        val chapterDir = diskProvider.findChapterDir(
+            effectiveSourceId,
+            effectiveMangaTitle,
+            effectiveChapterName,
+            effectiveMangaId,
+            effectiveChapterId,
+        )
         val existed = chapterDir != null && Files.exists(chapterDir)
         if (existed &&
-            !diskProvider.deleteChapter(effectiveSourceId, effectiveMangaTitle, effectiveChapterName)
+            !diskProvider.deleteChapter(
+                effectiveSourceId,
+                effectiveMangaTitle,
+                effectiveChapterName,
+                effectiveMangaId,
+                effectiveChapterId,
+            )
         ) {
             return false
         }
@@ -373,6 +416,7 @@ class DesktopDownloader(
         return true
     }
 
+    @Synchronized
     fun pause() {
         sessionGeneration.incrementAndGet()
         downloadJob?.cancel()
@@ -391,6 +435,7 @@ class DesktopDownloader(
         persistQueue()
     }
 
+    @Synchronized
     fun resume() {
         _queueState.update { list ->
             list.map { item ->
@@ -405,22 +450,39 @@ class DesktopDownloader(
         start()
     }
 
+    @Synchronized
     fun cancel(chapterId: Long) {
         val job = activeDownloadJobs.remove(chapterId)
-        job?.cancel()
+        val previousCleanup = pendingCleanupJobs[chapterId]
         val cancelled = _queueState.value.find { it.chapterId == chapterId }
-        _queueState.update { list -> list.filterNot { it.chapterId == chapterId } }
-        persistQueue()
-        cancelled?.let { download ->
-            scope.launch {
+        job?.cancel()
+        val cleanup = cancelled?.let { download ->
+            scope.launch(start = CoroutineStart.LAZY) {
+                previousCleanup?.join()
                 job?.join()
                 runCatching {
-                    diskProvider.deleteTempChapter(download.sourceId, download.mangaTitle, download.chapterName)
-                }
-                    .onFailure { _storageError.value = "下载临时文件无法清理：${it.message}" }
+                    diskProvider.deleteTempChapter(
+                        download.sourceId,
+                        download.mangaTitle,
+                        download.chapterName,
+                        download.mangaId,
+                        download.chapterId,
+                    )
+                }.onFailure { _storageError.value = "下载临时文件无法清理：${it.message}" }
+            }.also { cleanup ->
+                pendingCleanupJobs[chapterId] = cleanup
+                cleanup.invokeOnCompletion { pendingCleanupJobs.remove(chapterId, cleanup) }
             }
         }
+        _queueState.update { list -> list.filterNot { it.chapterId == chapterId } }
+        try {
+            persistQueue()
+        } finally {
+            cleanup?.start()
+        }
     }
+
+    @Synchronized
     fun retry(chapterId: Long) {
         _queueState.update { list ->
             list.map { item ->
@@ -447,6 +509,7 @@ class DesktopDownloader(
         start()
     }
 
+    @Synchronized
     fun clearCompleted() {
         _queueState.update { list -> list.filterNot { it.status == DownloadStatus.COMPLETED } }
         persistQueue()
@@ -456,35 +519,39 @@ class DesktopDownloader(
         val workers = List(downloadParallelism().coerceIn(1, 16)) {
             launch {
                 while (_isRunning.value) {
-                    val next = claimNextDownload() ?: break
-                    val chapterJob = launch(start = CoroutineStart.LAZY) {
-                        if (!diskProvider.checkDiskSpace()) {
-                            val errorMessage = "Insufficient disk space"
-                            updateDownload(next.chapterId) {
-                                it.copy(status = DownloadStatus.ERROR, error = errorMessage)
+                    val (chapterId, chapterJob) = synchronized(this@DesktopDownloader) {
+                        val next = claimNextDownload() ?: return@synchronized null
+                        val chapterJob = launch(start = CoroutineStart.LAZY) {
+                            pendingCleanupJobs[next.chapterId]?.join()
+                            if (!diskProvider.checkDiskSpace()) {
+                                val errorMessage = "Insufficient disk space"
+                                updateDownload(next.chapterId) {
+                                    it.copy(status = DownloadStatus.ERROR, error = errorMessage)
+                                }
+                                onDownloadFailed?.invoke(next, errorMessage)
+                                return@launch
                             }
-                            onDownloadFailed?.invoke(next, errorMessage)
-                            return@launch
-                        }
 
-                        try {
-                            processDownload(next)
-                        } catch (error: CancellationException) {
-                            throw error
-                        } catch (error: Exception) {
-                            val errorMessage = error.message ?: "Unknown download error"
-                            val failed = updateDownload(next.chapterId) {
-                                it.copy(status = DownloadStatus.ERROR, error = errorMessage)
+                            try {
+                                processDownload(next)
+                            } catch (error: CancellationException) {
+                                throw error
+                            } catch (error: Exception) {
+                                val errorMessage = error.message ?: "Unknown download error"
+                                val failed = updateDownload(next.chapterId) {
+                                    it.copy(status = DownloadStatus.ERROR, error = errorMessage)
+                                }
+                                onDownloadFailed?.invoke(failed ?: next, errorMessage)
                             }
-                            onDownloadFailed?.invoke(failed ?: next, errorMessage)
                         }
-                    }
-                    activeDownloadJobs[next.chapterId] = chapterJob
+                        activeDownloadJobs[next.chapterId] = chapterJob
+                        next.chapterId to chapterJob
+                    } ?: break
                     chapterJob.start()
                     try {
                         chapterJob.join()
                     } finally {
-                        activeDownloadJobs.remove(next.chapterId, chapterJob)
+                        activeDownloadJobs.remove(chapterId, chapterJob)
                     }
                 }
             }
@@ -546,16 +613,32 @@ class DesktopDownloader(
             download.sourceId,
             download.mangaTitle,
             download.chapterName,
+            download.mangaId,
+            download.chapterId,
         )
         if (!Files.exists(tempDir)) {
             Files.createDirectories(tempDir)
         }
 
         diskProvider.cleanPartialPages(tempDir)
+        diskProvider.restoreLegacyTemporaryPages(download, tempDir)
         // A previous run may have published the images before database registration failed.
         // Only reuse pages the saved queue marked ready, and validate their bytes again.
-        val publishedDir = diskProvider.findChapterDir(download.sourceId, download.mangaTitle, download.chapterName)
-            ?: diskProvider.getChapterDir(download.sourceId, download.mangaTitle, download.chapterName)
+        val publishedDir =
+            diskProvider.findChapterDir(
+                download.sourceId,
+                download.mangaTitle,
+                download.chapterName,
+                download.mangaId,
+                download.chapterId,
+            )
+                ?: diskProvider.getChapterDir(
+                    download.sourceId,
+                    download.mangaTitle,
+                    download.chapterName,
+                    download.mangaId,
+                    download.chapterId,
+                )
         pages.filter { it.status == PageStatus.READY }.forEach { page ->
             val temporaryPage = diskProvider.getPageFile(tempDir, page.index)
             val publishedPage = diskProvider.getPageFile(publishedDir, page.index)
@@ -669,7 +752,7 @@ class DesktopDownloader(
         )
 
         val completedDownload = updateDownload(download.chapterId) {
-            it.copy(status = DownloadStatus.COMPLETED, progress = 1.0f)
+            it.copy(status = DownloadStatus.COMPLETED, progress = 1.0f, storageLayoutVersion = 1)
         }
         completedDownload?.let { onDownloadCompleted?.invoke(it) }
     }
@@ -688,6 +771,7 @@ class DesktopDownloader(
         throw IllegalStateException("No page list fetcher available")
     }
 
+    @Synchronized
     private fun updateDownload(chapterId: Long, transform: (DesktopDownload) -> DesktopDownload): DesktopDownload? {
         var updatedItem: DesktopDownload? = null
         _queueState.update { list ->

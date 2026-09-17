@@ -89,14 +89,14 @@ class DownloadAheadTest {
             val ch = createChapter(1L, 1.0, "Chapter 1", read = true)
 
             // Create dummy downloaded chapter dir
-            val chDir = diskProvider.getChapterDir(manga.sourceId, manga.title, ch.name)
+            val chDir = diskProvider.getChapterDir(manga.sourceId, manga.title, ch.name, manga.id, ch.id)
             Files.createDirectories(chDir)
             Files.writeString(chDir.resolve("001.jpg"), "fake-image")
-            assertTrue(diskProvider.isChapterDownloaded(manga.sourceId, manga.title, ch.name))
+            assertTrue(diskProvider.isChapterDownloaded(manga.sourceId, manga.title, ch.name, manga.id, ch.id))
 
             val deleted = downloader.deleteDownloadedChapter(manga, ch)
             assertTrue(deleted)
-            assertFalse(diskProvider.isChapterDownloaded(manga.sourceId, manga.title, ch.name))
+            assertFalse(diskProvider.isChapterDownloaded(manga.sourceId, manga.title, ch.name, manga.id, ch.id))
             assertFalse(Files.exists(chDir))
         } finally {
             downloader.close()
