@@ -9,7 +9,10 @@ Apply only the selected state back to the source's original objects, preserving
 custom filter subclasses. Capture source defaults on initial filter loading; Reset
 changes the draft only. Explicit Apply retains the existing page-1 search behavior.
 
-- [ ] Regress edit/cancel, checkbox feedback, apply/pagination and reset/cancel/apply
+- [x] Regress edit/cancel, checkbox feedback, apply/pagination and reset/cancel/apply
   through BrowseContentView with a source that requires a custom filter subclass.
-- [ ] Isolate dialog drafts and cached defaults while preserving source types.
-- [ ] Verify relevant source/filter/browse tests and the rebuilt portable package.
+- [x] Isolate dialog drafts and cached defaults while preserving source types.
+- [x] Verify relevant source/filter/browse tests and the rebuilt portable package.
+
+23 source and 23 packaged tests pass. See
+[verification evidence](../evidence/2026-09-18-filter-draft-isolation.md).
