@@ -1,0 +1,13 @@
+{
+  "scope": "Separate instrumented diagnosis; not release acceptance",
+  "sourceRevision": "de1b8bd6bb2312641fa1197abd9eb085cec32e02",
+  "sourceImage": "D:\\my project\\mihon-w\\desktop-app\\build\\compose\\binaries\\main\\app\\mihondesk",
+  "instrumentedImage": "D:\\my project\\mihon-w\\build\\reader-soak-0218\\instrumented-app",
+  "changedFiles": [
+    "app/mihondesk.cfg"
+  ],
+  "cfgSha256": "15BF40941775500D84DB4B153A0D4DA93262C4C1BF49C8F5930C0F9838B15B55",
+  "durationSeconds": 180,
+  "forcedGc": false,
+  "heapLimitsChanged": false
+}
