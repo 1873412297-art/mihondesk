@@ -150,22 +150,26 @@ fun BrowseContentView(
                 )
             }
 
+            var lastRequest by remember(nav.source.id) { mutableStateOf<SourcePageRequest?>(null) }
+
             fun loadSourcePage(
                 mode: SourceListingMode,
                 page: Int,
                 query: String,
                 filters: mihon.extension.source.model.FilterList = sourceUiState.filterList,
+                append: Boolean = false,
             ) {
                 pageJob?.cancel()
-                sourceUiState =
-                    sourceUiState.copy(
-                        isLoading = true,
-                        isLoadingMore = false,
-                        errorMessage = null,
-                        networkFailure = null,
-                        mode = mode,
-                        page = page,
-                    )
+                lastRequest = SourcePageRequest(mode, page, query, filters, append)
+                sourceUiState = sourceUiState.copy(
+                    isLoading = !append,
+                    isLoadingMore = append,
+                    errorMessage = null,
+                    networkFailure = null,
+                    mode = mode,
+                    page = if (append) sourceUiState.page else page,
+                    hasNextPage = append && sourceUiState.hasNextPage,
+                )
                 pageJob = scope.launch {
                     try {
                         val mangasPage = when (mode) {
@@ -179,22 +183,28 @@ fun BrowseContentView(
                             )
                         }
                         val inLibrary = withContext(Dispatchers.IO) {
-                            val all = runtime.library.librarySnapshot(null)
-                            all.filter { it.sourceId == nav.source.id }.map { it.url }.toSet()
+                            runtime.library.librarySnapshot(null)
+                                .filter { it.sourceId == nav.source.id }.map { it.url }.toSet()
                         }
                         val chapterCounts = loadLocalChapterCounts(runtime, nav.source)
+                        currentCoroutineContext().ensureActive()
                         sourceUiState = sourceUiState.copy(
                             isLoading = false,
-                            mangas = mangasPage.mangas,
+                            isLoadingMore = false,
+                            page = page,
+                            mangas = (if (append) sourceUiState.mangas + mangasPage.mangas else mangasPage.mangas)
+                                .distinctBy { it.url },
                             hasNextPage = mangasPage.hasNextPage,
                             inLibraryUrls = inLibrary,
-                            chapterCounts = chapterCounts,
+                            chapterCounts = if (append) sourceUiState.chapterCounts + chapterCounts else chapterCounts,
                         )
-                    } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                    } catch (cancelled: CancellationException) {
                         throw cancelled
                     } catch (e: Exception) {
+                        currentCoroutineContext().ensureActive()
                         sourceUiState = sourceUiState.copy(
                             isLoading = false,
+                            isLoadingMore = false,
                             errorMessage = e.message ?: "Failed to load source page",
                             networkFailure = e.findNetworkFailure(),
                         )
@@ -204,43 +214,13 @@ fun BrowseContentView(
 
             fun loadMore() {
                 if (sourceUiState.isLoading || sourceUiState.isLoadingMore || !sourceUiState.hasNextPage) return
-                val nextPage = sourceUiState.page + 1
-                sourceUiState = sourceUiState.copy(isLoadingMore = true, errorMessage = null, networkFailure = null)
-                pageJob = scope.launch {
-                    try {
-                        val mangasPage = when (sourceUiState.mode) {
-                            SourceListingMode.Popular -> runtime.sourceManager.getPopular(nav.source.id, nextPage)
-                            SourceListingMode.Latest -> runtime.sourceManager.getLatest(nav.source.id, nextPage)
-                            SourceListingMode.Search -> runtime.sourceManager.searchManga(
-                                nav.source.id,
-                                nextPage,
-                                sourceUiState.query,
-                                sourceUiState.filterList,
-                            )
-                        }
-                        val inLibrary = withContext(Dispatchers.IO) {
-                            val all = runtime.library.librarySnapshot(null)
-                            all.filter { it.sourceId == nav.source.id }.map { it.url }.toSet()
-                        }
-                        val chapterCounts = sourceUiState.chapterCounts + loadLocalChapterCounts(runtime, nav.source)
-                        sourceUiState = sourceUiState.copy(
-                            isLoadingMore = false,
-                            page = nextPage,
-                            mangas = (sourceUiState.mangas + mangasPage.mangas).distinctBy { it.url },
-                            hasNextPage = mangasPage.hasNextPage,
-                            inLibraryUrls = sourceUiState.inLibraryUrls + inLibrary,
-                            chapterCounts = chapterCounts,
-                        )
-                    } catch (cancelled: kotlinx.coroutines.CancellationException) {
-                        throw cancelled
-                    } catch (e: Exception) {
-                        sourceUiState = sourceUiState.copy(
-                            isLoadingMore = false,
-                            errorMessage = e.message ?: "Failed to load more manga",
-                            networkFailure = e.findNetworkFailure(),
-                        )
-                    }
-                }
+                val request = lastRequest ?: return
+                loadSourcePage(request.mode, sourceUiState.page + 1, request.query, request.filters, append = true)
+            }
+
+            fun retrySourcePage() {
+                val request = lastRequest ?: return
+                loadSourcePage(request.mode, request.page, request.query, request.filters, request.append)
             }
 
             LaunchedEffect(nav.source.id) {
@@ -276,16 +256,14 @@ fun BrowseContentView(
                     if (newPage > sourceUiState.page) {
                         loadMore()
                     } else {
-                        loadSourcePage(sourceUiState.mode, newPage, sourceUiState.query)
+                        lastRequest?.let { loadSourcePage(it.mode, newPage, it.query, it.filters) }
                     }
                 },
                 onLoadMore = ::loadMore,
                 onMangaSelected = { manga ->
                     navState = BrowseNavigationState.MangaDetail(nav.source, manga)
                 },
-                onRetry = {
-                    loadSourcePage(sourceUiState.mode, sourceUiState.page, sourceUiState.query)
-                },
+                onRetry = ::retrySourcePage,
                 onOpenFilters = {
                     sourceUiState = sourceUiState.copy(isFilterDialogOpen = true)
                 },
@@ -325,7 +303,7 @@ fun BrowseContentView(
                     runtime,
                     nav.source,
                     onDismiss = { webPageOpen = false },
-                    onRetry = { loadSourcePage(sourceUiState.mode, sourceUiState.page, sourceUiState.query) },
+                    onRetry = ::retrySourcePage,
                 )
             }
         }
@@ -508,6 +486,14 @@ fun BrowseContentView(
         }
     }
 }
+
+private data class SourcePageRequest(
+    val mode: SourceListingMode,
+    val page: Int,
+    val query: String,
+    val filters: mihon.extension.source.model.FilterList,
+    val append: Boolean,
+)
 
 private data class OnlineDetailLoadState(
     val mangaId: Long? = null,
