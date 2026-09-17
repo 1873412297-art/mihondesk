@@ -21,4 +21,6 @@ subsequent work in the ongoing product goal.
       truncated downloads, existing destination preservation and single-flight state.
 - [x] Implement verified service and persistent presenter.
 - [x] Wire About UI with English, Simplified and Traditional Chinese copy.
-- [ ] Verify source tests and packaged classes; record evidence and merge local main.
+- [x] Verify source tests and packaged classes; record evidence and merge local main.
+
+Evidence: [source, packaged and live release verification](../evidence/2026-09-18-in-app-update-download.md).
