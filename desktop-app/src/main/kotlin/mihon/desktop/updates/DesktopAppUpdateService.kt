@@ -3,6 +3,7 @@ package mihon.desktop.updates
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
@@ -123,7 +124,26 @@ class DesktopAppUpdateService(
             currentCoroutineContext().ensureActive()
             onPublishing()
             currentCoroutineContext().ensureActive()
-            Files.move(tempFile, destination, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
+            // Windows can briefly deny replacement while another process inspects an EXE.
+            // Keep the original intact; retries add at most one second of backoff.
+            for (attempt in 0..4) {
+                try {
+                    Files.move(
+                        tempFile,
+                        destination,
+                        StandardCopyOption.REPLACE_EXISTING,
+                        StandardCopyOption.ATOMIC_MOVE,
+                    )
+                    break
+                } catch (error: java.nio.file.FileSystemException) {
+                    if (attempt == 4 || error is java.nio.file.AtomicMoveNotSupportedException ||
+                        error is java.nio.file.NoSuchFileException
+                    ) {
+                        throw error
+                    }
+                    delay((attempt + 1) * 100L)
+                }
+            }
             true
         } catch (e: CancellationException) {
             throw e
