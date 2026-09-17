@@ -42,4 +42,55 @@ JBR 浏览器运行时复制到主 Skiko DLL 同级目录，保持上游文件�
 补入同版 Skiko 数据后复跑成功且提示消失。安装镜像本来就包含该文件，
 没有用浏览器的不同版本 ICU 数据替换它。
 
-代码、安装包和安装后结果分别记录；安装验收完成后补充以下结果。
+## 回归、安装与实际运行
+
+生产代码提交：`63de66fc05437fbb0423268cbe6f193520205cbe`。
+源码完整 `desktop-app:test` 实际执行，694 项中 679 项通过、15 项按条件跳过，0 失败；
+其中真实窗口探针默认不启用。Spotless 和 `git diff --check` 通过。
+本次完整回归设置了 ANGLE 偏好，但 Compose UI 断言大多使用离屏渲染；
+这不代替下面的真实窗口和安装程序验证。
+
+`packageMsi`、`verifyCleanDistribution` 和 `scripts/verify-msi-package.ps1` 通过。
+分发镜像不包含用户资料和已安装扩展。实际 MSI 安装退出码为 0。
+
+| 项目 | 结果 |
+| --- | --- |
+| MSI | `desktop-app/build/compose/binaries/main/msi/mihondesk-0.2.18.msi` |
+| MSI 字节数 | 485639344 |
+| MSI SHA-256 | `C46B32DA12F4E187769457717DB44FCC9F0F58501C77D75FEB84A3458E808E2C` |
+| 安装位置 | `%LOCALAPPDATA%/mihondesk/mihondesk.exe` |
+| 已安装应用 JAR | `desktop-app-de8d3d1e875e1290c0423f51752fb0b6.jar` |
+| JAR SHA-256 | `41BFBE8866CD2B1892DDE94DCFAA0FB5B0C92C03AA4FF5015354A241F39A7B10` |
+
+安装 JAR 与构建镜像哈希相同，嵌入版本 0.2.18、上述生产提交、`dirty=false`。
+三个已安装渲染 DLL 均与镜像及内置浏览器中的原文件 SHA-256 一致。
+本轮交付 MSI 和本机安装，没有生成新 EXE 安装器、便携 ZIP 或发布 GitHub Release。
+
+实际启动安装 EXE，主进程 PID 89580 响应正常，原生 2048×1239 窗口确认设置页显示
+0.2.18，黑底中英文文字与控件正常。进程模块列表直接读到安装目录中的
+`skiko-windows-x64.dll`、`libEGL.dll` 和 `libGLESv2.dll`；
+`jcmd VM.system_properties` 确认 `skiko.rendering.angle.enabled=true`。
+
+以安装目录 JAR 优先的 classpath 执行全部 UI、渲染配置、主线程及通知测试，
+299 项全部通过、0 跳过。界面/阅读对比度用例和帧探针核对生产类来自安装目录。
+下载界面浅色/纯黑、640/1024 像素宽及阅读配色截图来自合成测试资料。
+真实窗口探针没有强制 `skiko.renderApi`，调用安装 JAR 的默认配置后断言实际 ANGLE：
+360 个采样时间戳、平均回调频率 179.93 Hz、P95 6.22 ms、最大 10.29 ms，
+大于 20 ms 的间隔为 0，窗口聚焦为 true。该次测量与前述交替实验负载不完全相同，
+不能把两个实验的差值直接当作优化提升幅度，也不保证真实页面恒定 180 FPS。
+
+安装 EXE 的独立资料目录阅读验证退出 0，`SUCCEEDED/initial-open`：
+单图、目录、CBZ、CBT、CB7、CBR、EPUB，六种阅读模式，共解码 38 个图块。
+该验证使用合成资源，不访问真实阅读历史。
+
+升级前用 SQLite backup API 保存一致备份。原生窗口退出受持续输入保护阻止后，
+仅终止了路径严格匹配旧安装 EXE 的两个进程；关闭后数据库及下载内容校验一致。
+安装前后配置、队列和数据库文件哈希一致。启动新应用后校验数据库完整性、外键及
+9 张业务表：旧记录没有被删除或改写，195 个原下载文件（193 页及元数据）哈希一致。
+应用运行期间新增一条未收藏在线漫画、一条章节及阅读历史，故全库哈希比较不再相等；
+逐行差异验证确认原有记录仍完整，不把当前活动数据回滚成旧备份。
+
+本地证据包括 `source-regression/summary.json`、`installed-regression/summary.json`、
+`installed-verification.json`、`installed-native.json`、`installed-processes.json`、
+`installed-rendering-properties.txt`、`installed-frame.json`、`installed-reader.json`、
+`profile-delta.json`。私有资料、备份和界面原始记录保留在忽略目录，未提交。
