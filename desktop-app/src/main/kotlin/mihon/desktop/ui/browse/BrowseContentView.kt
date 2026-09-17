@@ -1,6 +1,7 @@
 package mihon.desktop.ui.browse
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -8,7 +9,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import mihon.desktop.DesktopRuntime
@@ -334,23 +339,37 @@ fun BrowseContentView(
                     onReadChapter = onReadChapter,
                 )
             } else {
+                val detailScope = rememberCoroutineScope()
+                var loadJob by remember(nav.source.id, nav.manga.url) { mutableStateOf<Job?>(null) }
+                var libraryJob by remember(nav.source.id, nav.manga.url) { mutableStateOf<Job?>(null) }
+                DisposableEffect(nav.source.id, nav.manga.url) {
+                    onDispose {
+                        loadJob?.cancel()
+                        libraryJob?.cancel()
+                    }
+                }
                 var loadState by remember(nav.source.id, nav.manga.url) {
                     mutableStateOf(OnlineDetailLoadState(loading = true))
                 }
 
                 fun loadMangaDetails(forceRefresh: Boolean = false) {
+                    loadJob?.cancel()
                     loadState = loadState.copy(loading = true, errorMessage = null)
-                    scope.launch {
+                    loadJob = detailScope.launch {
                         try {
                             val mangaId = runtime.onlineMangaSyncService.prepareOnlineMangaForReading(
                                 sourceId = nav.source.id,
                                 manga = nav.manga,
                                 forceRefresh = forceRefresh,
                             )
+                            currentCoroutineContext().ensureActive()
                             onOpenMangaDetail(mangaId)
                             onRetryMangaDetail()
                             loadState = loadState.copy(loading = false, mangaId = mangaId)
+                        } catch (cancelled: CancellationException) {
+                            throw cancelled
                         } catch (e: Exception) {
+                            currentCoroutineContext().ensureActive()
                             loadState = loadState.copy(
                                 loading = false,
                                 errorMessage = e.message ?: "Failed to fetch manga details",
@@ -375,12 +394,15 @@ fun BrowseContentView(
                     state = displayedState,
                     actions = detailActions.copy(onReadChapter = onReadChapter),
                     onBack = {
+                        loadJob?.cancel()
+                        libraryJob?.cancel()
                         onCloseMangaDetail()
                         navState = BrowseNavigationState.SourceView(nav.source)
                     },
                     onRetry = { loadMangaDetails(forceRefresh = true) },
-                    onToggleLibrary = {
-                        scope.launch {
+                    onToggleLibrary = toggleLibrary@{
+                        if (loadState.syncingLibrary) return@toggleLibrary
+                        libraryJob = detailScope.launch {
                             loadState = loadState.copy(syncingLibrary = true, errorMessage = null)
                             try {
                                 val adding = detailState.manga?.favorite != true
@@ -395,9 +417,13 @@ fun BrowseContentView(
                                         nav.manga.url,
                                     )
                                 }
+                                currentCoroutineContext().ensureActive()
                                 onRetryMangaDetail()
                                 loadState = loadState.copy(syncingLibrary = false)
+                            } catch (cancelled: CancellationException) {
+                                throw cancelled
                             } catch (e: Exception) {
+                                currentCoroutineContext().ensureActive()
                                 loadState = loadState.copy(
                                     syncingLibrary = false,
                                     errorMessage = "Failed to update library: ${e.message}",
