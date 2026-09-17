@@ -26,4 +26,30 @@ reported 60 tests: 59 passed, one existing skip, zero failures/errors. Spotless 
 git diff checks passed. XML results and logs are retained under
 `build/notification-spam-evidence/` and `build/notification-spam-*.log`.
 
-Packaging and installed verification are recorded below once completed.
+## Installed verification
+
+`packageMsi`, `verifyCleanDistribution` and `scripts/verify-msi-package.ps1` passed.
+Windows Installer returned 0. Preferences, download queue and library database
+SHA-256 values matched the pre-upgrade copies before restarting the application.
+
+MSI: `desktop-app/build/compose/binaries/main/msi/mihondesk-0.2.15.msi`.
+SHA-256: `480629CB5444F75884FD2371CE9B04EFA37FC5259DFF40C1B2E15CBD6E20AA63`.
+
+The installed desktop JAR matches the packaged JAR:
+`E423CB5CA7458BD5689AB70407A80AD3270A81A1992DFB8455E305C6C4DDE7EE`.
+Embedded version: 0.2.15; revision:
+`4ec47590b1b16d54f43e127433fbb025375c6760`; dirty=false.
+
+All 11 notification, animation and chapter-detail tests passed with installed
+JARs first on the classpath, with no failures/errors/skips. The regression asserts
+that the notification service is loaded from the installed JAR. Its 145 progress
+events request zero native messages; completion and failure each request one.
+This validates the delivery boundary without generating 145 real Windows popups.
+Animation tests also assert installed class origin and verify intermediate fill,
+spinner movement, static pause, reset and completion.
+
+Installer logs, build identity, profile hashes, source and installed XML results,
+and installed animation renders are retained in `build/notification-spam-evidence/`.
+The installed executable was relaunched; its window title is `mihondesk` and
+the app process reports Responding=true. Launch evidence is saved alongside the
+installation checks. No GitHub release was published for this local repair.
