@@ -19,11 +19,14 @@ time, retain single-flight state, and leave the app open if preparation fails.
 
 - [x] Regress handshake readiness, cancellation, caller identity/exit failure and timeout.
 - [x] Implement launcher, receipt, presenter/UI action and graceful exit integration.
-- [x] Run source and packaged regressions, real isolated EXE replacement and shell rollback, record evidence.
+- [x] Run source and packaged regressions, real isolated EXE replacement and rollback, record evidence.
 
 Evidence: [portable handoff verification](../evidence/2026-09-18-portable-update-handoff.md).
 Native validation exposed the jpackage launcher/JVM process split; handoff now waits
 for the same-executable ancestor chain before replacing the installation.
+Final verification also reproduced a Windows download destination replacement lock;
+bounded atomic-move retries now cover release, persistent lock and cancellation.
+The final packaged suite passed 88 tests with one optional live check skipped.
 
 No user installation is modified by tests. Installed-profile rollback, historical
 release validation and clean Windows acceptance remain part of the full goal.
