@@ -3,6 +3,7 @@ package mihon.desktop.ui.library
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -57,6 +58,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -65,7 +67,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -134,13 +143,7 @@ fun MangaDetailScreen(
         color = MaterialTheme.colorScheme.surface,
     ) {
         when {
-            state.loading -> Column(
-                Modifier.fillMaxSize(),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
-            ) {
-                CircularProgressIndicator(modifier = Modifier.testTag("manga-detail-loading"))
-            }
+            state.loading -> DetailLoading(showBack, onBack)
             state.errorMessage != null -> DetailMessage(
                 message = state.errorMessage,
                 tag = "manga-detail-error",
@@ -1292,6 +1295,40 @@ private fun chapterActionLabel(
     }
     ChapterReaderAvailability.MissingLocalContent -> strings.text(UiText.LocateContent)
     ChapterReaderAvailability.RemoteOnly -> strings.text(UiText.SourceSupportRequired)
+}
+
+@Composable
+private fun DetailLoading(showBack: Boolean, onBack: () -> Unit) {
+    val focusRequester = remember { FocusRequester() }
+    val strings = LocalStrings.current
+    LaunchedEffect(showBack) {
+        if (showBack) focusRequester.requestFocus()
+    }
+    Column(
+        Modifier.fillMaxSize().then(
+            if (showBack) {
+                Modifier.focusRequester(focusRequester).onPreviewKeyEvent {
+                    if (it.key == Key.Escape && it.type == KeyEventType.KeyUp) {
+                        onBack()
+                        true
+                    } else {
+                        false
+                    }
+                }.focusable()
+            } else {
+                Modifier
+            },
+        ),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        CircularProgressIndicator(modifier = Modifier.testTag("manga-detail-loading"))
+        if (showBack) {
+            TextButton(onClick = onBack, modifier = Modifier.testTag("manga-detail-back")) {
+                Text(strings.mangaDetailBack)
+            }
+        }
+    }
 }
 
 @Composable

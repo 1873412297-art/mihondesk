@@ -1,6 +1,8 @@
 package mihon.desktop.extension
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -71,9 +73,11 @@ class OnlineMangaSyncService(
         // Fetch chapter list from source manager
         // A failed chapter request must not be converted into a successful, empty favorite.
         // Fetch before starting the transaction so the database remains unchanged on failure.
+        currentCoroutineContext().ensureActive()
         val chapters = sourceManager.getChapterList(sourceId, detailedManga)
 
         // Persist to database in a single transaction
+        currentCoroutineContext().ensureActive()
         libraryRepository.transaction {
             val now = System.currentTimeMillis()
             val existingManga = libraryRepository.findManga(sourceId, detailedManga.url)

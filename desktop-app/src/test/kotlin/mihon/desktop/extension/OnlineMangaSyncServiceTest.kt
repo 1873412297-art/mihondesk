@@ -1,6 +1,12 @@
 package mihon.desktop.extension
 
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.async
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import mihon.desktop.library.db.DesktopLibraryDatabaseFactory
 import mihon.extension.source.WindowsCatalogueSource
 import mihon.extension.source.model.FilterList
@@ -14,6 +20,8 @@ import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.CsvSource
 import java.io.IOException
 import java.nio.file.Path
 
@@ -85,15 +93,65 @@ class OnlineMangaSyncServiceTest {
         }
     }
 
-    private class FakeSource(private val failChapters: Boolean = false) : WindowsCatalogueSource {
+    @ParameterizedTest
+    @CsvSource("details,false", "chapters,false", "details,true", "chapters,true")
+    fun `cancelled source result cannot start database persistence`(
+        stage: String,
+        adding: Boolean,
+    ): Unit = runBlocking {
+        val repository = DesktopLibraryDatabaseFactory.open(tempDir.resolve("cancelled.db"))
+        val started = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        val manager = DesktopSourceManager().apply {
+            registerBuiltinSource(
+                FakeSource(beforeResponse = { responseStage ->
+                    if (responseStage == stage) {
+                        started.complete(Unit)
+                        withContext(NonCancellable) { release.await() }
+                    }
+                }),
+            )
+        }
+        val service = OnlineMangaSyncService(repository, manager)
+        val request = async {
+            val manga = SManga(url = "/cancelled", title = "Cancelled")
+            if (adding) {
+                service.addOrUpdateOnlineManga(FakeSource.ID, manga)
+            } else {
+                service.prepareOnlineMangaForReading(FakeSource.ID, manga)
+            }
+        }
+        try {
+            withTimeout(5000) { started.await() }
+            request.cancel()
+            release.complete(Unit)
+            withTimeout(5000) { request.join() }
+            assertTrue(request.isCancelled)
+            assertTrue(repository.allMangaSnapshot().isEmpty())
+            assertTrue(repository.allChaptersSnapshot().isEmpty())
+        } finally {
+            release.complete(Unit)
+            request.cancelAndJoin()
+            repository.close()
+        }
+    }
+
+    private class FakeSource(
+        private val failChapters: Boolean = false,
+        private val beforeResponse: suspend (String) -> Unit = {},
+    ) : WindowsCatalogueSource {
         override val id = ID
         override val name = "Fake"
         override val lang = "en"
         override suspend fun getPopularManga(page: Int) = MangasPage(emptyList(), false)
         override suspend fun getLatestUpdates(page: Int) = MangasPage(emptyList(), false)
         override suspend fun searchManga(page: Int, query: String, filters: FilterList) = MangasPage(emptyList(), false)
-        override suspend fun getMangaDetails(manga: SManga) = manga.copy(initialized = true)
+        override suspend fun getMangaDetails(manga: SManga): SManga {
+            beforeResponse("details")
+            return manga.copy(initialized = true)
+        }
         override suspend fun getChapterList(manga: SManga): List<SChapter> {
+            beforeResponse("chapters")
             if (failChapters) throw IOException("network unavailable")
             return listOf(SChapter(url = "/chapter/1", name = "Chapter 1", chapterNumber = 1f))
         }
