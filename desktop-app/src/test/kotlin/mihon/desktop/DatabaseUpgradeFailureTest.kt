@@ -8,6 +8,7 @@ import mihon.desktop.i18n.DesktopStrings
 import mihon.desktop.i18n.UiText
 import mihon.desktop.i18n.text
 import mihon.desktop.library.db.DesktopLibraryDatabaseOpenException
+import mihon.desktop.platform.PortableUpdatePendingException
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
@@ -36,7 +37,7 @@ class DatabaseUpgradeFailureTest {
         val strings = DesktopStrings.resolve(language)
         val output = ByteArrayOutputStream()
         var shown: Pair<String, String>? = null
-        reportDatabaseUpgradeFailure(
+        reportStartupRecoveryFailure(
             DesktopLibraryDatabaseOpenException.SnapshotFailed(database, directory, sensitive),
             true,
             output,
@@ -57,11 +58,12 @@ class DatabaseUpgradeFailureTest {
         val errors = listOf(
             DesktopLibraryDatabaseOpenException.SnapshotFailed(database, directory, sensitive),
             DesktopLibraryDatabaseOpenException.MigrationFailed(database, 1, 3, sensitive, directory.resolve("old.db")),
+            PortableUpdatePendingException(directory),
         )
         errors.forEach { error ->
             val output = ByteArrayOutputStream()
             var shown = false
-            reportDatabaseUpgradeFailure(error, false, output, DesktopStrings.resolve(AppLanguage.English)) { _, _ ->
+            reportStartupRecoveryFailure(error, false, output, DesktopStrings.resolve(AppLanguage.English)) { _, _ ->
                 shown = true
             } shouldBe true
             shown shouldBe false
@@ -69,11 +71,31 @@ class DatabaseUpgradeFailureTest {
         }
     }
 
+    @ParameterizedTest
+    @EnumSource(AppLanguage::class, names = ["English", "SimplifiedChinese", "TraditionalChinese"])
+    fun `pending portable update gives localized recovery instructions`(language: AppLanguage) {
+        val strings = DesktopStrings.resolve(language)
+        val output = ByteArrayOutputStream()
+        var shown: Pair<String, String>? = null
+        reportStartupRecoveryFailure(PortableUpdatePendingException(directory), true, output, strings) {
+                title,
+                message,
+            ->
+            shown = title to message
+        } shouldBe true
+        shown shouldBe (
+            strings.text(UiText.PortableUpdatePendingTitle) to
+                strings.text(UiText.PortableUpdatePending, directory)
+            )
+        output.toString("UTF-8") shouldContain "PORTABLE_UPDATE_PENDING"
+        output.toString("UTF-8") shouldNotContain "private-profile"
+    }
+
     @Test
     fun `failed migration shows preserved snapshot location and never raw cause`() {
         val snapshot = directory.resolve("before.db")
         var shown = ""
-        reportDatabaseUpgradeFailure(
+        reportStartupRecoveryFailure(
             DesktopLibraryDatabaseOpenException.MigrationFailed(database, 1, 3, sensitive, snapshot),
             true,
             ByteArrayOutputStream(),
@@ -89,7 +111,7 @@ class DatabaseUpgradeFailureTest {
     @Test
     fun `unrelated startup errors retain existing handler`() {
         val output = ByteArrayOutputStream()
-        reportDatabaseUpgradeFailure(sensitive, true, output, DesktopStrings.resolve(AppLanguage.English)) { _, _ ->
+        reportStartupRecoveryFailure(sensitive, true, output, DesktopStrings.resolve(AppLanguage.English)) { _, _ ->
             error("Unexpected dialog")
         } shouldBe false
         output.size() shouldBe 0

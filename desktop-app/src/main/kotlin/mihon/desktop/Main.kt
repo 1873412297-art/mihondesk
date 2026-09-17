@@ -9,6 +9,8 @@ import mihon.desktop.i18n.AppLanguage
 import mihon.desktop.i18n.DesktopStrings
 import mihon.desktop.platform.DesktopProfileDirectories
 import mihon.desktop.platform.DesktopProfileLock
+import mihon.desktop.platform.PortableUpdateGuard
+import mihon.desktop.platform.PortableUpdatePendingException
 import mihon.desktop.platform.ProfileInUseException
 import mihon.desktop.preferences.DesktopPreferenceStore
 import mihon.desktop.ui.MihonDesktopApp
@@ -27,9 +29,13 @@ fun main(args: Array<String>) {
     var interactiveStartup = false
     var startupLanguage = AppLanguage.System
     val exitCode = try {
-        interactiveStartup = DesktopCommandParser.parse(args) == DesktopCommand.LaunchUi
+        val requestedCommand = DesktopCommandParser.parse(args)
+        interactiveStartup = requestedCommand == DesktopCommand.LaunchUi
+        PortableUpdateGuard.requireAllowed(executableDirectory, requestedCommand, System.getenv())
         val profile = DesktopProfileDirectories.resolve(args, System.getenv(), executableDirectory)
         DesktopProfileLock.acquire(profile.root).use {
+            // Close the race with an updater creating the guard after our initial check.
+            PortableUpdateGuard.requireAllowed(executableDirectory, requestedCommand, System.getenv())
             startupLanguage = runCatching {
                 DesktopPreferenceStore(profile.root.resolve("preferences.properties")).load().language
             }.getOrDefault(AppLanguage.System)
@@ -55,10 +61,10 @@ fun main(args: Array<String>) {
         error.exitCode
     } catch (e: Throwable) {
         e.printStackTrace(System.err)
-        if (!reportDatabaseUpgradeFailure(e, interactiveStartup, System.out, DesktopStrings.resolve(startupLanguage))) {
+        if (!reportStartupRecoveryFailure(e, interactiveStartup, System.out, DesktopStrings.resolve(startupLanguage))) {
             DesktopCommandRunner.writeStartupFailure(System.out)
         }
-        1
+        if (e is PortableUpdatePendingException) 75 else 1
     }
     exitProcess(exitCode)
 }
