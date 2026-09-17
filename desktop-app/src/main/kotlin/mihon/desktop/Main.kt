@@ -32,6 +32,7 @@ fun main(args: Array<String>) {
                     DesktopCommandRunner(activeRuntime, System.out).run(desktopCommand)
                 },
                 launchUi = { activeRuntime ->
+                    configureDesktopRendering()
                     application(exitProcessOnExit = false) {
                         MihonDesktopApp(activeRuntime)
                     }
