@@ -68,6 +68,7 @@ import mihon.desktop.ui.library.LibraryImportController
 import mihon.desktop.ui.library.LibraryPresenter
 import mihon.desktop.ui.library.MangaDetailActions
 import mihon.desktop.ui.library.chapterDisplayLabel
+import mihon.desktop.ui.library.withDownloadProgress
 import mihon.desktop.ui.reader.DecodedReaderPage
 import mihon.desktop.ui.reader.LibraryChapterBookmarkStore
 import mihon.desktop.ui.reader.ReaderChapterTransitionChapter
@@ -172,7 +173,7 @@ fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
     }
     val libraryState by libraryPresenter.state.collectAsState()
     val libraryBatchState by libraryPresenter.batchState.collectAsState()
-    val mangaDetailState by libraryPresenter.detailState.collectAsState()
+    val repositoryMangaDetailState by libraryPresenter.detailState.collectAsState()
     val sourceNames = remember(runtime.sourceManager, libraryState.items) {
         runCatching {
             runtime.sourceManager.getSources().associate { it.id to it.name }
@@ -236,6 +237,9 @@ fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
             kotlinx.coroutines.flow.MutableStateFlow(false)
         }
         ).collectAsState()
+    val mangaDetailState = remember(repositoryMangaDetailState, downloadsQueue, isDownloaderRunning) {
+        repositoryMangaDetailState.withDownloadProgress(downloadsQueue, isDownloaderRunning)
+    }
     val downloadSpeed by (
         downloader?.speedBytesPerSec ?: remember {
             kotlinx.coroutines.flow.MutableStateFlow(0.0)
