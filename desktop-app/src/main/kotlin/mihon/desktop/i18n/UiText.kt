@@ -2,6 +2,42 @@ package mihon.desktop.i18n
 
 /** App-owned labels. Source metadata and diagnostic details are not translated here. */
 enum class UiText(val english: String, val simplified: String, val traditional: String) {
+    AppUpdateTitle("App updates", "应用更新", "應用程式更新"),
+    AppUpdateCheck("Check for updates", "检查更新", "檢查更新"),
+    AppUpdateChecking("Checking releases…", "正在检查版本…", "正在檢查版本…"),
+    AppUpdateCurrent("You are running the latest available version.", "当前已是最新可用版本。", "目前已是最新可用版本。"),
+    AppUpdateAvailable("Version {0} is available", "发现新版本 {0}", "發現新版本 {0}"),
+    AppUpdateDownload("Download update…", "下载更新…", "下載更新…"),
+    AppUpdateSave("Save update package", "保存更新包", "儲存更新套件"),
+    AppUpdateProgress("Downloaded {0} MiB / {1} MiB", "已下载 {0} MiB / {1} MiB", "已下載 {0} MiB / {1} MiB"),
+    AppUpdatePreparing("Preparing verified download…", "正在准备校验下载…", "正在準備驗證下載…"),
+    AppUpdatePublishing("Saving verified package…", "正在保存已校验的更新包…", "正在儲存已驗證的更新套件…"),
+    AppUpdateCancelling("Cancelling… Please wait for cleanup.", "正在取消，请等待清理完成。", "正在取消，請等待清理完成。"),
+    AppUpdateCancelled("Cancelled. You can try again.", "已取消，可以重试。", "已取消，可以重試。"),
+    AppUpdateCancel("Cancel", "取消", "取消"),
+    AppUpdateFailed(
+        "Could not check or verify the update. Check your connection and save location, then retry.",
+        "检查或校验更新失败，请检查网络和保存位置后重试。",
+        "檢查或驗證更新失敗，請檢查網路與儲存位置後重試。",
+    ),
+    AppUpdateUnsupported(
+        "No matching Windows package is available. Visit the release page.",
+        "此版本暂无匹配的 Windows 更新包，请查看发布页面。",
+        "此版本暫無符合的 Windows 更新套件，請查看發佈頁面。",
+    ),
+    AppUpdateRelease("Release page", "发布页面", "發佈頁面"),
+    AppUpdateReady("SHA-256 verified. Saved to:\n{0}", "SHA-256 校验通过，已保存到：\n{0}", "SHA-256 驗證通過，已儲存至：\n{0}"),
+    AppUpdateFolder("Open folder", "打开文件夹", "開啟資料夾"),
+    AppUpdateManual(
+        "Close mihondesk before installing. For portable packages, follow the recovery-enabled updater instructions in the release documentation.",
+        "安装前请关闭 mihondesk。便携版请按发布文档使用支持恢复的更新器。",
+        "安裝前請關閉 mihondesk。可攜版請依發佈文件使用支援還原的更新程式。",
+    ),
+    AppUpdateOpenFailed(
+        "Could not open this location. Check your default browser or file manager.",
+        "无法打开此位置，请检查默认浏览器或文件管理器。",
+        "無法開啟此位置，請檢查預設瀏覽器或檔案管理員。",
+    ),
     PortableUpdatePendingTitle("Update in progress", "更新尚未完成", "更新尚未完成"),
     PortableUpdatePending(
         "Wait for the portable updater to finish. If it has stopped, run the updater with -Recover " +

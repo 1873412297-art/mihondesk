@@ -39,6 +39,7 @@ class DesktopRuntimeFactoryTest {
             executableDirectory = tempDir.resolve("bin"),
         ).use { runtime ->
             runtime.downloader?.diskProvider?.downloadsDir shouldBe customDownloads.toAbsolutePath().normalize()
+            runtime.appUpdateService.distributionMode shouldBe mihon.desktop.platform.DistributionMode.Installed
             Files.isDirectory(customDownloads) shouldBe true
         }
     }
@@ -106,6 +107,7 @@ class DesktopRuntimeFactoryTest {
         ).use { runtime ->
             runtime.command shouldBe DesktopCommand.LaunchUi
             runtime.directories.root shouldBe executableDir.resolve("data").toAbsolutePath().normalize()
+            runtime.appUpdateService.distributionMode shouldBe mihon.desktop.platform.DistributionMode.Portable
             Files.isDirectory(runtime.directories.cache) shouldBe true
         }
     }
