@@ -21,13 +21,13 @@ database and its journal sidecars before using a snapshot.
 
 ## Implementation and validation
 
-- [ ] Regression: preserved v1 rows and WAL changes, old schema in standalone snapshot.
-- [ ] Regression: snapshot destination/write failure prevents any schema changes.
-- [ ] Snapshot creation, validation, durable atomic publication and typed failure.
-- [ ] Migration failure retains snapshot; fresh/current/rejected schemas avoid copies.
-- [ ] Verify restored snapshot can migrate and preserve all business data.
-- [ ] Source regression, packaged-class verification and actual EXE upgrade fixture.
-- [ ] Record evidence and merge verified changes into local main.
+- [x] Regression: preserved v1 rows and WAL changes, old schema in standalone snapshot.
+- [x] Regression: snapshot destination/write failure prevents any schema changes.
+- [x] Snapshot creation, validation, durable atomic publication and typed failure.
+- [x] Migration failure retains snapshot; fresh/current/rejected schemas avoid copies.
+- [x] Verify restored snapshot can migrate and preserve all business data.
+- [x] Source regression, packaged-class verification and actual EXE upgrade fixture.
+- [x] Record evidence and merge verified changes into local main.
 
 Reference: https://www.sqlite.org/lang_vacuum.html, section 2.1 (consistent snapshots,
 output publication risks on interruption, SQL filename expressions, active-transaction
