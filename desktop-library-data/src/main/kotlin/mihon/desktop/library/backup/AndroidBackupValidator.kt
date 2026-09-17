@@ -13,7 +13,9 @@ class AndroidBackupValidator {
     fun validate(
         backup: AndroidBackup,
         limits: BackupLimits = BackupLimits.DEFAULT,
+        checkCancelled: () -> Unit = {},
     ): ValidatedAndroidBackup {
+        checkCancelled()
         if (backup.backupManga.size > limits.maxManga) {
             reject("backupManga[${limits.maxManga}]", "manga count exceeds ${limits.maxManga}")
         }
@@ -25,6 +27,7 @@ class AndroidBackupValidator {
         val categoryNames = mutableSetOf<String>()
         val categoryOrders = mutableSetOf<Long>()
         backup.backupCategories.forEachIndexed { index, category ->
+            checkCancelled()
             val path = "backupCategories[$index]"
             checkString(category.name, "$path.name", limits)
             // Suwayomi does not emit Mihon field 3: zero is an absent ID, not an identity.
@@ -41,6 +44,7 @@ class AndroidBackupValidator {
         val mangaMemos = ArrayList<String>(backup.backupManga.size)
         val chapterMemos = ArrayList<List<String>>(backup.backupManga.size)
         backup.backupManga.forEachIndexed { mangaIndex, manga ->
+            checkCancelled()
             val path = "backupManga[$mangaIndex]"
             if (!mangaIdentities.add(manga.source to manga.url)) reject(path, "duplicate manga identity")
             checkString(manga.url, "$path.url", limits)
@@ -59,6 +63,7 @@ class AndroidBackupValidator {
             val chapterUrls = mutableSetOf<String>()
             val perMangaChapterMemos = ArrayList<String>(manga.chapters.size)
             manga.chapters.forEachIndexed { chapterIndex, chapter ->
+                checkCancelled()
                 val chapterPath = "$path.chapters[$chapterIndex]"
                 chapterCount++
                 if (chapterCount >
@@ -76,15 +81,18 @@ class AndroidBackupValidator {
             chapterMemos += perMangaChapterMemos
 
             manga.categories.forEachIndexed { index, categoryOrder ->
+                checkCancelled()
                 if (categoryOrder !in categoryOrders) reject("$path.categories[$index]", "unknown category order")
             }
             manga.history.forEachIndexed { index, history ->
+                checkCancelled()
                 val historyPath = "$path.history[$index]"
                 checkString(history.url, "$historyPath.url", limits)
                 if (history.url !in chapterUrls) reject("$historyPath.url", "history chapter URL is absent")
             }
             val trackingIds = mutableSetOf<Int>()
             manga.tracking.forEachIndexed { index, tracking ->
+                checkCancelled()
                 val trackingPath = "$path.tracking[$index]"
                 trackCount++
                 if (trackCount > limits.maxTracks) reject(trackingPath, "tracking count exceeds ${limits.maxTracks}")
@@ -97,11 +105,13 @@ class AndroidBackupValidator {
         }
 
         backup.backupSources.forEachIndexed { index, source ->
+            checkCancelled()
             checkString(source.name, "backupSources[$index].name", limits)
         }
 
         var preferenceCount = 0
         backup.backupPreferences.forEachIndexed { index, preference ->
+            checkCancelled()
             preferenceCount++
             if (preferenceCount > limits.maxPreferences) {
                 reject("backupPreferences[$index]", "preference count exceeds ${limits.maxPreferences}")
@@ -109,9 +119,11 @@ class AndroidBackupValidator {
             validatePreference(preference, "backupPreferences[$index]", limits)
         }
         backup.backupSourcePreferences.forEachIndexed { sourceIndex, sourcePreferences ->
+            checkCancelled()
             val path = "backupSourcePreferences[$sourceIndex]"
             checkString(sourcePreferences.sourceKey, "$path.sourceKey", limits)
             sourcePreferences.prefs.forEachIndexed { preferenceIndex, preference ->
+                checkCancelled()
                 val preferencePath = "$path.prefs[$preferenceIndex]"
                 preferenceCount++
                 if (preferenceCount > limits.maxPreferences) {
@@ -122,6 +134,7 @@ class AndroidBackupValidator {
         }
 
         backup.backupExtensionStores.forEachIndexed { index, store ->
+            checkCancelled()
             val path = "backupExtensionStores[$index]"
             checkString(store.indexUrl, "$path.indexUrl", limits)
             checkString(store.name, "$path.name", limits)

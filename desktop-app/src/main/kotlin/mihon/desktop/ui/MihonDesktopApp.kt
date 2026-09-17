@@ -61,6 +61,8 @@ import mihon.desktop.track.toDesktopTrackRecord
 import mihon.desktop.track.toTrackingRecord
 import mihon.desktop.ui.category.EditMangaCategoriesDialog
 import mihon.desktop.ui.category.ManageCategoriesDialog
+import mihon.desktop.ui.library.BackupRestoreDialog
+import mihon.desktop.ui.library.BackupRestorePresenter
 import mihon.desktop.ui.library.ChapterReaderAvailability
 import mihon.desktop.ui.library.ImportActionState
 import mihon.desktop.ui.library.LibraryImportActions
@@ -204,6 +206,11 @@ fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
     val importController = remember(runtime.backupImporter, runtime.localImporter, runtime.localLibraryRoot) {
         LibraryImportController(runtime.backupImporter, runtime.localImporter, runtime.localLibraryRoot)
     }
+    val backupRestore = remember(importController, presenterScope) {
+        BackupRestorePresenter(presenterScope, importController::importBackup)
+    }
+    val backupRestoreState by backupRestore.state.collectAsState()
+    DisposableEffect(backupRestore) { onDispose(backupRestore::close) }
     val importActions = remember(importController, preferences.language) {
         val importStrings = mihon.desktop.i18n.DesktopStrings.resolve(preferences.language)
         LibraryImportActions(
@@ -737,9 +744,10 @@ fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
                                         },
                                         onMangaDetailRetry = libraryPresenter::retryDetail,
                                         onImportBackup = {
-                                            presenterScope.launch {
-                                                importState = ImportActionState.Running
-                                                importState = importActions.chooseAndImportBackup()
+                                            mihon.desktop.ui.library.chooseAndroidBackup(
+                                                strings.libraryImportBackup,
+                                            )?.let {
+                                                backupRestore.start(it)
                                             }
                                         },
                                         onImportLocal = {
@@ -1068,6 +1076,9 @@ fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
                                     )
                                 }
                                 ImportStateDialog(importState) { importState = ImportActionState.Idle }
+                                BackupRestoreDialog(backupRestoreState, {
+                                    backupRestore.cancel()
+                                }, backupRestore::dismiss)
                                 exportNotification?.let { msg ->
                                     AlertDialog(
                                         onDismissRequest = { exportNotification = null },
@@ -1182,7 +1193,7 @@ private fun ReaderDestination(
 }
 
 @Composable
-private fun ImportStateDialog(state: ImportActionState, onDismiss: () -> Unit) {
+internal fun ImportStateDialog(state: ImportActionState, onDismiss: () -> Unit) {
     val strings = mihon.desktop.i18n.LocalStrings.current
     when (state) {
         ImportActionState.Idle -> Unit

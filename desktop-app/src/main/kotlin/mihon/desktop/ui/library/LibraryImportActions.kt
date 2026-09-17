@@ -3,9 +3,12 @@ package mihon.desktop.ui.library
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import mihon.desktop.library.backup.AndroidBackupImporter
 import mihon.desktop.library.backup.BackupDecodeException
+import mihon.desktop.library.backup.BackupImportControl
 import mihon.desktop.library.backup.BackupValidationException
 import mihon.desktop.library.local.LocalImportRejected
 import mihon.desktop.library.local.LocalMangaImporter
@@ -37,6 +40,7 @@ class LibraryImportController(
     private val localLibraryRoot: Path,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val clock: () -> Long = System::currentTimeMillis,
+    private val controlledBackup: ((Path, Long, BackupImportControl) -> ImportReport)? = null,
 ) {
     constructor(
         backupImporter: AndroidBackupImporter,
@@ -50,10 +54,17 @@ class LibraryImportController(
         localLibraryRoot = localLibraryRoot,
         ioDispatcher = ioDispatcher,
         clock = clock,
+        controlledBackup = backupImporter::import,
     )
 
-    suspend fun importBackup(path: Path): ImportActionState = runImport {
-        importBackup(path, clock())
+    suspend fun importBackup(path: Path): ImportActionState {
+        val context = currentCoroutineContext()
+        return importBackup(path, BackupImportControl(checkActive = context::ensureActive))
+    }
+
+    suspend fun importBackup(path: Path, control: BackupImportControl): ImportActionState = runImport {
+        control.checkpoint()
+        controlledBackup?.invoke(path, clock(), control) ?: importBackup(path, clock())
     }
 
     suspend fun importLocal(path: Path): ImportActionState = runImport {

@@ -29,12 +29,19 @@ class AndroidBackupImporter(
     private val preferences: SupportedPreferencePolicy = SupportedPreferencePolicy(),
     private val checkpoint: ImportCheckpoint = ImportCheckpoint.NONE,
 ) {
-    fun import(path: Path, nowMillis: Long): ImportReport {
-        val validated = validator.validate(codec.decode(path))
+    fun import(path: Path, nowMillis: Long): ImportReport = import(path, nowMillis, BackupImportControl())
+
+    fun import(path: Path, nowMillis: Long, control: BackupImportControl): ImportReport {
+        control.report(BackupImportProgress())
+        val backup = codec.decode(path, checkCancelled = control::checkpoint)
+        control.report(BackupImportProgress(BackupImportStage.VALIDATING, totalManga = backup.backupManga.size))
+        val validated = validator.validate(backup, checkCancelled = control::checkpoint)
+        control.report(BackupImportProgress(BackupImportStage.RESTORING, totalManga = backup.backupManga.size))
         return mutations.transaction {
             val accumulator = ImportAccumulator(path, nowMillis)
-            mergeCategoriesSourcesMangaChildrenAndPreferences(validated, accumulator, nowMillis)
+            mergeCategoriesSourcesMangaChildrenAndPreferences(validated, accumulator, nowMillis, control)
             checkpoint.beforeReport()
+            control.beginCommit(backup.backupManga.size)
             val report = accumulator.success(nowMillis)
             val reportId = insertReport(report.toRecord())
             report.items.forEach { insertReportItem(reportId, it.toRecord()) }
@@ -46,12 +53,14 @@ class AndroidBackupImporter(
         validated: ValidatedAndroidBackup,
         accumulator: ImportAccumulator,
         nowMillis: Long,
+        control: BackupImportControl,
     ) {
         val backup = validated.backup
         val databaseCategoryIdByOrder = mutableMapOf<Long, Long>()
         val databaseCategoryIdByName = mutableMapOf<String, Long>()
         val backupCategoryNameById = mutableMapOf<Long, String>()
         backup.backupCategories.forEach { category ->
+            control.checkpoint()
             val databaseId =
                 upsertCategory(CategoryRecord(name = category.name, sortOrder = category.order, flags = category.flags))
             databaseCategoryIdByOrder[category.order] = databaseId
@@ -60,10 +69,12 @@ class AndroidBackupImporter(
         }
 
         backup.backupSources.forEach { source ->
+            control.checkpoint()
             upsertSource(SourceRecord(source.sourceId, source.name, nowMillis))
         }
 
         backup.backupManga.forEachIndexed { mangaIndex, manga ->
+            control.checkpoint()
             val incomingManga = manga.toRecord(validated.mangaMemoJson[mangaIndex])
             val existingManga = findManga(manga.source, manga.url)
             val mangaId = if (existingManga == null) {
@@ -76,12 +87,14 @@ class AndroidBackupImporter(
             }
 
             manga.categories.forEach { categoryOrder ->
+                control.checkpoint()
                 linkCategory(mangaId, checkNotNull(databaseCategoryIdByOrder[categoryOrder]))
                 accumulator.categoriesLinked++
             }
 
             val chapterIdByUrl = mutableMapOf<String, Long>()
             manga.chapters.forEachIndexed { chapterIndex, chapter ->
+                control.checkpoint()
                 val incomingChapter = chapter.toRecord(mangaId, validated.chapterMemoJson[mangaIndex][chapterIndex])
                 val existingChapter = findChapter(mangaId, chapter.url)
                 val chapterId = if (existingChapter == null) {
@@ -96,6 +109,7 @@ class AndroidBackupImporter(
             }
 
             manga.history.forEach { history ->
+                control.checkpoint()
                 val incoming = HistoryRecord(
                     chapterId = checkNotNull(chapterIdByUrl[history.url]),
                     lastRead = history.lastRead,
@@ -105,6 +119,7 @@ class AndroidBackupImporter(
             }
 
             manga.tracking.forEach { tracking ->
+                control.checkpoint()
                 val incoming = tracking.toRecord(mangaId)
                 val existing = findTracking(mangaId, tracking.syncId.toLong())
                 if (existing == null) {
@@ -113,9 +128,11 @@ class AndroidBackupImporter(
                     updateTracking(BackupMergePolicy.mergeTracking(existing, incoming))
                 }
             }
+            control.report(BackupImportProgress(BackupImportStage.RESTORING, mangaIndex + 1, backup.backupManga.size))
         }
 
         backup.backupPreferences.forEach { preference ->
+            control.checkpoint()
             val decision = preferences.classifyApp(preference.key, preference.value)
             val remapped = remapCategoryPreference(
                 preference,
@@ -135,7 +152,9 @@ class AndroidBackupImporter(
         }
 
         backup.backupSourcePreferences.forEach { sourcePreferences ->
+            control.checkpoint()
             sourcePreferences.prefs.forEach { preference ->
+                control.checkpoint()
                 when (
                     val decision = preferences.classifySource(
                         sourcePreferences.sourceKey,
@@ -166,6 +185,7 @@ class AndroidBackupImporter(
         }
 
         backup.backupExtensionStores.forEachIndexed { index, _ ->
+            control.checkpoint()
             accumulator.items += ImportReportItem(
                 itemType = "EXTENSION_STORE",
                 itemKey = "extension-store[$index]",
