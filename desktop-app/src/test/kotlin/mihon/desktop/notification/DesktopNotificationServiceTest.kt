@@ -3,8 +3,61 @@ package mihon.desktop.notification
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
+import java.nio.file.Path
 
 class DesktopNotificationServiceTest {
+
+    @Test
+    fun `page progress stays in app and only the chapter result reaches Windows`() {
+        val systemMessages = mutableListOf<Triple<String, String, Boolean>>()
+        val service = WindowsDesktopNotificationService(
+            systemMessageSink = { title, message, isError -> systemMessages.add(Triple(title, message, isError)) },
+        )
+        System.getenv("MIHON_NOTIFICATION_INSTALLED_APP")?.let { installedApp ->
+            val origin = Path.of(service.javaClass.protectionDomain.codeSource.location.toURI())
+            origin.startsWith(Path.of(installedApp)) shouldBe true
+            println("Notification service loaded from $origin")
+        }
+
+        repeat(145) { page ->
+            service.notifyDownloadProgress("Test Manga", "Gallery", (page + 1) / 145f)
+        }
+
+        systemMessages shouldHaveSize 0
+        service.recentNotifications.value.first().progress shouldBe 1f
+
+        service.notifyDownloadComplete("Test Manga", "Gallery")
+        systemMessages shouldBe listOf(Triple("Download Complete", "Test Manga - Gallery", false))
+
+        service.notifyDownloadError("Test Manga", "Chapter 2", "Connection interrupted")
+        systemMessages shouldHaveSize 2
+        systemMessages.last() shouldBe Triple(
+            "Download Failed",
+            "Test Manga - Chapter 2: Connection interrupted",
+            true,
+        )
+    }
+
+    @Test
+    fun `Windows delivery respects disabled notifications and hidden chapter content`() {
+        var enabled = false
+        val systemMessages = mutableListOf<String>()
+        val service = WindowsDesktopNotificationService(
+            enabledProvider = { enabled },
+            hideContentProvider = { true },
+            systemMessageSink = { _, message, _ -> systemMessages.add(message) },
+        )
+
+        service.notifyDownloadComplete("Private title", "Chapter 1")
+        service.notifyDownloadError("Private title", "Chapter 1", "Private error")
+        service.notifyDownloadProgress("Private title", "Chapter 1", 0.5f)
+        systemMessages shouldHaveSize 0
+
+        enabled = true
+        service.notifyDownloadComplete("Private title", "Chapter 1")
+        service.notifyDownloadError("Private title", "Chapter 1", "Private error")
+        systemMessages shouldBe listOf("A chapter download completed", "A chapter download failed")
+    }
 
     @Test
     fun `dispatches and stores in-app notifications without crashing in headless environment`() {
