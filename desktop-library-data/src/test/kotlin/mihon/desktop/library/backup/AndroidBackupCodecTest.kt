@@ -8,6 +8,7 @@ import okio.Buffer
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.io.ByteArrayOutputStream
+import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.zip.GZIPOutputStream
@@ -18,6 +19,20 @@ class AndroidBackupCodecTest {
     lateinit var tempDir: Path
 
     private val codec = AndroidBackupCodec()
+
+    @Test
+    fun `failed publication preserves destination and removes its temporary file`() {
+        val target = Files.createDirectory(tempDir.resolve("existing.tachibk"))
+        val original = target.resolve("original.tachibk")
+        Files.write(original, gzip(encodedBackup()))
+        val before = Files.readAllBytes(original).toList()
+
+        shouldThrow<IOException> { codec.encode(codec.decode(original), target) }
+
+        Files.readAllBytes(original).toList() shouldBe before
+        codec.decode(original).backupManga.single().title shouldBe "Series"
+        Files.list(tempDir).use { it.toList() } shouldBe listOf(target)
+    }
 
     @Test
     fun `decodes a valid raw Android ProtoBuf backup`() {

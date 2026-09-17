@@ -1269,7 +1269,7 @@ private fun DownloadsSettingsPane(
                     )
                     OutlinedButton(
                         onClick = {
-                            chooseDownloadDirectory(
+                            chooseStorageDirectory(
                                 initialPath = pathDraft,
                                 activePath = downloadsDir,
                                 title = strings.settingsDownloadChooseFolder,
@@ -1292,7 +1292,7 @@ private fun DownloadsSettingsPane(
                             isSavingPath = true
                             scope.launch {
                                 try {
-                                    val validation = withContext(Dispatchers.IO) { validateDownloadPath(draft) }
+                                    val validation = withContext(Dispatchers.IO) { validateStoragePath(draft) }
                                     pathError = validation.error
                                     if (validation.error == null) {
                                         val updated = withContext(Dispatchers.IO) {
@@ -1489,7 +1489,7 @@ private fun DownloadsSettingsPane(
     }
 }
 
-private fun chooseDownloadDirectory(initialPath: String, activePath: Path?, title: String): Path? {
+internal fun chooseStorageDirectory(initialPath: String, activePath: Path?, title: String): Path? {
     val initial = runCatching {
         initialPath.takeIf(String::isNotBlank)?.let(Path::of)
     }.getOrNull() ?: activePath
@@ -1708,22 +1708,9 @@ private fun BackupSettingsPane(
                     }
                 }
 
-                // Storage Location
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(strings.backupLocation, fontWeight = FontWeight.Medium)
-                    OutlinedTextField(
-                        value = preferences.backupStoragePath,
-                        onValueChange = { path ->
-                            val updated = preferenceStore.updatePreferences { it.copy(backupStoragePath = path) }
-                            preferences = updated
-
-                            onPreferencesChanged?.invoke(updated)
-                        },
-                        label = { Text(strings.backupLocation) },
-                        placeholder = { Text(strings.backupLocationDefault) },
-                        modifier = Modifier.fillMaxWidth().testTag("backup-storage-input"),
-                        singleLine = true,
-                    )
+                BackupStorageLocation(preferenceStore, preferences.backupStoragePath) { updated ->
+                    preferences = updated
+                    onPreferencesChanged?.invoke(updated)
                 }
 
                 // Retention Count

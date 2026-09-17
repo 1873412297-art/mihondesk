@@ -26,6 +26,41 @@ class SettingsScreenTest {
 
     @OptIn(ExperimentalTestApi::class)
     @Test
+    fun `backup path draft cannot redirect automatic backups until validated and saved`() = runComposeUiTest {
+        val store = DesktopPreferenceStore(tempDir.resolve("backup-path.properties"))
+        setContent {
+            Box(Modifier.requiredSize(1024.dp, 768.dp)) {
+                SettingsScreen(preferenceStore = store, readerSettingsStore = DesktopReaderSettingsStore(store))
+            }
+        }
+        onNodeWithTag("settings-section-Backup").performClick()
+        onNodeWithTag("backup-storage-input").performScrollTo().performTextReplacement("relative-folder")
+        store.load().backupStoragePath shouldBe ""
+        onNodeWithTag("backup-storage-save").performScrollTo().performClick()
+        waitUntil {
+            onAllNodes(androidx.compose.ui.test.hasTestTag("backup-storage-error")).fetchSemanticsNodes().isNotEmpty()
+        }
+        store.load().backupStoragePath shouldBe ""
+        val target = tempDir.resolve("备份 folder")
+        onNodeWithTag("backup-storage-input").performScrollTo().performTextReplacement(target.toString())
+        runOnIdle {
+            store.updatePreferences { it.copy(lastAutoBackupEpochMillis = 123L, desktopNotificationsEnabled = false) }
+        }
+        onNodeWithTag("backup-storage-save").performScrollTo().performClick()
+        waitUntil { store.load().backupStoragePath == target.toString() }
+        onNodeWithTag("backup-storage-saved").assertExists()
+        store.load().lastAutoBackupEpochMillis shouldBe 123L
+        store.load().desktopNotificationsEnabled shouldBe false
+        java.nio.file.Files.isDirectory(target) shouldBe true
+        java.nio.file.Files.list(target).use { it.count() } shouldBe 0L
+        onNodeWithTag("backup-storage-default").performScrollTo().performClick()
+        store.load().backupStoragePath shouldBe target.toString()
+        onNodeWithTag("backup-storage-save").performScrollTo().performClick()
+        waitUntil { store.load().backupStoragePath.isEmpty() }
+    }
+
+    @OptIn(ExperimentalTestApi::class)
+    @Test
     fun `download path draft is validated before save and preserves other settings`() = runComposeUiTest {
         val store = DesktopPreferenceStore(tempDir.resolve("path-draft.properties"))
         setContent {
