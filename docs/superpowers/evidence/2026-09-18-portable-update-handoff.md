@@ -2,7 +2,8 @@
 
 Verified 2026-09-18 CST in `D:\my project\mihon-w`. Baseline local main
 `bc6e060a5`, version 0.2.18. Implementation `78c705525`; packaged-launcher fix
-and final build `eac5ba49a20bb4c0a2d998a62ea110b7e9ba31fa`, dirty=false.
+`eac5ba49a`; final build including Windows replacement-lock recovery
+`e4036b8f26648da2e9aefdc2102de6be29f79df4`, dirty=false.
 
 ## Result
 
@@ -35,10 +36,12 @@ covered at 480/1024 px widths in light/dark themes.
   include ready-before-exit, cancellation, bad caller identity, failed shutdown,
   post-swap rollback and restart, the actual 120-second no-commit timeout, invalid
   commit token, checksum/profile-lock/archive protections and interrupted recovery.
-- Final packaged suite: 85 discovered, **84 passed**, 1 skipped, no failures/errors.
+- Final packaged suite: 89 discovered, **88 passed**, 1 skipped, no failures/errors.
   The skipped case is the optional live GitHub contract check already exercised in
   the preceding iteration. UI tests assert the service, presenter, connected panel,
   card and handoff classes originate in the actual packaged application JAR.
+- Windows file-lock regressions and related source tests: **26 passed**. The final
+  packaged suite also includes all three real Windows handle-lock cases below.
 - `spotlessCheck`, `createDistributable`, `packagePortableZip` and the distribution
   cleanliness check passed. The ZIP's app JAR matches the tested image. The embedded
   updater resource, standalone ZIP updater and source script are byte-identical.
@@ -50,7 +53,7 @@ Logs/results:
   `build/portable-updater-tests-3000416d8e5b456099c07b70eea1d779/results.json`.
 - `build/portable-handoff-winps-final.log` and
   `build/portable-updater-tests-1ee6348ffa3249f5bfb00c95d5e8d9e7/results.json`.
-- `build/portable-handoff-evidence/packaged-tests-final.log`, `packaged-results/`,
+- `build/portable-handoff-evidence/packaged-tests-accepted.log`, `packaged-results-accepted/`,
   `packaged-images/`, `package.json`; `build/portable-handoff-package-final.log`.
 
 ## Real EXE handoff
@@ -77,10 +80,21 @@ The final run proved:
 6. The receipt reports success and points to the helper log; the restarted test
    window closes normally. No test mihondesk process remained after verification.
 
-Final evidence directory:
-`build/portable-handoff-evidence/real-exe-final/c38b2378-80f8-458f-96ec-83e9aafd0c24/`.
-Its `result.txt` records original launcher PID 109492 (exit 0), replacement window
-process PID 94908 and the helper log path.
+The second native case removes `mihon-desktop-version.txt` from only the staged
+candidate JAR after readiness. The real candidate EXE then fails its post-swap probe
+with `Desktop version resource is missing`. The updater restores the original
+program/profile sentinels, retains the failed candidate, records failure and restarts
+the old real GUI. The test reads the Windows helper log without assuming UTF-8.
+
+Final evidence under `build/portable-handoff-evidence/real-exe-accepted/`:
+
+- `d90ae4fa-805c-47ae-9dcd-8f504b67a46c/result.txt`: success; original launcher
+  PID 15844 (exit 0), replacement window PID 77932.
+- `f47f2118-592a-46e5-81a4-6306cc6427ef/result.txt`: rollback; original launcher
+  PID 56240 (exit 0), restored window PID 32196.
+
+Both result files record their helper log paths. No mihondesk process remained
+after final verification.
 
 This is an isolated replacement using the same newly built 0.2.18 image as old/new
 programs, distinguished by a sentinel. It is not historical-release compatibility
@@ -94,13 +108,33 @@ root, then run `*PortableUpdateHandoffIntegrationTest`. For packaged-class tests
 the existing `build/restore-progress-evidence/packaged-tests.init.gradle`, with
 `MIHON_RESTORE_APP` and `MIHON_UPDATE_APP` set to the image's `app` directory.
 
+## Windows download replacement locks
+
+Repeated verification reproduced `AccessDeniedException` when atomically replacing
+an existing EXE after a valid download. The process holding the conflicting handle
+was not identified. Production now retries eligible filesystem failures for up to
+five atomic-move attempts, with a total of one second of backoff. Missing-file and
+unsupported-atomic-move errors are not retried; cancellation still cleans the temp
+file and preserves the existing destination before publication.
+
+Deterministic tests hold a real Windows file handle that denies deletion. They
+verify successful replacement after release, bounded failure while held, and
+cancellation during backoff, including original-file preservation and temp cleanup.
+The original implementation failed the regression before the fix; all three cases
+pass with the fix, including against the final packaged classes.
+
+Evidence in `build/portable-handoff-evidence/`: `retry-diagnostic-suite.log`,
+`access-denied-reproduction/`, `locked-destination-red.log`,
+`locked-destination-green.log`, and `locked-destination-results/`. Temporary repeat
+and stack-print diagnostics were removed before the clean build.
+
 ## Artifact and remaining scope
 
 `desktop-app/build/compose/binaries/main/portable/mihondesk-0.2.18-windows-x64-portable.zip`
 
-- Size: 493133716 bytes.
-- SHA-256: `c1f8025ddc2aa8b3b22ead92231e8e61e080c94d01dd6acb75dacc2267257820`.
-- App JAR SHA-256: `cd69d1b89287b26679255ef46bab557b86ee09710bb2e9b0bc1d4000c6c0295c`.
+- Size: 493134137 bytes.
+- SHA-256: `d384e7e499108b3df00b21a0ded54911d680abe82f770466ace6ed41234f2a58`.
+- App JAR SHA-256: `aa7930acb99f273c6ca043aa1bd4ba74675986c4894c34d6fa52642d54a194d4`.
 - Updater SHA-256: `f28c3f2fc2312e1b577dd74eafb2a23f5bebce5b6c214d8e606510d992bde305`.
 
 No user installation was changed, no installer EXE/MSI was rebuilt and nothing was
