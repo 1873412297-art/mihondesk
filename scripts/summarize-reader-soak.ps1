@@ -10,6 +10,35 @@ if ($memoryFile.Count -ne 1) { throw 'Expected exactly one process-memory stream
 $memoryRows = @(Get-Content -LiteralPath $memoryFile[0].FullName | ForEach-Object { $_ | ConvertFrom-Json })
 if ($readerRows.Count -lt 2 -or $memoryRows.Count -lt 1) { throw 'Insufficient memory samples' }
 $verification = Get-Content -LiteralPath (Join-Path $root 'stdout.json') -Raw | ConvertFrom-Json
+$readerPids = @($readerRows.processId | Sort-Object -Unique)
+if ($readerPids.Count -ne 1 -or $readerPids[0] -ne $result.soak.processId) {
+    throw 'Reader samples do not belong to the completed runtime'
+}
+if ($readerRows[0].cycles -ne 0 -or $readerRows[0].decodedTiles -ne 0 -or
+    $readerRows[-1].cycles -ne $result.soak.cycles -or
+    $readerRows[-1].decodedTiles -ne $result.soak.decodedTiles) {
+    throw 'Reader sample boundaries do not match the completed workload'
+}
+$maxReaderGap = 0.0
+for ($index = 1; $index -lt $readerRows.Count; $index++) {
+    $previous = $readerRows[$index - 1]
+    $current = $readerRows[$index]
+    $gap = $current.elapsedSeconds - $previous.elapsedSeconds
+    if ($gap -lt 0 -or $current.cycles -lt $previous.cycles -or $current.decodedTiles -lt $previous.decodedTiles) {
+        throw 'Reader sample time or progress moved backwards'
+    }
+    $maxReaderGap = [Math]::Max($maxReaderGap, $gap)
+}
+$maxProcessGap = 0.0
+for ($index = 1; $index -lt $memoryRows.Count; $index++) {
+    $gap = $memoryRows[$index].elapsedSeconds - $memoryRows[$index - 1].elapsedSeconds
+    if ($gap -lt 0) { throw 'Process sample time moved backwards' }
+    $maxProcessGap = [Math]::Max($maxProcessGap, $gap)
+}
+$observedProcessIds = @($memoryRows | ForEach-Object { $_.processes.processId } | Sort-Object -Unique)
+if ($observedProcessIds -notcontains $result.soak.processId) {
+    throw 'Process memory stream did not observe the reader runtime'
+}
 function Describe([double[]]$Values) {
     if ($Values.Count -eq 0) { return $null }
     $sorted = @($Values | Sort-Object)
@@ -38,7 +67,17 @@ $analysis = [ordered]@{
     soak = $result.soak
     verifiedAssets = $verification.verifiedAssets
     verifiedModes = $verification.verifiedModes
-    distinctReaderPids = @($readerRows.processId | Sort-Object -Unique)
+    distinctReaderPids = $readerPids
+    continuity = [ordered]@{
+        readerBoundariesMatchCompletedWorkload = $true
+        readerFirstSampleSeconds = $readerRows[0].elapsedSeconds
+        readerLastSampleSeconds = $readerRows[-1].elapsedSeconds
+        maxReaderSampleGapSeconds = [Math]::Round($maxReaderGap, 3)
+        processFirstSampleSeconds = $memoryRows[0].elapsedSeconds
+        processLastSampleSeconds = $memoryRows[-1].elapsedSeconds
+        maxProcessSampleGapSeconds = [Math]::Round($maxProcessGap, 3)
+        observedProcessIds = $observedProcessIds
+    }
     readerSamples = $readerRows.Count
     processSamples = $memoryRows.Count
     heapUsed = Describe @($readerRows | ForEach-Object { $_.heapUsedBytes })
