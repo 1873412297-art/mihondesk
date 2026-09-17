@@ -5,17 +5,17 @@
 此记录跟踪审计和证据，不承诺软件不存在任何未知缺陷。
 
 基线：`e0a1d9c88`，版本 0.2.15；工作分支 `codex/audit-critical-stability`。
-真实用户数据仅用于必要的只读检查；破坏性/故障注入场景使用独立临时目录。
+真实数据在安装前做一致性备份并核对，升级后验证记录完整；破坏性/故障注入场景使用独立临时目录。
 
 ## 检查范围与验收证据
 
 | 范围 | 必须验证的行为 | 当前证据/状态 |
 | --- | --- | --- |
-| 启动、退出、数据持久化 | 配置与数据库可恢复，多窗口/后台写入不丢配置，启动失败有可用反馈 | A5；配置/生命周期回归通过，待安装迁移核对 |
+| 启动、退出、数据持久化 | 配置与数据库可恢复，多窗口/后台写入不丢配置，启动失败有可用反馈 | A5；回归通过，真实资料迁移核对通过 |
 | 书库、导入和备份 | 备份恢复事务完整，删除和清理仅影响目标数据，导出失败保留旧备份 | 事务及原子导出回归，A1/A2/A3 修复 |
 | 下载与离线阅读 | 并发/暂停/重试/取消一致，文件身份不会碰撞，损坏/中断可恢复 | A1–A4；下载到断网阅读回归通过 |
-| 阅读器 | 进入/翻页/章节切换/退出可用，取消释放资源，阅读进度正确持久化 | 现有阅读/取消/进度回归；待安装级复验 |
-| 扩展与网络 | 进程退出/重启不移除新宿主，超时/取消不挂死，严格保持来源权限边界 | 生命周期回归，待实际 EXE 宿主检查 |
+| 阅读器 | 进入/翻页/章节切换/退出可用，取消释放资源，阅读进度正确持久化 | 回归及安装 EXE 三次独立启动的续读/完成验证通过 |
+| 扩展与网络 | 进程退出/重启不移除新宿主，超时/取消不挂死，严格保持来源权限边界 | 回归及安装 EXE 握手/重启、2 扩展 5 图源注册通过 |
 | 更新、任务与桌面界面 | 任务失败不拖垮 UI，更新路径和本地文件操作安全，重要操作反馈可见 | 设置、调度、通知回归通过 |
 
 六个 Windows 运行时模块基线命令已完成，日志 `build/critical-stability-audit/baseline.log`：
@@ -64,7 +64,7 @@ SQLDelight 原先仅在 local_manga_entry 保存一本书的根目录。新章�
 新增 schema 2→3 迁移保存已有在线下载位置；迁移可重放且有故障注入回滚检查。
 117 项数据层测试通过；17 项相关应用测试通过，包括 A1、A3、下载恢复、调度测试。
 Spotless 和 git diff 检查通过。A2 的失败回归未包含在这 17 项中，不能称完整回归通过。
-这些修改尚未打包安装，用户电脑仍运行原 0.2.15。
+这是 A3 阶段的局部验证；最终安装状态见文末。
 
 复现日志：`installed-storage-probe.log`、`storage-red.log`、`storage-root-red.log`；
 后续检查：`path-safety-green.log`、`storage-root-regression.log`、`library-regression.log`，
@@ -107,16 +107,45 @@ Spotless 和 git diff 检查通过。A2 的失败回归未包含在这 17 项中
   窗口导航、设置页面、阅读器对比度和下载动画使用现有 Compose 回归。
 
 111 项聚焦应用回归：110 通过、1 真实图源探针跳过，日志 lifecycle-green.log。
-完整六模块回归和安装验证正在执行，最终数字与安装身份待下方补充。
+完整六模块回归和安装验证已完成，数字与安装身份见下方。
 
 跳过项的基线清单已核对：14 项应用测试要求真实扩展、指定安装目录、联网仓库、
 系统计划任务或真实 WebView；extension-host 2 项要求提供实际扩展；reader-core 1 项
 因系统未开放符号链接创建而跳过。不能以这些自动跳过项声称所有图源联网阅读已验证。
-安装后将补做实际 EXE 宿主握手/重启、已装扩展注册以及安装 JAR 的存储、离线阅读和设置测试。
+安装后已补做实际 EXE 宿主握手/重启、已装扩展注册以及安装 JAR 的存储、离线阅读和设置测试。
 
 ## 完成核对
 
-本分支计划版本 0.2.16；完整测试、提交身份和实际安装证据尚待完成。
+本轮审计完成，5 类已确认缺陷均已修复、回归并安装验证；不等于对所有未知缺陷或所有图源可用性作保证。
 日志与临时测试资料保存在 build/critical-stability-audit/（不随应用分发）。
 
 完整六模块回归通过：1035 项，1018 通过、17 跳过、0 失败；8 分 46 秒。XML 已归档 final-regression/。
+
+
+## 0.2.16 实际安装验收
+
+- 代码提交：38660b6a3ef5b636fbafbf27bedc816215963de3，分支 codex/audit-critical-stability。
+- packageMsi 和 verifyCleanDistribution 通过（3 分 20 秒）；MSI 版本、浏览器/许可及卸载钩子检查通过。
+- 安装器退出码 0；安装前备份保存在 build/critical-stability-audit/profile-before-upgrade/。
+  安装过程中 preferences.properties、downloads.json、database/library.db SHA-256 均未变。
+- MSI SHA-256：`6BC3A3DF1F5B0C2D7931283723FBCFB791FC34D16D90D2C6B0F3849789281164`。
+- 已安装核心 JAR SHA-256：`9595C514E682B6FCF29E5786820D7B72A870CED404ECBC0F27A503DA363DCB9C`，与本次应用映像一致。
+  内嵌 version=0.2.16、revision=38660b6a3ef5b636fbafbf27bedc816215963de3、dirty=false。
+- 对真实数据库的一致性副本先运行安装 EXE 的 --smoke-test，schema 2→3 成功。
+  随后真实应用启动，真实数据库 integrity_check=ok、foreign_key_check 为空；8 张业务表的
+  全部行内容摘要与升级前一致（6 本书、12 章节、4 历史、2 个已下载章节）。两个旧下载目录存在。
+  preferences.properties 和 downloads.json 在启动后仍与备份字节一致。
+- 38 项安装版回归全部通过、零跳过，日志 installed-regression.log，XML 在 installed-regression/。
+  测试优先加载安装目录 JAR，并输出下载/数据库/通知/动画/阅读 UI 的类来源，覆盖本次存储修复、
+  取消/恢复、设置并发保存、断网阅读、深色文字、通知与动画、宿主握手/重启。
+  2 个实际已装扩展共 5 个图源注册并读取设置成功；这不是这些图源联网浏览全部通过的证明。
+- 实际安装 EXE 对同一隔离资料目录连续执行 3 次阅读验证，分别得到 initial-open、reopen-continue、
+  final-completion，均 SUCCEEDED。每次解码 38 块图像，覆盖 standalone/directory/CBZ/CBT/CB7/CBR/EPUB、
+  6 种阅读模式和 GIF 帧；报告 installed-reader*.json。
+- 新版主窗口已启动，进程路径为 C:/Users/18734/AppData/Local/mihondesk/mihondesk.exe，
+  标题 mihondesk、Responding=true（installed-window.json）。升级前 Windows 自动化点击关闭报
+  coordinate input geometry is unavailable，重新激活报 failed to activate captured window；
+  确认无活跃下载并保留快照后，仅按精确安装路径停止该应用进程再升级。
+  本轮原生 UI 证据为启动/响应检查；交互与像素验证来自加载安装 JAR 的 Compose 测试，未冒充人工点击验证。
+
+公开 GitHub Release 未在本轮更新；修复提交、安装包和验证记录已保留在此旁支及本机。
