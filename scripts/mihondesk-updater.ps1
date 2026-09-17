@@ -22,6 +22,15 @@ finally { $hashAlgorithm.Dispose() }
 $journalPath = Join-Path $targetParent ".mihon-update-$targetKey.json"
 $coordinatorPath = Join-Path $targetParent ".mihon-update-$targetKey.lock"
 
+function Get-ArchiveSha256([string]$Path) {
+    # Get-FileHash is a script-module command on Windows PowerShell and may not be
+    # discoverable when an app inherits PowerShell 7's PSModulePath. Use the runtime API.
+    $digest = [Security.Cryptography.SHA256]::Create()
+    $stream = [IO.File]::OpenRead($Path)
+    try { return ([BitConverter]::ToString($digest.ComputeHash($stream))).Replace('-', '') }
+    finally { $stream.Dispose(); $digest.Dispose() }
+}
+
 function Assert-NoReparse([string]$Path) {
     $current = [IO.Path]::GetFullPath($Path)
     while ($current) {
@@ -227,7 +236,7 @@ try {
         $copy = [IO.File]::Create($stagedZip)
         try { $archive.CopyTo($copy); $copy.Flush($true) } finally { $copy.Dispose() }
     } finally { $archive.Dispose() }
-    if ((Get-FileHash -LiteralPath $stagedZip -Algorithm SHA256).Hash -ne $ExpectedSha256) { throw 'Update SHA-256 mismatch' }
+    if ((Get-ArchiveSha256 $stagedZip) -ne $ExpectedSha256) { throw 'Update SHA-256 mismatch' }
     $candidate = Expand-ValidatedArchive $stagedZip $paths.Stage
     [IO.File]::WriteAllText((Join-Path $candidate '.portable'), '')
     Invoke-Validation $candidate (Join-Path $paths.Stage 'probe-data')
