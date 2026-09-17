@@ -6,6 +6,7 @@ Browser: JetBrains Runtime JBRSDK-21.0.10+1-1163.110-jcef (Java 21.0.10).
 Source: https://github.com/JetBrains/JetBrainsRuntime
 Browser runtime legal/ and LICENSE files ship unchanged in browser/runtime.
 JCEF/CEF licenses and Chromium credits are in resources/licenses.
+Windows rendering: unmodified ANGLE libEGL/libGLESv2 and d3dcompiler_47 copied from that same browser runtime; notices remain in browser/runtime/legal and resources/licenses.
 Chromium credits are exported from the exact packaged native browser chrome://credits page.
 Reader codec: ImageMagick 7.1.2-31; see codec/LICENSE.txt and NOTICE.txt.
 JVM dependencies retain their upstream license resources in the distributed JARs.

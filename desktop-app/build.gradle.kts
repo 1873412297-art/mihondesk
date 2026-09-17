@@ -224,6 +224,22 @@ compose.desktop {
     }
 }
 
+// Skiko loads ANGLE beside its own native DLL. Reuse the version-pinned, licensed browser
+// payload, without changing the main Java runtime or downloading a second native dependency.
+tasks.matching { it.name == "createDistributable" }.configureEach {
+    val browserBin = project(":desktop-webview-host").layout.buildDirectory.dir("browser-runtime/bin")
+    val angleLibraries = listOf("libEGL.dll", "libGLESv2.dll", "d3dcompiler_47.dll")
+    inputs.files(angleLibraries.map { browserBin.get().file(it) })
+    doLast {
+        val appDirectory = layout.buildDirectory.dir("compose/binaries/main/app/mihondesk/app").get().asFile
+        angleLibraries.forEach { name ->
+            val source = browserBin.get().file(name).asFile
+            check(source.isFile && source.length() > 0) { "Packaged ANGLE dependency missing: $source" }
+            source.copyTo(File(appDirectory, name), overwrite = true)
+        }
+    }
+}
+
 val verifyCleanDistribution by tasks.registering(Exec::class) {
     group = "verification"
     description = "Rejects user profiles and installed extensions before Windows packaging"
