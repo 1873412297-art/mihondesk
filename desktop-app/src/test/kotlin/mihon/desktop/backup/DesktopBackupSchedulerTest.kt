@@ -1,11 +1,17 @@
 package mihon.desktop.backup
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.runBlocking
+import mihon.desktop.library.backup.AndroidBackup
+import mihon.desktop.library.backup.AndroidBackupCodec
 import mihon.desktop.library.backup.AndroidBackupExporter
+import mihon.desktop.library.backup.AndroidBackupManga
 import mihon.desktop.library.db.DesktopLibraryDatabaseFactory
 import mihon.desktop.library.model.CategoryRecord
 import mihon.desktop.library.model.ChapterRecord
@@ -27,7 +33,9 @@ import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.io.TempDir
+import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.attribute.FileTime
@@ -82,6 +90,143 @@ class DesktopBackupSchedulerTest {
             assertEquals(simulatedTime, prefStore.load().lastAutoBackupEpochMillis)
         } finally {
             repo.close()
+        }
+    }
+
+    @Test
+    fun `next automatic backup waits a full interval after a slow export completes`() = runBlocking {
+        val startedAt = 7_200_000L
+        val completedAt = startedAt + 2 * 3_600_000L
+        var now = startedAt
+        val repository = object : LibraryRepository by FakeLibraryRepository() {
+            override fun allMangaSnapshot(): List<MangaRecord> {
+                now = maxOf(now, completedAt)
+                return emptyList()
+            }
+        }
+        val store = DesktopPreferenceStore(tempDir.resolve("prefs.properties"))
+        store.save(DesktopPreferences(backupIntervalHours = 1))
+        val scheduler = DesktopBackupScheduler(
+            AndroidBackupExporter(repository),
+            store,
+            tempDir.resolve("backups"),
+            CoroutineScope(SupervisorJob()),
+            clock = { now },
+        )
+
+        assertNotNull(scheduler.checkAndRunAutoBackup())
+        assertEquals(completedAt, store.load().lastAutoBackupEpochMillis)
+        assertEquals(completedAt, scheduler.lastResult?.completedAtEpochMillis)
+        now += 3_600_000L - 1
+        assertNull(scheduler.checkAndRunAutoBackup())
+        now++
+        assertNotNull(scheduler.checkAndRunAutoBackup())
+    }
+
+    @Test
+    fun `invalid custom backup path fails without falling back to another directory`() = runBlocking {
+        val defaultDir = tempDir.resolve("default")
+        val store = DesktopPreferenceStore(tempDir.resolve("prefs.properties"))
+        store.save(DesktopPreferences(backupStoragePath = "\u0000", backupIntervalHours = 1))
+        val scheduler = DesktopBackupScheduler(
+            AndroidBackupExporter(FakeLibraryRepository()),
+            store,
+            defaultDir,
+            CoroutineScope(SupervisorJob()),
+            clock = { 7_200_000L },
+        )
+
+        assertThrows<IllegalArgumentException> { scheduler.checkAndRunAutoBackup() }
+        assertEquals(false, Files.exists(defaultDir))
+        assertEquals(0L, store.load().lastAutoBackupEpochMillis)
+        assertNotNull(scheduler.lastResult?.error)
+        assertThrows<IllegalArgumentException> { scheduler.resolveBackupDirectory("unfinished-path") }
+        assertEquals(defaultDir.toAbsolutePath(), scheduler.resolveBackupDirectory(""))
+    }
+
+    @Test
+    fun `concurrent due checks publish a single automatic restore point`() = runBlocking {
+        val store = DesktopPreferenceStore(tempDir.resolve("prefs.properties"))
+        store.save(DesktopPreferences(backupIntervalHours = 1))
+        val dir = tempDir.resolve("backups")
+        val scheduler = DesktopBackupScheduler(
+            AndroidBackupExporter(FakeLibraryRepository()),
+            store,
+            dir,
+            CoroutineScope(SupervisorJob()),
+            clock = { 7_200_000L },
+        )
+
+        val results = List(8) { async(Dispatchers.Default) { scheduler.checkAndRunAutoBackup() } }.awaitAll()
+        assertEquals(1, results.count { it != null })
+        Files.list(dir).use { assertEquals(1L, it.count()) }
+    }
+
+    @Test
+    fun `manual backup preserves automatic schedule and settings changed during export`() = runBlocking {
+        val store = DesktopPreferenceStore(tempDir.resolve("prefs.properties"))
+        store.save(DesktopPreferences(lastAutoBackupEpochMillis = 123L))
+        val repository = object : LibraryRepository by FakeLibraryRepository() {
+            override fun allMangaSnapshot(): List<MangaRecord> {
+                store.updatePreferences { it.copy(desktopNotificationsEnabled = false) }
+                return emptyList()
+            }
+        }
+        val scheduler = DesktopBackupScheduler(
+            AndroidBackupExporter(repository),
+            store,
+            tempDir.resolve("backups"),
+            CoroutineScope(SupervisorJob()),
+        )
+
+        scheduler.performBackup(isManual = true)
+        assertEquals(123L, store.load().lastAutoBackupEpochMillis)
+        assertEquals(false, store.load().desktopNotificationsEnabled)
+    }
+
+    @Test
+    fun `failed or cancelled export preserves prior restore point and remains eligible for retry`() = runBlocking {
+        for (failure in listOf(IOException("snapshot failed"), CancellationException("stopped"))) {
+            val dir = tempDir.resolve(failure.javaClass.simpleName)
+            Files.createDirectories(dir)
+            val old = dir.resolve("mihon_backup_previous.tachibk")
+            val backup = AndroidBackup(listOf(AndroidBackupManga(source = 42, url = "/series", title = "Keep me")))
+            val codec = AndroidBackupCodec()
+            codec.encode(backup, old)
+            val original = Files.readAllBytes(old).toList()
+            var shouldFail = true
+            val repository = object : LibraryRepository by FakeLibraryRepository() {
+                override fun allMangaSnapshot(): List<MangaRecord> {
+                    if (shouldFail) throw failure
+                    return emptyList()
+                }
+            }
+            val store = DesktopPreferenceStore(dir.resolve("prefs.properties"))
+            store.save(DesktopPreferences(backupIntervalHours = 1, backupRetentionCount = 1))
+            val scheduler = DesktopBackupScheduler(
+                AndroidBackupExporter(repository),
+                store,
+                dir,
+                CoroutineScope(SupervisorJob()),
+                clock = { 7_200_000L },
+            )
+
+            val error = assertThrows<Exception> { scheduler.checkAndRunAutoBackup() }
+            assertEquals(failure.javaClass, error.javaClass)
+            assertEquals(failure.message, error.message)
+            assertEquals(original, Files.readAllBytes(old).toList())
+            assertEquals("Keep me", codec.decode(old).backupManga.single().title)
+            assertEquals(0L, store.load().lastAutoBackupEpochMillis)
+            if (failure is CancellationException) {
+                assertNull(
+                    scheduler.lastResult,
+                )
+            } else {
+                assertNotNull(scheduler.lastResult?.error)
+            }
+            shouldFail = false
+            assertNotNull(scheduler.checkAndRunAutoBackup())
+            assertEquals(7_200_000L, store.load().lastAutoBackupEpochMillis)
         }
     }
 

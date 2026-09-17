@@ -20,6 +20,15 @@ enum class UiText(val english: String, val simplified: String, val traditional: 
     NotificationExtensions("Extension Updates Available", "有可用的扩展更新", "有可用的擴充套件更新"),
     NotificationExtensionCount("{0} extension update(s) are ready", "{0} 个扩展可更新", "{0} 個擴充套件可更新"),
     SaveDownloadPath("Save location", "保存下载位置", "儲存下載位置"),
+    SaveBackupPath("Save backup location", "保存备份位置", "儲存備份位置"),
+    BackupPathSaved("Backup location saved.", "备份位置已保存。", "備份位置已儲存。"),
+    BackupPathHint(
+        "Save to use this location for the next backup. Existing backups stay in their original folder.",
+        "保存后，下一次备份使用新位置；已有备份保留在原文件夹。",
+        "儲存後，下一次備份使用新位置；已有備份保留在原資料夾。",
+    ),
+    BackupPathCurrent("Saved location: {0}", "已保存位置：{0}", "已儲存位置：{0}"),
+    BackupPathSaveFailed("Could not save the backup location. Please retry.", "备份位置保存失败，请重试。", "備份位置儲存失敗，請重試。"),
     CheckingDownloadPath("Checking folder…", "正在检查文件夹…", "正在檢查資料夾…"),
     DownloadPathSaved("Location saved. Restart the app to use it.", "下载位置已保存，重启应用后生效。", "下載位置已儲存，重新啟動應用程式後生效。"),
     DownloadPathHint(

@@ -65,9 +65,7 @@ class DesktopBackupScheduler(
         val intervalMillis = prefs.backupIntervalHours.toLong() * 3_600_000L
         val now = clock()
         if (now - prefs.lastAutoBackupEpochMillis >= intervalMillis) {
-            val path = performBackupLocked(isManual = false)
-            preferenceStore.updatePreferences { it.copy(lastAutoBackupEpochMillis = now) }
-            return@withLock path
+            return@withLock performBackupLocked(isManual = false)
         }
         null
     }
@@ -98,12 +96,13 @@ class DesktopBackupScheduler(
 
         backupExporter.export(targetFile)
         val warnings = pruneOldBackups(targetDir, prefs.backupRetentionCount, targetFile)
+        val completedAt = clock()
 
         if (!isManual) {
-            preferenceStore.updatePreferences { it.copy(lastAutoBackupEpochMillis = clock()) }
+            preferenceStore.updatePreferences { it.copy(lastAutoBackupEpochMillis = completedAt) }
         }
 
-        lastResult = BackupRunResult(targetFile, clock(), retentionWarnings = warnings)
+        lastResult = BackupRunResult(targetFile, completedAt, retentionWarnings = warnings)
         return targetFile
     }
 
@@ -141,11 +140,9 @@ class DesktopBackupScheduler(
     }
     fun resolveBackupDirectory(customPath: String): Path {
         if (customPath.isNotBlank()) {
-            try {
-                return Path.of(customPath).toAbsolutePath().normalize()
-            } catch (_: Exception) {
-                // fall through
-            }
+            val path = Path.of(customPath).normalize()
+            require(path.isAbsolute) { "Backup location must be an absolute folder path" }
+            return path
         }
         return defaultBackupDir.toAbsolutePath().normalize()
     }
