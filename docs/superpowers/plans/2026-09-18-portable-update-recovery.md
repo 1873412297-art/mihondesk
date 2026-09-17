@@ -33,10 +33,10 @@ Windows supports an indivisible swap of two directory names. Installer/MSI updat
 external custom data directories, and the missing application-update UI remain
 separate work. No user installation is modified during verification.
 
-- [ ] Reproduce profile-in-use rejection gap and verify checksum rollback baseline.
-- [ ] Add journal/locks/path validation, guarded probe, rollback and recovery.
-- [ ] Add app startup guard and localized pending-update guidance.
-- [ ] Test successful replacement, active-profile rejection, malformed archive,
+- [x] Reproduce profile-in-use rejection gap and verify checksum rollback baseline.
+- [x] Add journal/locks/path validation, guarded probe, rollback and recovery.
+- [x] Add app startup guard and localized pending-update guidance.
+- [x] Test successful replacement, active-profile rejection, malformed archive,
       failed post-swap validation and interrupted transaction recovery.
-- [ ] Build portable artifact and verify real EXE/profile upgrade and rollback.
-- [ ] Record evidence and integrate verified code into local main.
+- [x] Build portable artifact and verify real EXE/profile upgrade and rollback.
+- [x] Record evidence and integrate verified code into local main.
