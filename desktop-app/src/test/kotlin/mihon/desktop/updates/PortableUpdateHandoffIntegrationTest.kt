@@ -41,14 +41,18 @@ class PortableUpdateHandoffIntegrationTest {
         ).redirectErrorStream(true).redirectOutput(root.resolve("caller.log").toFile()).start()
         var prepared: PreparedAppUpdate? = null
         try {
-            withTimeout(30_000) {
-                while (windowFor(caller.pid()) == null) {
+            val windowOwner = withTimeout(30_000) {
+                var owner: ProcessHandle? = null
+                while (owner == null) {
                     check(caller.isAlive)
-                    delay(100)
+                    owner = ownedProcesses(exe).firstOrNull { windowFor(it.pid()) != null }
+                    if (owner == null) delay(100)
                 }
+                owner
             }
-            val handoff = PortableUpdateHandoff(target, profile, caller.toHandle())
+            val handoff = PortableUpdateHandoff(target, profile, windowOwner)
             handoff.available shouldBe true
+            PortableUpdateHandoff(target, root.resolve("external-profile"), windowOwner).available shouldBe false
             val hash = Files.newInputStream(archive).use { input ->
                 val digest = MessageDigest.getInstance("SHA-256")
                 val buffer = ByteArray(1024 * 1024)
@@ -72,7 +76,7 @@ class PortableUpdateHandoffIntegrationTest {
             prepared = handoff.prepare(archive, hash)
             caller.isAlive shouldBe true
             prepared.commit()
-            closeWindow(caller.toHandle(), exe)
+            closeWindow(windowOwner, exe)
             withTimeout(30_000) { while (caller.isAlive) delay(100) }
             caller.exitValue() shouldBe 0
             withTimeout(120_000) { while (handoff.lastOutcome()?.succeeded != true) delay(200) }
@@ -107,9 +111,11 @@ class PortableUpdateHandoffIntegrationTest {
             println("REAL_PORTABLE_HANDOFF $root")
         } finally {
             runCatching { prepared?.abort() }
-            ownedProcesses(exe).forEach { process ->
-                runCatching { closeWindow(process, exe) }
-                withTimeout(10_000) { while (process.isAlive) delay(100) }
+            val owned = ownedProcesses(exe)
+            owned.forEach { process -> runCatching { closeWindow(process, exe) } }
+            kotlinx.coroutines.withTimeoutOrNull(10_000) { while (owned.any { it.isAlive }) delay(100) }
+            owned.filter { it.isAlive && it.info().command().orElse(null)?.let(Path::of) == exe }.forEach {
+                it.destroy()
             }
         }
     }

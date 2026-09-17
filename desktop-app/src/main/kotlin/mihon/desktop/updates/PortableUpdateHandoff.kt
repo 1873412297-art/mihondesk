@@ -35,6 +35,18 @@ class PortableUpdateHandoff(
     private val profile = profileDirectory.toAbsolutePath().normalize()
     private val pointer = profile.resolve(".mihon-update-receipt")
 
+    private fun updateCaller(): ProcessHandle {
+        // jpackage may keep a same-executable launcher alive above the JVM child.
+        var owner = caller
+        while (true) {
+            val parent = owner.parent().orElse(null) ?: break
+            val command = parent.info().command().orElse(null)?.let(Path::of)?.toAbsolutePath()?.normalize()
+            if (command != target.resolve("mihondesk.exe")) break
+            owner = parent
+        }
+        return owner
+    }
+
     override val available: Boolean
         get() = windowsDirectory != null &&
             profile == target.resolve("data") &&
@@ -74,6 +86,7 @@ class PortableUpdateHandoff(
                 } finally {
                     Files.deleteIfExists(receipt)
                 }
+                val updateCaller = updateCaller()
                 val command = listOf(
                     requireNotNull(
                         windowsDirectory,
@@ -81,8 +94,8 @@ class PortableUpdateHandoff(
                     "-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden",
                     "-ExecutionPolicy", "Bypass", "-File", script.toString(),
                     "-ZipPath", archive.toAbsolutePath().toString(), "-TargetDir", target.toString(),
-                    "-ExpectedSha256", expectedSha256, "-CallerPid", caller.pid().toString(),
-                    "-CallerStartMillis", caller.info().startInstant().orElseThrow().toEpochMilli().toString(),
+                    "-ExpectedSha256", expectedSha256, "-CallerPid", updateCaller.pid().toString(),
+                    "-CallerStartMillis", updateCaller.info().startInstant().orElseThrow().toEpochMilli().toString(),
                     "-HandoffToken", token,
                 )
                 val helper = ProcessBuilder(
