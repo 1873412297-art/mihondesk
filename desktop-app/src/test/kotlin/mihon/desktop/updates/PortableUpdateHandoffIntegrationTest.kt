@@ -17,8 +17,11 @@ import java.util.UUID
 /** Opens/closes only the real EXE copied into this test's uniquely owned evidence directory. */
 @EnabledIfEnvironmentVariable(named = "MIHON_HANDOFF_IMAGE", matches = ".+")
 class PortableUpdateHandoffIntegrationTest {
-    @Test
-    fun `real packaged caller closes cleanly and the replacement restarts with its profile`(): Unit = runBlocking {
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans = [false, true])
+    fun `real packaged caller updates or rolls back then restarts with its profile`(
+        rollback: Boolean,
+    ): Unit = runBlocking {
         val image = Path.of(System.getenv("MIHON_HANDOFF_IMAGE")).toAbsolutePath()
         val archive = Path.of(System.getenv("MIHON_HANDOFF_ZIP")).toAbsolutePath()
         val root = Files.createDirectories(
@@ -75,11 +78,15 @@ class PortableUpdateHandoffIntegrationTest {
             Files.exists(target.resolve("old-program-sentinel")) shouldBe true
             prepared = handoff.prepare(archive, hash)
             caller.isAlive shouldBe true
+            if (rollback) removeCandidateVersionResource(root)
             prepared.commit()
             closeWindow(windowOwner, exe)
             withTimeout(30_000) { while (caller.isAlive) delay(100) }
             caller.exitValue() shouldBe 0
-            withTimeout(120_000) { while (handoff.lastOutcome()?.succeeded != true) delay(200) }
+            val resultFile = requireNotNull(handoff.lastOutcome()).logFile.parent.resolve("result")
+            withTimeout(120_000) { while (!Files.isRegularFile(resultFile)) delay(200) }
+            Files.readString(resultFile) shouldBe if (rollback) "failed" else "updated"
+            handoff.lastOutcome()?.succeeded shouldBe !rollback
             val replacement = withTimeout(30_000) {
                 var found: ProcessHandle? = null
                 while (found ==
@@ -94,19 +101,33 @@ class PortableUpdateHandoffIntegrationTest {
                 }
                 found
             }
-            Files.exists(target.resolve("old-program-sentinel")) shouldBe false
+            Files.exists(target.resolve("old-program-sentinel")) shouldBe rollback
             Files.readString(profile.resolve("profile-sentinel")) shouldBe "preserved private profile"
             closeWindow(replacement, exe)
             withTimeout(30_000) { while (replacement.isAlive) delay(100) }
             val backups = Files.list(root).use { paths ->
                 paths.filter { it.fileName.toString().startsWith(".mihon-rollback-") }.toList()
             }
-            backups.size shouldBe 1
-            Files.readString(backups.single().resolve("old-program-sentinel")) shouldBe "old program"
-            Files.readString(backups.single().resolve("data/profile-sentinel")) shouldBe "preserved private profile"
+            backups.size shouldBe if (rollback) 0 else 1
+            if (rollback) {
+                val failed = Files.list(root).use { paths ->
+                    paths.filter { it.fileName.toString().startsWith(".mihon-failed-") }.toList()
+                }
+                failed.size shouldBe 1
+                Files.readString(failed.single().resolve("data/profile-sentinel")) shouldBe "preserved private profile"
+                // PowerShell stderr uses the Windows locale; the failure invariant is ASCII.
+                Files.readString(
+                    requireNotNull(handoff.lastOutcome()).logFile,
+                    Charsets.ISO_8859_1,
+                ).contains("Desktop version resource is missing") shouldBe
+                    true
+            } else {
+                Files.readString(backups.single().resolve("old-program-sentinel")) shouldBe "old program"
+                Files.readString(backups.single().resolve("data/profile-sentinel")) shouldBe "preserved private profile"
+            }
             Files.writeString(
                 root.resolve("result.txt"),
-                "PASS\ncaller=${caller.pid()} exit=0\nreplacement=${replacement.pid()}\nlog=${handoff.lastOutcome()?.logFile}\n",
+                "PASS rollback=$rollback\ncaller=${caller.pid()} exit=0\nreplacement=${replacement.pid()}\nlog=${handoff.lastOutcome()?.logFile}\n",
             )
             println("REAL_PORTABLE_HANDOFF $root")
         } finally {
@@ -118,6 +139,31 @@ class PortableUpdateHandoffIntegrationTest {
                 it.destroy()
             }
         }
+    }
+
+    private fun removeCandidateVersionResource(root: Path) {
+        val stage = Files.list(root).use { paths ->
+            paths.filter { it.fileName.toString().startsWith(".mihon-stage-") }.toList().single()
+        }
+        val candidateApp = stage.resolve("mihondesk/app")
+        val jar = Files.list(candidateApp).use { paths ->
+            paths.filter {
+                it.fileName.toString().startsWith("desktop-app-") &&
+                    it.fileName.toString().endsWith(".jar")
+            }.toList().single()
+        }
+        val changed = jar.resolveSibling("fault-injected.jar")
+        java.util.zip.ZipFile(jar.toFile()).use { source ->
+            java.util.zip.ZipOutputStream(Files.newOutputStream(changed)).use { output ->
+                for (entry in source.entries().asSequence()) {
+                    if (entry.name == "mihon-desktop-version.txt") continue
+                    output.putNextEntry(java.util.zip.ZipEntry(entry.name))
+                    if (!entry.isDirectory) source.getInputStream(entry).use { it.copyTo(output) }
+                    output.closeEntry()
+                }
+            }
+        }
+        Files.move(changed, jar, java.nio.file.StandardCopyOption.REPLACE_EXISTING)
     }
 
     private fun ownedProcesses(exe: Path): List<ProcessHandle> = ProcessHandle.allProcesses().use { handles ->
