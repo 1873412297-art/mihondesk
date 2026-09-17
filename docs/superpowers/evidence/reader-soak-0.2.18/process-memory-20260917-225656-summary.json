@@ -1,0 +1,11 @@
+{
+  "executable": "D:\\my project\\mihon-w\\desktop-app\\build\\compose\\binaries\\main\\app\\mihondesk\\mihondesk.exe",
+  "requestedMinutes": 32,
+  "sampledSeconds": 1807.78,
+  "samples": 311,
+  "maxWorkingSetBytes": 1163444224.0,
+  "maxPrivateBytes": 1868652544.0,
+  "samplesPath": "D:\\my project\\mihon-w\\build\\reader-soak-0218\\full\\process-memory-20260917-225656.jsonl",
+  "heapPath": null,
+  "note": "Process-tree memory sampling only; this does not prove active reading, frame times, or UI responsiveness."
+}
