@@ -4,6 +4,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -68,6 +69,8 @@ enum class BrowseTab {
     Migration,
 }
 
+enum class ExtensionInstallPhase { Downloading, Installing, Cancelling }
+
 data class BrowseUiState(
     val selectedTab: BrowseTab = BrowseTab.Sources,
     val installedExtensions: List<InstalledExtension> = emptyList(),
@@ -83,6 +86,9 @@ data class BrowseUiState(
     val isLoading: Boolean = false,
     val isInstalling: Boolean = false,
     val installingPkg: String? = null,
+    val installingName: String = "",
+    val installPhase: ExtensionInstallPhase? = null,
+    val installationCancelled: Boolean = false,
     val errorMessage: String? = null,
     val searchQuery: String = "",
     // Migration state
@@ -122,6 +128,7 @@ fun BrowseScreen(
     onTogglePinSource: (Long) -> Unit = {},
     onInstallExtension: (ExtensionStoreItem) -> Unit = {},
     onInstallFromFile: (File) -> Unit = {},
+    onCancelInstallation: () -> Unit = {},
     onUninstallExtension: (String) -> Unit = {},
     onToggleExtensionEnabled: (String, Boolean) -> Unit = { _, _ -> },
     onExtensionSelected: (InstalledExtension) -> Unit = {},
@@ -240,17 +247,17 @@ fun BrowseScreen(
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp).testTag("browse-screen")) {
         // Top Header
-        Row(
+        FlowRow(
             modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text(
                 text = strings.browseTitle,
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold,
             )
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(
                     onClick = onOpenGlobalSearch,
                     modifier = Modifier.testTag("open-global-search-button"),
@@ -259,7 +266,6 @@ fun BrowseScreen(
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(strings.browseGlobalSearch)
                 }
-                Spacer(modifier = Modifier.width(8.dp))
                 OutlinedButton(
                     onClick = {
                         val file = chooseMextFile(strings.text(UiText.ChooseExtension))
@@ -268,12 +274,12 @@ fun BrowseScreen(
                         }
                     },
                     modifier = Modifier.testTag("install-file-button"),
+                    enabled = !state.isInstalling,
                 ) {
                     Icon(Icons.Rounded.FolderOpen, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(strings.browseInstallFromFile)
                 }
-                Spacer(modifier = Modifier.width(8.dp))
                 OutlinedButton(
                     onClick = { showRepoDialog = true },
                     modifier = Modifier.testTag("manage-repos-button"),
@@ -282,7 +288,6 @@ fun BrowseScreen(
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(strings.browseManageRepositories)
                 }
-                Spacer(modifier = Modifier.width(8.dp))
                 OutlinedButton(
                     onClick = onRefresh,
                     modifier = Modifier.testTag("refresh-browse-button"),
@@ -337,6 +342,8 @@ fun BrowseScreen(
                 singleLine = true,
             )
         }
+
+        ExtensionInstallStatus(state, onCancelInstallation)
 
         // Error Banner
         state.errorMessage?.let { error ->
@@ -799,7 +806,11 @@ private fun ExtensionsListView(
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary,
                     )
-                    Button(onClick = onUpdateAllPending, modifier = Modifier.testTag("update-all-button")) {
+                    Button(
+                        onClick = onUpdateAllPending,
+                        enabled = !state.isInstalling,
+                        modifier = Modifier.testTag("update-all-button"),
+                    ) {
                         Text(strings.browseUpdateAll)
                     }
                 }
@@ -811,6 +822,7 @@ private fun ExtensionsListView(
                     installed = installed,
                     trustStatus = trustStatuses[item.pkg],
                     isInstalling = state.isInstalling && state.installingPkg == item.pkg,
+                    installEnabled = !state.isInstalling,
                     onRequestInstall = onRequestInstall,
                     onUninstallExtension = onUninstallExtension,
                     onToggleEnabled = onToggleEnabled,
@@ -848,6 +860,7 @@ private fun ExtensionsListView(
                     installed = installed,
                     trustStatus = trustStatuses[item.pkg],
                     isInstalling = state.isInstalling && state.installingPkg == item.pkg,
+                    installEnabled = !state.isInstalling,
                     onRequestInstall = onRequestInstall,
                     onUninstallExtension = onUninstallExtension,
                     onToggleEnabled = onToggleEnabled,
@@ -903,6 +916,7 @@ private fun ExtensionsListView(
                         installed = null,
                         trustStatus = trustStatuses[item.pkg],
                         isInstalling = state.isInstalling && state.installingPkg == item.pkg,
+                        installEnabled = !state.isInstalling,
                         onRequestInstall = onRequestInstall,
                         onUninstallExtension = onUninstallExtension,
                         onToggleEnabled = onToggleEnabled,
@@ -923,6 +937,7 @@ private fun ExtensionItemRow(
     installed: InstalledExtension?,
     trustStatus: ExtensionTrustStatus?,
     isInstalling: Boolean,
+    installEnabled: Boolean,
     onRequestInstall: (ExtensionStoreItem) -> Unit,
     onUninstallExtension: (String) -> Unit,
     onToggleEnabled: (String, Boolean) -> Unit,
@@ -983,6 +998,7 @@ private fun ExtensionItemRow(
                     Button(
                         onClick = { onRequestInstall(item) },
                         modifier = Modifier.testTag("install-btn-${item.pkg}"),
+                        enabled = installEnabled,
                     ) {
                         Text(strings.browseInstall)
                     }
@@ -992,6 +1008,7 @@ private fun ExtensionItemRow(
                         Button(
                             onClick = { onRequestInstall(item) },
                             modifier = Modifier.testTag("update-btn-${item.pkg}"),
+                            enabled = installEnabled,
                         ) {
                             Text(strings.browseUpdate)
                         }

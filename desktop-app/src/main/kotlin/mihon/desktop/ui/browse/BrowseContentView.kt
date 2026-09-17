@@ -105,6 +105,7 @@ fun BrowseContentView(
                 onTogglePinSource = presenter::togglePinSource,
                 onInstallExtension = presenter::installExtension,
                 onInstallFromFile = presenter::installFromFile,
+                onCancelInstallation = presenter::cancelInstallation,
                 onUninstallExtension = presenter::uninstallExtension,
                 onToggleExtensionEnabled = presenter::toggleExtensionEnabled,
                 onExtensionSelected = { extension ->
