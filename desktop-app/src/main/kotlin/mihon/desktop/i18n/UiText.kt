@@ -205,6 +205,7 @@ enum class UiText(val english: String, val simplified: String, val traditional: 
     PreparingDownload("Preparing...", "正在准备…", "正在準備…"),
     DownloadedPages("Downloaded ({0} pages)", "已下载（{0} 页）", "已下載（{0} 頁）"),
     DownloadFailed("Download failed", "下载失败", "下載失敗"),
+    DownloadQueued("Queued", "等待下载", "等待下載"),
     ContinuePage("Continue · Page {0}", "继续阅读 · 第 {0} 页", "繼續閱讀 · 第 {0} 頁"),
     ReadChapter("Read", "阅读", "閱讀"),
     LocateContent("Locate or re-import local content", "重新定位或导入本地文件", "重新指定或匯入本機檔案"),

@@ -86,6 +86,8 @@ data class MangaDetailUiState(
     val availableScanlators: Set<String> = emptySet(),
     val chapterListItems: List<ChapterListItem> = emptyList(),
     val isChapterSettingsDialogOpen: Boolean = false,
+    val chapterDownloads: Map<Long, ChapterDownloadProgress> = emptyMap(),
+    val downloadsRunning: Boolean = false,
 )
 
 sealed interface ChapterReaderAvailability {

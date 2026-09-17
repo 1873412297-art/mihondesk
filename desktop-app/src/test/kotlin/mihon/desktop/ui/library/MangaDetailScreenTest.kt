@@ -3,7 +3,9 @@ package mihon.desktop.ui.library
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.getBoundsInRoot
@@ -14,6 +16,8 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.v2.runComposeUiTest
 import androidx.compose.ui.unit.dp
 import io.kotest.matchers.shouldBe
+import mihon.desktop.download.DesktopDownload
+import mihon.desktop.download.DownloadStatus
 import mihon.desktop.library.model.CategoryRecord
 import mihon.desktop.library.model.LibraryChapter
 import mihon.desktop.library.model.LibraryManga
@@ -22,6 +26,52 @@ import org.junit.jupiter.api.Test
 
 @OptIn(ExperimentalTestApi::class)
 class MangaDetailScreenTest {
+    @Test
+    fun `chapter indicator follows live queue without reloading chapter metadata`() = runComposeUiTest {
+        val queue = mutableStateOf(
+            listOf(
+                DesktopDownload(
+                    72,
+                    7,
+                    107,
+                    "Real title",
+                    "Second in repository",
+                    "/72",
+                    status = DownloadStatus.DOWNLOADING,
+                    progress = 0.35f,
+                ),
+                DesktopDownload(
+                    999,
+                    8,
+                    107,
+                    "Other manga",
+                    "Other chapter",
+                    "/999",
+                    status = DownloadStatus.DOWNLOADING,
+                    progress = 0.9f,
+                ),
+            ),
+        )
+        val base = detailState()
+        base.withDownloadProgress(queue.value, true).chapterDownloads.keys shouldBe setOf(72L)
+        setContent {
+            MaterialTheme {
+                Box(Modifier.requiredSize(1280.dp, 1000.dp)) {
+                    MangaDetailScreen(base.withDownloadProgress(queue.value, true), onBack = {})
+                }
+            }
+        }
+        val indicator = onNodeWithTag("chapter-download-indicator-72", useUnmergedTree = true)
+        indicator.fetchSemanticsNode().config[SemanticsProperties.ProgressBarRangeInfo].current shouldBe 0.35f
+        runOnIdle { queue.value = listOf(queue.value.first().copy(status = DownloadStatus.PAUSED)) }
+        indicator.fetchSemanticsNode().config[SemanticsProperties.StateDescription] shouldBe "Paused"
+        runOnIdle { queue.value = listOf(queue.value.first().copy(status = DownloadStatus.COMPLETED)) }
+        indicator.fetchSemanticsNode().config[SemanticsProperties.StateDescription] shouldBe "Completed"
+        runOnIdle { queue.value = emptyList() }
+        indicator.fetchSemanticsNode().config[SemanticsProperties.StateDescription] shouldBe "Not downloaded"
+        onNodeWithText("Second in repository").assertExists()
+    }
+
     @Test
     fun `wide library shows adjacent detail with real metadata and chapter semantics in repository order`() =
         runComposeUiTest {

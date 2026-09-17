@@ -26,7 +26,6 @@ import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.automirrored.rounded.PlaylistAddCheck
 import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.BookmarkBorder
-import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Edit
@@ -74,10 +73,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.serialization.json.Json
 import mihon.desktop.category.DesktopCategory
+import mihon.desktop.download.DownloadStatus
 import mihon.desktop.i18n.LocalStrings
 import mihon.desktop.i18n.UiText
 import mihon.desktop.i18n.text
 import mihon.desktop.library.model.LibraryChapter
+import mihon.desktop.ui.common.DownloadIndicator
 import mihon.desktop.ui.common.MangaBackdropBanner
 
 @Composable
@@ -839,6 +840,8 @@ fun MangaDetailScreen(
                                         availability = state.readerAvailability[item.chapter.id]
                                             ?: ChapterReaderAvailability.RemoteOnly,
                                         isDownloaded = state.downloadedChapterIds.contains(item.chapter.id),
+                                        download = state.chapterDownloads[item.chapter.id],
+                                        downloadsRunning = state.downloadsRunning,
                                         isSelectionMode = isSelectionMode,
                                         isSelected = selectedChapterIds.contains(item.chapter.id),
                                         onToggleSelection = {
@@ -1126,6 +1129,8 @@ private fun ChapterRow(
     displayName: String,
     availability: ChapterReaderAvailability,
     isDownloaded: Boolean,
+    download: ChapterDownloadProgress? = null,
+    downloadsRunning: Boolean = false,
     isSelectionMode: Boolean = false,
     isSelected: Boolean = false,
     onToggleSelection: () -> Unit = {},
@@ -1225,15 +1230,11 @@ private fun ChapterRow(
                 },
                 modifier = Modifier.testTag("chapter-download-button"),
             ) {
-                val color = if (isDownloaded) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                }
-                Icon(
-                    imageVector = if (isDownloaded) Icons.Rounded.CheckCircle else Icons.Rounded.Download,
-                    contentDescription = null,
-                    tint = color,
+                DownloadIndicator(
+                    status = download?.status ?: if (isDownloaded) DownloadStatus.COMPLETED else null,
+                    progress = download?.progress ?: if (isDownloaded) 1f else 0f,
+                    isRunning = downloadsRunning,
+                    modifier = Modifier.testTag("chapter-download-indicator-${chapter.id}"),
                 )
             }
 

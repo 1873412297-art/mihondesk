@@ -44,6 +44,11 @@ import mihon.desktop.download.DownloadStatus
 import mihon.desktop.i18n.LocalStrings
 import mihon.desktop.i18n.UiText
 import mihon.desktop.i18n.text
+import mihon.desktop.ui.common.DownloadIndicator
+import mihon.desktop.ui.common.animatedDownloadProgress
+import mihon.desktop.ui.common.downloadIsIndeterminate
+import mihon.desktop.ui.common.downloadStatusLabel
+import mihon.desktop.ui.common.normalizedDownloadProgress
 
 const val DOWNLOADS_SCREEN_TEST_TAG = "downloads_screen"
 const val DOWNLOADS_PAUSE_ALL_BUTTON_TEST_TAG = "downloads_pause_all"
@@ -68,149 +73,152 @@ fun DownloadsScreen(
     storageError: String? = null,
 ) {
     val strings = mihon.desktop.i18n.LocalStrings.current
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .testTag(DOWNLOADS_SCREEN_TEST_TAG)
-            .padding(16.dp),
-    ) {
-        // Top Header
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
+    Surface(modifier = modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .testTag(DOWNLOADS_SCREEN_TEST_TAG)
+                .padding(16.dp),
         ) {
-            Column {
-                Text(
-                    text = strings.downloadsTitle,
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold,
-                )
-                val speedText = formatSpeed(speedBytesPerSec)
-                val activeCount = queue.count {
-                    it.status == DownloadStatus.DOWNLOADING ||
-                        it.status == DownloadStatus.QUEUED
-                }
-                Text(
-                    text = if (isRunning && speedBytesPerSec > 0) {
-                        strings.downloadsActiveSpeed(activeCount, speedText)
-                    } else {
-                        mihon.desktop.i18n.recoveryText(
-                            "$activeCount active items",
-                            "$activeCount 个下载任务",
-                            "$activeCount 個下載工作",
-                        )
-                    },
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (isRunning) {
-                    OutlinedButton(
-                        onClick = onPauseAll,
-                        modifier = Modifier.testTag(DOWNLOADS_PAUSE_ALL_BUTTON_TEST_TAG),
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Pause,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp),
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(strings.downloadsPauseAll)
+            // Top Header
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column {
+                    Text(
+                        text = strings.downloadsTitle,
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    val speedText = formatSpeed(speedBytesPerSec)
+                    val activeCount = queue.count {
+                        it.status == DownloadStatus.DOWNLOADING ||
+                            it.status == DownloadStatus.QUEUED
                     }
-                } else {
-                    Button(
-                        onClick = onResumeAll,
-                        modifier = Modifier.testTag(DOWNLOADS_RESUME_ALL_BUTTON_TEST_TAG),
-                        enabled = queue.any {
-                            it.status == DownloadStatus.PAUSED || it.status == DownloadStatus.QUEUED
+                    Text(
+                        text = if (isRunning && speedBytesPerSec > 0) {
+                            strings.downloadsActiveSpeed(activeCount, speedText)
+                        } else {
+                            mihon.desktop.i18n.recoveryText(
+                                "$activeCount active items",
+                                "$activeCount 个下载任务",
+                                "$activeCount 個下載工作",
+                            )
                         },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (isRunning) {
+                        OutlinedButton(
+                            onClick = onPauseAll,
+                            modifier = Modifier.testTag(DOWNLOADS_PAUSE_ALL_BUTTON_TEST_TAG),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Pause,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(strings.downloadsPauseAll)
+                        }
+                    } else {
+                        Button(
+                            onClick = onResumeAll,
+                            modifier = Modifier.testTag(DOWNLOADS_RESUME_ALL_BUTTON_TEST_TAG),
+                            enabled = queue.any {
+                                it.status == DownloadStatus.PAUSED || it.status == DownloadStatus.QUEUED
+                            },
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.PlayArrow,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(strings.downloadsResumeAll)
+                        }
+                    }
+
+                    TextButton(
+                        onClick = onClearCompleted,
+                        modifier = Modifier.testTag(DOWNLOADS_CLEAR_COMPLETED_BUTTON_TEST_TAG),
+                        enabled = queue.any { it.status == DownloadStatus.COMPLETED },
                     ) {
                         Icon(
-                            imageVector = Icons.Rounded.PlayArrow,
+                            imageVector = Icons.Rounded.DeleteSweep,
                             contentDescription = null,
                             modifier = Modifier.size(18.dp),
                         )
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text(strings.downloadsResumeAll)
+                        Text(strings.downloadsClearCompleted)
                     }
                 }
-
-                TextButton(
-                    onClick = onClearCompleted,
-                    modifier = Modifier.testTag(DOWNLOADS_CLEAR_COMPLETED_BUTTON_TEST_TAG),
-                    enabled = queue.any { it.status == DownloadStatus.COMPLETED },
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.DeleteSweep,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp),
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(strings.downloadsClearCompleted)
-                }
             }
-        }
 
-        Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
-        listOfNotNull(storageError, recoveryMessage).distinct().forEach { message ->
-            Surface(
-                color = if (message == storageError) {
-                    MaterialTheme.colorScheme.errorContainer
-                } else {
-                    MaterialTheme.colorScheme.secondaryContainer
-                },
-                shape = RoundedCornerShape(8.dp),
-                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp).testTag("download-recovery-notice"),
-            ) {
-                Text(message, modifier = Modifier.padding(12.dp), style = MaterialTheme.typography.bodyMedium)
-            }
-        }
-
-        if (queue.isEmpty()) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center,
-            ) {
+            listOfNotNull(storageError, recoveryMessage).distinct().forEach { message ->
                 Surface(
-                    shape = RoundedCornerShape(16.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-                    modifier = Modifier.padding(32.dp),
+                    color = if (message == storageError) {
+                        MaterialTheme.colorScheme.errorContainer
+                    } else {
+                        MaterialTheme.colorScheme.secondaryContainer
+                    },
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp).testTag("download-recovery-notice"),
                 ) {
-                    Column(
-                        modifier = Modifier.padding(32.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.DownloadDone,
-                            contentDescription = null,
-                            modifier = Modifier.size(56.dp),
-                            tint = MaterialTheme.colorScheme.primary,
-                        )
-                        Text(
-                            text = strings.downloadsEmptyTitle,
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
+                    Text(message, modifier = Modifier.padding(12.dp), style = MaterialTheme.typography.bodyMedium)
                 }
             }
-        } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                items(queue, key = { it.chapterId }) { item ->
-                    DownloadCard(
-                        download = item,
-                        onCancel = { onCancel(item.chapterId) },
-                        onRetry = { onRetry(item.chapterId) },
-                        onRead = { onReadChapter(item.mangaId, item.chapterId) },
-                    )
+
+            if (queue.isEmpty()) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                        modifier = Modifier.padding(32.dp),
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(32.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.DownloadDone,
+                                contentDescription = null,
+                                modifier = Modifier.size(56.dp),
+                                tint = MaterialTheme.colorScheme.primary,
+                            )
+                            Text(
+                                text = strings.downloadsEmptyTitle,
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    items(queue, key = { it.chapterId }) { item ->
+                        DownloadCard(
+                            download = item,
+                            isRunning = isRunning,
+                            onCancel = { onCancel(item.chapterId) },
+                            onRetry = { onRetry(item.chapterId) },
+                            onRead = { onReadChapter(item.mangaId, item.chapterId) },
+                        )
+                    }
                 }
             }
         }
@@ -220,6 +228,7 @@ fun DownloadsScreen(
 @Composable
 private fun DownloadCard(
     download: DesktopDownload,
+    isRunning: Boolean,
     onCancel: () -> Unit,
     onRetry: () -> Unit,
     onRead: () -> Unit,
@@ -250,15 +259,46 @@ private fun DownloadCard(
                     )
                 }
 
-                StatusBadge(download.status)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    DownloadIndicator(
+                        status = download.status,
+                        progress = download.progress,
+                        isRunning = isRunning,
+                        modifier = Modifier.testTag("download-status-indicator-${download.chapterId}"),
+                    )
+                    StatusBadge(download.status, isRunning)
+                }
             }
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            LinearProgressIndicator(
-                progress = { download.progress },
-                modifier = Modifier.fillMaxWidth().height(6.dp),
-            )
+            val animatedProgress = animatedDownloadProgress(download.status, download.progress, isRunning)
+            val progressModifier = Modifier.fillMaxWidth().height(
+                6.dp,
+            ).testTag("download-progress-${download.chapterId}")
+            if (downloadIsIndeterminate(
+                    download.status,
+                    normalizedDownloadProgress(download.status, download.progress),
+                    isRunning,
+                )
+            ) {
+                LinearProgressIndicator(modifier = progressModifier)
+            } else {
+                LinearProgressIndicator(
+                    progress = { animatedProgress },
+                    modifier = progressModifier,
+                    color = if (download.status ==
+                        DownloadStatus.ERROR
+                    ) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.primary
+                    },
+                )
+            }
 
             Spacer(modifier = Modifier.height(6.dp))
 
@@ -344,14 +384,14 @@ private fun DownloadCard(
 }
 
 @Composable
-private fun StatusBadge(status: DownloadStatus) {
-    val strings = mihon.desktop.i18n.LocalStrings.current
-    val (color, label) = when (status) {
-        DownloadStatus.QUEUED -> Color.Gray to "Queued"
-        DownloadStatus.DOWNLOADING -> MaterialTheme.colorScheme.primary to strings.downloadsStatusDownloading
-        DownloadStatus.PAUSED -> Color(0xFFE6A23C) to strings.downloadsStatusPaused
-        DownloadStatus.COMPLETED -> Color(0xFF67C23A) to strings.downloadsStatusCompleted
-        DownloadStatus.ERROR -> MaterialTheme.colorScheme.error to strings.downloadsStatusError
+private fun StatusBadge(status: DownloadStatus, isRunning: Boolean) {
+    val label = downloadStatusLabel(status, isRunning)
+    val color = when (status) {
+        DownloadStatus.QUEUED -> MaterialTheme.colorScheme.onSurfaceVariant
+        DownloadStatus.DOWNLOADING -> MaterialTheme.colorScheme.primary
+        DownloadStatus.PAUSED -> Color(0xFFE6A23C)
+        DownloadStatus.COMPLETED -> Color(0xFF67C23A)
+        DownloadStatus.ERROR -> MaterialTheme.colorScheme.error
     }
 
     Surface(
