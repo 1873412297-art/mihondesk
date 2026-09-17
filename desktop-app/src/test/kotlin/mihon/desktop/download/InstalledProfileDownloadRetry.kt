@@ -82,7 +82,15 @@ object InstalledProfileDownloadRetry {
                             }
                             val asset = requireNotNull(library.chapterAsset(chapterId))
                             check(Files.isDirectory(asset.storageRoot.resolve(asset.relativePath)))
-                            check(disk.isChapterDownloaded(result.sourceId, result.mangaTitle, result.chapterName))
+                            check(
+                                disk.isChapterDownloaded(
+                                    result.sourceId,
+                                    result.mangaTitle,
+                                    result.chapterName,
+                                    result.mangaId,
+                                    result.chapterId,
+                                ),
+                            )
                             println(
                                 "INSTALLED_RETRY status=${result.status} ready=${result.downloadedImages}" +
                                     " bytes=${result.bytesDownloaded} error=${result.error}",

@@ -42,7 +42,12 @@ class DownloadDiskProvider(
     downloadsDir: Path,
     legacyDownloadsDirs: List<Path> = emptyList(),
     private val minDiskSpaceBytes: Long = 50L * 1024 * 1024, // 50 MB safety margin
+    private val registeredChapterDirectory: (Long, Long, Long) -> Path? = { _, _, _ -> null },
 ) {
+    private data class ChapterKey(val sourceId: Long, val mangaId: Long, val chapterId: Long)
+    private val legacyChapters = java.util.concurrent.ConcurrentHashMap<ChapterKey, Path>()
+    private val legacyTemporaryChapters = java.util.concurrent.ConcurrentHashMap<ChapterKey, Path>()
+    private val registeredDirectories = java.util.concurrent.ConcurrentHashMap.newKeySet<Path>()
     private val manifestJson = Json { ignoreUnknownKeys = true }
     val downloadsDir: Path = downloadsDir.toAbsolutePath().normalize()
     val downloadRoots: List<Path> = buildList {
@@ -60,25 +65,117 @@ class DownloadDiskProvider(
     }
 
     fun sanitizeFileName(name: String): String {
-        val sanitized = name.replace(Regex("[\\\\/:*?\"<>|]"), "_").trim()
-        return sanitized.ifEmpty { "unnamed" }
+        val sanitized = name.replace(Regex("[\\x00-\\x1f\\\\/:*?\"<>|]"), "_")
+            .trim().trimEnd('.', ' ').ifEmpty { "unnamed" }
+        val deviceName = sanitized.substringBefore('.').trimEnd()
+        return if (deviceName.matches(Regex("(?i)CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9]"))) {
+            "_$sanitized"
+        } else {
+            sanitized
+        }
     }
 
-    fun getMangaDir(sourceId: Long, mangaTitle: String): Path {
-        return getMangaDir(downloadsDir, sourceId, mangaTitle)
+    fun getMangaDir(sourceId: Long, mangaTitle: String, mangaId: Long? = null): Path {
+        return if (mangaId == null) {
+            getMangaDir(downloadsDir, sourceId, mangaTitle)
+        } else {
+            downloadsDir.resolve(sourceId.toString()).resolve("manga-$mangaId")
+        }
     }
 
-    fun getChapterDir(sourceId: Long, mangaTitle: String, chapterName: String): Path {
-        return getMangaDir(sourceId, mangaTitle).resolve(sanitizeFileName(chapterName))
+    fun getChapterDir(
+        sourceId: Long,
+        mangaTitle: String,
+        chapterName: String,
+        mangaId: Long? = null,
+        chapterId: Long? = null,
+    ): Path {
+        require((mangaId == null) == (chapterId == null))
+        return getMangaDir(sourceId, mangaTitle, mangaId)
+            .resolve(chapterId?.let { "chapter-$it" } ?: sanitizeFileName(chapterName))
     }
 
-    fun findChapterDir(sourceId: Long, mangaTitle: String, chapterName: String): Path? =
-        downloadRoots.asSequence()
-            .map { root -> getMangaDir(root, sourceId, mangaTitle).resolve(sanitizeFileName(chapterName)) }
-            .firstOrNull(Files::isDirectory)
+    fun findChapterDir(
+        sourceId: Long,
+        mangaTitle: String,
+        chapterName: String,
+        mangaId: Long? = null,
+        chapterId: Long? = null,
+    ): Path? = chapterDirectories(sourceId, mangaTitle, chapterName, mangaId, chapterId).firstOrNull(Files::isDirectory)
 
-    fun getTempChapterDir(sourceId: Long, mangaTitle: String, chapterName: String): Path {
-        return getMangaDir(sourceId, mangaTitle).resolve("${sanitizeFileName(chapterName)}_tmp")
+    private fun chapterDirectories(
+        sourceId: Long,
+        mangaTitle: String,
+        chapterName: String,
+        mangaId: Long?,
+        chapterId: Long?,
+    ): List<Path> {
+        require((mangaId == null) == (chapterId == null))
+        if (mangaId == null || chapterId == null) {
+            return downloadRoots.map { root ->
+                getMangaDir(root, sourceId, mangaTitle).resolve(sanitizeFileName(chapterName))
+            }
+        }
+        val key = ChapterKey(sourceId, mangaId, chapterId)
+        return buildList {
+            downloadRoots.forEach { root ->
+                add(root.resolve(sourceId.toString()).resolve("manga-$mangaId").resolve("chapter-$chapterId"))
+            }
+            registeredChapterDirectory(sourceId, mangaId, chapterId)?.toAbsolutePath()?.normalize()?.let {
+                registeredDirectories.add(it)
+                add(it)
+            }
+            legacyChapters[key]?.let(::add)
+        }.distinct()
+    }
+
+    fun getTempChapterDir(
+        sourceId: Long,
+        mangaTitle: String,
+        chapterName: String,
+        mangaId: Long? = null,
+        chapterId: Long? = null,
+    ): Path {
+        val chapter = getChapterDir(sourceId, mangaTitle, chapterName, mangaId, chapterId)
+        return chapter.resolveSibling("${chapter.fileName}_tmp")
+    }
+
+    /** Only an unambiguous pre-ID queue entry may claim a legacy name-based directory. */
+    internal fun adoptLegacyDownloads(downloads: List<DesktopDownload>) {
+        val legacy = downloads.filter { it.storageLayoutVersion == 0 }
+        val mangaOwners = legacy.groupBy {
+            it.sourceId to
+                sanitizeFileName(it.mangaTitle).lowercase(java.util.Locale.ROOT)
+        }
+        legacy.groupBy {
+            Triple(
+                it.sourceId,
+                sanitizeFileName(it.mangaTitle).lowercase(java.util.Locale.ROOT),
+                sanitizeFileName(it.chapterName).lowercase(java.util.Locale.ROOT),
+            )
+        }.values.filter { group ->
+            group.map { it.chapterId }.distinct().size == 1 &&
+                mangaOwners.getValue(
+                    group.first().sourceId to
+                        sanitizeFileName(group.first().mangaTitle).lowercase(java.util.Locale.ROOT),
+                )
+                    .map { it.mangaId }.distinct().size == 1
+        }.forEach { group ->
+            val item = group.first()
+            val key = ChapterKey(item.sourceId, item.mangaId, item.chapterId)
+            findChapterDir(item.sourceId, item.mangaTitle, item.chapterName)?.let { legacyChapters[key] = it }
+            val temporary = getTempChapterDir(item.sourceId, item.mangaTitle, item.chapterName)
+            if (Files.isDirectory(temporary)) legacyTemporaryChapters[key] = temporary
+        }
+    }
+
+    internal fun restoreLegacyTemporaryPages(download: DesktopDownload, target: Path) {
+        val old = legacyTemporaryChapters[ChapterKey(download.sourceId, download.mangaId, download.chapterId)] ?: return
+        download.pages.forEach { page ->
+            val previous = getPageFile(old, page.index)
+            val current = getPageFile(target, page.index)
+            if (!Files.exists(current) && isValidPage(previous)) Files.copy(previous, current)
+        }
     }
 
     fun checkDiskSpace(requiredBytes: Long = minDiskSpaceBytes): Boolean {
@@ -179,11 +276,25 @@ class DownloadDiskProvider(
         }
     }
 
-    fun deleteTempChapter(sourceId: Long, mangaTitle: String, chapterName: String) {
-        deleteDirectory(getTempChapterDir(sourceId, mangaTitle, chapterName))
+    fun deleteTempChapter(
+        sourceId: Long,
+        mangaTitle: String,
+        chapterName: String,
+        mangaId: Long? = null,
+        chapterId: Long? = null,
+    ) {
+        deleteDirectory(getTempChapterDir(sourceId, mangaTitle, chapterName, mangaId, chapterId))
     }
 
     private fun deleteDirectory(dir: Path) {
+        val normalized = dir.toAbsolutePath().normalize()
+        require(
+            normalized in registeredDirectories || downloadRoots.any { root ->
+                normalized.startsWith(root) && root.relativize(normalized).nameCount >= 3
+            },
+        ) {
+            "Refusing to delete outside a download chapter directory: $dir"
+        }
         if (!Files.exists(dir)) return
         Files.walk(dir).use { paths ->
             paths.sorted(Comparator.reverseOrder()).forEach { Files.deleteIfExists(it) }
@@ -199,14 +310,22 @@ class DownloadDiskProvider(
         mangaTitle: String,
         chapterName: String,
         expectedPageIndexes: List<Int>,
+        mangaId: Long? = null,
+        chapterId: Long? = null,
     ): DownloadChapterInspection {
-        val chapterDir = findChapterDir(sourceId, mangaTitle, chapterName)
+        val chapterDir = findChapterDir(sourceId, mangaTitle, chapterName, mangaId, chapterId)
             ?: return DownloadChapterInspection(expectedPageIndexes.size, emptyMap())
         return inspectChapterAt(chapterDir, expectedPageIndexes)
     }
 
-    fun isChapterDownloaded(sourceId: Long, mangaTitle: String, chapterName: String): Boolean {
-        val chapterDir = findChapterDir(sourceId, mangaTitle, chapterName) ?: return false
+    fun isChapterDownloaded(
+        sourceId: Long,
+        mangaTitle: String,
+        chapterName: String,
+        mangaId: Long? = null,
+        chapterId: Long? = null,
+    ): Boolean {
+        val chapterDir = findChapterDir(sourceId, mangaTitle, chapterName, mangaId, chapterId) ?: return false
         val manifestFile = manifestPath(chapterDir)
         val manifest = readManifest(chapterDir)
         if (Files.exists(manifestFile) && manifest == null) return false
@@ -226,11 +345,20 @@ class DownloadDiskProvider(
         }.getOrDefault(false)
     }
 
-    fun deleteChapter(sourceId: Long, mangaTitle: String, chapterName: String): Boolean {
-        val chapterDirs = downloadRoots.map { root ->
-            getMangaDir(root, sourceId, mangaTitle).resolve(sanitizeFileName(chapterName))
-        }
-            .filter(Files::exists)
+    fun deleteChapter(
+        sourceId: Long,
+        mangaTitle: String,
+        chapterName: String,
+        mangaId: Long? = null,
+        chapterId: Long? = null,
+    ): Boolean {
+        val chapterDirs = chapterDirectories(
+            sourceId,
+            mangaTitle,
+            chapterName,
+            mangaId,
+            chapterId,
+        ).filter(Files::exists)
         if (chapterDirs.isEmpty()) return false
         return chapterDirs.all { chapterDir ->
             runCatching {
@@ -252,8 +380,8 @@ class DownloadDiskProvider(
         totalPages: Int,
         mutationPort: LibraryMutationPort? = null,
     ): Path {
-        val tempDir = getTempChapterDir(sourceId, mangaTitle, chapterName)
-        val targetDir = getChapterDir(sourceId, mangaTitle, chapterName)
+        val tempDir = getTempChapterDir(sourceId, mangaTitle, chapterName, mangaId, chapterId)
+        val targetDir = getChapterDir(sourceId, mangaTitle, chapterName, mangaId, chapterId)
 
         if (!Files.exists(tempDir) || !Files.isDirectory(tempDir)) {
             throw IOException("Temporary download directory $tempDir does not exist")
@@ -273,6 +401,7 @@ class DownloadDiskProvider(
 
         cleanPartialPages(tempDir)
         writeManifest(tempDir, metadata)
+        Files.createDirectories(targetDir.parent)
         val previousDir = targetDir.resolveSibling("${targetDir.fileName}.previous")
         // Keep the previous complete chapter until replacement succeeds.
         if (Files.exists(targetDir)) {
@@ -322,8 +451,9 @@ class DownloadDiskProvider(
         mutationPort: LibraryMutationPort?,
     ) {
         mutationPort?.transaction {
-            val mangaDir = findChapterDir(sourceId, mangaTitle, chapterName)?.parent
-                ?: getMangaDir(sourceId, mangaTitle)
+            val chapterDir = findChapterDir(sourceId, mangaTitle, chapterName, mangaId, chapterId)
+                ?: getChapterDir(sourceId, mangaTitle, chapterName, mangaId, chapterId)
+            val mangaDir = chapterDir.parent
             insertLocalManga(
                 LocalMangaRecord(
                     mangaId = mangaId,
@@ -335,7 +465,7 @@ class DownloadDiskProvider(
             insertLocalChapter(
                 LocalChapterRecord(
                     chapterId = chapterId,
-                    relativePath = sanitizeFileName(chapterName),
+                    relativePath = chapterDir.fileName.toString(),
                     assetKind = "DIRECTORY",
                     sizeBytes = totalBytes,
                     modifiedAt = System.currentTimeMillis(),
@@ -352,16 +482,17 @@ class DownloadDiskProvider(
         chapterName: String,
         totalBytes: Long,
         mutationPort: LibraryMutationPort,
-    ): Boolean = mutationPort.isLocalChapterAssetRegistered(
-        mangaId = mangaId,
-        storagePath = (
-            findChapterDir(sourceId, mangaTitle, chapterName)?.parent
-                ?: getMangaDir(sourceId, mangaTitle)
-            ).toAbsolutePath().toString(),
-        chapterId = chapterId,
-        relativePath = sanitizeFileName(chapterName),
-        sizeBytes = totalBytes,
-    )
+    ): Boolean {
+        val chapterDir = findChapterDir(sourceId, mangaTitle, chapterName, mangaId, chapterId)
+            ?: getChapterDir(sourceId, mangaTitle, chapterName, mangaId, chapterId)
+        return mutationPort.isLocalChapterAssetRegistered(
+            mangaId = mangaId,
+            storagePath = chapterDir.parent.toAbsolutePath().toString(),
+            chapterId = chapterId,
+            relativePath = chapterDir.fileName.toString(),
+            sizeBytes = totalBytes,
+        )
+    }
 
     private fun pageMetadata(path: Path, index: Int): DownloadedPageMetadata? = runCatching {
         if (!Files.isRegularFile(path)) return@runCatching null

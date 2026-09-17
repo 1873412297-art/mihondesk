@@ -66,8 +66,7 @@ class DesktopBackupScheduler(
         val now = clock()
         if (now - prefs.lastAutoBackupEpochMillis >= intervalMillis) {
             val path = performBackupLocked(isManual = false)
-            val updated = preferenceStore.load().copy(lastAutoBackupEpochMillis = now)
-            preferenceStore.save(updated)
+            preferenceStore.updatePreferences { it.copy(lastAutoBackupEpochMillis = now) }
             return@withLock path
         }
         null
@@ -101,8 +100,7 @@ class DesktopBackupScheduler(
         val warnings = pruneOldBackups(targetDir, prefs.backupRetentionCount, targetFile)
 
         if (!isManual) {
-            val updated = preferenceStore.load().copy(lastAutoBackupEpochMillis = clock())
-            preferenceStore.save(updated)
+            preferenceStore.updatePreferences { it.copy(lastAutoBackupEpochMillis = clock()) }
         }
 
         lastResult = BackupRunResult(targetFile, clock(), retentionWarnings = warnings)

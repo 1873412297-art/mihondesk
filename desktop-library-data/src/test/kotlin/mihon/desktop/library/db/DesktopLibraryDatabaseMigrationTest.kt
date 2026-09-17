@@ -4,6 +4,7 @@ import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
+import mihon.desktop.library.model.LocalMangaRecord
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Path
@@ -14,6 +15,50 @@ class DesktopLibraryDatabaseMigrationTest {
     // Exercises the version-aware create/migrate paths used by DesktopLibraryDatabaseFactory.
     @TempDir
     lateinit var tempDir: Path
+
+    @Test
+    fun `version two download keeps its original root after migration and later root changes`() {
+        val file = tempDir.resolve("download-roots.db")
+        createVersionTwoDownloadFixture(file)
+        withConnection(file) { connection ->
+            userVersion(connection) shouldBe 2L
+            hasTable(connection, "local_chapter_storage") shouldBe false
+        }
+
+        DesktopLibraryDatabaseFactory.open(file).use { repository ->
+            repository.insertLocalManga(LocalMangaRecord(1, "C:/downloads/new", "", 2))
+            requireNotNull(repository.chapterAsset(1)).storageRoot shouldBe Path.of("C:/downloads/original")
+            repository.checkIntegrity() shouldBe listOf("ok")
+        }
+        DesktopLibraryDatabaseFactory.open(file).use { repository ->
+            requireNotNull(repository.chapterAsset(1)).storageRoot shouldBe Path.of("C:/downloads/original")
+        }
+    }
+
+    @Test
+    fun `failed per chapter storage migration rolls back the table and version`() {
+        val file = tempDir.resolve("download-roots-rollback.db")
+        createVersionTwoDownloadFixture(file)
+        shouldThrow<DesktopLibraryDatabaseOpenException.MigrationFailed> {
+            DesktopLibraryDatabaseFactory.open(file) { sql ->
+                if (sql.contains(
+                        "INSERT OR IGNORE INTO local_chapter_storage",
+                    )
+                ) {
+                    error("injected storage migration failure")
+                }
+            }
+        }
+        withConnection(file) { connection ->
+            userVersion(connection) shouldBe 2L
+            hasTable(connection, "local_chapter_storage") shouldBe false
+            queryString(connection, "SELECT storage_path FROM local_manga_entry WHERE manga_id = 1") shouldBe
+                "C:/downloads/original"
+        }
+        DesktopLibraryDatabaseFactory.open(file).use { repository ->
+            requireNotNull(repository.chapterAsset(1)).storageRoot shouldBe Path.of("C:/downloads/original")
+        }
+    }
 
     @Test
     fun `fresh database is created at the current schema version`() {
@@ -207,6 +252,7 @@ class DesktopLibraryDatabaseMigrationTest {
 private fun createVersionOneFixture(file: Path) {
     JdbcSqliteDriver("jdbc:sqlite:${file.toAbsolutePath()}").use { driver ->
         DesktopLibraryDatabase.Schema.create(driver)
+        driver.execute(null, "DROP TABLE local_chapter_storage", 0)
         driver.execute(null, "DROP TABLE library_metadata", 0)
         driver.execute(null, "PRAGMA user_version = 1", 0)
     }
@@ -227,6 +273,18 @@ private fun createVersionOneFixture(file: Path) {
                 "INSERT INTO history(chapter_id, last_read, read_duration) VALUES (1, 123456789, 42)",
             )
         }
+    }
+}
+
+private fun createVersionTwoDownloadFixture(file: Path) {
+    createVersionOneFixture(file)
+    JdbcSqliteDriver("jdbc:sqlite:${file.toAbsolutePath()}").use { driver ->
+        DesktopLibraryDatabase.Schema.migrate(driver, 1L, 2L)
+        driver.execute(null, "PRAGMA user_version = 2", 0)
+    }
+    withConnection(file) { connection ->
+        connection.execute("INSERT INTO local_manga_entry VALUES (1, 'C:/downloads/original', '', 1)")
+        connection.execute("INSERT INTO local_chapter_asset VALUES (1, 'Chapter 1', 'DIRECTORY', 123, 1)")
     }
 }
 

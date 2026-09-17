@@ -470,17 +470,23 @@ class SqlDelightLibraryRepository(
             .executeAsList().toSet()
 
     override fun insertLocalManga(value: LocalMangaRecord) {
-        queries.insertLocalMangaEntry(value.mangaId, value.storagePath, value.manifestSha256, value.importedAt)
+        database.transaction {
+            queries.preserveDownloadedChapterStorage(value.mangaId)
+            queries.insertLocalMangaEntry(value.mangaId, value.storagePath, value.manifestSha256, value.importedAt)
+        }
     }
 
     override fun insertLocalChapter(value: LocalChapterRecord) {
-        queries.insertLocalChapterAsset(
-            value.chapterId,
-            value.relativePath,
-            value.assetKind,
-            value.sizeBytes,
-            value.modifiedAt,
-        )
+        database.transaction {
+            queries.insertLocalChapterAsset(
+                value.chapterId,
+                value.relativePath,
+                value.assetKind,
+                value.sizeBytes,
+                value.modifiedAt,
+            )
+            queries.registerDownloadedChapterStorage(value.chapterId)
+        }
     }
 
     override fun isLocalChapterAssetRegistered(

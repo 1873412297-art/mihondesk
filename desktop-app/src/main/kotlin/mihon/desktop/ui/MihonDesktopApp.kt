@@ -106,8 +106,7 @@ fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
     }
     val navigator = remember {
         DesktopNavigator(preferences.lastDestination) { destination ->
-            preferences = preferences.copy(lastDestination = destination)
-            runtime.preferences.save(preferences)
+            preferences = runtime.preferences.updatePreferences { it.copy(lastDestination = destination) }
         }
     }
     val windowState = rememberWindowState(
@@ -343,16 +342,17 @@ fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
         Window(
             onCloseRequest = {
                 composeWindow?.let { window ->
-                    preferences = preferences.copy(
-                        windowPlacement = WindowPlacement(
-                            x = window.x,
-                            y = window.y,
-                            width = window.width,
-                            height = window.height,
-                            maximized = window.extendedState and Frame.MAXIMIZED_BOTH != 0,
-                        ).sanitize(screen),
-                    )
-                    runtime.preferences.save(preferences)
+                    preferences = runtime.preferences.updatePreferences {
+                        it.copy(
+                            windowPlacement = WindowPlacement(
+                                x = window.x,
+                                y = window.y,
+                                width = window.width,
+                                height = window.height,
+                                maximized = window.extendedState and Frame.MAXIMIZED_BOTH != 0,
+                            ).sanitize(screen),
+                        )
+                    }
                 }
                 exitApplication()
             },
@@ -899,9 +899,10 @@ fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
                                         onRefreshStats = { presenterScope.launch { statsService?.refresh() } },
                                         incognitoMode = preferences.incognitoMode,
                                         onToggleIncognito = {
-                                            val updated = preferences.copy(incognitoMode = !preferences.incognitoMode)
+                                            val updated = runtime.preferences.updatePreferences {
+                                                it.copy(incognitoMode = !it.incognitoMode)
+                                            }
                                             preferences = updated
-                                            runtime.preferences.save(updated)
                                         },
                                         // Upcoming calendar (transient view opened from Updates)
                                         isUpcomingOpen = isUpcomingOpen,

@@ -366,7 +366,7 @@ class LibraryPresenter(
                 val rawChapters = result.chapters
                 val downloadedIds = if (manga != null && downloader != null) {
                     rawChapters.filter { ch ->
-                        downloader.isChapterDownloaded(manga.sourceId, manga.title, ch.id, ch.name)
+                        downloader.isChapterDownloaded(manga.sourceId, manga.title, ch.id, ch.name, manga.id)
                     }.map { it.id }.toSet()
                 } else {
                     emptySet()

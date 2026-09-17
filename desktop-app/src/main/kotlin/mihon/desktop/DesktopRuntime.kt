@@ -273,17 +273,31 @@ object DesktopRuntimeFactory {
                 dataRoot = directories.root,
                 configuredPath = preferences.load().downloadStoragePath,
             ) ?: defaultDownloadsDir
+            val registeredDownloadDirectory: (Long, Long, Long) -> Path? = { sourceId, mangaId, chapterId ->
+                library.chapterAsset(chapterId)?.takeIf {
+                    sourceId != 0L && it.mangaId == mangaId && it.assetKind == "DIRECTORY" &&
+                        library.mangaSnapshot(mangaId)?.sourceId == sourceId
+                }?.let { asset ->
+                    asset.storageRoot.resolve(asset.relativePath).normalize().takeIf {
+                        it != asset.storageRoot && it.startsWith(asset.storageRoot)
+                    }
+                }
+            }
             val downloadDiskProvider = runCatching {
                 mihon.desktop.download.DownloadDiskProvider(
                     downloadsDir = configuredDownloadsDir,
                     legacyDownloadsDirs = listOf(defaultDownloadsDir).filterNot { it == configuredDownloadsDir },
+                    registeredChapterDirectory = registeredDownloadDirectory,
                 )
             }.getOrElse { error ->
                 System.err.println(
                     "Configured download directory is unavailable ($configuredDownloadsDir): ${error.message}. " +
                         "Using $defaultDownloadsDir.",
                 )
-                mihon.desktop.download.DownloadDiskProvider(defaultDownloadsDir)
+                mihon.desktop.download.DownloadDiskProvider(
+                    defaultDownloadsDir,
+                    registeredChapterDirectory = registeredDownloadDirectory,
+                )
             }
             val downloadStore = mihon.desktop.download.DownloadStore(directories.root.resolve("downloads.json"))
             val cookieStore = mihon.desktop.extension.DesktopCookieStore(directories.root.resolve("cookies.json"))

@@ -60,7 +60,8 @@ class DownloadRecoveryTest {
             }
             downloader.queueState.value.single().status shouldBe DownloadStatus.COMPLETED
             requests.get() shouldBe missingPages
-            repeat(2) { Files.readAllBytes(disk.getPageFile(chapterDir, it)).toList() shouldBe bytes.toList() }
+            val recoveredDir = requireNotNull(disk.findChapterDir(1, "Manga", "Chapter 1", 1, 1))
+            repeat(2) { Files.readAllBytes(disk.getPageFile(recoveredDir, it)).toList() shouldBe bytes.toList() }
         } finally {
             downloader.close()
             network.close()
@@ -80,8 +81,8 @@ class DownloadRecoveryTest {
                 ),
             )
             val disk = DownloadDiskProvider(dir.resolve("pages"))
-            val previous = disk.getChapterDir(1, "Manga", "Chapter")
-            val temp = disk.getTempChapterDir(1, "Manga", "Chapter")
+            val previous = disk.getChapterDir(1, "Manga", "Chapter", 1, 999)
+            val temp = disk.getTempChapterDir(1, "Manga", "Chapter", 1, 999)
             disk.savePage(previous, 0, validDownloadImage())
             Files.writeString(previous.resolve("previous-marker"), "keep")
             val newPage = disk.savePage(temp, 0, validDownloadImage())
@@ -151,13 +152,13 @@ class DownloadRecoveryTest {
     @Test
     fun `nonempty truncated page cannot finalize a chapter`(@TempDir dir: Path) {
         val disk = DownloadDiskProvider(dir)
-        val temp = disk.getTempChapterDir(1, "Manga", "Chapter")
+        val temp = disk.getTempChapterDir(1, "Manga", "Chapter", 1, 999)
         Files.createDirectories(temp)
         Files.write(disk.getPageFile(temp, 0), byteArrayOf(0xff.toByte(), 0xd8.toByte(), 0xff.toByte()))
         io.kotest.assertions.throwables.shouldThrow<java.io.IOException> {
-            disk.finalizeChapter(1, 1, 1, "Manga", "Chapter", 1)
+            disk.finalizeChapter(1, 1, 999, "Manga", "Chapter", 1)
         }
-        Files.exists(disk.getChapterDir(1, "Manga", "Chapter")) shouldBe false
+        Files.exists(disk.getChapterDir(1, "Manga", "Chapter", 1, 999)) shouldBe false
     }
 
     @Test

@@ -122,7 +122,7 @@ class LibraryUpdateScheduler(
                 }
                 persist(next)
                 if (retryIds == null) {
-                    preferenceStore.save(preferenceStore.load().copy(lastLibraryUpdateEpochMillis = completedAt))
+                    preferenceStore.updatePreferences { it.copy(lastLibraryUpdateEpochMillis = completedAt) }
                 }
                 return report
             } catch (error: CancellationException) {

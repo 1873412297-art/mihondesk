@@ -81,7 +81,15 @@ class InstalledDownloadRecoverySmokeTest {
                 )
                 check(result.status == DownloadStatus.COMPLETED) { result.error.orEmpty() }
                 check(result.downloadedImages == saved.pages.size)
-                check(disk.isChapterDownloaded(sourceId, saved.mangaTitle, saved.chapterName))
+                check(
+                    disk.isChapterDownloaded(
+                        sourceId,
+                        saved.mangaTitle,
+                        saved.chapterName,
+                        saved.mangaId,
+                        saved.chapterId,
+                    ),
+                )
             } finally {
                 downloader.close()
                 sources.close()

@@ -7,8 +7,8 @@ import org.junit.jupiter.api.Test
 
 class LibrarySchemaTest {
     @Test
-    fun `schema version includes the baseline migration`() {
-        DesktopLibraryDatabase.Schema.version shouldBe 2L
+    fun `schema version includes per chapter download storage`() {
+        DesktopLibraryDatabase.Schema.version shouldBe 3L
     }
 
     @Test
@@ -30,7 +30,7 @@ class LibrarySchemaTest {
                 "manga", "chapter", "category", "manga_category", "history", "tracking",
                 "source_metadata", "preference_snapshot", "source_preference_snapshot",
                 "local_manga_entry", "local_chapter_asset", "import_report", "import_report_item",
-                "library_metadata",
+                "library_metadata", "local_chapter_storage",
             )
         }
     }

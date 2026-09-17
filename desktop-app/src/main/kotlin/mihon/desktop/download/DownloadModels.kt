@@ -45,6 +45,7 @@ data class DesktopDownload(
     val error: String? = null,
     val bytesDownloaded: Long = 0L,
     val enqueuedAt: Long = System.currentTimeMillis(),
+    val storageLayoutVersion: Int = 0,
 ) {
     val downloadedImages: Int
         get() = pages.count { it.status == PageStatus.READY }
