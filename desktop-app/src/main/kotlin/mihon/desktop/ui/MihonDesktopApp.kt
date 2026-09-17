@@ -780,6 +780,7 @@ fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
                                         onClearCompletedDownloads = { downloader?.clearCompleted() },
                                         onCancelDownload = { downloader?.cancel(it) },
                                         onRetryDownload = { downloader?.retry(it) },
+                                        onRetryAllFailedDownloads = { downloader?.retryAllFailed() },
                                         onReadDownloadedChapter = { mangaId, chapterId ->
                                             libraryPresenter.openMangaDetail(mangaId)
                                             navigator.navigate(DesktopDestination.Reader(chapterId))

@@ -1,7 +1,12 @@
 package mihon.desktop.ui.browse
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -45,6 +50,8 @@ class BrowsePresenter(
     private val _state = MutableStateFlow(BrowseUiState())
     val state: StateFlow<BrowseUiState> = _state.asStateFlow()
     private var lastNotifiedPendingUpdates = 0
+    private var globalSearchJob: Job? = null
+    private val globalSearchGeneration = java.util.concurrent.atomic.AtomicLong()
 
     init {
         // The runtime builds the source manager before the browse presenter, so the built-in local
@@ -526,7 +533,15 @@ class BrowsePresenter(
     }
 
     fun closeGlobalSearch() {
-        _state.update { it.copy(isGlobalSearchOpen = false) }
+        globalSearchGeneration.incrementAndGet()
+        globalSearchJob?.cancel()
+        _state.update {
+            it.copy(
+                isGlobalSearchOpen = false,
+                isGlobalSearching = false,
+                globalSearchResults = emptyList(),
+            )
+        }
     }
 
     fun setGlobalSearchQuery(query: String) {
@@ -536,47 +551,61 @@ class BrowsePresenter(
     fun performGlobalSearch() {
         val query = _state.value.globalSearchQuery.trim()
         if (query.isBlank()) return
-
+        val generation = globalSearchGeneration.incrementAndGet()
+        globalSearchJob?.cancel()
         val sources = _state.value.sources
         _state.update {
             it.copy(
-                isGlobalSearching = true,
+                isGlobalSearching = sources.isNotEmpty(),
                 globalSearchResults = sources.map { s -> GlobalSearchSourceResult(source = s, isLoading = true) },
             )
         }
 
-        for (source in sources) {
-            scope.launch {
-                try {
-                    val page = sourceManager.searchManga(source.id, 1, query)
-                    _state.update { current ->
-                        val updated = current.globalSearchResults.map { item ->
-                            if (item.source.id == source.id) {
-                                item.copy(isLoading = false, mangas = page.mangas)
-                            } else {
-                                item
+        globalSearchJob = scope.launch {
+            coroutineScope {
+                for (source in sources) {
+                    launch {
+                        try {
+                            val page = sourceManager.searchManga(source.id, 1, query)
+                            currentCoroutineContext().ensureActive()
+                            _state.update { current ->
+                                if (generation != globalSearchGeneration.get()) return@update current
+                                val updated = current.globalSearchResults.map { item ->
+                                    if (item.source.id == source.id) {
+                                        item.copy(isLoading = false, mangas = page.mangas)
+                                    } else {
+                                        item
+                                    }
+                                }
+                                val stillLoading = updated.any { it.isLoading }
+                                current.copy(
+                                    globalSearchResults = updated,
+                                    isGlobalSearching = stillLoading,
+                                )
+                            }
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            _state.update { current ->
+                                if (generation != globalSearchGeneration.get()) return@update current
+                                val updated = current.globalSearchResults.map { item ->
+                                    if (item.source.id == source.id) {
+                                        item.copy(
+                                            isLoading = false,
+                                            errorMessage = e.message ?: "Failed to search",
+                                            failureReason = mihon.desktop.download.classifyDownloadFailure(e),
+                                        )
+                                    } else {
+                                        item
+                                    }
+                                }
+                                val stillLoading = updated.any { it.isLoading }
+                                current.copy(
+                                    globalSearchResults = updated,
+                                    isGlobalSearching = stillLoading,
+                                )
                             }
                         }
-                        val stillLoading = updated.any { it.isLoading }
-                        current.copy(
-                            globalSearchResults = updated,
-                            isGlobalSearching = stillLoading,
-                        )
-                    }
-                } catch (e: Exception) {
-                    _state.update { current ->
-                        val updated = current.globalSearchResults.map { item ->
-                            if (item.source.id == source.id) {
-                                item.copy(isLoading = false, errorMessage = e.message ?: "Failed to search")
-                            } else {
-                                item
-                            }
-                        }
-                        val stillLoading = updated.any { it.isLoading }
-                        current.copy(
-                            globalSearchResults = updated,
-                            isGlobalSearching = stillLoading,
-                        )
                     }
                 }
             }

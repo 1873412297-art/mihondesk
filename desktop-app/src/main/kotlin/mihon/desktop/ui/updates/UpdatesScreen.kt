@@ -163,7 +163,11 @@ fun UpdatesScreen(
                     val retry = runState.retryAfterEpochMillis.takeIf { it > System.currentTimeMillis() }
                         ?.let { java.text.DateFormat.getDateTimeInstance().format(java.util.Date(it)) }
                     listOfNotNull(
-                        runState.error ?: mihon.desktop.i18n.recoveryText("Update failed", "更新失败", "更新失敗"),
+                        mihon.desktop.i18n.recoveryText(
+                            "Library update failed. You can check again.",
+                            "书库更新失败，可点击“立即检查”重试。",
+                            "書架更新失敗，可點擊「立即檢查」重試。",
+                        ),
                         retry?.let { mihon.desktop.i18n.recoveryText("Retry after $it", "将在 $it 后重试", "將在 $it 後重試") },
                     ).joinToString("\n")
                 }
@@ -180,7 +184,17 @@ fun UpdatesScreen(
                     color = MaterialTheme.colorScheme.secondaryContainer,
                     shape = RoundedCornerShape(8.dp),
                     modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp).testTag("library-update-recovery"),
-                ) { Text(it, modifier = Modifier.padding(12.dp), style = MaterialTheme.typography.bodyMedium) }
+                ) {
+                    Column(Modifier.padding(12.dp)) {
+                        Text(it, style = MaterialTheme.typography.bodyMedium)
+                        if (runState.status == mihon.desktop.library.update.LibraryUpdateStatus.FAILED) {
+                            mihon.desktop.ui.common.FailureExplanation(
+                                mihon.desktop.download.classifyDownloadFailure(runState.error),
+                            )
+                            mihon.desktop.ui.common.ErrorDetails(runState.error, "library-update-error")
+                        }
+                    }
+                }
             }
         }
 

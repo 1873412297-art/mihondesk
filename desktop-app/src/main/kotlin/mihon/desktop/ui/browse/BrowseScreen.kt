@@ -163,6 +163,7 @@ fun BrowseScreen(
             onBack = onCloseGlobalSearch,
             isSearching = state.isGlobalSearching,
             sourceResults = state.globalSearchResults,
+            hasSources = state.sources.isNotEmpty(),
             onMangaSelected = onGlobalMangaSelected,
             onViewSource = { source ->
                 onCloseGlobalSearch()
@@ -339,11 +340,17 @@ fun BrowseScreen(
 
         // Error Banner
         state.errorMessage?.let { error ->
-            Text(
-                text = error,
-                color = MaterialTheme.colorScheme.error,
-                modifier = Modifier.padding(bottom = 8.dp),
-            )
+            Column(Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+                mihon.desktop.ui.common.FailureExplanation(mihon.desktop.download.classifyDownloadFailure(error))
+                mihon.desktop.ui.common.ErrorDetails(error, "browse-error")
+                TextButton(
+                    onClick = onRefresh,
+                    enabled = !state.isLoading,
+                    modifier = Modifier.testTag("browse-error-retry"),
+                ) {
+                    Text(strings.libraryRetry)
+                }
+            }
         }
 
         // Content

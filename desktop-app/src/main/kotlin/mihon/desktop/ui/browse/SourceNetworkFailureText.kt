@@ -1,7 +1,12 @@
 package mihon.desktop.ui.browse
 
 import androidx.compose.runtime.Composable
+import mihon.desktop.download.downloadFailureReason
+import mihon.desktop.i18n.LocalStrings
+import mihon.desktop.i18n.hint
 import mihon.desktop.i18n.recoveryText
+import mihon.desktop.i18n.text
+import mihon.desktop.i18n.title
 import mihon.extension.ipc.NetworkFailure
 import mihon.extension.ipc.NetworkFailureKind
 
@@ -28,7 +33,13 @@ internal fun sourceNetworkFailureText(failure: NetworkFailure): String {
             "网站正在限制请求频率，请稍后重试。",
             "網站正在限制請求頻率，請稍後重試。",
         )
-        else -> recoveryText("The website request failed.", "网站请求失败。", "網站請求失敗。")
+        else -> failure.kind.downloadFailureReason().let {
+            "${LocalStrings.current.text(it.title)}\n${LocalStrings.current.text(it.hint)}"
+        }
     }
-    return "$detail\n${failure.host} · HTTP ${failure.statusCode}"
+    val context = listOfNotNull(
+        failure.host.takeIf { it.isNotBlank() },
+        failure.statusCode.takeIf { it > 0 }?.let { "HTTP $it" },
+    ).joinToString(" · ")
+    return listOf(detail, context).filter { it.isNotBlank() }.joinToString("\n")
 }

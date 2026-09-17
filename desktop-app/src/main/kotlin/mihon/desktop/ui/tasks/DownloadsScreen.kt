@@ -3,6 +3,8 @@ package mihon.desktop.ui.tasks
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -21,30 +23,40 @@ import androidx.compose.material.icons.rounded.DownloadDone
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import mihon.desktop.download.DesktopDownload
 import mihon.desktop.download.DownloadStatus
+import mihon.desktop.download.classifyDownloadFailure
 import mihon.desktop.i18n.LocalStrings
 import mihon.desktop.i18n.UiText
 import mihon.desktop.i18n.text
 import mihon.desktop.ui.common.DownloadIndicator
+import mihon.desktop.ui.common.ErrorDetails
+import mihon.desktop.ui.common.FailureExplanation
 import mihon.desktop.ui.common.animatedDownloadProgress
 import mihon.desktop.ui.common.downloadIsIndeterminate
 import mihon.desktop.ui.common.downloadStatusLabel
@@ -57,6 +69,7 @@ const val DOWNLOADS_CLEAR_COMPLETED_BUTTON_TEST_TAG = "downloads_clear_completed
 const val DOWNLOAD_ITEM_TEST_TAG_PREFIX = "download_item_"
 const val DOWNLOAD_READ_BUTTON_TEST_TAG_PREFIX = "download_read_"
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun DownloadsScreen(
     queue: List<DesktopDownload>,
@@ -71,8 +84,20 @@ fun DownloadsScreen(
     modifier: Modifier = Modifier,
     recoveryMessage: String? = null,
     storageError: String? = null,
+    onRetryAllFailed: () -> Unit = {},
 ) {
-    val strings = mihon.desktop.i18n.LocalStrings.current
+    val strings = LocalStrings.current
+    var query by rememberSaveable { mutableStateOf("") }
+    var selectedStatus by rememberSaveable { mutableStateOf<DownloadStatus?>(null) }
+    val failedCount = queue.count { it.status == DownloadStatus.ERROR }
+    val counts = queue.groupingBy { it.displayStatus(isRunning) }.eachCount()
+    val visible = queue.filter { item ->
+        (selectedStatus == null || item.displayStatus(isRunning) == selectedStatus) &&
+            (
+                item.mangaTitle.contains(query.trim(), ignoreCase = true) ||
+                    item.chapterName.contains(query.trim(), ignoreCase = true)
+                )
+    }
     Surface(modifier = modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
@@ -81,10 +106,10 @@ fun DownloadsScreen(
                 .padding(16.dp),
         ) {
             // Top Header
-            Row(
+            FlowRow(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Column {
                     Text(
@@ -101,18 +126,14 @@ fun DownloadsScreen(
                         text = if (isRunning && speedBytesPerSec > 0) {
                             strings.downloadsActiveSpeed(activeCount, speedText)
                         } else {
-                            mihon.desktop.i18n.recoveryText(
-                                "$activeCount active items",
-                                "$activeCount 个下载任务",
-                                "$activeCount 個下載工作",
-                            )
+                            strings.text(UiText.DownloadQueueCount, queue.size)
                         },
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
 
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (isRunning) {
                         OutlinedButton(
                             onClick = onPauseAll,
@@ -144,6 +165,17 @@ fun DownloadsScreen(
                         }
                     }
 
+                    if (failedCount > 0) {
+                        OutlinedButton(
+                            onClick = onRetryAllFailed,
+                            modifier = Modifier.testTag("downloads-retry-failed"),
+                        ) {
+                            Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text(strings.text(UiText.RetryAllFailed, failedCount))
+                        }
+                    }
+
                     TextButton(
                         onClick = onClearCompleted,
                         modifier = Modifier.testTag(DOWNLOADS_CLEAR_COMPLETED_BUTTON_TEST_TAG),
@@ -161,6 +193,41 @@ fun DownloadsScreen(
             }
 
             Spacer(modifier = Modifier.height(16.dp))
+
+            if (queue.isNotEmpty()) {
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    label = { Text(strings.text(UiText.SearchDownloads)) },
+                    leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
+                    trailingIcon = {
+                        if (query.isNotEmpty()) {
+                            IconButton(onClick = { query = "" }) {
+                                Icon(Icons.Rounded.Close, contentDescription = strings.text(UiText.ClearSearch))
+                            }
+                        }
+                    },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth().testTag("downloads-search"),
+                )
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(
+                        selected = selectedStatus == null,
+                        onClick = { selectedStatus = null },
+                        label = { Text("${strings.text(UiText.All)} (${queue.size})") },
+                        modifier = Modifier.testTag("download-filter-ALL"),
+                    )
+                    DownloadStatus.entries.forEach { status ->
+                        FilterChip(
+                            selected = selectedStatus == status,
+                            onClick = { selectedStatus = status },
+                            label = { Text("${downloadStatusLabel(status, true)} (${counts[status] ?: 0})") },
+                            modifier = Modifier.testTag("download-filter-$status"),
+                        )
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+            }
 
             listOfNotNull(storageError, recoveryMessage).distinct().forEach { message ->
                 Surface(
@@ -205,12 +272,23 @@ fun DownloadsScreen(
                         }
                     }
                 }
+            } else if (visible.isEmpty()) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(32.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text(strings.text(UiText.DownloadsNoMatches), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    TextButton(onClick = {
+                        query = ""
+                        selectedStatus = null
+                    }) { Text(strings.text(UiText.ClearFilters)) }
+                }
             } else {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    items(queue, key = { it.chapterId }) { item ->
+                    items(visible, key = { it.chapterId }) { item ->
                         DownloadCard(
                             download = item,
                             isRunning = isRunning,
@@ -302,6 +380,11 @@ private fun DownloadCard(
 
             Spacer(modifier = Modifier.height(6.dp))
 
+            if (download.status == DownloadStatus.ERROR) {
+                FailureExplanation(download.failureReason ?: classifyDownloadFailure(download.error))
+                ErrorDetails(download.error, "download-error-${download.chapterId}")
+            }
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -324,7 +407,16 @@ private fun DownloadCard(
                         }
                     }
                     DownloadStatus.COMPLETED -> strings.text(UiText.DownloadedPages, download.downloadedImages)
-                    DownloadStatus.ERROR -> download.error ?: strings.text(UiText.DownloadFailed)
+                    DownloadStatus.ERROR -> if (download.totalPages > 0) {
+                        strings.text(
+                            UiText.DownloadProgress,
+                            download.downloadedImages,
+                            download.totalPages,
+                            (normalizedDownloadProgress(download.status, download.progress) * 100).toInt(),
+                        )
+                    } else {
+                        ""
+                    }
                 }
 
                 Text(
@@ -356,7 +448,10 @@ private fun DownloadCard(
                         }
                     }
                     if (download.status == DownloadStatus.ERROR) {
-                        TextButton(onClick = onRetry) {
+                        TextButton(
+                            onClick = onRetry,
+                            modifier = Modifier.testTag("download-retry-${download.chapterId}"),
+                        ) {
                             Icon(
                                 imageVector = Icons.Rounded.Refresh,
                                 contentDescription = null,
@@ -367,7 +462,10 @@ private fun DownloadCard(
                         }
                     }
                     if (download.status != DownloadStatus.COMPLETED) {
-                        TextButton(onClick = onCancel) {
+                        TextButton(
+                            onClick = onCancel,
+                            modifier = Modifier.testTag("download-cancel-${download.chapterId}"),
+                        ) {
                             Icon(
                                 imageVector = Icons.Rounded.Close,
                                 contentDescription = null,
@@ -386,11 +484,11 @@ private fun DownloadCard(
 @Composable
 private fun StatusBadge(status: DownloadStatus, isRunning: Boolean) {
     val label = downloadStatusLabel(status, isRunning)
-    val color = when (status) {
+    val color = when (effectiveDownloadStatus(status, isRunning)) {
         DownloadStatus.QUEUED -> MaterialTheme.colorScheme.onSurfaceVariant
         DownloadStatus.DOWNLOADING -> MaterialTheme.colorScheme.primary
-        DownloadStatus.PAUSED -> Color(0xFFE6A23C)
-        DownloadStatus.COMPLETED -> Color(0xFF67C23A)
+        DownloadStatus.PAUSED -> MaterialTheme.colorScheme.onSurfaceVariant
+        DownloadStatus.COMPLETED -> MaterialTheme.colorScheme.primary
         DownloadStatus.ERROR -> MaterialTheme.colorScheme.error
     }
 
@@ -407,6 +505,17 @@ private fun StatusBadge(status: DownloadStatus, isRunning: Boolean) {
         )
     }
 }
+
+private fun DesktopDownload.displayStatus(isRunning: Boolean) = effectiveDownloadStatus(status, isRunning)
+
+private fun effectiveDownloadStatus(status: DownloadStatus, isRunning: Boolean): DownloadStatus =
+    if (!isRunning &&
+        (status == DownloadStatus.QUEUED || status == DownloadStatus.DOWNLOADING)
+    ) {
+        DownloadStatus.PAUSED
+    } else {
+        status
+    }
 
 private fun formatSpeed(bytesPerSec: Double): String {
     return when {

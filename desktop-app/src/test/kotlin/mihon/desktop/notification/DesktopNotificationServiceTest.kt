@@ -8,6 +8,30 @@ import java.nio.file.Path
 class DesktopNotificationServiceTest {
 
     @Test
+    fun `notifications follow the current language without leaking raw exceptions`() {
+        var strings: mihon.desktop.i18n.DesktopStrings = mihon.desktop.i18n.SimplifiedChineseStrings
+        var hidden = false
+        val native = mutableListOf<Pair<String, String>>()
+        val service = WindowsDesktopNotificationService(
+            stringsProvider = { strings },
+            hideContentProvider = { hidden },
+            systemMessageSink = { title, message, _ -> native.add(title to message) },
+        )
+        repeat(145) { service.notifyDownloadProgress("Manga", "Chapter", it / 144f) }
+        native shouldHaveSize 0
+        service.notifyDownloadError("Manga", "Chapter", "TLS: Remote host terminated the handshake")
+        native.last() shouldBe ("下载失败" to "Manga - Chapter: 安全连接建立失败")
+        service.notifyLibraryUpdate(5, 2)
+        native.last() shouldBe ("书库已更新" to "2 部漫画共发现 5 个新章节")
+        strings = mihon.desktop.i18n.TraditionalChineseStrings
+        hidden = true
+        service.notifyDownloadComplete("Private title", "Private chapter")
+        native.last() shouldBe ("下載完成" to "一個章節已下載完成")
+        service.notifyExtensionUpdatePending(2)
+        native.last() shouldBe ("有可用的擴充套件更新" to "2 個擴充套件可更新")
+    }
+
+    @Test
     fun `page progress stays in app and only the chapter result reaches Windows`() {
         val systemMessages = mutableListOf<Triple<String, String, Boolean>>()
         val service = WindowsDesktopNotificationService(

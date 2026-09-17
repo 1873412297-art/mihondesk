@@ -4,6 +4,12 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import mihon.desktop.download.classifyDownloadFailure
+import mihon.desktop.i18n.DesktopStrings
+import mihon.desktop.i18n.EnglishStrings
+import mihon.desktop.i18n.UiText
+import mihon.desktop.i18n.text
+import mihon.desktop.i18n.title
 import java.awt.GraphicsEnvironment
 import java.awt.Image
 import java.awt.SystemTray
@@ -34,6 +40,7 @@ class WindowsDesktopNotificationService(
     private val enabledProvider: () -> Boolean = { true },
     private val hideContentProvider: () -> Boolean = { false },
     private val systemMessageSink: ((String, String, Boolean) -> Unit)? = null,
+    private val stringsProvider: () -> DesktopStrings = { EnglishStrings },
 ) : DesktopNotificationService {
 
     private val _recentNotifications = MutableStateFlow<List<DesktopNotificationItem>>(emptyList())
@@ -65,38 +72,56 @@ class WindowsDesktopNotificationService(
     }
 
     override fun notifyDownloadComplete(mangaTitle: String, chapterName: String) {
-        val title = "Download Complete"
-        val message = if (hideContentProvider()) "A chapter download completed" else "$mangaTitle - $chapterName"
+        val strings = stringsProvider()
+        val title = strings.text(UiText.NotificationComplete)
+        val message = if (hideContentProvider()) {
+            strings.text(
+                UiText.NotificationCompletedHidden,
+            )
+        } else {
+            "$mangaTitle - $chapterName"
+        }
         dispatch(title, message, isError = false)
     }
 
     override fun notifyDownloadError(mangaTitle: String, chapterName: String, error: String) {
-        val title = "Download Failed"
-        val message = if (hideContentProvider()) "A chapter download failed" else "$mangaTitle - $chapterName: $error"
+        val strings = stringsProvider()
+        val title = strings.text(UiText.NotificationFailed)
+        val reason = strings.text(classifyDownloadFailure(error).title)
+        val message = if (hideContentProvider()) {
+            strings.text(
+                UiText.NotificationFailedHidden,
+            )
+        } else {
+            "$mangaTitle - $chapterName: $reason"
+        }
         dispatch(title, message, isError = true)
     }
 
     override fun notifyDownloadProgress(mangaTitle: String, chapterName: String, progress: Float) {
-        val boundedProgress = progress.coerceIn(0f, 1f)
+        val strings = stringsProvider()
+        val boundedProgress = if (progress.isFinite()) progress.coerceIn(0f, 1f) else 0f
         val percentage = (boundedProgress * 100).toInt()
         val message = if (hideContentProvider()) {
-            "Downloading chapter: $percentage%"
+            strings.text(UiText.NotificationProgressHidden, percentage)
         } else {
             "$mangaTitle - $chapterName: $percentage%"
         }
-        dispatch("Download Progress", message, isError = false, progress = boundedProgress)
+        dispatch(strings.text(UiText.NotificationProgress), message, isError = false, progress = boundedProgress)
     }
 
     override fun notifyLibraryUpdate(newChaptersCount: Int, mangaCount: Int) {
-        val title = "Library Updated"
-        val message = "Found $newChaptersCount new chapters across $mangaCount manga"
+        val strings = stringsProvider()
+        val title = strings.text(UiText.NotificationLibrary)
+        val message = strings.text(UiText.NotificationNewChapters, newChaptersCount, mangaCount)
         dispatch(title, message, isError = false)
     }
 
     override fun notifyExtensionUpdatePending(extensionCount: Int) {
+        val strings = stringsProvider()
         dispatch(
-            title = "Extension Updates Available",
-            message = "$extensionCount extension update(s) are ready",
+            title = strings.text(UiText.NotificationExtensions),
+            message = strings.text(UiText.NotificationExtensionCount, extensionCount),
             isError = false,
         )
     }

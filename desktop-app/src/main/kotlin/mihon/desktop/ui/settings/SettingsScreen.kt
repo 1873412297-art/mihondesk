@@ -1222,6 +1222,11 @@ private fun DownloadsSettingsPane(
 ) {
     val strings = LocalStrings.current
     var preferences by remember { mutableStateOf(preferenceStore.load()) }
+    var pathDraft by remember { mutableStateOf(preferences.downloadStoragePath) }
+    var pathError by remember { mutableStateOf<UiText?>(null) }
+    var pathSaved by remember { mutableStateOf(false) }
+    var isSavingPath by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
 
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
@@ -1249,53 +1254,99 @@ private fun DownloadsSettingsPane(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     OutlinedTextField(
-                        value = preferences.downloadStoragePath,
+                        value = pathDraft,
                         onValueChange = { path ->
-                            val updated = preferenceStore.updatePreferences { it.copy(downloadStoragePath = path) }
-                            preferences = updated
-
-                            onPreferencesChanged?.invoke(updated)
+                            pathDraft = path
+                            pathError = null
+                            pathSaved = false
                         },
                         label = { Text(strings.settingsDownloadCustomPath) },
                         placeholder = { Text(strings.settingsDownloadCustomPathPlaceholder) },
                         modifier = Modifier.weight(1f).testTag("download-storage-input"),
                         singleLine = true,
+                        enabled = !isSavingPath,
+                        isError = pathError != null,
                     )
                     OutlinedButton(
                         onClick = {
                             chooseDownloadDirectory(
-                                initialPath = preferences.downloadStoragePath,
+                                initialPath = pathDraft,
                                 activePath = downloadsDir,
                                 title = strings.settingsDownloadChooseFolder,
                             )?.let { selected ->
-                                val updated = preferenceStore.updatePreferences {
-                                    it.copy(downloadStoragePath = selected.toString())
-                                }
-                                preferences = updated
-
-                                onPreferencesChanged?.invoke(updated)
+                                pathDraft = selected.toString()
+                                pathError = null
+                                pathSaved = false
                             }
                         },
                         modifier = Modifier.testTag("download-storage-choose"),
+                        enabled = !isSavingPath,
                     ) {
                         Text(strings.settingsDownloadChooseFolder)
                     }
                 }
-                if (preferences.downloadStoragePath.isNotBlank()) {
-                    TextButton(
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
                         onClick = {
-                            val updated = preferenceStore.updatePreferences { it.copy(downloadStoragePath = "") }
-                            preferences = updated
-
-                            onPreferencesChanged?.invoke(updated)
+                            val draft = pathDraft
+                            isSavingPath = true
+                            scope.launch {
+                                try {
+                                    val validation = withContext(Dispatchers.IO) { validateDownloadPath(draft) }
+                                    pathError = validation.error
+                                    if (validation.error == null) {
+                                        val updated = withContext(Dispatchers.IO) {
+                                            preferenceStore.updatePreferences {
+                                                it.copy(downloadStoragePath = validation.path)
+                                            }
+                                        }
+                                        preferences = updated
+                                        pathDraft = updated.downloadStoragePath
+                                        pathSaved = true
+                                        onPreferencesChanged?.invoke(updated)
+                                    }
+                                } catch (error: kotlinx.coroutines.CancellationException) {
+                                    throw error
+                                } catch (_: Exception) {
+                                    pathError = UiText.DownloadPathSaveFailed
+                                } finally {
+                                    isSavingPath = false
+                                }
+                            }
                         },
-                        modifier = Modifier.testTag("download-storage-default"),
-                    ) {
-                        Text(strings.settingsDownloadUseDefault)
+                        enabled = !isSavingPath && pathDraft != preferences.downloadStoragePath,
+                        modifier = Modifier.testTag("download-storage-save"),
+                    ) { Text(strings.text(if (isSavingPath) UiText.CheckingDownloadPath else UiText.SaveDownloadPath)) }
+                    if (pathDraft.isNotBlank()) {
+                        TextButton(
+                            onClick = {
+                                pathDraft = ""
+                                pathError = null
+                                pathSaved = false
+                            },
+                            modifier = Modifier.testTag("download-storage-default"),
+                            enabled = !isSavingPath,
+                        ) {
+                            Text(strings.settingsDownloadUseDefault)
+                        }
                     }
                 }
+                pathError?.let {
+                    Text(
+                        strings.text(it),
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.testTag("download-storage-error"),
+                    )
+                }
+                if (pathSaved) {
+                    Text(
+                        strings.text(UiText.DownloadPathSaved),
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.testTag("download-storage-saved"),
+                    )
+                }
                 Text(
-                    strings.settingsDownloadRestartRequired,
+                    strings.text(UiText.DownloadPathHint),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
