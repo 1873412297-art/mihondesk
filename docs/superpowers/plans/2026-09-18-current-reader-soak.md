@@ -7,6 +7,10 @@ soak or the 256 MiB reader budget as current total-process memory evidence.
 - [x] Add a reproducible runner that records package identity, isolated data, stderr,
   reader heap/core samples and separate process-tree working-set/private bytes.
 - [x] Validate the summary and PNG/SVG plot generation against the completed preflight.
+- [x] Check a single runtime identity and monotonic progress, require sample boundaries
+  to match the completed workload, and report maximum reader/process sampling gaps.
+  The completed preflight passes; four copied evidence streams with a changed PID,
+  final cycle count, backwards time or missing reader process are correctly rejected.
 - [ ] Complete 1800 seconds in one packaged runtime, with repeated decoding, mode
   changes, chapter transitions and persistence checks; require empty stderr/exit 0.
 - [ ] Inspect five-minute heap and process-memory windows and record the actual
