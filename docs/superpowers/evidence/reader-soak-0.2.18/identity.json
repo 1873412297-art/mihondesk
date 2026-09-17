@@ -1,0 +1,23 @@
+{
+  "executable": "D:\\my project\\mihon-w\\desktop-app\\build\\compose\\binaries\\main\\app\\mihondesk\\mihondesk.exe",
+  "executableSha256": "329B002304FA801D368A14C3875B92780C37BF81D3C101EFAA5FF8A8287AEF88",
+  "appJar": "D:\\my project\\mihon-w\\desktop-app\\build\\compose\\binaries\\main\\app\\mihondesk\\app\\desktop-app-ba517f3eb6dd17c97fed9dde3df2a9.jar",
+  "appJarSha256": "9A77EDCF86C5CDD82E7EF05ED3C4650C1166AB48BA19DA379B18CC3C38A0DFAA",
+  "buildMetadata": "version=0.2.18\nrevision=de1b8bd6bb2312641fa1197abd9eb085cec32e02\ndirty=false\n",
+  "fixtureSha256": "9FAF51D89D29B547F6DB4C54D3D27A5A2EBAA625961255AE0BB2BFA754DF7038",
+  "requestedSeconds": 1800,
+  "startedUtc": "2026-09-17T22:56:54.1575679Z",
+  "operatingSystem": {
+    "Caption": "Microsoft Windows 11 家庭版 Insider Preview 中文版",
+    "Version": "10.0.26220",
+    "BuildNumber": "26220"
+  },
+  "processor": [
+    {
+      "Name": "13th Gen Intel(R) Core(TM) i9-13980HX",
+      "NumberOfCores": 24,
+      "NumberOfLogicalProcessors": 32
+    }
+  ],
+  "physicalMemoryBytes": 33954439168
+}

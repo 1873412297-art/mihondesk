@@ -1,0 +1,251 @@
+{
+  "identity": {
+    "executable": "D:\\my project\\mihon-w\\desktop-app\\build\\compose\\binaries\\main\\app\\mihondesk\\mihondesk.exe",
+    "executableSha256": "329B002304FA801D368A14C3875B92780C37BF81D3C101EFAA5FF8A8287AEF88",
+    "appJar": "D:\\my project\\mihon-w\\desktop-app\\build\\compose\\binaries\\main\\app\\mihondesk\\app\\desktop-app-ba517f3eb6dd17c97fed9dde3df2a9.jar",
+    "appJarSha256": "9A77EDCF86C5CDD82E7EF05ED3C4650C1166AB48BA19DA379B18CC3C38A0DFAA",
+    "buildMetadata": "version=0.2.18\nrevision=de1b8bd6bb2312641fa1197abd9eb085cec32e02\ndirty=false\n",
+    "fixtureSha256": "9FAF51D89D29B547F6DB4C54D3D27A5A2EBAA625961255AE0BB2BFA754DF7038",
+    "requestedSeconds": 1800,
+    "startedUtc": "2026-09-17T22:56:54.1575679Z",
+    "operatingSystem": {
+      "Caption": "Microsoft Windows 11 家庭版 Insider Preview 中文版",
+      "Version": "10.0.26220",
+      "BuildNumber": "26220"
+    },
+    "processor": [
+      {
+        "Name": "13th Gen Intel(R) Core(TM) i9-13980HX",
+        "NumberOfCores": 24,
+        "NumberOfLogicalProcessors": 32
+      }
+    ],
+    "physicalMemoryBytes": 33954439168
+  },
+  "soak": {
+    "processId": 51444,
+    "elapsedSeconds": 1800.683615,
+    "cycles": 520,
+    "decodedTiles": 19760,
+    "heapHighWaterBytes": 805182352,
+    "samplesFile": "D:\\my project\\mihon-w\\build\\reader-soak-0218\\full\\reader-samples.jsonl"
+  },
+  "verifiedAssets": [
+    "standalone",
+    "directory",
+    "cbz",
+    "cbt",
+    "cb7",
+    "cbr",
+    "epub"
+  ],
+  "verifiedModes": [
+    "SINGLE_LTR",
+    "SINGLE_RTL",
+    "DUAL_LTR",
+    "DUAL_RTL",
+    "VERTICAL",
+    "WEBTOON"
+  ],
+  "distinctReaderPids": [
+    51444
+  ],
+  "continuity": {
+    "readerBoundariesMatchCompletedWorkload": true,
+    "readerFirstSampleSeconds": 0.0006269,
+    "readerLastSampleSeconds": 1800.6821237,
+    "maxReaderSampleGapSeconds": 11.306,
+    "processFirstSampleSeconds": 0.82,
+    "processLastSampleSeconds": 1802.77,
+    "maxProcessSampleGapSeconds": 6.21,
+    "observedProcessIds": [
+      51444,
+      72048
+    ]
+  },
+  "readerSamples": 522,
+  "processSamples": 311,
+  "heapUsed": {
+    "samples": 522,
+    "minMiB": 58.343,
+    "medianMiB": 171.781,
+    "maxMiB": 767.882
+  },
+  "workingSet": {
+    "samples": 311,
+    "minMiB": 178.117,
+    "medianMiB": 625.129,
+    "maxMiB": 1109.547
+  },
+  "privateBytes": {
+    "samples": 311,
+    "minMiB": 447.531,
+    "medianMiB": 813.004,
+    "maxMiB": 1782.086
+  },
+  "coreHighWaterBytes": 171819520,
+  "cacheHighWaterBytes": 18851792,
+  "windows": [
+    {
+      "startMinute": 0,
+      "endMinute": 5.0,
+      "heapUsed": {
+        "samples": 87,
+        "minMiB": 58.343,
+        "medianMiB": 177.291,
+        "maxMiB": 404.047
+      },
+      "workingSet": {
+        "samples": 52,
+        "minMiB": 178.117,
+        "medianMiB": 566.918,
+        "maxMiB": 1080.527
+      },
+      "privateBytes": {
+        "samples": 52,
+        "minMiB": 447.531,
+        "medianMiB": 722.658,
+        "maxMiB": 1387.535
+      }
+    },
+    {
+      "startMinute": 5,
+      "endMinute": 10.0,
+      "heapUsed": {
+        "samples": 87,
+        "minMiB": 81.148,
+        "medianMiB": 162.182,
+        "maxMiB": 486.059
+      },
+      "workingSet": {
+        "samples": 51,
+        "minMiB": 449.75,
+        "medianMiB": 604.266,
+        "maxMiB": 1038.172
+      },
+      "privateBytes": {
+        "samples": 51,
+        "minMiB": 499.223,
+        "medianMiB": 786.988,
+        "maxMiB": 1411.57
+      }
+    },
+    {
+      "startMinute": 10,
+      "endMinute": 15.0,
+      "heapUsed": {
+        "samples": 86,
+        "minMiB": 71.509,
+        "medianMiB": 170.751,
+        "maxMiB": 419.562
+      },
+      "workingSet": {
+        "samples": 52,
+        "minMiB": 440.277,
+        "medianMiB": 617.971,
+        "maxMiB": 1109.547
+      },
+      "privateBytes": {
+        "samples": 52,
+        "minMiB": 488.879,
+        "medianMiB": 746.582,
+        "maxMiB": 1348.691
+      }
+    },
+    {
+      "startMinute": 15,
+      "endMinute": 20.0,
+      "heapUsed": {
+        "samples": 88,
+        "minMiB": 61.211,
+        "medianMiB": 162.674,
+        "maxMiB": 513.229
+      },
+      "workingSet": {
+        "samples": 52,
+        "minMiB": 424.707,
+        "medianMiB": 584.465,
+        "maxMiB": 929.816
+      },
+      "privateBytes": {
+        "samples": 52,
+        "minMiB": 473.293,
+        "medianMiB": 693.828,
+        "maxMiB": 1131.184
+      }
+    },
+    {
+      "startMinute": 20,
+      "endMinute": 25.0,
+      "heapUsed": {
+        "samples": 85,
+        "minMiB": 58.596,
+        "medianMiB": 165.518,
+        "maxMiB": 426.674
+      },
+      "workingSet": {
+        "samples": 51,
+        "minMiB": 412.113,
+        "medianMiB": 626.934,
+        "maxMiB": 959.953
+      },
+      "privateBytes": {
+        "samples": 51,
+        "minMiB": 463.086,
+        "medianMiB": 813.004,
+        "maxMiB": 1515.703
+      }
+    },
+    {
+      "startMinute": 25,
+      "endMinute": 30.0,
+      "heapUsed": {
+        "samples": 87,
+        "minMiB": 86.824,
+        "medianMiB": 210.288,
+        "maxMiB": 767.882
+      },
+      "workingSet": {
+        "samples": 52,
+        "minMiB": 485.859,
+        "medianMiB": 850.145,
+        "maxMiB": 1094.02
+      },
+      "privateBytes": {
+        "samples": 52,
+        "minMiB": 535.59,
+        "medianMiB": 1119.275,
+        "maxMiB": 1782.086
+      }
+    },
+    {
+      "startMinute": 30,
+      "endMinute": 30.011393583333334,
+      "heapUsed": {
+        "samples": 2,
+        "minMiB": 85.173,
+        "medianMiB": 85.173,
+        "maxMiB": 85.173
+      },
+      "workingSet": {
+        "samples": 1,
+        "minMiB": 612.258,
+        "medianMiB": 612.258,
+        "maxMiB": 612.258
+      },
+      "privateBytes": {
+        "samples": 1,
+        "minMiB": 783.695,
+        "medianMiB": 783.695,
+        "maxMiB": 783.695
+      }
+    }
+  ],
+  "limitations": [
+    "Headless active decoding/session workload; no Compose frame timing or UI responsiveness measurement.",
+    "Heap samples occur between completed cycles; core high-water uses the independent verifier poller.",
+    "Process sampling starts after launch and uses its own elapsed clock; all child processes are included.",
+    "Five-minute windows are descriptive evidence; no automatic memory plateau claim is made.",
+    "This is the current development machine, not clean Win10/Win11 release acceptance."
+  ]
+}

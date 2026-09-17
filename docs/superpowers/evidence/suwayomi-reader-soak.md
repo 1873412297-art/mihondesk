@@ -1,5 +1,8 @@
 # T9 continuous reader soak
 
+For the completed current 0.2.18 run, see [2026-09-18 evidence](2026-09-18-current-reader-soak.md).
+The historical failed run below is retained for provenance and is not a current pass.
+
 This evidence covers the headless reader pipeline (decoding, session paging/mode changes, cross-chapter transitions, persistence, cache and memory budgets). It does not measure Compose frame rendering or UI latency.
 
 ## Internal opt-in
