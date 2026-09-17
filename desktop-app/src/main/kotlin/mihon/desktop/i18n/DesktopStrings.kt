@@ -1116,7 +1116,7 @@ object EnglishStrings : DesktopStrings {
     override val libraryUpdateSkipCompleted = "Skip completed manga"
     override val libraryUpdateSkipUnread = "Skip manga with unread chapters"
     override val libraryAutoDownloadNew = "Automatically download new chapters"
-    override val notificationsDesktopEnabled = "Show desktop notifications for new chapters"
+    override val notificationsDesktopEnabled = "Show desktop notifications"
     override val libraryLastUpdate = "Last library update:"
 
     // Web & Cookie Management
@@ -1846,7 +1846,7 @@ object SimplifiedChineseStrings : DesktopStrings {
     override val libraryUpdateSkipCompleted = "跳过已完结作品"
     override val libraryUpdateSkipUnread = "跳过存在未读章节的作品"
     override val libraryAutoDownloadNew = "自动下载新更新章节"
-    override val notificationsDesktopEnabled = "发现新章节时推送桌面系统通知"
+    override val notificationsDesktopEnabled = "显示桌面通知"
     override val libraryLastUpdate = "上次书架更新："
 
     // Web & Cookie Management
@@ -2574,7 +2574,7 @@ object TraditionalChineseStrings : DesktopStrings {
     override val libraryUpdateSkipCompleted = "跳過已完結作品"
     override val libraryUpdateSkipUnread = "跳過存在未讀章節的作品"
     override val libraryAutoDownloadNew = "自動下載新更新章節"
-    override val notificationsDesktopEnabled = "發現新章節時推送桌面系統通知"
+    override val notificationsDesktopEnabled = "顯示桌面通知"
     override val libraryLastUpdate = "上次書架更新："
 
     // Web & Cookie Management

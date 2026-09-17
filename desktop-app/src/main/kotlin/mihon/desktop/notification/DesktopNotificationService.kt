@@ -33,6 +33,7 @@ interface DesktopNotificationService {
 class WindowsDesktopNotificationService(
     private val enabledProvider: () -> Boolean = { true },
     private val hideContentProvider: () -> Boolean = { false },
+    private val systemMessageSink: ((String, String, Boolean) -> Unit)? = null,
 ) : DesktopNotificationService {
 
     private val _recentNotifications = MutableStateFlow<List<DesktopNotificationItem>>(emptyList())
@@ -41,7 +42,7 @@ class WindowsDesktopNotificationService(
     private var trayIcon: TrayIcon? = null
 
     init {
-        initTray()
+        if (systemMessageSink == null) initTray()
     }
 
     private fun initTray() {
@@ -120,12 +121,20 @@ class WindowsDesktopNotificationService(
                 .take(50) // keep last 50
         }
 
-        trayIcon?.let { icon ->
-            try {
-                val msgType = if (isError) TrayIcon.MessageType.ERROR else TrayIcon.MessageType.INFO
-                icon.displayMessage(title, message, msgType)
-            } catch (_: Exception) {
-                // Ignore tray display failure
+        // AWT creates a new Windows popup for every displayMessage call; it cannot
+        // silently update a progress notification. Keep page progress in the app.
+        if (progress != null) return
+
+        if (systemMessageSink != null) {
+            systemMessageSink.invoke(title, message, isError)
+        } else {
+            trayIcon?.let { icon ->
+                try {
+                    val msgType = if (isError) TrayIcon.MessageType.ERROR else TrayIcon.MessageType.INFO
+                    icon.displayMessage(title, message, msgType)
+                } catch (_: Exception) {
+                    // Ignore tray display failure
+                }
             }
         }
     }
