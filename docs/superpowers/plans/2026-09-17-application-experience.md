@@ -11,7 +11,7 @@ Scope confirmed by the user: all application areas. Keep the existing Material 3
 - [x] Reader: check dark/light contrast, loading cancellation and readable actionable failures.
 - [x] History and updates: check search/filter/no-results feedback and recovery controls.
 - [x] Localization and shared feedback: app-owned copy in English, simplified and traditional Chinese; raw diagnostics only behind details where practical.
-- [ ] Verification: focused behavior tests, desktop-size light/dark screenshots, relevant regression suites; build and verify the installed artifact separately from source tests.
+- [x] Verification: focused behavior tests, desktop-size light/dark screenshots, relevant regression suites; build and verify the installed artifact separately from source tests. See [0.2.17 installed evidence](../evidence/2026-09-18-application-experience.md).
 
 ## First implementation slice: downloads
 

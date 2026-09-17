@@ -40,7 +40,16 @@ class SourceFilterPlumbingTest {
     private class FilterCapturingProcessManager(
         workingDirectory: File,
         private val filterList: FilterList,
-    ) : WindowsExtensionProcessManager(workingDirectory) {
+    ) : WindowsExtensionProcessManager(
+        workingDirectory,
+        // Installed-JAR runs also carry Gradle's test classpath. Launch the packaged host
+        // explicitly so that combined classpath cannot exceed Windows' command-line limit.
+        customCommand = System.getenv("MIHON_PACKAGED_EXE")?.let {
+            val executable = File(it)
+            check(executable.isFile) { "Packaged executable does not exist: $it" }
+            listOf(executable.absolutePath, "--extension-host", "--stdio")
+        },
+    ) {
 
         var lastSearchPage: Int? = null
         var lastSearchQuery: String? = null
@@ -88,6 +97,7 @@ class SourceFilterPlumbingTest {
         val manager = DesktopSourceManager(installer = null, processManager = processManager)
 
         try {
+            runBlocking { manager.ensureSourceLoaded(4242L) }
             val loaded = manager.getFilterList(4242L)
 
             loaded.filters shouldHaveSize 8
