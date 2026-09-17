@@ -90,7 +90,10 @@ def main():
         finally:
             connection.close()
         (profile / "synthetic-private-note.txt").write_text("synthetic session and configuration sentinel", encoding="utf-8")
-        (profile / "preferences.properties").write_text("language=zh-CN\n", encoding="ascii")
+        # Retain the credential-profile identity created by the seed launch. Replacing
+        # the entire preferences file would intentionally trigger identity repair.
+        with (profile / "preferences.properties").open("a", encoding="ascii") as preferences:
+            preferences.write("\nlanguage=zh-CN\n")
         (profile / "media/local/keep").mkdir(parents=True)
         (profile / "media/local/keep/notes.txt").write_text("synthetic media sentinel", encoding="utf-8")
         before_state = database_state(database)
