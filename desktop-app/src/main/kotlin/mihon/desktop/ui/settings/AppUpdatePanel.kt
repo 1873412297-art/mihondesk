@@ -36,6 +36,9 @@ fun AppUpdatePanel(presenter: AppUpdatePresenter, service: DesktopAppUpdateServi
     }
     AppUpdateCard(
         state = state,
+        canInstall = presenter.canInstall,
+        onInstall = presenter::install,
+        onOpenLog = { state.previousOutcome?.logFile?.let { log -> open { Desktop.getDesktop().open(log.toFile()) } } },
         onCheck = presenter::check,
         onCancel = presenter::cancel,
         onDownload = {

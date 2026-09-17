@@ -40,7 +40,10 @@ val generateDesktopVersion by tasks.registering {
     }
 }
 sourceSets.main { resources.srcDir(generatedVersionResources) }
-tasks.named("processResources") { dependsOn(generateDesktopVersion) }
+tasks.named<ProcessResources>("processResources") {
+    dependsOn(generateDesktopVersion)
+    from(rootProject.file("scripts/mihondesk-updater.ps1"))
+}
 
 val desktopJavaHome = extensions
     .getByType<JavaToolchainService>()

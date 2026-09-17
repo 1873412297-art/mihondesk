@@ -22,6 +22,8 @@ enum class AppUpdatePhase {
     Current,
     Failed,
     Cancelled,
+    PreparingUpdate,
+    Exiting,
 }
 
 data class AppUpdateState(
@@ -31,14 +33,30 @@ data class AppUpdateState(
     val total: Long = 0,
     val savedFile: Path? = null,
     val openFailed: Boolean = false,
+    val verifiedSha256: String? = null,
+    val installFailed: Boolean = false,
+    val previousOutcome: AppUpdateOutcome? = null,
 ) {
     val busy: Boolean get() = phase in
-        setOf(AppUpdatePhase.Checking, AppUpdatePhase.Downloading, AppUpdatePhase.Cancelling, AppUpdatePhase.Publishing)
+        setOf(
+            AppUpdatePhase.Checking,
+            AppUpdatePhase.Downloading,
+            AppUpdatePhase.Cancelling,
+            AppUpdatePhase.Publishing,
+            AppUpdatePhase.PreparingUpdate,
+            AppUpdatePhase.Exiting,
+        )
 }
 
 /** UI entry points and state transitions are confined to the supplied application UI scope. */
-class AppUpdatePresenter(private val service: DesktopAppUpdateService, private val scope: CoroutineScope) {
-    private val mutableState = MutableStateFlow(AppUpdateState())
+class AppUpdatePresenter(
+    private val service: DesktopAppUpdateService,
+    private val scope: CoroutineScope,
+    private val installer: AppUpdateInstaller? = null,
+    private val onExit: () -> Unit = {},
+) {
+    val canInstall: Boolean get() = installer?.available == true
+    private val mutableState = MutableStateFlow(AppUpdateState(previousOutcome = installer?.lastOutcome()))
     val state = mutableState.asStateFlow()
     private var operation: Job? = null
     private val uiContext = scope.coroutineContext.minusKey(Job)
@@ -87,6 +105,7 @@ class AppUpdatePresenter(private val service: DesktopAppUpdateService, private v
                 mutableState.value = state.value.copy(
                     phase = if (saved) AppUpdatePhase.Ready else AppUpdatePhase.Failed,
                     savedFile = destination.takeIf { saved },
+                    verifiedSha256 = checksum.takeIf { saved },
                 )
             } catch (_: CancellationException) {
                 mutableState.value = state.value.copy(phase = AppUpdatePhase.Cancelled)
@@ -97,13 +116,47 @@ class AppUpdatePresenter(private val service: DesktopAppUpdateService, private v
     }
 
     fun cancel() {
-        if (state.value.phase !in setOf(AppUpdatePhase.Checking, AppUpdatePhase.Downloading)) return
+        if (state.value.phase !in
+            setOf(AppUpdatePhase.Checking, AppUpdatePhase.Downloading, AppUpdatePhase.PreparingUpdate)
+        ) {
+            return
+        }
         mutableState.value = state.value.copy(phase = AppUpdatePhase.Cancelling)
         operation?.cancel()
     }
 
     fun reportOpenFailure() {
         mutableState.value = state.value.copy(openFailed = true)
+    }
+
+    fun install() {
+        if (!canInstall || state.value.busy ||
+            state.value.phase !in setOf(AppUpdatePhase.Ready, AppUpdatePhase.Cancelled)
+        ) {
+            return
+        }
+        val file = state.value.savedFile ?: return
+        val checksum = state.value.verifiedSha256 ?: return
+        mutableState.value = state.value.copy(phase = AppUpdatePhase.PreparingUpdate, installFailed = false)
+        operation = scope.launch(start = CoroutineStart.UNDISPATCHED) {
+            var prepared: PreparedAppUpdate? = null
+            try {
+                prepared = requireNotNull(installer).prepare(file, checksum)
+                mutableState.value = state.value.copy(phase = AppUpdatePhase.Exiting)
+                prepared.commit()
+                onExit()
+            } catch (_: CancellationException) {
+                runCatching { prepared?.abort() }
+                mutableState.value = state.value.copy(phase = AppUpdatePhase.Cancelled)
+            } catch (_: Exception) {
+                runCatching { prepared?.abort() }
+                mutableState.value = state.value.copy(
+                    phase = AppUpdatePhase.Ready,
+                    installFailed = true,
+                    previousOutcome = installer?.lastOutcome(),
+                )
+            }
+        }
     }
 
     suspend fun shutdown() {

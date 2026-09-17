@@ -6,7 +6,9 @@ param(
     [Parameter(Mandatory, ParameterSetName = 'Update')][ValidatePattern('^[a-fA-F0-9]{64}$')][string]$ExpectedSha256,
     [Parameter(Mandatory, ParameterSetName = 'Recover')][switch]$Recover,
     [string]$ExecutableName = 'mihondesk.exe',
-    [switch]$NoRestart
+    [switch]$NoRestart,
+    [Parameter(ParameterSetName = 'Update')][string]$HandoffToken = '',
+    [Parameter(ParameterSetName = 'Update')][long]$CallerStartMillis = 0
 )
 $ErrorActionPreference = 'Stop'
 if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) { throw 'This updater requires Windows' }
@@ -21,6 +23,19 @@ try { $targetKey = ([BitConverter]::ToString($hashAlgorithm.ComputeHash([Text.En
 finally { $hashAlgorithm.Dispose() }
 $journalPath = Join-Path $targetParent ".mihon-update-$targetKey.json"
 $coordinatorPath = Join-Path $targetParent ".mihon-update-$targetKey.lock"
+$handoffPath = $null
+if ($HandoffToken) {
+    if ($HandoffToken -notmatch '^[a-f0-9]{32}$' -or $CallerPid -le 0 -or $CallerStartMillis -le 0) { throw 'Invalid application handoff identity' }
+    $handoffPath = Join-Path $targetParent ".mihon-handoff-$HandoffToken"
+    if (-not [IO.Directory]::Exists($handoffPath)) { throw 'Application handoff directory is missing' }
+}
+
+function Write-HandoffResult([string]$Value) {
+    if ($handoffPath) { [IO.File]::WriteAllText((Join-Path $handoffPath 'result'), $Value) }
+}
+function Assert-HandoffActive {
+    if ($handoffPath -and (Test-Path -LiteralPath (Join-Path $handoffPath 'abort'))) { throw 'Application update was cancelled' }
+}
 
 function Get-ArchiveSha256([string]$Path) {
     # Get-FileHash is a script-module command on Windows PowerShell and may not be
@@ -206,10 +221,14 @@ function Invoke-Validation([string]$Directory, [string]$DataDirectory, [string]$
 
 Assert-NoReparse $targetResolved
 Assert-NoReparse $coordinatorPath
+if ($handoffPath) { Assert-NoReparse $handoffPath }
 $coordinator = $null
 $profileLock = $null
 $operationId = $null
 $restart = $false
+$callerExited = $false
+$handoffFailure = $null
+$caller = $null
 try {
     try { $coordinator = [IO.FileStream]::new($coordinatorPath, [IO.FileMode]::OpenOrCreate, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None) }
     catch { throw 'Another portable update is in progress' }
@@ -219,13 +238,20 @@ try {
     if (Test-Path -LiteralPath (Join-Path $targetResolved $guardName)) { throw 'Update guard has no recovery journal; preserve this directory and investigate' }
     if ($CallerPid -gt 0) {
         $caller = Get-Process -Id $CallerPid -ErrorAction SilentlyContinue
+        if ($handoffPath -and -not $caller) { throw 'Application caller has already exited' }
         if ($caller) {
             if ([IO.Path]::GetDirectoryName($caller.MainModule.FileName) -ne $targetResolved) { throw 'Caller PID does not belong to the portable installation' }
-            if (-not $caller.WaitForExit(30000)) { throw 'Application is still running; update aborted' }
+            if ($handoffPath) {
+                if (([DateTimeOffset]::new($caller.StartTime.ToUniversalTime())).ToUnixTimeMilliseconds() -ne $CallerStartMillis) { throw 'Caller start time does not match' }
+                # Open the process handle now so its exit status remains available after exit.
+                $null = $caller.Handle
+            } elseif (-not $caller.WaitForExit(30000)) { throw 'Application is still running; update aborted' }
         }
     }
-    $profileLock = Acquire-ProfileLock $targetResolved
-    Assert-SafeTree (Join-Path $targetResolved 'data')
+    if (-not $handoffPath) {
+        $profileLock = Acquire-ProfileLock $targetResolved
+        Assert-SafeTree (Join-Path $targetResolved 'data')
+    }
     $operationId = [Guid]::NewGuid().ToString('N')
     $paths = Get-OperationPaths $operationId
     New-Item -ItemType Directory -Path $paths.Stage | Out-Null
@@ -243,6 +269,27 @@ try {
     [IO.File]::WriteAllText((Join-Path $candidate $guardName), $operationId)
     # Do not install a package that would ignore the pending-update startup barrier.
     Invoke-Validation $candidate (Join-Path $paths.Stage 'probe-data') '' 75
+    if ($handoffPath) {
+        Assert-HandoffActive
+        [IO.File]::WriteAllText((Join-Path $handoffPath 'ready'), $HandoffToken)
+        $deadline = [DateTime]::UtcNow.AddSeconds(120)
+        while (-not (Test-Path -LiteralPath (Join-Path $handoffPath 'commit'))) {
+            Assert-HandoffActive
+            if ($caller.HasExited) { throw 'Application exited without committing the update' }
+            if ([DateTime]::UtcNow -gt $deadline) { throw 'Application did not commit the prepared update' }
+            Start-Sleep -Milliseconds 100
+        }
+        if ([IO.File]::ReadAllText((Join-Path $handoffPath 'commit')) -ne $HandoffToken) { throw 'Invalid application commit token' }
+        while (-not $caller.WaitForExit(100)) {
+            Assert-HandoffActive
+            if ([DateTime]::UtcNow -gt $deadline) { throw 'Application is still running; update aborted' }
+        }
+        Assert-HandoffActive
+        $callerExited = $true
+        if ($caller.ExitCode -ne 0) { throw 'Application shutdown failed; update aborted' }
+        $profileLock = Acquire-ProfileLock $targetResolved
+        Assert-SafeTree (Join-Path $targetResolved 'data')
+    }
     $candidateData = Join-Path $candidate 'data'
     New-Item -ItemType Directory -Path $candidateData | Out-Null
     # The lock is metadata, not profile content; copying its locked byte range would fail.
@@ -265,6 +312,7 @@ try {
     Remove-Guard $paths.Backup $operationId
     Remove-Item -LiteralPath $journalPath -Force
     Write-Output "Update installed. Previous application and data retained at $($paths.Backup)"
+    Write-HandoffResult 'updated'
     $restart = -not $NoRestart
 } catch {
     $failure = $_
@@ -273,11 +321,24 @@ try {
         try { Recover-PendingUpdate }
         catch { Write-Warning "Recovery remains pending at $journalPath : $($_.Exception.Message)" }
     }
-    throw $failure
+    if ($handoffPath) {
+        Write-HandoffResult 'failed'
+        $handoffFailure = $failure
+        $restart = $callerExited -and -not $NoRestart -and
+            (Test-Path -LiteralPath (Join-Path $targetResolved $ExecutableName)) -and
+            -not (Test-Path -LiteralPath (Join-Path $targetResolved $guardName)) -and
+            -not (Test-Path -LiteralPath $journalPath)
+    } else { throw $failure }
 } finally {
     if ($profileLock) { $profileLock.Dispose() }
     try {
         if ($operationId -and -not (Test-Path -LiteralPath $journalPath)) { Remove-OwnedStage $operationId }
-    } finally { if ($coordinator) { $coordinator.Dispose() } }
+    } catch {
+        Write-Warning "Update staging cleanup could not finish; retained $($paths.Stage) : $($_.Exception.Message)"
+    } finally {
+        if ($coordinator) { $coordinator.Dispose() }
+        if ($caller) { $caller.Dispose() }
+    }
 }
 if ($restart) { Start-Process -FilePath (Join-Path $targetResolved $ExecutableName) -WindowStyle Hidden }
+if ($handoffFailure) { throw $handoffFailure }

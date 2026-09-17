@@ -164,8 +164,21 @@ fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
         ReaderWindowEscape.CloseReader -> true
     }
     val presenterScope = rememberCoroutineScope()
+    fun closeApplication() {
+        composeWindow?.let {
+            preferences = runtime.preferences.updatePreferences { current ->
+                current.copy(windowPlacement = currentWindowPlacement().sanitize(screen))
+            }
+        }
+        exitApplication()
+    }
     val appUpdatePresenter = remember(runtime.appUpdateService) {
-        mihon.desktop.updates.AppUpdatePresenter(runtime.appUpdateService, presenterScope)
+        mihon.desktop.updates.AppUpdatePresenter(
+            runtime.appUpdateService,
+            presenterScope,
+            runtime.appUpdateInstaller,
+            ::closeApplication,
+        )
             .also { runtime.onShutdown(it::shutdown) }
     }
     val libraryPresenter = remember(runtime.library) {
@@ -351,22 +364,7 @@ fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
 
     key(readerWindowMode == ReaderWindowMode.BORDERLESS) {
         Window(
-            onCloseRequest = {
-                composeWindow?.let { window ->
-                    preferences = runtime.preferences.updatePreferences {
-                        it.copy(
-                            windowPlacement = WindowPlacement(
-                                x = window.x,
-                                y = window.y,
-                                width = window.width,
-                                height = window.height,
-                                maximized = window.extendedState and Frame.MAXIMIZED_BOTH != 0,
-                            ).sanitize(screen),
-                        )
-                    }
-                }
-                exitApplication()
-            },
+            onCloseRequest = ::closeApplication,
             state = windowState,
             title = "mihondesk",
             icon = appIcon,

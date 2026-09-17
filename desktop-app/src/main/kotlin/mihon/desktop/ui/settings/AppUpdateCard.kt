@@ -40,6 +40,9 @@ fun AppUpdateCard(
     onCancel: () -> Unit,
     onOpenFolder: () -> Unit,
     onOpenRelease: () -> Unit,
+    canInstall: Boolean = false,
+    onInstall: () -> Unit = {},
+    onOpenLog: () -> Unit = {},
 ) {
     val strings = LocalStrings.current
     Card(Modifier.fillMaxWidth().animateContentSize().testTag("app-update-card")) {
@@ -60,6 +63,8 @@ fun AppUpdateCard(
                 AppUpdatePhase.Cancelled -> UiText.AppUpdateCancelled
                 AppUpdatePhase.Failed -> UiText.AppUpdateFailed
                 AppUpdatePhase.Ready -> null
+                AppUpdatePhase.PreparingUpdate -> UiText.AppUpdatePreparingInstall
+                AppUpdatePhase.Exiting -> UiText.AppUpdateExiting
             }
             status?.let { Text(strings.text(it), Modifier.testTag("app-update-status")) }
             state.release?.let { release ->
@@ -92,7 +97,22 @@ fun AppUpdateCard(
                 SelectionContainer {
                     Text(strings.text(UiText.AppUpdateReady, file), Modifier.testTag("app-update-saved"))
                 }
-                Text(strings.text(UiText.AppUpdateManual))
+                Text(strings.text(if (canInstall) UiText.AppUpdateAutomaticHint else UiText.AppUpdateManual))
+            }
+            if (state.installFailed) {
+                Text(
+                    strings.text(UiText.AppUpdateInstallFailed),
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+            state.previousOutcome?.let { outcome ->
+                Text(
+                    strings.text(
+                        if (outcome.succeeded) UiText.AppUpdatePreviousSuccess else UiText.AppUpdatePreviousFailed,
+                    ),
+                )
+                SelectionContainer { Text(outcome.logFile.toString(), style = MaterialTheme.typography.bodySmall) }
+                TextButton(onOpenLog) { Text(strings.text(UiText.AppUpdateLog)) }
             }
             if (state.openFailed) {
                 Text(
@@ -105,12 +125,18 @@ fun AppUpdateCard(
                     TextButton(
                         onCancel,
                         enabled =
-                        state.phase in setOf(AppUpdatePhase.Checking, AppUpdatePhase.Downloading),
+                        state.phase in
+                            setOf(AppUpdatePhase.Checking, AppUpdatePhase.Downloading, AppUpdatePhase.PreparingUpdate),
                         modifier = Modifier.testTag("app-update-cancel"),
                     ) {
                         Text(strings.text(UiText.AppUpdateCancel))
                     }
                 } else {
+                    if (canInstall && state.savedFile != null && state.verifiedSha256 != null) {
+                        Button(onInstall, Modifier.testTag("app-update-install")) {
+                            Text(strings.text(UiText.AppUpdateInstall))
+                        }
+                    }
                     if (state.release?.matchedAsset != null && state.savedFile == null) {
                         Button(onDownload, Modifier.testTag("app-update-download")) {
                             Text(strings.text(UiText.AppUpdateDownload))
