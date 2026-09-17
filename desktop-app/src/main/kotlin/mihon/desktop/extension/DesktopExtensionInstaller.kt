@@ -1,6 +1,11 @@
 package mihon.desktop.extension
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -17,6 +22,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
 import java.io.FileOutputStream
+import java.io.IOException
 import java.security.MessageDigest
 
 @Serializable
@@ -126,13 +132,40 @@ class DesktopExtensionInstaller(
             .build()
         val tempFile = File.createTempFile("mext_dl_", ".mext")
         try {
-            httpClient.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) {
-                    throw ExtensionValidationException("Failed to download extension package: HTTP ${response.code}")
+            coroutineScope {
+                val call = httpClient.newCall(request)
+                val download = async(Dispatchers.IO) {
+                    try {
+                        call.execute().use { response ->
+                            if (!response.isSuccessful) {
+                                throw ExtensionValidationException(
+                                    "Failed to download extension package: HTTP ${response.code}",
+                                )
+                            }
+                            FileOutputStream(tempFile).use { out ->
+                                val input = response.body.byteStream()
+                                val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                                while (true) {
+                                    currentCoroutineContext().ensureActive()
+                                    val count = input.read(buffer)
+                                    if (count < 0) break
+                                    out.write(buffer, 0, count)
+                                }
+                            }
+                        }
+                    } catch (failure: IOException) {
+                        // Closing a cancelled socket must remain cancellation, not an install error.
+                        currentCoroutineContext().ensureActive()
+                        throw failure
+                    }
                 }
-                val body = response.body
-                FileOutputStream(tempFile).use { out ->
-                    body.byteStream().copyTo(out)
+                try {
+                    download.await()
+                } catch (cancelled: CancellationException) {
+                    // Covers both header and body waits. The scope joins the writer before
+                    // the outer finally deletes its temporary file (also on Windows).
+                    call.cancel()
+                    throw cancelled
                 }
             }
 
