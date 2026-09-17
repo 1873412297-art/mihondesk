@@ -1,0 +1,14 @@
+{
+  "accepted": true,
+  "exitCode": 0,
+  "samplerExitCode": 0,
+  "soak": {
+    "processId": 55104,
+    "elapsedSeconds": 180.1944358,
+    "cycles": 53,
+    "decodedTiles": 2014,
+    "heapHighWaterBytes": 486021992,
+    "samplesFile": "D:\\my project\\mihon-w\\build\\reader-soak-0218\\gc-diagnostic-01\\reader-samples.jsonl"
+  },
+  "scope": "Headless decoding/session workload; excludes Compose rendering and UI frame times"
+}

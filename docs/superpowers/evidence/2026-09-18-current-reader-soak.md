@@ -104,9 +104,37 @@ Plotting was verified with Matplotlib 3.10.8. A short native-EXE preflight passe
 the summary also rejects copied evidence with a mismatched PID, final count,
 backwards time or missing runtime in the process stream.
 
-Next: collect GC/allocation evidence using this exact packaged runtime in a
-separate diagnostic run, correlate retained heap with process memory, and address
+Next: obtain allocation call-site evidence in a separate diagnostic run,
+correlate retained heap with process memory, and address
 a demonstrated cause before repeating acceptance. Do not add forced GC, change
 heap limits or weaken the memory target simply to produce a flatter graph. Full
 T9/T11 still require long chapters, native Compose/UI measurements, representative
 production sources, and clean Windows installation/upgrade acceptance.
+
+## Follow-up GC diagnosis (separate instrumented copy)
+
+A copied application image retained the same Java 17.0.18 runtime and production
+JARs; only `app/mihondesk.cfg` gained GC logging and Native Memory Tracking summary.
+It completed 180.194 seconds, 53 cycles and 2,014 decoded tiles in JVM 55104, with
+exit 0 and empty stderr. No heap limit or collector policy was changed. The full
+30-minute run above was not instrumented or interrupted by this experiment.
+
+The [diagnostic archive](reader-soak-0.2.18/diagnostic/) contains raw GC output,
+Native Memory Tracking snapshots, heap info, an all-objects histogram and the
+configuration/result. There were 273 recorded completed GC pauses, including 162
+triggered by G1 humongous allocation, and no Full GC. Post-GC used heap ranged from
+7 to 202 MiB (including startup); reported heap capacity ranged from 56 to 1048
+MiB. Maximum recorded GC pause was 43.241 ms; this is not a Compose frame metric.
+
+Three NMT snapshots show heap committed at 624, 356 and 1048 MiB, respectively;
+the other JVM-tracked committed categories total approximately 180.8, 185.1 and
+207.9 MiB. NMT does not account for all allocations made by third-party native
+libraries, so these measurements do not rule out every native-memory source.
+The histogram was requested with `GC.class_histogram -all` and did not force a
+collection; it includes unreachable objects and cannot establish retained size.
+
+This supports investigating allocation churn and G1 heap resizing. It does not yet
+locate allocation call sites or prove that the higher final five-minute window is
+fully explained. Allocation stack profiling is the next diagnostic step; the
+shipped compact runtime does not include `jdk.jfr`, so any JFR-enabled runtime
+must remain an explicitly separate diagnostic artifact, not release acceptance.

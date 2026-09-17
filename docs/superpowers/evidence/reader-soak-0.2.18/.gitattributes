@@ -1,1 +1,2 @@
-* -text
+# Preserve original runtime output, including CRLF and native diagnostic whitespace.
+* -text -whitespace

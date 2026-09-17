@@ -1,0 +1,31 @@
+{
+  "scope": "Instrumented 180-second diagnosis; not 30-minute plateau acceptance",
+  "completedPauses": 273,
+  "humongousAllocationPauses": 162,
+  "fullPauses": 0,
+  "postGcHeapMinMiB": 7.0,
+  "postGcHeapMaxMiB": 202.0,
+  "heapCapacityMinMiB": 56.0,
+  "heapCapacityMaxMiB": 1048.0,
+  "pauseMaxMs": 43.241,
+  "nmtSnapshots": [
+    {
+      "file": "nmt-late.txt",
+      "committedKiB": 1286056,
+      "heapCommittedKiB": 1073152,
+      "nonHeapCommittedKiB": 212904
+    },
+    {
+      "file": "nmt-middle.txt",
+      "committedKiB": 554096,
+      "heapCommittedKiB": 364544,
+      "nonHeapCommittedKiB": 189552
+    },
+    {
+      "file": "nmt-start.txt",
+      "committedKiB": 824120,
+      "heapCommittedKiB": 638976,
+      "nonHeapCommittedKiB": 185144
+    }
+  ]
+}

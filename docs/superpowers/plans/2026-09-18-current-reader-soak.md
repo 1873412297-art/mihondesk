@@ -23,6 +23,13 @@ higher, so the memory plateau target remains unproven. See the [current evidence
 - [ ] Attribute the higher late-window process memory using separate GC/allocation
   diagnostics, address any demonstrated cause, then repeat memory acceptance.
 
+The first separate 180-second diagnostic completed with GC logging/NMT, unchanged
+heap limits and no forced collection: 273 pauses, 162 for humongous allocation,
+no Full GC. Its samples support investigating allocation churn and heap resizing;
+allocation call sites and the late-window cause remain unresolved. Raw diagnostics
+are archived with the current evidence. The shipped Java 17 compact runtime lacks
+`jdk.jfr`; any JFR runtime must be kept separate and explicitly identified.
+
 After completion run `scripts/summarize-reader-soak.ps1 -OutputDirectory <run>` and
 `python scripts/plot-reader-soak.py <run>` (Python with Matplotlib; validated with
 Matplotlib 3.10.8). Plotting requires a completed accepted result and labels the
