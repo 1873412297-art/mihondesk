@@ -2,6 +2,13 @@ package mihon.desktop.i18n
 
 /** App-owned labels. Source metadata and diagnostic details are not translated here. */
 enum class UiText(val english: String, val simplified: String, val traditional: String) {
+    PortableUpdatePendingTitle("Update in progress", "更新尚未完成", "更新尚未完成"),
+    PortableUpdatePending(
+        "Wait for the portable updater to finish. If it has stopped, run the updater with -Recover " +
+            "following the portable recovery instructions. Keep the update journal and rollback directories.\n\nApplication folder:\n{0}",
+        "请等待便携版更新器完成。如果更新器已退出，请按便携版恢复说明使用 -Recover 参数运行更新器。请保留更新记录和回滚目录。\n\n程序目录：\n{0}",
+        "請等待可攜版更新器完成。如果更新器已退出，請依可攜版還原說明使用 -Recover 參數執行更新器。請保留更新記錄與回復目錄。\n\n程式目錄：\n{0}",
+    ),
     UpgradeFailedTitle("Unable to upgrade library", "无法升级书库", "無法升級書庫"),
     UpgradeSnapshotFailed(
         "The recovery snapshot could not be saved. The database upgrade has not started. " +
