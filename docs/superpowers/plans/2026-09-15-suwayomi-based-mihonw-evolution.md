@@ -134,6 +134,8 @@ Suwayomi 是完整服务端，并非可直接加入现有 Java 17 应用的后�
 
 **验收：** 本地 HTTP 测试服务覆盖两源同名 Cookie 隔离、跨域重定向、UA/代理切换、请求头传递、错误页面误当图片、延迟响应取消。取消后 UI 在下一次调度即可返回，底层调用在确定性测试中 1 秒内结束；Cookie 不进入不匹配域。
 
+2026-09-18 补充：扩展安装包下载现在也能在等待响应头或读取响应体时关闭底层 Call，保留取消语义，并等待文件写入结束后清理临时包。源码和实际包内各 32 项测试通过，两个阻塞下载取消场景均在 1 秒内结束；见[扩展下载取消证据](../evidence/2026-09-18-extension-download-cancellation.md)。本次不包含新的 UI 取消按钮或安装提交阶段取消。
+
 **上游依据：** [NetworkHelper.kt](https://github.com/Suwayomi/Suwayomi-Server/blob/d10e000e1fdcac6f3c84d002f0b459c90c1b00f3/server/src/main/kotlin/eu/kanade/tachiyomi/network/NetworkHelper.kt)。移植行为不照搬上游简化的 Cookie 匹配；保留本地更严格的语义。
 
 ### T3：按真实样本补齐 Android/Mihon 兼容契约
