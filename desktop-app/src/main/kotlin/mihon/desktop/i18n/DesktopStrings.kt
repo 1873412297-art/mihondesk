@@ -1755,7 +1755,7 @@ object SimplifiedChineseStrings : DesktopStrings {
     override fun settingsBundleExportedTo(path: String) = "诊断包已导出至: $path"
 
     override val aboutTitle = "关于 mihondesk"
-    override val aboutSubtitle = "mihondeskindows 桌面移植版"
+    override val aboutSubtitle = "mihondesk Windows 桌面版"
     override fun aboutVersion(version: String) = "版本: $version"
     override val aboutArchitecture = "目标架构: Windows 10/11 x64"
     override val aboutRuntime = "运行时: Java ${System.getProperty("java.version")} / Compose Desktop"
@@ -2483,7 +2483,7 @@ object TraditionalChineseStrings : DesktopStrings {
     override fun settingsBundleExportedTo(path: String) = "診斷包已匯出至: $path"
 
     override val aboutTitle = "關於 mihondesk"
-    override val aboutSubtitle = "mihondeskindows 桌面移植版"
+    override val aboutSubtitle = "mihondesk Windows 桌面版"
     override fun aboutVersion(version: String) = "版本: $version"
     override val aboutArchitecture = "目標架構: Windows 10/11 x64"
     override val aboutRuntime = "執行環境: Java ${System.getProperty("java.version")} / Compose Desktop"

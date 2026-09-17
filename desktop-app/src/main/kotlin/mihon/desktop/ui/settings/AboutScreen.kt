@@ -20,7 +20,7 @@ import androidx.compose.ui.unit.dp
 import mihon.desktop.i18n.LocalStrings
 
 @Composable
-fun AboutScreen(modifier: Modifier = Modifier) {
+fun AboutScreen(modifier: Modifier = Modifier, updateContent: (@Composable () -> Unit)? = null) {
     val strings = LocalStrings.current
 
     Surface(
@@ -36,6 +36,8 @@ fun AboutScreen(modifier: Modifier = Modifier) {
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold,
             )
+
+            updateContent?.invoke()
 
             Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) {
                 Column(modifier = Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {

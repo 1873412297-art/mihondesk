@@ -164,6 +164,10 @@ fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
         ReaderWindowEscape.CloseReader -> true
     }
     val presenterScope = rememberCoroutineScope()
+    val appUpdatePresenter = remember(runtime.appUpdateService) {
+        mihon.desktop.updates.AppUpdatePresenter(runtime.appUpdateService, presenterScope)
+            .also { runtime.onShutdown(it::shutdown) }
+    }
     val libraryPresenter = remember(runtime.library) {
         LibraryPresenter(
             repository = runtime.library,
@@ -678,6 +682,12 @@ fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
                                         libraryPresenter::resetChapterSettingsToDefault,
                                     )
                                     DesktopShell(
+                                        appUpdateContent = {
+                                            mihon.desktop.ui.settings.AppUpdatePanel(
+                                                appUpdatePresenter,
+                                                runtime.appUpdateService,
+                                            )
+                                        },
                                         selected = destination as? DesktopDestination ?: DesktopDestination.Library,
                                         standaloneMangaDetails = destination is DesktopDestination.MangaDetails,
                                         onDestinationSelected = { selectedDestination ->

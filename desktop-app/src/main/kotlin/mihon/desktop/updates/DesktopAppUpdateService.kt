@@ -1,6 +1,9 @@
 package mihon.desktop.updates
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -56,11 +59,22 @@ class DesktopAppUpdateService(
             val jsonText = fetchText(url)
             val release = parseReleaseJson(jsonText)
             if (isNewerVersion(release.version, currentVersion)) {
-                val matchedAsset = findBestAsset(release.assets, distributionMode)
+                val matchedAsset =
+                    findBestAsset(
+                        release.assets.filter {
+                            it.name.startsWith("mihondesk-${release.version}.") ||
+                                it.name.startsWith("mihondesk-${release.version}-") ||
+                                it.name.startsWith("MihonW-${release.version}.") ||
+                                it.name.startsWith("MihonW-${release.version}-")
+                        },
+                        distributionMode,
+                    )
                 UpdateCheckResult.UpdateAvailable(release, currentVersion, matchedAsset)
             } else {
                 UpdateCheckResult.UpToDate(currentVersion)
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             UpdateCheckResult.CheckFailed(e.message ?: "Failed to check for updates")
         }
@@ -70,22 +84,74 @@ class DesktopAppUpdateService(
         asset: AppReleaseAsset,
         destination: Path,
         expectedSha256: String? = null,
+        onProgress: suspend (Long, Long) -> Unit = { _, _ -> },
+        onPublishing: suspend () -> Unit = {},
     ): Boolean = withContext(Dispatchers.IO) {
-        val tempFile = destination.resolveSibling("${destination.fileName}.download")
+        if (expectedSha256 == null || !SHA256.matches(expectedSha256)) return@withContext false
+        var tempFile: Path? = null
         try {
+            tempFile = Files.createTempFile(destination.toAbsolutePath().parent, ".mihon-update-", ".download")
+            val digest = MessageDigest.getInstance("SHA-256")
+            var received = 0L
+            var reported = 0L
             downloadStream(asset.downloadUrl).use { input ->
-                Files.copy(input, tempFile, StandardCopyOption.REPLACE_EXISTING)
+                Files.newOutputStream(tempFile).use { output ->
+                    val buffer = ByteArray(64 * 1024)
+                    while (true) {
+                        currentCoroutineContext().ensureActive()
+                        val count = input.read(buffer)
+                        if (count < 0) break
+                        received += count
+                        require(asset.size <= 0 || received <= asset.size) { "Download size mismatch" }
+                        digest.update(buffer, 0, count)
+                        output.write(buffer, 0, count)
+                        val now = System.nanoTime()
+                        if (now - reported >= 100_000_000) {
+                            onProgress(received, asset.size)
+                            reported = now
+                        }
+                    }
+                }
             }
-            if (expectedSha256 != null && !verifySha256(tempFile, expectedSha256)) {
-                Files.deleteIfExists(tempFile)
-                return@withContext false
-            }
+            require(asset.size <= 0 || received == asset.size) { "Download size mismatch" }
+            require(
+                digest.digest().joinToString("") {
+                    "%02x".format(it)
+                }.equals(expectedSha256, true),
+            ) { "Checksum mismatch" }
+            onProgress(received, asset.size)
+            currentCoroutineContext().ensureActive()
+            onPublishing()
+            currentCoroutineContext().ensureActive()
             Files.move(tempFile, destination, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
             true
+        } catch (e: CancellationException) {
+            throw e
         } catch (_: Exception) {
-            Files.deleteIfExists(tempFile)
             false
+        } finally {
+            tempFile?.let { Files.deleteIfExists(it) }
         }
+    }
+
+    /** Require one unambiguous checksum belonging to the selected official release asset. */
+    suspend fun releaseChecksum(release: AppReleaseInfo, asset: AppReleaseAsset): String = withContext(Dispatchers.IO) {
+        require(asset in release.assets && trustedAsset(release, asset)) { "Unsupported release asset" }
+        require(asset.size > 0) { "Release asset size is missing" }
+        val manifest = release.assets.single { it.name == "SHA256SUMS.txt" }
+        require(trustedAsset(release, manifest)) { "Unsupported checksum location" }
+        val matches = fetchText(manifest.downloadUrl).lineSequence().mapNotNull { line ->
+            val match = Regex("^([a-fA-F0-9]{64}) [ *](.+)$").matchEntire(line.trimEnd()) ?: return@mapNotNull null
+            if (match.groupValues[2] == asset.name) match.groupValues[1] else null
+        }.toList()
+        require(matches.size == 1) { "Missing or ambiguous checksum" }
+        matches.single()
+    }
+
+    private fun trustedAsset(release: AppReleaseInfo, asset: AppReleaseAsset): Boolean {
+        if (!Regex("[a-zA-Z0-9._-]+").matches(asset.name)) return false
+        if (!Regex("v?[0-9]+\\.[0-9]+\\.[0-9]+").matches(release.tagName)) return false
+        return asset.downloadUrl == "https://github.com/$repository/releases/download/${release.tagName}/${asset.name}"
     }
 
     companion object {
@@ -95,11 +161,17 @@ class DesktopAppUpdateService(
         const val DEFAULT_REPO = "1873412297-art/mihondesk"
 
         private val json = Json { ignoreUnknownKeys = true }
+        private val SHA256 = Regex("[a-fA-F0-9]{64}")
 
         fun parseReleaseJson(jsonText: String): AppReleaseInfo {
             val element = json.parseToJsonElement(jsonText).jsonObject
+            require(
+                element["draft"]?.jsonPrimitive?.content != "true" &&
+                    element["prerelease"]?.jsonPrimitive?.content != "true",
+            )
             val tagName = element["tag_name"]?.jsonPrimitive?.content ?: ""
             val version = tagName.removePrefix("v").trim()
+            parseVersionParts(tagName)
             val releaseNotes = element["body"]?.jsonPrimitive?.content ?: ""
             val htmlUrl = element["html_url"]?.jsonPrimitive?.content ?: ""
             val publishedAt = element["published_at"]?.jsonPrimitive?.content ?: ""
@@ -138,18 +210,18 @@ class DesktopAppUpdateService(
             return false
         }
 
-        private fun parseVersionParts(v: String): List<Int> =
-            v.removePrefix("v")
-                .split('.', '-', '_')
-                .mapNotNull { it.toIntOrNull() }
+        private fun parseVersionParts(v: String): List<Int> {
+            require(Regex("v?[0-9]+\\.[0-9]+\\.[0-9]+").matches(v)) { "Unsupported release version" }
+            return v.removePrefix("v").split('.').map { it.toInt() }
+        }
 
         fun findBestAsset(assets: List<AppReleaseAsset>, mode: DistributionMode): AppReleaseAsset? = when (mode) {
-            DistributionMode.Portable -> assets.firstOrNull {
-                it.name.contains("portable", ignoreCase = true) && it.name.endsWith(".zip", ignoreCase = true)
-            } ?: assets.firstOrNull { it.name.endsWith(".zip", ignoreCase = true) }
-            DistributionMode.Installed -> assets.firstOrNull {
-                it.name.endsWith(".exe", ignoreCase = true) && !it.name.contains("portable", ignoreCase = true)
-            } ?: assets.firstOrNull { it.name.endsWith(".exe", ignoreCase = true) }
+            DistributionMode.Portable -> assets.singleOrNull {
+                Regex("(?:mihondesk|MihonW)-[0-9]+\\.[0-9]+\\.[0-9]+-windows-x64-portable\\.zip").matches(it.name)
+            }
+            DistributionMode.Installed -> assets.singleOrNull {
+                Regex("(?:mihondesk|MihonW)-[0-9]+\\.[0-9]+\\.[0-9]+\\.exe").matches(it.name)
+            }
         }
 
         fun verifySha256(file: Path, expectedHash: String): Boolean {
@@ -171,7 +243,15 @@ class DesktopAppUpdateService(
             connection.setRequestProperty("User-Agent", "mihondesk/$CURRENT_VERSION")
             connection.connectTimeout = 10000
             connection.readTimeout = 10000
-            return connection.inputStream.bufferedReader().use { it.readText() }
+            try {
+                return connection.inputStream.use { input ->
+                    val bytes = input.readNBytes(2 * 1024 * 1024 + 1)
+                    require(bytes.size <= 2 * 1024 * 1024) { "Release metadata too large" }
+                    bytes.toString(Charsets.UTF_8)
+                }
+            } finally {
+                connection.disconnect()
+            }
         }
 
         private fun defaultDownloadStream(url: String): InputStream {
@@ -179,7 +259,20 @@ class DesktopAppUpdateService(
             connection.setRequestProperty("User-Agent", "mihondesk/$CURRENT_VERSION")
             connection.connectTimeout = 15000
             connection.readTimeout = 30000
-            return connection.inputStream
+            return try {
+                object : java.io.FilterInputStream(connection.inputStream) {
+                    override fun close() {
+                        try {
+                            super.close()
+                        } finally {
+                            connection.disconnect()
+                        }
+                    }
+                }
+            } catch (error: Exception) {
+                connection.disconnect()
+                throw error
+            }
         }
     }
 }

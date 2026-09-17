@@ -106,6 +106,8 @@ class DesktopRuntime(
     private val closeReaderServices: () -> Unit = readerFactory?.let { it::closeServices } ?: {},
     internal val closeLibrary: () -> Unit = library::close,
     private val blockingShutdown: ExecutorService = BLOCKING_SHUTDOWN_EXECUTOR,
+    val appUpdateService: mihon.desktop.updates.DesktopAppUpdateService =
+        mihon.desktop.updates.DesktopAppUpdateService(),
 ) : AutoCloseable {
     private val shutdownLock = Any()
     private var shutdownResult: CompletableDeferred<Result<Unit>>? = null
@@ -467,6 +469,7 @@ object DesktopRuntimeFactory {
                 localImporter = localImporter,
                 localLibraryRoot = localLibraryRoot,
                 readerFactory = readerFactory,
+                appUpdateService = mihon.desktop.updates.DesktopAppUpdateService(distributionMode = mode),
                 downloader = downloader,
                 downloadStore = downloadStore,
                 notificationService = notificationService,

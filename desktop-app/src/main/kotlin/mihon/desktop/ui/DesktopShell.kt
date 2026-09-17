@@ -45,6 +45,7 @@ const val DESKTOP_LOCK_NOW_BUTTON_TEST_TAG = "desktop-lock-now-button"
 fun DesktopShell(
     selected: DesktopDestination,
     onDestinationSelected: (DesktopDestination) -> Unit,
+    appUpdateContent: (@Composable () -> Unit)? = null,
     libraryState: LibraryUiState = LibraryUiState(),
     libraryBatchState: mihon.desktop.ui.library.LibraryBatchState = mihon.desktop.ui.library.LibraryBatchState(),
     mangaDetailState: MangaDetailUiState = MangaDetailUiState(),
@@ -431,7 +432,7 @@ fun DesktopShell(
                             )
                         }
                         DesktopDestination.About -> {
-                            mihon.desktop.ui.settings.AboutScreen()
+                            mihon.desktop.ui.settings.AboutScreen(updateContent = appUpdateContent)
                         }
                         DesktopDestination.Browse -> {
                             browseContent?.invoke() ?: Text(
