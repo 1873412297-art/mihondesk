@@ -379,7 +379,6 @@ fun BrowseSourceScreen(
                 OutlinedButton(
                     onClick = {
                         if (state.hasNextPage) {
-                            onLoadMore()
                             onPageChange(state.page + 1)
                         }
                     },
