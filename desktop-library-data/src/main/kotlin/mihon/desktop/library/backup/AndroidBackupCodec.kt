@@ -33,7 +33,12 @@ class AndroidBackupCodec private constructor(
         protoBuf: ProtoBuf = ProtoBuf,
     ) : this(protoBuf, compressedSize, sourceFactory)
 
-    fun decode(path: Path, limits: BackupLimits = BackupLimits.DEFAULT): AndroidBackup {
+    fun decode(
+        path: Path,
+        limits: BackupLimits = BackupLimits.DEFAULT,
+        checkCancelled: () -> Unit = {},
+    ): AndroidBackup {
+        checkCancelled()
         val compressedBytes = compressedSize(path)
         if (compressedBytes > limits.maxCompressedBytes) {
             throw BackupDecodeException.compressed(compressedBytes)
@@ -41,7 +46,13 @@ class AndroidBackupCodec private constructor(
 
         var gzipPayload = false
         try {
-            CompressedLimitSource(sourceFactory(path), limits.maxCompressedBytes).buffer().use { source ->
+            val cancellable = object : ForwardingSource(sourceFactory(path)) {
+                override fun read(sink: Buffer, byteCount: Long): Long {
+                    checkCancelled()
+                    return super.read(sink, byteCount)
+                }
+            }
+            CompressedLimitSource(cancellable, limits.maxCompressedBytes).buffer().use { source ->
                 val magic = source.peek().run {
                     if (request(2)) {
                         intArrayOf(readByte().toInt() and 0xff, readByte().toInt() and 0xff)
@@ -51,12 +62,13 @@ class AndroidBackupCodec private constructor(
                 }
                 gzipPayload = magic.contentEquals(intArrayOf(GZIP_MAGIC_FIRST, GZIP_MAGIC_SECOND))
                 val payload: Source = if (gzipPayload) source.gzip() else source
-                val bytes = ExpandedLimitSource(payload, limits.maxExpandedBytes).buffer().use {
+                val bytes = ExpandedLimitSource(payload, limits.maxExpandedBytes, checkCancelled).buffer().use {
                     it.readByteArray()
                 }
                 rejectLegacyJson(bytes)
+                checkCancelled()
                 return try {
-                    protoBuf.decodeFromByteArray(AndroidBackup.serializer(), bytes)
+                    protoBuf.decodeFromByteArray(AndroidBackup.serializer(), bytes).also { checkCancelled() }
                 } catch (error: SerializationException) {
                     throw BackupDecodeException.invalidProto(error)
                 }
@@ -175,10 +187,12 @@ class BackupDecodeException private constructor(
 private class ExpandedLimitSource(
     delegate: Source,
     private val maxExpandedBytes: Long,
+    private val checkCancelled: () -> Unit,
 ) : ForwardingSource(delegate) {
     private var expandedBytes = 0L
 
     override fun read(sink: Buffer, byteCount: Long): Long {
+        checkCancelled()
         val remaining = maxExpandedBytes - expandedBytes
         val boundedByteCount = if (remaining == Long.MAX_VALUE) byteCount else minOf(byteCount, remaining + 1)
         val read = super.read(sink, boundedByteCount)

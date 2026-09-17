@@ -2,6 +2,24 @@ package mihon.desktop.i18n
 
 /** App-owned labels. Source metadata and diagnostic details are not translated here. */
 enum class UiText(val english: String, val simplified: String, val traditional: String) {
+    RestoreReading("Reading backup…", "正在读取备份…", "正在讀取備份…"),
+    RestoreValidating("Checking backup…", "正在校验备份…", "正在檢查備份…"),
+    RestoreManga("Restoring manga: {0} / {1}", "正在恢复漫画：{0} / {1}", "正在還原漫畫：{0} / {1}"),
+    RestoreCommitting("Saving restored library…", "正在保存恢复结果…", "正在儲存還原結果…"),
+    RestoreCancelling("Cancelling restore…", "正在取消恢复…", "正在取消還原…"),
+    RestoreCancelHint(
+        "You can cancel before saving. Changes from this restore will be discarded.",
+        "保存前可以取消，本次恢复的更改将被撤销。",
+        "儲存前可以取消，本次還原的變更將被撤銷。",
+    ),
+    RestoreCancelledTitle("Restore cancelled", "恢复已取消", "還原已取消"),
+    RestoreCancelledMessage("No changes from this backup were saved.", "未保存本次备份的任何更改。", "未儲存本次備份的任何變更。"),
+    RestoreFailed(
+        "Could not restore the backup. Check the file and try again.",
+        "无法恢复备份，请检查文件后重试。",
+        "無法還原備份，請檢查檔案後重試。",
+    ),
+    RestoreInvalid("This backup is damaged or unsupported.", "备份文件已损坏或格式不受支持。", "備份檔案已損毀或格式不受支援。"),
     SearchDownloads("Search manga or chapter", "搜索漫画或章节", "搜尋漫畫或章節"),
     LibraryFilteredEmpty("No manga match these filters", "没有符合筛选条件的漫画", "沒有符合篩選條件的漫畫"),
     LibraryFilteredHint(

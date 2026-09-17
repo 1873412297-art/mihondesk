@@ -504,6 +504,49 @@ class AndroidBackupImporterTest {
     }
 
     @Test
+    fun `cancel after restoring a manga rolls back every table and permits a fresh retry`() {
+        val database = tempDir.resolve("cancel-restore.db")
+        val backupFile = tempDir.resolve("cancel-restore.tachibk")
+        encode(fullyMutatingBackup(), backupFile)
+        DesktopLibraryDatabaseFactory.open(database).use { repository ->
+            repository.insertManga(MangaRecord(sourceId = 99, url = "/keep", title = "Keep this library record"))
+            val before = dumpImportTables(database)
+            val importer = AndroidBackupImporter(AndroidBackupCodec(), AndroidBackupValidator(), repository)
+            lateinit var control: BackupImportControl
+            control = BackupImportControl(onProgress = {
+                if (it.stage == BackupImportStage.RESTORING && it.completedManga == 1) control.cancel() shouldBe true
+            })
+
+            shouldThrow<kotlinx.coroutines.CancellationException> { importer.import(backupFile, 2, control) }
+            dumpImportTables(database) shouldBe before
+            repository.checkIntegrity() shouldBe listOf("ok")
+            importer.import(backupFile, 3).counts.mangaInserted shouldBe 1L
+        }
+    }
+
+    @Test
+    fun `commit stage rejects late cancellation and returns a completed report`() {
+        val backupFile = tempDir.resolve("commit-restore.tachibk")
+        encode(fullyMutatingBackup(), backupFile)
+        DesktopLibraryDatabaseFactory.open(tempDir.resolve("commit-restore.db")).use { repository ->
+            val progress = mutableListOf<BackupImportProgress>()
+            lateinit var control: BackupImportControl
+            control = BackupImportControl(onProgress = {
+                progress += it
+                if (it.stage == BackupImportStage.COMMITTING) control.cancel() shouldBe false
+            })
+            val report = AndroidBackupImporter(AndroidBackupCodec(), AndroidBackupValidator(), repository)
+                .import(backupFile, 2, control)
+
+            report.counts.mangaInserted shouldBe 1L
+            repository.latestImportReport()?.id shouldBe report.id
+            progress.map { it.stage }.distinct() shouldBe BackupImportStage.entries
+            progress.filter { it.stage == BackupImportStage.RESTORING }.map { it.completedManga } shouldBe listOf(0, 1)
+            control.isCancellationRequested shouldBe false
+        }
+    }
+
+    @Test
     fun `checkpoint failure rolls every imported table back byte for byte`() {
         val database = tempDir.resolve("rollback.db")
         val backupFile = tempDir.resolve("rollback.tachibk")

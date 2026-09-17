@@ -5,6 +5,7 @@ import io.kotest.matchers.shouldBe
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.protobuf.ProtoBuf
 import okio.Buffer
+import okio.ForwardingSource
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.io.ByteArrayOutputStream
@@ -19,6 +20,30 @@ class AndroidBackupCodecTest {
     lateinit var tempDir: Path
 
     private val codec = AndroidBackupCodec()
+
+    @Test
+    fun `decode cancellation closes the input without classifying it as corrupt`() {
+        var cancel = false
+        var closed = false
+        val source = object : ForwardingSource(Buffer().write(gzip(encodedBackup()))) {
+            override fun read(sink: Buffer, byteCount: Long): Long {
+                val result = super.read(sink, byteCount)
+                cancel = true
+                return result
+            }
+            override fun close() {
+                closed = true
+                super.close()
+            }
+        }
+        val controlled = AndroidBackupCodec(compressedSize = { 1 }, sourceFactory = { source })
+        shouldThrow<kotlinx.coroutines.CancellationException> {
+            controlled.decode(tempDir.resolve("cancelled.tachibk"), checkCancelled = {
+                if (cancel) throw kotlinx.coroutines.CancellationException("cancel")
+            })
+        }
+        closed shouldBe true
+    }
 
     @Test
     fun `failed publication preserves destination and removes its temporary file`() {
