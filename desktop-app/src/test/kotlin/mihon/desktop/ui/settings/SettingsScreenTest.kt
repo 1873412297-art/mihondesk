@@ -9,6 +9,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.v2.runComposeUiTest
 import androidx.compose.ui.unit.dp
 import io.kotest.matchers.shouldBe
@@ -22,6 +23,38 @@ import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Path
 
 class SettingsScreenTest {
+
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun `download path draft is validated before save and preserves other settings`() = runComposeUiTest {
+        val store = DesktopPreferenceStore(tempDir.resolve("path-draft.properties"))
+        setContent {
+            Box(Modifier.requiredSize(1024.dp, 768.dp)) {
+                SettingsScreen(preferenceStore = store, readerSettingsStore = DesktopReaderSettingsStore(store))
+            }
+        }
+        onNodeWithTag("settings-section-Downloads").performClick()
+        onNodeWithTag("download-storage-input").performTextReplacement("relative-folder")
+        store.load().downloadStoragePath shouldBe ""
+        onNodeWithTag("download-storage-save").performClick()
+        waitUntil {
+            onAllNodes(androidx.compose.ui.test.hasTestTag("download-storage-error")).fetchSemanticsNodes().isNotEmpty()
+        }
+        store.load().downloadStoragePath shouldBe ""
+        val target = tempDir.resolve("new-downloads")
+        onNodeWithTag("download-storage-input").performTextReplacement(target.toString())
+        runOnIdle { store.updatePreferences { it.copy(desktopNotificationsEnabled = false) } }
+        onNodeWithTag("download-storage-save").performClick()
+        waitUntil { store.load().downloadStoragePath == target.toString() }
+        onNodeWithTag("download-storage-saved").assertExists()
+        store.load().desktopNotificationsEnabled shouldBe false
+        java.nio.file.Files.isDirectory(target) shouldBe true
+        java.nio.file.Files.list(target).use { it.count() } shouldBe 0L
+        onNodeWithTag("download-storage-default").performClick()
+        store.load().downloadStoragePath shouldBe target.toString()
+        onNodeWithTag("download-storage-save").performClick()
+        waitUntil { store.load().downloadStoragePath.isEmpty() }
+    }
 
     @OptIn(ExperimentalTestApi::class)
     @Test

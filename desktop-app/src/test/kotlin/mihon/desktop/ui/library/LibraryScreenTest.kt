@@ -20,6 +20,52 @@ import org.junit.jupiter.api.Test
 @OptIn(ExperimentalTestApi::class)
 class LibraryScreenTest {
     @Test
+    fun `Chinese library cards localize chapter counts and source fallback`() = runComposeUiTest {
+        setContent {
+            mihon.desktop.i18n.ProvideDesktopStrings(mihon.desktop.i18n.AppLanguage.SimplifiedChinese) {
+                MaterialTheme {
+                    LibraryScreen(
+                        state = LibraryUiState(loading = false, items = listOf(manga(42, "Test", chapters = 18))),
+                        onQueryChange = {},
+                        onMangaSelected = {},
+                        onImportBackup = {},
+                        onImportLocal = {},
+                    )
+                }
+            }
+        }
+        onNodeWithText("图源 142 · 18 章").assertExists()
+    }
+
+    @Test
+    fun `filtered empty library explains filters and clears query category and filters together`() = runComposeUiTest {
+        var query: String? = null
+        var category: Long? = null
+        var filter: LibraryFilterState? = null
+        setContent {
+            MaterialTheme {
+                LibraryScreen(
+                    state = LibraryUiState(
+                        loading = false,
+                        filterState = LibraryFilterState(unread = TriStateFilter.Include),
+                    ),
+                    onQueryChange = { query = it },
+                    onMangaSelected = {},
+                    onImportBackup = {},
+                    onImportLocal = {},
+                    onFilterChange = { filter = it },
+                    onCategorySelected = { category = it },
+                )
+            }
+        }
+        onNodeWithText("No manga match these filters").assertExists()
+        onNodeWithTag("library-clear-filters").performClick()
+        query shouldBe ""
+        filter shouldBe LibraryFilterState()
+        category shouldBe mihon.desktop.category.SYSTEM_ALL_CATEGORY.id
+    }
+
+    @Test
     fun `renders persisted manga metadata unread marker and stable tags`() = runComposeUiTest {
         setLibraryContent(
             LibraryUiState(

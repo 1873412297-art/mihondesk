@@ -265,6 +265,7 @@ object DesktopRuntimeFactory {
             val notificationService = mihon.desktop.notification.WindowsDesktopNotificationService(
                 enabledProvider = { preferences.load().desktopNotificationsEnabled },
                 hideContentProvider = { preferences.load().desktopNotificationsHideContent },
+                stringsProvider = { mihon.desktop.i18n.DesktopStrings.resolve(preferences.load().language) },
             )
             val defaultDownloadsDir = directories.root.resolve("media").resolve("downloads")
                 .toAbsolutePath()

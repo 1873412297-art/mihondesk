@@ -266,6 +266,22 @@ class ReaderScreenTest {
     }
 
     @Test
+    fun `remote TLS failure explains recovery while keeping raw details collapsed`() = runComposeUiTest {
+        val failure = ReaderFailure.RemoteImage("TLS: Remote host terminated the handshake")
+        val session =
+            FakeReaderSession(
+                ReaderState(
+                    loadState = ReaderLoadState.Failed(ReaderSessionError(ReaderErrorCode.SOURCE_UNAVAILABLE, failure)),
+                ),
+            )
+        setReaderScreen(session, settingsStore())
+        onNodeWithTag("reader-error").assertTextContains("Secure connection failed")
+        onNodeWithText(failure.message!!).assertDoesNotExist()
+        onNodeWithTag("reader-error-details").performClick()
+        onNodeWithText(failure.message!!).assertExists()
+    }
+
+    @Test
     fun `cache diagnostic appears only for explicit debug mode`() = runComposeUiTest {
         setReaderScreen(FakeReaderSession(ready()), settingsStore(), debugEnabled = false)
         onNodeWithTag("reader-cache-diagnostic").assertDoesNotExist()

@@ -29,6 +29,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.CollectionsBookmark
 import androidx.compose.material.icons.rounded.FilterList
 import androidx.compose.material.icons.rounded.Search
@@ -42,6 +43,7 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -68,6 +70,9 @@ import androidx.compose.ui.unit.dp
 import mihon.desktop.category.DesktopCategory
 import mihon.desktop.category.SYSTEM_ALL_CATEGORY
 import mihon.desktop.i18n.LocalStrings
+import mihon.desktop.i18n.UiText
+import mihon.desktop.i18n.chapterCountLabel
+import mihon.desktop.i18n.text
 import mihon.desktop.library.model.LibraryManga
 import mihon.desktop.ui.common.MangaCover
 
@@ -197,6 +202,11 @@ fun LibraryScreen(
                     onDisplayModeChange = onDisplayModeChange,
                     onGridSizeChange = onGridSizeChange,
                     onOpenFilterDialog = onOpenFilterDialog,
+                    onClearFilters = {
+                        onQueryChange("")
+                        onFilterChange(LibraryFilterState())
+                        onCategorySelected(SYSTEM_ALL_CATEGORY.id)
+                    },
                     onToggleSelectionMode = onToggleSelectionMode,
                     onToggleMangaSelection = onToggleMangaSelection,
                     onSelectAll = onSelectAll,
@@ -249,6 +259,11 @@ fun LibraryScreen(
                 onDisplayModeChange = onDisplayModeChange,
                 onGridSizeChange = onGridSizeChange,
                 onOpenFilterDialog = onOpenFilterDialog,
+                onClearFilters = {
+                    onQueryChange("")
+                    onFilterChange(LibraryFilterState())
+                    onCategorySelected(SYSTEM_ALL_CATEGORY.id)
+                },
                 onToggleSelectionMode = onToggleSelectionMode,
                 onToggleMangaSelection = onToggleMangaSelection,
                 onSelectAll = onSelectAll,
@@ -307,6 +322,7 @@ private fun LibraryPane(
     onDisplayModeChange: (LibraryDisplayMode) -> Unit,
     onGridSizeChange: (Float) -> Unit,
     onOpenFilterDialog: () -> Unit,
+    onClearFilters: () -> Unit,
     onToggleSelectionMode: (Boolean) -> Unit,
     onToggleMangaSelection: (Long) -> Unit,
     onSelectAll: () -> Unit,
@@ -557,6 +573,13 @@ private fun LibraryPane(
                 onValueChange = onQueryChange,
                 modifier = Modifier.fillMaxWidth().testTag("library-search"),
                 label = { Text(strings.librarySearchPlaceholder) },
+                trailingIcon = {
+                    if (state.query.isNotEmpty()) {
+                        IconButton(onClick = { onQueryChange("") }) {
+                            Icon(Icons.Rounded.Close, contentDescription = strings.text(UiText.ClearSearch))
+                        }
+                    }
+                },
                 singleLine = true,
             )
 
@@ -566,6 +589,7 @@ private fun LibraryPane(
                 onMangaSelected = onMangaSelected,
                 onToggleMangaSelection = onToggleMangaSelection,
                 onRetry = onRetry,
+                onClearFilters = onClearFilters,
                 modifier = Modifier.weight(1f).fillMaxWidth(),
             )
         }
@@ -594,6 +618,7 @@ private fun LibraryContent(
     onMangaSelected: (Long) -> Unit,
     onToggleMangaSelection: (Long) -> Unit,
     onRetry: () -> Unit,
+    onClearFilters: () -> Unit,
     modifier: Modifier,
 ) {
     when {
@@ -601,7 +626,7 @@ private fun LibraryContent(
             CircularProgressIndicator(modifier = Modifier.testTag("library-loading"))
         }
         state.errorMessage != null -> ErrorState(state.errorMessage, onRetry, modifier)
-        state.items.isEmpty() -> EmptyState(state.query, modifier)
+        state.items.isEmpty() -> EmptyState(state, onClearFilters, modifier)
         else -> BoxWithConstraints(modifier = modifier) {
             when (state.displayMode) {
                 LibraryDisplayMode.ComfortableGrid -> {
@@ -804,8 +829,11 @@ private fun ComfortableMangaCard(
                 )
                 Text(
                     text = buildString {
-                        append(manga.author?.takeIf { it.isNotBlank() } ?: "Source ${manga.sourceId}")
-                        append(" · ${manga.chapterCount} ${chapterLabel(manga.chapterCount)}")
+                        append(
+                            manga.author?.takeIf { it.isNotBlank() }
+                                ?: strings.text(UiText.SourceFallback, manga.sourceId),
+                        )
+                        append(" · ${strings.chapterCountLabel(manga.chapterCount)}")
                     },
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodySmall,
@@ -1021,12 +1049,13 @@ private fun ListMangaItem(
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    text = manga.author ?: "Source ${manga.sourceId}",
+                    text =
+                    manga.author?.takeIf { it.isNotBlank() } ?: strings.text(UiText.SourceFallback, manga.sourceId),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Text(
-                    text = "${manga.chapterCount} ${chapterLabel(manga.chapterCount)}",
+                    text = strings.chapterCountLabel(manga.chapterCount),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.outline,
                 )
@@ -1117,8 +1146,11 @@ private fun BatchCategorySelectionDialog(
 }
 
 @Composable
-private fun EmptyState(query: String, modifier: Modifier) {
+private fun EmptyState(state: LibraryUiState, onClearFilters: () -> Unit, modifier: Modifier) {
     val strings = LocalStrings.current
+    val query = state.query
+    val filtered =
+        query.isNotBlank() || state.filterState.hasActiveFilters || state.selectedCategoryId != SYSTEM_ALL_CATEGORY.id
     Box(modifier, contentAlignment = Alignment.Center) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -1139,7 +1171,7 @@ private fun EmptyState(query: String, modifier: Modifier) {
                     )
                 }
             }
-            if (query.isBlank()) {
+            if (!filtered) {
                 Text(
                     strings.libraryEmptyTitle,
                     style = MaterialTheme.typography.titleLarge,
@@ -1152,15 +1184,30 @@ private fun EmptyState(query: String, modifier: Modifier) {
                 )
             } else {
                 Text(
-                    strings.libraryNoMatchTitle(query),
+                    if (query.isNotBlank()) {
+                        strings.libraryNoMatchTitle(
+                            query,
+                        )
+                    } else {
+                        strings.text(UiText.LibraryFilteredEmpty)
+                    },
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                 )
                 Text(
-                    strings.libraryNoMatchSubtitle,
+                    if (query.isNotBlank()) {
+                        strings.libraryNoMatchSubtitle
+                    } else {
+                        strings.text(
+                            UiText.LibraryFilteredHint,
+                        )
+                    },
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodyMedium,
                 )
+                TextButton(onClick = onClearFilters, modifier = Modifier.testTag("library-clear-filters")) {
+                    Text(strings.text(UiText.ClearFilters))
+                }
             }
         }
     }
@@ -1193,5 +1240,3 @@ private fun ErrorState(
         }
     }
 }
-
-private fun chapterLabel(count: Long): String = if (count == 1L) "chapter" else "chapters"

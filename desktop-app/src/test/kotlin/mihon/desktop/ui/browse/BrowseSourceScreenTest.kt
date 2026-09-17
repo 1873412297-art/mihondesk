@@ -19,6 +19,29 @@ class BrowseSourceScreenTest {
 
     @OptIn(ExperimentalTestApi::class)
     @Test
+    fun `failed pagination waits for explicit retry instead of requesting again on scroll`() = runComposeUiTest {
+        var requests = 0
+        var retries = 0
+        setContent {
+            BrowseSourceScreen(
+                state = BrowseSourceUiState(
+                    source = testSource,
+                    hasNextPage = true,
+                    mangas = listOf(SManga(url = "/one", title = "One")),
+                    errorMessage = "TLS: handshake failed",
+                ),
+                onBack = {}, onModeChange = {}, onQueryChange = {}, onSearch = {}, onPageChange = {},
+                onMangaSelected = {}, onLoadMore = { requests++ }, onRetry = { retries++ },
+            )
+        }
+        waitForIdle()
+        requests shouldBe 0
+        onNodeWithText("Retry").performClick()
+        retries shouldBe 1
+    }
+
+    @OptIn(ExperimentalTestApi::class)
+    @Test
     fun `site block is explained without promising a verification retry`() = runComposeUiTest {
         setContent {
             androidx.compose.runtime.CompositionLocalProvider(

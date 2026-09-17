@@ -36,6 +36,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -169,13 +174,21 @@ fun BrowseSourceScreen(
                 value = state.query,
                 onValueChange = onQueryChange,
                 placeholder = { Text(strings.browseSearchTitlesPlaceholder) },
-                modifier = Modifier.weight(1f).testTag("source-search-input"),
+                modifier = Modifier.weight(1f).testTag("source-search-input").onPreviewKeyEvent {
+                    if (it.key == Key.Enter && it.type == KeyEventType.KeyUp && !state.isLoading) {
+                        onSearch()
+                        true
+                    } else {
+                        false
+                    }
+                },
                 singleLine = true,
             )
             Spacer(modifier = Modifier.width(8.dp))
             Button(
                 onClick = onSearch,
                 modifier = Modifier.testTag("source-search-btn"),
+                enabled = !state.isLoading,
             ) {
                 Text(strings.browseSearchButton)
             }
@@ -204,11 +217,15 @@ fun BrowseSourceScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    text = state.networkFailure?.let { sourceNetworkFailureText(it) } ?: error,
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.weight(1f).padding(end = 12.dp),
-                )
+                Column(Modifier.weight(1f).padding(end = 12.dp)) {
+                    state.networkFailure?.let {
+                        Text(sourceNetworkFailureText(it), color = MaterialTheme.colorScheme.error)
+                    }
+                        ?: mihon.desktop.ui.common.FailureExplanation(
+                            mihon.desktop.download.classifyDownloadFailure(error),
+                        )
+                    mihon.desktop.ui.common.ErrorDetails(error, "source-error")
+                }
                 Button(onClick = onRetry) { Text(strings.libraryRetry) }
             }
         }
@@ -226,8 +243,10 @@ fun BrowseSourceScreen(
             }
         }
 
-        LaunchedEffect(shouldLoadMore, state.hasNextPage, state.isLoading, state.isLoadingMore) {
-            if (shouldLoadMore && state.hasNextPage && !state.isLoading && !state.isLoadingMore) {
+        LaunchedEffect(shouldLoadMore, state.hasNextPage, state.isLoading, state.isLoadingMore, state.errorMessage) {
+            if (shouldLoadMore && state.hasNextPage && !state.isLoading && !state.isLoadingMore &&
+                state.errorMessage == null
+            ) {
                 onLoadMore()
             }
         }

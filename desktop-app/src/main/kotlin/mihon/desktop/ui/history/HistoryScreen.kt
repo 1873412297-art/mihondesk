@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.DeleteSweep
 import androidx.compose.material.icons.rounded.History
@@ -123,6 +124,18 @@ fun HistoryScreen(
                 )
             },
             singleLine = true,
+            trailingIcon = {
+                if (query.isNotEmpty()) {
+                    androidx.compose.material3.IconButton(onClick = {
+                        onQueryChange("")
+                    }, modifier = Modifier.testTag("history-clear-search")) {
+                        Icon(
+                            Icons.Rounded.Close,
+                            contentDescription = strings.text(mihon.desktop.i18n.UiText.ClearSearch),
+                        )
+                    }
+                }
+            },
         )
 
         // Content

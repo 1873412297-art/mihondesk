@@ -141,13 +141,18 @@ class DesktopDownloader(
                 )
             }
             val message = "Downloaded files could not be registered for offline reading: ${registrationError.message}"
-            return download.copy(status = DownloadStatus.ERROR, error = message)
+            return download.copy(
+                status = DownloadStatus.ERROR,
+                error = message,
+                failureReason = DownloadFailureReason.REGISTRATION,
+            )
         }
         runCatching { mutationPort?.deleteLocalChapterAsset(download.mangaId, download.chapterId) }
         val message = "Downloaded files are missing or corrupt. Retry to download them again."
         return download.copy(
             status = DownloadStatus.ERROR,
             error = message,
+            failureReason = DownloadFailureReason.MISSING_FILES,
             progress = if (download.pages.isEmpty()) {
                 0f
             } else {
@@ -425,7 +430,7 @@ class DesktopDownloader(
 
         _queueState.update { list ->
             list.map { item ->
-                if (item.status == DownloadStatus.DOWNLOADING) {
+                if (item.status == DownloadStatus.DOWNLOADING || item.status == DownloadStatus.QUEUED) {
                     item.copy(status = DownloadStatus.PAUSED)
                 } else {
                     item
@@ -484,12 +489,23 @@ class DesktopDownloader(
 
     @Synchronized
     fun retry(chapterId: Long) {
+        retryFailed { it.chapterId == chapterId }
+    }
+
+    @Synchronized
+    fun retryAllFailed() {
+        retryFailed { true }
+    }
+
+    private fun retryFailed(select: (DesktopDownload) -> Boolean) {
+        if (_queueState.value.none { it.status == DownloadStatus.ERROR && select(it) }) return
         _queueState.update { list ->
             list.map { item ->
-                if (item.chapterId == chapterId && item.status == DownloadStatus.ERROR) {
+                if (item.status == DownloadStatus.ERROR && select(item)) {
                     item.copy(
                         status = DownloadStatus.QUEUED,
                         error = null,
+                        failureReason = null,
                         pages = item.pages.map { page ->
                             if (page.status ==
                                 PageStatus.ERROR
@@ -526,7 +542,11 @@ class DesktopDownloader(
                             if (!diskProvider.checkDiskSpace()) {
                                 val errorMessage = "Insufficient disk space"
                                 updateDownload(next.chapterId) {
-                                    it.copy(status = DownloadStatus.ERROR, error = errorMessage)
+                                    it.copy(
+                                        status = DownloadStatus.ERROR,
+                                        error = errorMessage,
+                                        failureReason = DownloadFailureReason.STORAGE_FULL,
+                                    )
                                 }
                                 onDownloadFailed?.invoke(next, errorMessage)
                                 return@launch
@@ -539,7 +559,11 @@ class DesktopDownloader(
                             } catch (error: Exception) {
                                 val errorMessage = error.message ?: "Unknown download error"
                                 val failed = updateDownload(next.chapterId) {
-                                    it.copy(status = DownloadStatus.ERROR, error = errorMessage)
+                                    it.copy(
+                                        status = DownloadStatus.ERROR,
+                                        error = errorMessage,
+                                        failureReason = classifyDownloadFailure(error),
+                                    )
                                 }
                                 onDownloadFailed?.invoke(failed ?: next, errorMessage)
                             }
@@ -575,7 +599,7 @@ class DesktopDownloader(
             val rotation = sources.drop(after) + sources.take(after)
             val source = rotation.firstOrNull { id -> eligible.any { it.sourceId == id } } ?: return null
             val next = eligible.first { it.sourceId == source }
-            val claimed = next.copy(status = DownloadStatus.DOWNLOADING, error = null)
+            val claimed = next.copy(status = DownloadStatus.DOWNLOADING, error = null, failureReason = null)
             val updated = current.map { item -> if (item.chapterId == next.chapterId) claimed else item }
             if (_queueState.compareAndSet(current, updated)) {
                 lastClaimedSource = next.sourceId

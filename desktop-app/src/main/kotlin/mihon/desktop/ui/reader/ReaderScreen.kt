@@ -10,6 +10,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
@@ -58,7 +61,9 @@ import kotlinx.coroutines.withContext
 import mihon.desktop.i18n.EnglishStrings
 import mihon.desktop.i18n.LocalStrings
 import mihon.desktop.i18n.UiText
+import mihon.desktop.i18n.hint
 import mihon.desktop.i18n.text
+import mihon.desktop.i18n.title
 import mihon.desktop.image.LocalCustomCoverManager
 import mihon.desktop.reader.DesktopReaderSettings
 import mihon.desktop.reader.DesktopReaderSettingsStore
@@ -882,6 +887,7 @@ private fun ReaderBody(
         )
         is ReaderLoadState.Failed -> ReaderErrorPanel(
             message = strings.readerErrorMessage(load.error),
+            error = load.error,
             retryable = load.error.code != ReaderErrorCode.EMPTY_CHAPTER,
             onRetry = {
                 scope.launch {
@@ -896,20 +902,40 @@ private fun ReaderBody(
 }
 
 @Composable
-private fun ReaderErrorPanel(message: String, retryable: Boolean, onRetry: () -> Unit) {
+private fun ReaderErrorPanel(message: String, error: ReaderSessionError, retryable: Boolean, onRetry: () -> Unit) {
     val strings = LocalStrings.current
+    val reason = error.cause?.let { mihon.desktop.download.classifyDownloadFailure(it) }?.takeIf {
+        error.cause is mihon.reader.source.ReaderFailure.RemoteImage ||
+            (
+                error.code == ReaderErrorCode.SOURCE_UNAVAILABLE &&
+                    it != mihon.desktop.download.DownloadFailureReason.UNKNOWN
+                )
+    }
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Surface(color = MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.large, tonalElevation = 3.dp) {
+        Surface(
+            modifier = Modifier.padding(24.dp).widthIn(max = 760.dp),
+            color = MaterialTheme.colorScheme.surface,
+            shape = MaterialTheme.shapes.large,
+            tonalElevation = 3.dp,
+        ) {
             Column(
-                modifier = Modifier.padding(24.dp),
+                modifier = Modifier.verticalScroll(rememberScrollState()).padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Text(
-                    message,
+                    if (reason == null) message else strings.text(reason.title),
                     modifier = Modifier.testTag("reader-error"),
                     color = MaterialTheme.colorScheme.error,
                     style = MaterialTheme.typography.titleMedium,
                 )
+                if (reason != null) {
+                    Text(
+                        strings.text(reason.hint),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    mihon.desktop.ui.common.ErrorDetails(error.cause?.message, "reader-error")
+                }
                 if (retryable) {
                     FilledTonalButton(
                         onClick = onRetry,

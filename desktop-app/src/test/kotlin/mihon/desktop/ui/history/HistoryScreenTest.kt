@@ -21,6 +21,19 @@ class HistoryScreenTest {
 
     @OptIn(ExperimentalTestApi::class)
     @Test
+    fun `clearing an unmatched search does not clear reading history`() = runComposeUiTest {
+        var query = "missing"
+        var deleted = false
+        setContent {
+            HistoryScreen(emptyList(), query, { query = it }, {}, { deleted = true }, { deleted = true })
+        }
+        onNodeWithTag("history-clear-search").performClick()
+        assertEquals("", query)
+        assertEquals(false, deleted)
+    }
+
+    @OptIn(ExperimentalTestApi::class)
+    @Test
     fun `history screen displays groups and invokes resume and delete`() = runComposeUiTest {
         var resumedChapterId: Long? = null
         var deletedChapterId: Long? = null

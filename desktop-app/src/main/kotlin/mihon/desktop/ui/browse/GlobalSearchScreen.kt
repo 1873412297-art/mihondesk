@@ -29,11 +29,20 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import mihon.desktop.download.DownloadFailureReason
+import mihon.desktop.download.classifyDownloadFailure
 import mihon.desktop.i18n.LocalStrings
+import mihon.desktop.ui.common.ErrorDetails
+import mihon.desktop.ui.common.FailureExplanation
 import mihon.desktop.ui.common.MangaCover
 import mihon.extension.model.SourceDescriptor
 import mihon.extension.source.model.SManga
@@ -43,6 +52,7 @@ data class GlobalSearchSourceResult(
     val isLoading: Boolean = false,
     val mangas: List<SManga> = emptyList(),
     val errorMessage: String? = null,
+    val failureReason: DownloadFailureReason? = null,
 )
 
 @Composable
@@ -55,6 +65,7 @@ fun GlobalSearchScreen(
     sourceResults: List<GlobalSearchSourceResult>,
     onMangaSelected: (SourceDescriptor, SManga) -> Unit,
     onViewSource: (SourceDescriptor) -> Unit,
+    hasSources: Boolean = true,
 ) {
     val strings = LocalStrings.current
 
@@ -76,14 +87,23 @@ fun GlobalSearchScreen(
             OutlinedTextField(
                 value = query,
                 onValueChange = onQueryChange,
-                modifier = Modifier.weight(1f).testTag("global-search-input"),
+                modifier = Modifier.weight(1f).testTag("global-search-input").onPreviewKeyEvent {
+                    if (it.key == Key.Enter && it.type == KeyEventType.KeyUp && query.isNotBlank() && !isSearching &&
+                        hasSources
+                    ) {
+                        onSearch()
+                        true
+                    } else {
+                        false
+                    }
+                },
                 placeholder = { Text(strings.browseSearchPlaceholder) },
                 singleLine = true,
             )
             Spacer(modifier = Modifier.width(8.dp))
             Button(
                 onClick = onSearch,
-                enabled = query.isNotBlank() && !isSearching,
+                enabled = query.isNotBlank() && !isSearching && hasSources,
                 modifier = Modifier.testTag("global-search-submit-btn"),
             ) {
                 Text(strings.browseSearchButton)
@@ -100,10 +120,10 @@ fun GlobalSearchScreen(
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    text = if (query.isBlank()) {
-                        strings.globalSearchEnterQuery
-                    } else {
+                    text = if (!hasSources) {
                         strings.globalSearchNoSources
+                    } else {
+                        strings.globalSearchEnterQuery
                     },
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.outline,
@@ -121,11 +141,14 @@ fun GlobalSearchScreen(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+                            Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
                                 Text(
                                     text = item.source.name,
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f, fill = false),
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
@@ -147,12 +170,8 @@ fun GlobalSearchScreen(
                         }
 
                         item.errorMessage?.let { error ->
-                            Text(
-                                text = strings.globalSearchError(error),
-                                color = MaterialTheme.colorScheme.error,
-                                style = MaterialTheme.typography.bodySmall,
-                                modifier = Modifier.padding(bottom = 4.dp),
-                            )
+                            FailureExplanation(item.failureReason ?: classifyDownloadFailure(error))
+                            ErrorDetails(error, "global-search-error-${item.source.id}")
                         }
 
                         if (!item.isLoading && item.mangas.isEmpty() && item.errorMessage == null) {
