@@ -34,6 +34,8 @@ import mihon.desktop.ui.library.MangaDetailScreen
 import mihon.desktop.ui.library.MangaDetailUiState
 import mihon.desktop.ui.library.TriStateFilter
 import mihon.extension.ipc.findNetworkFailure
+import mihon.extension.ipc.toFilterList
+import mihon.extension.ipc.toFilterListDto
 import mihon.extension.model.SourceDescriptor
 import mihon.extension.source.model.SManga
 import java.nio.file.Files
@@ -226,7 +228,10 @@ fun BrowseContentView(
             LaunchedEffect(nav.source.id) {
                 val filters = runtime.sourceManager.loadFilterList(nav.source.id)
                 if (filters.isNotEmpty()) {
-                    sourceUiState = sourceUiState.copy(filterList = filters)
+                    sourceUiState = sourceUiState.copy(
+                        filterList = filters,
+                        defaultFilterList = filters.toFilterListDto().toFilterList(),
+                    )
                 }
             }
 
@@ -269,12 +274,6 @@ fun BrowseContentView(
                 },
                 onCloseFilters = {
                     sourceUiState = sourceUiState.copy(isFilterDialogOpen = false)
-                },
-                onResetFilters = {
-                    scope.launch {
-                        val reset = runtime.sourceManager.loadFilterList(nav.source.id)
-                        sourceUiState = sourceUiState.copy(filterList = reset)
-                    }
                 },
                 onApplyFilters = { applied ->
                     sourceUiState = sourceUiState.copy(filterList = applied, isFilterDialogOpen = false)
