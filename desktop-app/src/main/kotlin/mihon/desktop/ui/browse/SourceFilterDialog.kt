@@ -40,6 +40,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import mihon.desktop.i18n.LocalStrings
+import mihon.extension.ipc.applyStateFrom
+import mihon.extension.ipc.toFilterList
+import mihon.extension.ipc.toFilterListDto
 import mihon.extension.source.model.Filter
 import mihon.extension.source.model.FilterList
 
@@ -50,10 +53,11 @@ fun SourceFilterDialog(
     onDismissRequest: () -> Unit,
     onReset: () -> Unit,
     onApply: (FilterList) -> Unit,
+    defaultFilterList: FilterList = filterList,
 ) {
     val strings = LocalStrings.current
-    // Re-render trigger when filter state mutates
-    var mutationCount by remember { mutableStateOf(0) }
+    // UI drafts must not mutate active requests or discard source-specific filter subclasses.
+    var draft by remember(filterList) { mutableStateOf(filterList.toFilterListDto().toFilterList()) }
 
     Dialog(onDismissRequest = onDismissRequest) {
         Surface(
@@ -84,7 +88,7 @@ fun SourceFilterDialog(
                     TextButton(
                         onClick = {
                             onReset()
-                            mutationCount++
+                            draft = defaultFilterList.toFilterListDto().toFilterList()
                         },
                         modifier = Modifier.testTag("filter-reset-btn"),
                     ) {
@@ -105,7 +109,7 @@ fun SourceFilterDialog(
                         .verticalScroll(scrollState),
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
-                    if (filterList.isEmpty()) {
+                    if (draft.isEmpty()) {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -119,11 +123,10 @@ fun SourceFilterDialog(
                             )
                         }
                     } else {
-                        // Keyed by mutationCount to force recomposition on in-place state changes
-                        filterList.forEach { filter ->
+                        draft.forEach { filter ->
                             FilterItem(
                                 filter = filter,
-                                onStateChanged = { mutationCount++ },
+                                onStateChanged = { draft = draft.toFilterListDto().toFilterList() },
                             )
                         }
                     }
@@ -147,7 +150,7 @@ fun SourceFilterDialog(
                     }
                     Spacer(modifier = Modifier.width(12.dp))
                     Button(
-                        onClick = { onApply(filterList) },
+                        onClick = { onApply(filterList.applyStateFrom(draft)) },
                         modifier = Modifier.testTag("filter-apply-btn"),
                     ) {
                         Text(strings.filterApply)

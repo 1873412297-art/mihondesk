@@ -72,6 +72,7 @@ data class BrowseSourceUiState(
     val errorMessage: String? = null,
     val networkFailure: mihon.extension.ipc.NetworkFailure? = null,
     val filterList: FilterList = FilterList(),
+    val defaultFilterList: FilterList? = null,
     val isFilterDialogOpen: Boolean = false,
 ) {
     val activeFilterCount: Int
@@ -393,6 +394,7 @@ fun BrowseSourceScreen(
         if (state.isFilterDialogOpen) {
             SourceFilterDialog(
                 filterList = state.filterList,
+                defaultFilterList = state.defaultFilterList ?: state.filterList,
                 onDismissRequest = onCloseFilters,
                 onReset = onResetFilters,
                 onApply = { applied ->
