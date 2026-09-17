@@ -11,12 +11,15 @@ detail destination, cancel superseded loads, preserve coroutine cancellation and
 check active status before publishing callbacks. Cancel explicitly before back
 navigation as well as on disposal. Do not turn viewing into library membership.
 
-- [ ] Reproduce inability to leave loading and late result callbacks using the real
+- [x] Reproduce inability to leave loading and late result callbacks using the real
   BrowseContentView, source manager and online synchronization service.
-- [ ] Cover both metadata/chapter waits, cooperative and late-returning sources,
+- [x] Cover both metadata/chapter waits, cooperative and late-returning sources,
   navigation to another manga and disposal of the entire browse surface.
-- [ ] Implement destination-scoped requests and loading back navigation.
-- [ ] Verify existing detail/browse/source regressions, packaged tests and rendering.
+- [x] Implement destination-scoped requests and loading back navigation (button/Esc).
+- [x] Verify existing detail/browse/source regressions, packaged tests and rendering.
+
+34 source and 34 packaged tests pass; see
+[verification evidence](../evidence/2026-09-18-detail-loading-cancellation.md).
 
 This closes a detail-navigation slice of T9; full reader/host-restart and production
 source acceptance remain separate requirements.
