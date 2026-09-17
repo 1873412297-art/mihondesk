@@ -2,6 +2,20 @@ package mihon.desktop.i18n
 
 /** App-owned labels. Source metadata and diagnostic details are not translated here. */
 enum class UiText(val english: String, val simplified: String, val traditional: String) {
+    UpgradeFailedTitle("Unable to upgrade library", "无法升级书库", "無法升級書庫"),
+    UpgradeSnapshotFailed(
+        "The recovery snapshot could not be saved. The database upgrade has not started. " +
+            "Check free disk space and write access to this folder, then reopen mihondesk:\n\n{0}",
+        "无法保存恢复快照，尚未开始升级数据库。请检查磁盘剩余空间及以下目录的写入权限，然后重新打开 mihondesk：\n\n{0}",
+        "無法儲存還原快照，尚未開始升級資料庫。請檢查磁碟剩餘空間及以下目錄的寫入權限，然後重新開啟 mihondesk：\n\n{0}",
+    ),
+    UpgradeMigrationFailed(
+        "The database upgrade did not complete. Keep the existing data folder and recovery snapshot. " +
+            "Close mihondesk before restoring data; do not delete the database to bypass this error.",
+        "数据库升级未完成，请保留现有数据目录和恢复快照。恢复数据前请关闭 mihondesk，不要通过删除数据库来绕过此错误。",
+        "資料庫升級未完成，請保留現有資料目錄與還原快照。還原資料前請關閉 mihondesk，請勿刪除資料庫以繞過此錯誤。",
+    ),
+    UpgradeRecoveryLocation("Recovery snapshot:\n{0}", "恢复快照：\n{0}", "還原快照：\n{0}"),
     RestoreReading("Reading backup…", "正在读取备份…", "正在讀取備份…"),
     RestoreValidating("Checking backup…", "正在校验备份…", "正在檢查備份…"),
     RestoreManga("Restoring manga: {0} / {1}", "正在恢复漫画：{0} / {1}", "正在還原漫畫：{0} / {1}"),

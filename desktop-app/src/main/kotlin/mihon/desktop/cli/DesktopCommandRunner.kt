@@ -183,8 +183,8 @@ class DesktopCommandRunner(
             )
         }
 
-        fun writeStartupFailure(output: OutputStream) {
-            writeUtf8Line(output, JSON.encodeToString(ErrorOutput("startup", "FAILED", "UNEXPECTED", null)))
+        fun writeStartupFailure(output: OutputStream, category: String = "UNEXPECTED") {
+            writeUtf8Line(output, JSON.encodeToString(ErrorOutput("startup", "FAILED", category, null)))
         }
     }
 }
