@@ -12,10 +12,14 @@ duplicate requests in the presenter. Update-all runs sequentially in the same jo
 cancellation stops remaining downloads, and failure leaves later updates pending.
 Clear busy state only after the owned job and network cleanup have completed.
 
-- [ ] Regress duplicate download requests, cancel/retry, commit phase and batch order.
-- [ ] Add the download-to-install boundary, presenter states and localized banner.
-- [ ] Connect the screen and disable competing install controls while busy.
-- [ ] Verify connected UI at desktop/narrow widths and source/packaged behavior.
+- [x] Regress duplicate download requests, cancel/retry, commit phase and batch order.
+- [x] Add the download-to-install boundary, presenter states and localized banner.
+- [x] Connect the screen and disable competing install controls while busy.
+- [x] Verify connected UI at desktop/narrow widths and source/packaged behavior.
+
+50 source and 50 packaged tests pass. Narrow-window screenshot inspection also
+identified clipped header actions; wrapping now keeps those actions visible.
+See [verification evidence](../evidence/2026-09-18-extension-install-controls.md).
 
 Do not claim cancellation rolls back an installation already committing. The
 separate MSI rollback candidate remains unmerged and is outside this change.

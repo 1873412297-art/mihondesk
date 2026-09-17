@@ -136,6 +136,8 @@ Suwayomi 是完整服务端，并非可直接加入现有 Java 17 应用的后�
 
 2026-09-18 补充：扩展安装包下载现在也能在等待响应头或读取响应体时关闭底层 Call，保留取消语义，并等待文件写入结束后清理临时包。源码和实际包内各 32 项测试通过，两个阻塞下载取消场景均在 1 秒内结束；见[扩展下载取消证据](../evidence/2026-09-18-extension-download-cancellation.md)。本次不包含新的 UI 取消按钮或安装提交阶段取消。
 
+2026-09-18 后续：已接通浏览页的扩展下载取消、阶段提示与取消后重试反馈；单任务约束防止重复点击并发下载，“全部更新”逐项执行，取消或失败保留已完成安装并停止后续项。中英文宽窄界面及现有浏览/安装回归在源码和实际包内各 50 项通过，便携包已重建并核对，见[扩展安装控制证据](../evidence/2026-09-18-extension-install-controls.md)。安装提交阶段不提供取消，完整后台安装队列与 T11 仍未完成。
+
 **上游依据：** [NetworkHelper.kt](https://github.com/Suwayomi/Suwayomi-Server/blob/d10e000e1fdcac6f3c84d002f0b459c90c1b00f3/server/src/main/kotlin/eu/kanade/tachiyomi/network/NetworkHelper.kt)。移植行为不照搬上游简化的 Cookie 匹配；保留本地更严格的语义。
 
 ### T3：按真实样本补齐 Android/Mihon 兼容契约
