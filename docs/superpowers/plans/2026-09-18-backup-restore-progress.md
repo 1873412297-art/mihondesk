@@ -10,11 +10,11 @@ Desktop backup restore gets a single active operation presenter and localized di
 
 Alternatives: merely cancelling a coroutine does not stop synchronous SQLite work; committing one manga at a time leaves partial restore data. Both are rejected. The existing full transaction plus cooperative checkpoints preserves compatibility.
 
-- [ ] Reproduce lifecycle cancellation committing data via a real importer/controller regression; observe failure on the current implementation.
-- [ ] Add per-operation control and rollback checkpoints; retain existing two-argument import API for CLI and callers.
-- [ ] Add progress/cancel/commit-gate, rollback and repeated import regression tests against real SQLite.
-- [ ] Add presenter with single-operation ownership, safe cancel and terminal state; test duplicate starts and completion boundaries.
-- [ ] Wire shared desktop restore progress UI and localized cancel/finishing/result states; verify interaction, narrow/desktop layout and contrast.
-- [ ] Run affected data/app tests and Spotless, build a clean application image, verify packaged behavior, and record authoritative evidence.
+- [x] Reproduce lifecycle cancellation committing data via a real importer/controller regression; observe failure on the current implementation.
+- [x] Add per-operation control and rollback checkpoints; retain existing two-argument import API for CLI and callers.
+- [x] Add progress/cancel/commit-gate, rollback and repeated import regression tests against real SQLite.
+- [x] Add presenter with single-operation ownership, safe cancel and terminal state; test duplicate starts and completion boundaries.
+- [x] Wire shared desktop restore progress UI and localized cancel/finishing/result states; verify interaction, narrow/desktop layout and contrast.
+- [x] Run affected data/app tests and Spotless, build a clean application image, verify packaged behavior, and record authoritative evidence.
 
 Use Corretto 23 and serialized Gradle (`--max-workers=1`, `-Pkotlin.compiler.execution.strategy=in-process`). Verification profiles and render captures stay in ignored `build/restore-progress-evidence/`; never import into the user's library.
