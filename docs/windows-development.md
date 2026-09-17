@@ -36,6 +36,16 @@ The verifier checks formatting, desktop unit tests, the self-contained applicati
 
 The release version comes from `desktop-version.txt`. EXE, MSI and portable ZIP files are written to `desktop-app/build/releases/<version>/`. See [Windows release and upgrade notes](WINDOWS_RELEASE.md) for packaging checks and data compatibility.
 
+Database schema upgrades first create a validated SQLite recovery snapshot. See
+[database recovery](database-recovery.md) for its scope and safe restore instructions.
+Verify the packaged EXE against isolated synthetic old-schema profiles with:
+
+```powershell
+python -X utf8 scripts/verify-database-upgrade.py --exe desktop-app/build/compose/binaries/main/app/mihondesk/mihondesk.exe --output build/database-upgrade-check
+```
+
+The output directory must be new; this check never opens the default user profile.
+
 ## Update application artwork
 
 The icon source is `desktop-app/src/main/resources/icon.svg`. Export the PNG, multi-size Windows ICO and GitHub artwork with `scripts/export-brand-assets.ps1`. See [brand assets](BRANDING.md) for sizes, colors and export requirements.

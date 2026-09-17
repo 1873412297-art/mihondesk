@@ -117,13 +117,14 @@ object DesktopLibraryDatabaseFactory {
         oldVersion: Long,
         newVersion: Long,
     ) {
+        val snapshot = DatabaseMigrationSnapshot.create(driver, path, oldVersion, newVersion)
         try {
             database.transaction {
                 DesktopLibraryDatabase.Schema.migrate(driver, oldVersion, newVersion)
                 writeUserVersion(driver, newVersion)
             }
         } catch (error: Throwable) {
-            throw DesktopLibraryDatabaseOpenException.MigrationFailed(path, oldVersion, newVersion, error)
+            throw DesktopLibraryDatabaseOpenException.MigrationFailed(path, oldVersion, newVersion, error, snapshot)
         }
     }
 
@@ -166,8 +167,19 @@ sealed class DesktopLibraryDatabaseOpenException(
         val fromVersion: Long,
         val toVersion: Long,
         cause: Throwable,
+        val recoverySnapshot: Path? = null,
     ) : DesktopLibraryDatabaseOpenException(
-        "Failed to migrate desktop library database $path from version $fromVersion to $toVersion.",
+        "Failed to migrate desktop library database $path from version $fromVersion to $toVersion." +
+            (recoverySnapshot?.let { " Recovery snapshot: $it" } ?: ""),
+        cause,
+    )
+
+    class SnapshotFailed(
+        path: Path,
+        val snapshotDirectory: Path,
+        cause: Throwable,
+    ) : DesktopLibraryDatabaseOpenException(
+        "Failed to save a recovery snapshot of $path in $snapshotDirectory; database migration was not started.",
         cause,
     )
 

@@ -5,9 +5,12 @@ import mihon.desktop.cli.CommandLineException
 import mihon.desktop.cli.DesktopCommand
 import mihon.desktop.cli.DesktopCommandParser
 import mihon.desktop.cli.DesktopCommandRunner
+import mihon.desktop.i18n.AppLanguage
+import mihon.desktop.i18n.DesktopStrings
 import mihon.desktop.platform.DesktopProfileDirectories
 import mihon.desktop.platform.DesktopProfileLock
 import mihon.desktop.platform.ProfileInUseException
+import mihon.desktop.preferences.DesktopPreferenceStore
 import mihon.desktop.ui.MihonDesktopApp
 import java.nio.file.Path
 import kotlin.system.exitProcess
@@ -21,10 +24,15 @@ fun main(args: Array<String>) {
     val command = ProcessHandle.current().info().command().orElse(null)
     val executableDirectory = command?.let(Path::of)?.parent
         ?: Path.of(System.getProperty("user.dir"))
+    var interactiveStartup = false
+    var startupLanguage = AppLanguage.System
     val exitCode = try {
-        DesktopCommandParser.parse(args)
+        interactiveStartup = DesktopCommandParser.parse(args) == DesktopCommand.LaunchUi
         val profile = DesktopProfileDirectories.resolve(args, System.getenv(), executableDirectory)
         DesktopProfileLock.acquire(profile.root).use {
+            startupLanguage = runCatching {
+                DesktopPreferenceStore(profile.root.resolve("preferences.properties")).load().language
+            }.getOrDefault(AppLanguage.System)
             val runtime = DesktopRuntimeFactory.create(args, System.getenv(), executableDirectory)
             executeDesktopRuntime(
                 runtime = runtime,
@@ -47,7 +55,9 @@ fun main(args: Array<String>) {
         error.exitCode
     } catch (e: Throwable) {
         e.printStackTrace(System.err)
-        DesktopCommandRunner.writeStartupFailure(System.out)
+        if (!reportDatabaseUpgradeFailure(e, interactiveStartup, System.out, DesktopStrings.resolve(startupLanguage))) {
+            DesktopCommandRunner.writeStartupFailure(System.out)
+        }
         1
     }
     exitProcess(exitCode)
