@@ -13,9 +13,9 @@ Alternatives considered: changing the interval to run-start semantics contradict
 - [x] Add a deterministic export that advances the clock by longer than the interval; assert the saved time equals completion and the next check is skipped. Observe failure first.
 - [x] Remove the duplicate timestamp write and use one completion value in `DesktopBackupScheduler`.
 - [x] Verify manual backup leaves the automatic timestamp unchanged; failed/cancelled snapshot preserves old files and retry eligibility; concurrent due checks produce one backup.
-- [ ] Exercise atomic publication failure and corrupt input against real files, and run backup/import/settings regression suites.
-- [ ] Build a fresh application image, run the actual launcher against isolated nonempty profiles, export/import a backup, and verify rejected corrupt input leaves the destination library unchanged.
-- [ ] Record commands, results, artifact identity, and remaining acceptance gaps.
+- [x] Exercise atomic publication failure and corrupt input against real files, and run backup/import/settings regression suites.
+- [x] Build a fresh application image, run the actual launcher against isolated nonempty profiles, export/import a backup, and verify rejected corrupt input leaves the destination library unchanged.
+- [x] Record commands, results, artifact identity, and remaining acceptance gaps.
 
 ## Follow-up: protect the selected backup directory
 
@@ -23,9 +23,9 @@ Inspection of 0.2.18 found that backup path keystrokes immediately update persis
 
 Use an explicit draft/save flow with a directory chooser, asynchronous absolute-directory/write checks, localized success/error feedback, and default-folder reset. A saved change takes effect on the next backup without relocating old restore points. Reuse the existing download directory validation under a general storage name; preserve download behavior. The scheduler must reject nonblank invalid or relative paths instead of silently changing their destination. Blank still selects the default.
 
-- [ ] Reproduce draft persistence and invalid-path fallback with UI/scheduler regressions.
-- [ ] Implement validated save and explicit runtime path rejection; retain atomic preference updates.
-- [ ] Verify default reset, concurrent preference edits, three languages, and desktop/narrow layout through Compose UI tests and renders.
+- [x] Reproduce draft persistence and invalid-path fallback with UI/scheduler regressions.
+- [x] Implement validated save and explicit runtime path rejection; retain atomic preference updates.
+- [x] Verify default reset, concurrent preference edits, three languages, and desktop/narrow layout through Compose UI tests and renders.
 
 ## Verification
 

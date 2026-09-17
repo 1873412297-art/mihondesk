@@ -51,6 +51,15 @@ class BackupStorageLocationTest {
         dark: Boolean,
         saveLabel: String,
     ) = runComposeUiTest {
+        System.getenv("MIHON_BACKUP_APP")?.let { directory ->
+            val origin = Path.of(
+                Class.forName(
+                    "mihon.desktop.ui.settings.BackupStorageLocationKt",
+                ).protectionDomain.codeSource.location.toURI(),
+            )
+            check(origin.startsWith(Path.of(directory))) { "Expected packaged backup UI, got $origin" }
+            println("PACKAGED_BACKUP_UI $origin")
+        }
         val store = DesktopPreferenceStore(dir.resolve("preferences.properties"))
         setContent {
             ProvideDesktopStrings(language) {
