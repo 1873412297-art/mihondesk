@@ -2,6 +2,10 @@ package mihon.desktop.i18n
 
 /** App-owned labels. Source metadata and diagnostic details are not translated here. */
 enum class UiText(val english: String, val simplified: String, val traditional: String) {
+    ExtensionDownloading("Downloading {0}…", "正在下载 {0}…", "正在下載 {0}…"),
+    ExtensionInstalling("Installing {0}…", "正在安装 {0}…", "正在安裝 {0}…"),
+    ExtensionCancelling("Cancelling download…", "正在取消下载…", "正在取消下載…"),
+    ExtensionCancelled("Download cancelled. You can try again.", "下载已取消，可以重试。", "下載已取消，可以重試。"),
     AppUpdateInstall("Exit and update", "退出并更新", "結束並更新"),
     AppUpdatePreparingInstall("Checking the new app before closing…", "正在检查新程序，完成后才会退出…", "正在檢查新程式，完成後才會結束…"),
     AppUpdateExiting("Closing safely for the update…", "正在安全退出以完成更新…", "正在安全結束以完成更新…"),

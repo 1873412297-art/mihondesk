@@ -2,6 +2,7 @@ package mihon.desktop.ui.browse
 
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
@@ -11,6 +12,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
@@ -50,6 +52,7 @@ class BrowsePresenter(
     private val _state = MutableStateFlow(BrowseUiState())
     val state: StateFlow<BrowseUiState> = _state.asStateFlow()
     private var lastNotifiedPendingUpdates = 0
+    private var installJob: Job? = null
     private var globalSearchJob: Job? = null
     private val globalSearchGeneration = java.util.concurrent.atomic.AtomicLong()
 
@@ -357,54 +360,97 @@ class BrowsePresenter(
         }
     }
 
-    fun installExtension(item: ExtensionStoreItem) {
-        scope.launch {
-            _state.update { it.copy(isInstalling = true, installingPkg = item.pkg) }
-            try {
-                if (item.downloadUrl.isNotBlank()) {
-                    installer.downloadAndInstall(item.downloadUrl, item.sha256, item.repoUrl, storeItem = item)
+    fun installExtension(item: ExtensionStoreItem) = installItems(listOf(item))
+
+    internal fun installItems(items: List<ExtensionStoreItem>) {
+        if (items.isEmpty()) return
+        startInstallation(items.first().pkg, items.first().name, ExtensionInstallPhase.Downloading) {
+            for (item in items) {
+                currentCoroutineContext().ensureActive()
+                synchronized(this@BrowsePresenter) {
+                    if (installJob?.isActive != true) throw CancellationException("Extension installation cancelled")
+                    _state.update {
+                        it.copy(
+                            installingPkg = item.pkg,
+                            installingName = item.name,
+                            installPhase = ExtensionInstallPhase.Downloading,
+                        )
+                    }
                 }
+                require(item.downloadUrl.isNotBlank()) { "Extension download URL is missing" }
+                installer.downloadAndInstall(
+                    item.downloadUrl,
+                    item.sha256,
+                    item.repoUrl,
+                    storeItem = item,
+                    onDownloadComplete = ::beginInstallation,
+                )
                 refreshInstalledAndSources()
-                _state.update {
-                    it.copy(
-                        isInstalling = false,
-                        installingPkg = null,
-                    )
-                }
-            } catch (e: Exception) {
-                _state.update {
-                    it.copy(
-                        isInstalling = false,
-                        installingPkg = null,
-                        errorMessage = "Failed to install ${item.name}: ${e.message}",
-                    )
-                }
             }
         }
     }
 
     fun installFromFile(file: File) {
-        scope.launch {
-            _state.update { it.copy(isInstalling = true, installingPkg = file.name) }
+        startInstallation(file.name, file.name, ExtensionInstallPhase.Installing) {
+            installer.installFromLocalFile(file)
+            refreshInstalledAndSources()
+        }
+    }
+
+    @Synchronized
+    private fun beginInstallation() {
+        if (installJob?.isActive != true || _state.value.installPhase != ExtensionInstallPhase.Downloading) {
+            throw CancellationException("Extension download was cancelled")
+        }
+        _state.update { it.copy(installPhase = ExtensionInstallPhase.Installing) }
+    }
+
+    @Synchronized
+    fun cancelInstallation() {
+        if (_state.value.installPhase != ExtensionInstallPhase.Downloading) return
+        _state.update { it.copy(installPhase = ExtensionInstallPhase.Cancelling) }
+        installJob?.cancel()
+    }
+
+    @Synchronized
+    private fun startInstallation(pkg: String, name: String, phase: ExtensionInstallPhase, action: suspend () -> Unit) {
+        if (installJob?.isCompleted == false || !scope.isActive) return
+        _state.update {
+            it.copy(
+                isInstalling = true,
+                installingPkg = pkg,
+                installingName = name,
+                installPhase = phase,
+                installationCancelled = false,
+                errorMessage = null,
+            )
+        }
+        val job = scope.launch(start = CoroutineStart.LAZY) {
             try {
-                installer.installFromLocalFile(file)
-                refreshInstalledAndSources()
-                _state.update {
-                    it.copy(
-                        isInstalling = false,
-                        installingPkg = null,
-                    )
-                }
-            } catch (e: Exception) {
-                _state.update {
-                    it.copy(
-                        isInstalling = false,
-                        installingPkg = null,
-                        errorMessage = "Failed to install from file ${file.name}: ${e.message}",
-                    )
+                action()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Exception) {
+                _state.update { it.copy(errorMessage = "Failed to install ${it.installingName}: ${failure.message}") }
+            }
+        }
+        installJob = job
+        job.invokeOnCompletion { cause ->
+            synchronized(this@BrowsePresenter) {
+                if (installJob === job) {
+                    installJob = null
+                    _state.update {
+                        it.copy(
+                            isInstalling = false,
+                            installingPkg = null,
+                            installPhase = null,
+                            installationCancelled = cause is CancellationException,
+                        )
+                    }
                 }
             }
         }
+        job.start()
     }
 
     fun uninstallExtension(pkg: String) {
@@ -513,11 +559,7 @@ class BrowsePresenter(
             inst != null && available.versionCode > inst.manifest.versionCode
         }
 
-        scope.launch {
-            for (item in toUpdate) {
-                installExtension(item)
-            }
-        }
+        installItems(toUpdate)
     }
 
     fun openGlobalSearch() {

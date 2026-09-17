@@ -125,6 +125,7 @@ class DesktopExtensionInstaller(
         allowUntrusted: Boolean = false,
         explicitTrust: Boolean = false,
         trustUnknown: Boolean = false,
+        onDownloadComplete: () -> Unit = {},
     ): InstalledExtension = withContext(Dispatchers.IO) {
         val request = Request.Builder()
             .url(downloadUrl)
@@ -169,6 +170,8 @@ class DesktopExtensionInstaller(
                 }
             }
 
+            currentCoroutineContext().ensureActive()
+            onDownloadComplete()
             installFromLocalFile(
                 file = tempFile,
                 expectedSha256 = expectedSha256,
