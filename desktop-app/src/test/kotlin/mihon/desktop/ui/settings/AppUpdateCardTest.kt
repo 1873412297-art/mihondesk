@@ -54,6 +54,7 @@ class AppUpdateCardTest {
                 "mihon.desktop.ui.settings.AppUpdatePanelKt",
                 "mihon.desktop.updates.AppUpdatePresenter",
                 "mihon.desktop.updates.DesktopAppUpdateService",
+                "mihon.desktop.updates.PortableUpdateHandoff",
             )) {
                 val origin = Path.of(Class.forName(name).protectionDomain.codeSource.location.toURI())
                 check(origin.startsWith(Path.of(directory))) { "Expected packaged $name, got $origin" }
@@ -76,12 +77,16 @@ class AppUpdateCardTest {
         var checks = 0
         var cancels = 0
         var folders = 0
+        var installs = 0
+        val automatic = mutableStateOf(false)
         setContent {
             ProvideDesktopStrings(language) {
                 MihonDesktopTheme(themeMode = if (dark) ThemeMode.Dark else ThemeMode.Light, isAmoled = dark) {
                     Surface(Modifier.requiredSize(width.dp, 680.dp).testTag("app-update-render")) {
                         AboutScreen(updateContent = {
-                            AppUpdateCard(state.value, { checks++ }, { downloads++ }, { cancels++ }, { folders++ }, {})
+                            AppUpdateCard(state.value, {
+                                checks++
+                            }, { downloads++ }, { cancels++ }, { folders++ }, {}, automatic.value, { installs++ })
                         })
                     }
                 }
@@ -107,6 +112,19 @@ class AppUpdateCardTest {
         onNodeWithTag("app-update-saved").assertIsDisplayed()
         onNodeWithTag("app-update-folder").assertIsDisplayed().performClick()
         folders shouldBe 1
+        onNodeWithTag("app-update-install").assertDoesNotExist()
+        runOnIdle {
+            automatic.value = true
+            state.value = state.value.copy(verifiedSha256 = "a".repeat(64))
+        }
+        onNodeWithTag("app-update-install").assertIsDisplayed().performClick()
+        installs shouldBe 1
+        runOnIdle { state.value = state.value.copy(phase = AppUpdatePhase.PreparingUpdate) }
+        onNodeWithTag("app-update-cancel").performClick()
+        cancels shouldBe 2
+        runOnIdle { state.value = state.value.copy(phase = AppUpdatePhase.Exiting) }
+        onNodeWithTag("app-update-cancel").assertIsNotEnabled()
+        runOnIdle { state.value = state.value.copy(phase = AppUpdatePhase.Ready) }
         System.getenv("MIHON_UPDATE_EVIDENCE")?.let { location ->
             val target = Files.createDirectories(Path.of(location))
             Image.makeFromBitmap(onNodeWithTag("app-update-render").captureToImage().asSkiaBitmap()).use { image ->

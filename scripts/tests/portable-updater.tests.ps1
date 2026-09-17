@@ -17,6 +17,15 @@ using System.Threading;
 public class Probe {
     public static int Main(string[] args) {
         string root = AppDomain.CurrentDomain.BaseDirectory;
+        if (args.Length > 0 && args[0] == "--hold") {
+            using (var profile = new FileStream(Path.Combine(root, "data", ".mihon-profile.lock"), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.ReadWrite)) {
+                profile.Lock(0, Int64.MaxValue);
+                File.WriteAllText(Path.Combine(root, "caller-ready"), "ready");
+                while (!File.Exists(Path.Combine(root, "shutdown-code"))) Thread.Sleep(50);
+                return Int32.Parse(File.ReadAllText(Path.Combine(root, "shutdown-code")));
+            }
+        }
+        if (args.Length == 0) File.WriteAllText(Path.Combine(root, "restarted"), "yes");
         string token = Environment.GetEnvironmentVariable("MIHON_PORTABLE_UPDATE_TOKEN");
         string guard = Path.Combine(root, ".mihon-update-in-progress");
         if (File.Exists(guard) && File.ReadAllText(guard).Trim() != token) {
@@ -74,6 +83,62 @@ function Repack-Fixture($Fixture) {
     $Fixture.Hash = (Get-FileHash -LiteralPath $Fixture.Zip).Hash
 }
 try {
+    foreach ($scenario in @('success', 'cancel', 'bad-identity', 'failed-exit', 'rollback', 'timeout', 'invalid-commit')) {
+    Test-Case "application handoff $scenario" {
+        $fixture = New-Fixture "handoff-$scenario" $(if ($scenario -eq 'rollback') { 'fail' } else { '' })
+        Copy-Item -LiteralPath $probe -Destination (Join-Path $fixture.Target 'mihondesk.exe')
+        $caller = Start-Process -FilePath (Join-Path $fixture.Target 'mihondesk.exe') -ArgumentList '--hold' -PassThru -WindowStyle Hidden
+        $runner = $null
+        try {
+            $deadline = [DateTime]::UtcNow.AddSeconds(10)
+            while (-not (Test-Path -LiteralPath (Join-Path $fixture.Target 'caller-ready'))) {
+                if ($caller.HasExited -or [DateTime]::UtcNow -gt $deadline) { throw 'Caller did not acquire the profile' }
+                Start-Sleep -Milliseconds 50
+            }
+            $token = [Guid]::NewGuid().ToString('N')
+            $handoff = Join-Path $fixture.Directory ".mihon-handoff-$token"
+            New-Item -ItemType Directory -Path $handoff | Out-Null
+            $started = ([DateTimeOffset]::new($caller.StartTime.ToUniversalTime())).ToUnixTimeMilliseconds()
+            if ($scenario -eq 'bad-identity') { $started-- }
+            $command = "& '{0}' -ZipPath '{1}' -TargetDir '{2}' -ExpectedSha256 '{3}' -CallerPid {4} -CallerStartMillis {5} -HandoffToken '{6}'" -f $updater.Replace("'", "''"), $fixture.Zip.Replace("'", "''"), $fixture.Target.Replace("'", "''"), $fixture.Hash, $caller.Id, $started, $token
+            $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($command))
+            $runner = Start-Process -FilePath (Get-Process -Id $PID).Path -ArgumentList @('-NoProfile', '-EncodedCommand', $encoded) -PassThru -WindowStyle Hidden -RedirectStandardOutput (Join-Path $handoff 'stdout') -RedirectStandardError (Join-Path $handoff 'stderr')
+            if ($scenario -ne 'bad-identity') {
+                $deadline = [DateTime]::UtcNow.AddSeconds(20)
+                while (-not (Test-Path -LiteralPath (Join-Path $handoff 'ready'))) {
+                    if ($runner.HasExited -or [DateTime]::UtcNow -gt $deadline) { throw "Updater did not prepare: $([IO.File]::ReadAllText((Join-Path $handoff 'stderr')))" }
+                    Start-Sleep -Milliseconds 50
+                }
+                if ($caller.HasExited) { throw 'Caller exited before readiness' }
+                Assert-Original $fixture
+                if ($scenario -eq 'cancel') { [IO.File]::WriteAllText((Join-Path $handoff 'abort'), $token) }
+                elseif ($scenario -eq 'invalid-commit') { [IO.File]::WriteAllText((Join-Path $handoff 'commit'), 'invalid') }
+                elseif ($scenario -ne 'timeout') {
+                    [IO.File]::WriteAllText((Join-Path $handoff 'commit'), $token)
+                    [IO.File]::WriteAllText((Join-Path $fixture.Target 'shutdown-code'), $(if ($scenario -eq 'failed-exit') { '7' } else { '0' }))
+                }
+            }
+            if (-not $runner.WaitForExit($(if ($scenario -eq 'timeout') { 130000 } else { 20000 }))) { throw 'Handoff did not terminate' }
+            $expected = if ($scenario -eq 'success') { 'updated' } else { 'failed' }
+            if ([IO.File]::ReadAllText((Join-Path $handoff 'result')) -ne $expected) { throw 'Wrong handoff result' }
+            if ($scenario -ne 'success') { Assert-Original $fixture }
+            if ($scenario -in @('cancel', 'bad-identity', 'timeout', 'invalid-commit') -and $caller.HasExited) { throw 'Preparation failure closed caller' }
+            if ($scenario -in @('success', 'rollback', 'failed-exit')) {
+                $deadline = [DateTime]::UtcNow.AddSeconds(5)
+                while (-not (Test-Path -LiteralPath (Join-Path $fixture.Target 'restarted'))) {
+                    if ([DateTime]::UtcNow -gt $deadline) { throw 'Available application did not restart' }
+                    Start-Sleep -Milliseconds 50
+                }
+            }
+            if (@(Get-ChildItem -LiteralPath $fixture.Directory -Force -Filter '.mihon-stage-*').Count -ne 0) { throw 'Handoff stage was not cleaned' }
+        } finally {
+            if ($runner -and -not $runner.HasExited) { $runner.Kill(); $runner.WaitForExit(5000) | Out-Null }
+            if (-not $caller.HasExited) { $caller.Kill(); $caller.WaitForExit(5000) | Out-Null }
+            $caller.Dispose()
+            if ($runner) { $runner.Dispose() }
+        }
+    }
+    }
     Test-Case 'checksum rejection preserves original' {
         $fixture = New-Fixture 'checksum'
         Assert-Fails { & $updater -ZipPath $fixture.Zip -TargetDir $fixture.Target -ExpectedSha256 ('0' * 64) -NoRestart } 'SHA-256'

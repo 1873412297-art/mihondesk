@@ -2,6 +2,26 @@ package mihon.desktop.i18n
 
 /** App-owned labels. Source metadata and diagnostic details are not translated here. */
 enum class UiText(val english: String, val simplified: String, val traditional: String) {
+    AppUpdateInstall("Exit and update", "退出并更新", "結束並更新"),
+    AppUpdatePreparingInstall("Checking the new app before closing…", "正在检查新程序，完成后才会退出…", "正在檢查新程式，完成後才會結束…"),
+    AppUpdateExiting("Closing safely for the update…", "正在安全退出以完成更新…", "正在安全結束以完成更新…"),
+    AppUpdateInstallFailed(
+        "Update preparation failed. This app remains open; see the update log and retry.",
+        "更新准备失败，当前应用仍保持打开。请查看更新日志后重试。",
+        "更新準備失敗，目前應用程式仍保持開啟。請查看更新日誌後重試。",
+    ),
+    AppUpdateAutomaticHint(
+        "The updater will check the new app, wait for a safe shutdown, then update and restart.",
+        "更新器会先检查新程序，等待当前应用安全退出后再更新并重启。",
+        "更新程式會先檢查新程式，等待目前應用程式安全結束後再更新並重新啟動。",
+    ),
+    AppUpdatePreviousSuccess("The previous update completed.", "上次更新已完成。", "上次更新已完成。"),
+    AppUpdatePreviousFailed(
+        "The previous update did not complete. Review its log before retrying.",
+        "上次更新未完成，请查看日志后重试。",
+        "上次更新未完成，請查看日誌後重試。",
+    ),
+    AppUpdateLog("Open update log", "打开更新日志", "開啟更新日誌"),
     AppUpdateTitle("App updates", "应用更新", "應用程式更新"),
     AppUpdateCheck("Check for updates", "检查更新", "檢查更新"),
     AppUpdateChecking("Checking releases…", "正在检查版本…", "正在檢查版本…"),

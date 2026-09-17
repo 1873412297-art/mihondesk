@@ -16,6 +16,72 @@ import java.security.MessageDigest
 import java.util.concurrent.atomic.AtomicInteger
 
 class AppUpdatePresenterTest {
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(
+        strings = ["success", "cancel", "prepare-failure", "commit-failure", "exit-failure"],
+    )
+    fun `application exit requires prepared committed update`(scenario: String): Unit = runBlocking {
+        val gate = CompletableDeferred<Unit>()
+        val events = mutableListOf<String>()
+        val installer = object : AppUpdateInstaller {
+            override val available = true
+            override fun lastOutcome(): AppUpdateOutcome? = null
+            override suspend fun prepare(archive: Path, expectedSha256: String): PreparedAppUpdate {
+                expectedSha256 shouldBe hash
+                events.add("prepare")
+                gate.await()
+                if (scenario == "prepare-failure") error("invalid package")
+                return object : PreparedAppUpdate {
+                    override fun commit() {
+                        events.add("commit")
+                        if (scenario == "commit-failure") error("helper stopped")
+                    }
+                    override fun abort() {
+                        events.add("abort")
+                    }
+                }
+            }
+        }
+        val service =
+            DesktopAppUpdateService(fetchText = {
+                if (it.endsWith("latest")) json else "$hash  $name"
+            }, downloadStream = { ByteArrayInputStream(data) })
+        val presenter = AppUpdatePresenter(service, this, installer) {
+            events.add("exit")
+            if (scenario == "exit-failure") error("cannot save settings")
+        }
+        presenter.install()
+        events shouldBe emptyList()
+        presenter.check()
+        presenter.await(AppUpdatePhase.Available)
+        presenter.download(root.resolve(name))
+        presenter.await(AppUpdatePhase.Ready)
+        presenter.install()
+        presenter.install()
+        events shouldBe listOf("prepare")
+        if (scenario == "cancel") {
+            presenter.cancel()
+            presenter.await(AppUpdatePhase.Cancelled)
+            events shouldBe listOf("prepare")
+        } else {
+            gate.complete(Unit)
+            if (scenario == "success") {
+                presenter.await(AppUpdatePhase.Exiting)
+                events shouldBe listOf("prepare", "commit", "exit")
+            } else {
+                presenter.await(AppUpdatePhase.Ready)
+                presenter.state.value.installFailed shouldBe true
+                presenter.state.value.verifiedSha256 shouldBe hash
+                events shouldBe when (scenario) {
+                    "prepare-failure" -> listOf("prepare")
+                    "commit-failure" -> listOf("prepare", "commit", "abort")
+                    else -> listOf("prepare", "commit", "exit", "abort")
+                }
+            }
+        }
+        presenter.shutdown()
+    }
+
     @Test
     fun `cancel waits for blocked read cleanup and rejects a second operation`(): Unit = runBlocking {
         val entered = CompletableDeferred<Unit>()
