@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([Parameter(Mandatory)][string]$OutputDirectory)
+param([Parameter(Mandatory)][string]$OutputDirectory, [switch]$MainProcessesOnly)
 $ErrorActionPreference = 'Stop'
 $root = (Resolve-Path -LiteralPath $OutputDirectory).Path
 $result = Get-Content -LiteralPath (Join-Path $root 'result.json') -Raw | ConvertFrom-Json
@@ -8,6 +8,25 @@ $readerRows = @(Get-Content -LiteralPath (Join-Path $root 'reader-samples.jsonl'
 $memoryFile = @(Get-ChildItem -LiteralPath $root -Filter 'process-memory-*.jsonl')
 if ($memoryFile.Count -ne 1) { throw 'Expected exactly one process-memory stream' }
 $memoryRows = @(Get-Content -LiteralPath $memoryFile[0].FullName | ForEach-Object { $_ | ConvertFrom-Json })
+$processScope = 'process tree'
+$excludedProcessSamples = @()
+if ($MainProcessesOnly) {
+    $ownership = Get-Content -LiteralPath (Join-Path $root 'processes.json') -Raw | ConvertFrom-Json
+    $mainIds = @([long]$ownership.launcherPid, [long]$result.soak.processId)
+    if (@($mainIds | Where-Object { $_ -le 0 }).Count) { throw 'Missing authoritative launcher or runtime identity' }
+    $processScope = 'recorded launcher and reader JVM only; other child processes excluded'
+    $excludedProcessSamples = @(foreach ($row in $memoryRows) {
+        foreach ($member in $row.processes) {
+            if ([long]$member.processId -notin $mainIds) {
+                [pscustomobject]@{ elapsedSeconds = $row.elapsedSeconds; processId = $member.processId; name = $member.name }
+            }
+        }
+        $row.processes = @($row.processes | Where-Object { [long]$_.processId -in $mainIds })
+        if ($row.processes.Count -eq 0) { throw 'Process sample contains no recorded main process' }
+        $row.workingSetBytes = ($row.processes | Measure-Object workingSetBytes -Sum).Sum
+        $row.privateBytes = ($row.processes | Measure-Object privateBytes -Sum).Sum
+    })
+}
 if ($readerRows.Count -lt 2 -or $memoryRows.Count -lt 1) { throw 'Insufficient memory samples' }
 $verification = Get-Content -LiteralPath (Join-Path $root 'stdout.json') -Raw | ConvertFrom-Json
 $readerPids = @($readerRows.processId | Sort-Object -Unique)
@@ -80,6 +99,8 @@ $analysis = [ordered]@{
     }
     readerSamples = $readerRows.Count
     processSamples = $memoryRows.Count
+    processScope = $processScope
+    excludedProcessSamples = $excludedProcessSamples
     heapUsed = Describe @($readerRows | ForEach-Object { $_.heapUsedBytes })
     workingSet = Describe @($memoryRows | ForEach-Object { $_.workingSetBytes })
     privateBytes = Describe @($memoryRows | ForEach-Object { $_.privateBytes })
@@ -89,7 +110,7 @@ $analysis = [ordered]@{
     limitations = @(
         'Headless active decoding/session workload; no Compose frame timing or UI responsiveness measurement.',
         'Heap samples occur between completed cycles; core high-water uses the independent verifier poller.',
-        'Process sampling starts after launch and uses its own elapsed clock; all child processes are included.',
+        "Process sampling starts after launch and uses its own elapsed clock; scope: $processScope.",
         'Five-minute windows are descriptive evidence; no automatic memory plateau claim is made.',
         'This is the current development machine, not clean Win10/Win11 release acceptance.'
     )

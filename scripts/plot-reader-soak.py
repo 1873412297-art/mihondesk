@@ -21,6 +21,8 @@ def read_rows(path):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("directory", type=Path)
+    parser.add_argument("--main-processes-only", action="store_true",
+                        help="Explicitly plot only the recorded launcher and reader JVM; retain raw data unchanged.")
     args = parser.parse_args()
     result = read_json(args.directory / "result.json")
     if not result.get("accepted"):
@@ -30,14 +32,27 @@ def main():
     if len(memory_paths) != 1:
         raise SystemExit("Expected one process memory stream")
     memory = read_rows(memory_paths[0])
+    process_label = "Process tree"
+    if args.main_processes_only:
+        ownership = read_json(args.directory / "processes.json")
+        main_ids = {ownership["launcherPid"], result["soak"]["processId"]}
+        if not all(isinstance(pid, int) and pid > 0 for pid in main_ids):
+            raise SystemExit("Missing authoritative main process identity")
+        for row in memory:
+            members = [p for p in row["processes"] if p["processId"] in main_ids]
+            if not members:
+                raise SystemExit("Process sample contains no recorded main process")
+            for key in ("workingSetBytes", "privateBytes"):
+                row[key] = sum(p[key] for p in members)
+        process_label = "Launcher + reader JVM"
     if not reader or not memory:
         raise SystemExit("Memory evidence is empty")
     reader_time = [row["elapsedSeconds"] / 60 for row in reader]
     process_time = [row["elapsedSeconds"] / 60 for row in memory]
     mib = 1024 * 1024
     fig, axes = plt.subplots(3, 1, figsize=(11, 8), sharex=True, layout="constrained")
-    axes[0].plot(process_time, [row["workingSetBytes"] / mib for row in memory], label="Process tree working set")
-    axes[0].plot(process_time, [row["privateBytes"] / mib for row in memory], label="Process tree private bytes", alpha=0.8)
+    axes[0].plot(process_time, [row["workingSetBytes"] / mib for row in memory], label=f"{process_label} working set")
+    axes[0].plot(process_time, [row["privateBytes"] / mib for row in memory], label=f"{process_label} private bytes", alpha=0.8)
     axes[0].set_ylabel("MiB")
     axes[0].legend(loc="upper right")
     axes[1].plot(reader_time, [row["heapUsedBytes"] / mib for row in reader], label="JVM heap used")
