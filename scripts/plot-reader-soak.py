@@ -32,6 +32,8 @@ def main():
     if len(memory_paths) != 1:
         raise SystemExit("Expected one process memory stream")
     memory = read_rows(memory_paths[0])
+    memory = [row for row in memory if row.get("processes")
+              and row.get("workingSetBytes") is not None and row.get("privateBytes") is not None]
     process_label = "Process tree"
     if args.main_processes_only:
         ownership = read_json(args.directory / "processes.json")
