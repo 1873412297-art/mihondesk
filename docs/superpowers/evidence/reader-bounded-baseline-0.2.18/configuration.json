@@ -1,0 +1,19 @@
+{
+  "scope": "Existing main implementation with isolated experimental maximum heap; no cache candidate or GC/JFR/NMT logging",
+  "baselineProductionRevision": "de1b8bd6bb2312641fa1197abd9eb085cec32e02",
+  "equivalentMainRevision": "6dafdc522",
+  "executable": "D:\\my project\\mihon-w\\build\\reader-bounded-baseline\\app\\mihondesk.exe",
+  "outputDirectory": "D:\\my project\\mihon-w\\build\\reader-bounded-baseline\\full",
+  "configurationSha256": "1e87e294c30a2c770a924c42f0b77362dbe007fcf46816cdd1ee2d8b59ca6122",
+  "javaOptions": [
+    "java-options=-Djpackage.app-version=0.2.18",
+    "java-options=-Dcompose.application.resources.dir=$APPDIR\\resources",
+    "java-options=-Dcompose.application.configure.swing.globals=true",
+    "java-options=-Djava.net.useSystemProxies=true",
+    "java-options=-Dskiko.library.path=$APPDIR",
+    "java-options=-Xmx768m"
+  ],
+  "durationSeconds": 1800,
+  "appJarSha256": "9a77edcf86c5cdd82e7ef05ed3c4650c1166ab48ba19da379b18cc3c38a0dfaa",
+  "coreJarSha256": "4605d8f01a163aaf8533f8865bf14ce68a520c6f1d0e666cfa8d6f39a3d53b7b"
+}

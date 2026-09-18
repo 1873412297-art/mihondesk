@@ -1,0 +1,254 @@
+{
+  "identity": {
+    "executable": "D:\\my project\\mihon-w\\build\\reader-bounded-baseline\\app\\mihondesk.exe",
+    "executableSha256": "329B002304FA801D368A14C3875B92780C37BF81D3C101EFAA5FF8A8287AEF88",
+    "appJar": "D:\\my project\\mihon-w\\build\\reader-bounded-baseline\\app\\app\\desktop-app-ba517f3eb6dd17c97fed9dde3df2a9.jar",
+    "appJarSha256": "9A77EDCF86C5CDD82E7EF05ED3C4650C1166AB48BA19DA379B18CC3C38A0DFAA",
+    "buildMetadata": "version=0.2.18\nrevision=de1b8bd6bb2312641fa1197abd9eb085cec32e02\ndirty=false\n",
+    "fixtureSha256": "9FAF51D89D29B547F6DB4C54D3D27A5A2EBAA625961255AE0BB2BFA754DF7038",
+    "requestedSeconds": 1800,
+    "startedUtc": "2026-09-18T01:27:39.3670141Z",
+    "operatingSystem": {
+      "Caption": "Microsoft Windows 11 家庭版 Insider Preview 中文版",
+      "Version": "10.0.26220",
+      "BuildNumber": "26220"
+    },
+    "processor": [
+      {
+        "Name": "13th Gen Intel(R) Core(TM) i9-13980HX",
+        "NumberOfCores": 24,
+        "NumberOfLogicalProcessors": 32
+      }
+    ],
+    "physicalMemoryBytes": 33954439168
+  },
+  "soak": {
+    "processId": 65296,
+    "elapsedSeconds": 1803.135171801,
+    "cycles": 488,
+    "decodedTiles": 18544,
+    "heapHighWaterBytes": 397677216,
+    "samplesFile": "D:\\my project\\mihon-w\\build\\reader-bounded-baseline\\full\\reader-samples.jsonl"
+  },
+  "verifiedAssets": [
+    "standalone",
+    "directory",
+    "cbz",
+    "cbt",
+    "cb7",
+    "cbr",
+    "epub"
+  ],
+  "verifiedModes": [
+    "SINGLE_LTR",
+    "SINGLE_RTL",
+    "DUAL_LTR",
+    "DUAL_RTL",
+    "VERTICAL",
+    "WEBTOON"
+  ],
+  "distinctReaderPids": [
+    65296
+  ],
+  "continuity": {
+    "readerBoundariesMatchCompletedWorkload": true,
+    "readerFirstSampleSeconds": 0.000665,
+    "readerLastSampleSeconds": 1803.134011401,
+    "maxReaderSampleGapSeconds": 62.843,
+    "processFirstSampleSeconds": 0.88,
+    "processLastSampleSeconds": 1808.1,
+    "maxProcessSampleGapSeconds": 30.22,
+    "observedProcessIds": [
+      65296,
+      86288
+    ]
+  },
+  "readerSamples": 490,
+  "processSamples": 308,
+  "missingProcessSamples": [],
+  "processScope": "recorded launcher and reader JVM only; other child processes excluded",
+  "excludedProcessSamples": [],
+  "heapUsed": {
+    "samples": 490,
+    "minMiB": 55.373,
+    "medianMiB": 127.472,
+    "maxMiB": 379.255
+  },
+  "workingSet": {
+    "samples": 308,
+    "minMiB": 166.605,
+    "medianMiB": 489.568,
+    "maxMiB": 725.543
+  },
+  "privateBytes": {
+    "samples": 308,
+    "minMiB": 266.965,
+    "medianMiB": 561.6,
+    "maxMiB": 829.977
+  },
+  "coreHighWaterBytes": 171819520,
+  "cacheHighWaterBytes": 12601792,
+  "windows": [
+    {
+      "startMinute": 0,
+      "endMinute": 5.0,
+      "heapUsed": {
+        "samples": 87,
+        "minMiB": 66.306,
+        "medianMiB": 124.81,
+        "maxMiB": 298.068
+      },
+      "workingSet": {
+        "samples": 52,
+        "minMiB": 166.605,
+        "medianMiB": 482.213,
+        "maxMiB": 612.438
+      },
+      "privateBytes": {
+        "samples": 52,
+        "minMiB": 266.965,
+        "medianMiB": 555.123,
+        "maxMiB": 757.863
+      }
+    },
+    {
+      "startMinute": 5,
+      "endMinute": 10.0,
+      "heapUsed": {
+        "samples": 87,
+        "minMiB": 55.687,
+        "medianMiB": 123.852,
+        "maxMiB": 232.829
+      },
+      "workingSet": {
+        "samples": 52,
+        "minMiB": 385.699,
+        "medianMiB": 498.309,
+        "maxMiB": 706.332
+      },
+      "privateBytes": {
+        "samples": 52,
+        "minMiB": 448.398,
+        "medianMiB": 562.973,
+        "maxMiB": 821.852
+      }
+    },
+    {
+      "startMinute": 10,
+      "endMinute": 15.0,
+      "heapUsed": {
+        "samples": 87,
+        "minMiB": 55.5,
+        "medianMiB": 128.799,
+        "maxMiB": 379.255
+      },
+      "workingSet": {
+        "samples": 51,
+        "minMiB": 407.781,
+        "medianMiB": 489.438,
+        "maxMiB": 668.262
+      },
+      "privateBytes": {
+        "samples": 51,
+        "minMiB": 469.473,
+        "medianMiB": 558.516,
+        "maxMiB": 780.285
+      }
+    },
+    {
+      "startMinute": 15,
+      "endMinute": 20.0,
+      "heapUsed": {
+        "samples": 82,
+        "minMiB": 70.043,
+        "medianMiB": 135.665,
+        "maxMiB": 228.796
+      },
+      "workingSet": {
+        "samples": 52,
+        "minMiB": 448.52,
+        "medianMiB": 522.541,
+        "maxMiB": 712.773
+      },
+      "privateBytes": {
+        "samples": 52,
+        "minMiB": 512.133,
+        "medianMiB": 596.49,
+        "maxMiB": 818.535
+      }
+    },
+    {
+      "startMinute": 20,
+      "endMinute": 25.0,
+      "heapUsed": {
+        "samples": 57,
+        "minMiB": 55.373,
+        "medianMiB": 122.739,
+        "maxMiB": 254.671
+      },
+      "workingSet": {
+        "samples": 47,
+        "minMiB": 395.113,
+        "medianMiB": 459.281,
+        "maxMiB": 527.043
+      },
+      "privateBytes": {
+        "samples": 47,
+        "minMiB": 456.59,
+        "medianMiB": 520.719,
+        "maxMiB": 667.16
+      }
+    },
+    {
+      "startMinute": 25,
+      "endMinute": 30.0,
+      "heapUsed": {
+        "samples": 88,
+        "minMiB": 63.716,
+        "medianMiB": 131.475,
+        "maxMiB": 282.306
+      },
+      "workingSet": {
+        "samples": 52,
+        "minMiB": 390.281,
+        "medianMiB": 497.938,
+        "maxMiB": 689.059
+      },
+      "privateBytes": {
+        "samples": 52,
+        "minMiB": 451.598,
+        "medianMiB": 568.324,
+        "maxMiB": 825.84
+      }
+    },
+    {
+      "startMinute": 30,
+      "endMinute": 30.052252863350002,
+      "heapUsed": {
+        "samples": 2,
+        "minMiB": 98.922,
+        "medianMiB": 98.922,
+        "maxMiB": 98.922
+      },
+      "workingSet": {
+        "samples": 2,
+        "minMiB": 473.453,
+        "medianMiB": 599.498,
+        "maxMiB": 725.543
+      },
+      "privateBytes": {
+        "samples": 2,
+        "minMiB": 534.992,
+        "medianMiB": 682.484,
+        "maxMiB": 829.977
+      }
+    }
+  ],
+  "limitations": [
+    "Headless active decoding/session workload; no Compose frame timing or UI responsiveness measurement.",
+    "Heap samples occur between completed cycles; core high-water uses the independent verifier poller.",
+    "Process sampling starts after launch and uses its own elapsed clock; scope: recorded launcher and reader JVM only; other child processes excluded.",
+    "Five-minute windows are descriptive evidence; no automatic memory plateau claim is made.",
+    "This is the current development machine, not clean Win10/Win11 release acceptance."
+  ]
+}
