@@ -7,8 +7,10 @@ param(
     [string]$JcmdPath
 )
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'desktop-process-tree.ps1')
 $rootProcess = Get-Process -Id $ProcessId -ErrorAction Stop
 $expectedPath = $rootProcess.Path
+$expectedCreatedUtc = $rootProcess.StartTime.ToUniversalTime()
 if ([IO.Path]::GetFileName($expectedPath) -ne 'mihondesk.exe') { throw 'Target must be a running mihondesk executable' }
 $outputRoot = [IO.Path]::GetFullPath($OutputDirectory)
 New-Item -ItemType Directory -Path $outputRoot -Force | Out-Null
@@ -20,21 +22,20 @@ $nextHeap = $started
 $samples = [Collections.Generic.List[object]]::new()
 while (([DateTime]::UtcNow - $started).TotalMinutes -lt $DurationMinutes) {
     $currentRoot = Get-Process -Id $ProcessId -ErrorAction SilentlyContinue
-    if (-not $currentRoot -or $currentRoot.Path -ne $expectedPath) { break }
-    $processRows = @(Get-CimInstance Win32_Process -Property ProcessId,ParentProcessId,Name)
-    $treeIds = [Collections.Generic.HashSet[int]]::new()
-    $null = $treeIds.Add($ProcessId)
-    do {
-        $added = $false
-        foreach ($row in $processRows) {
-            if ($treeIds.Contains([int]$row.ParentProcessId) -and $treeIds.Add([int]$row.ProcessId)) { $added = $true }
-        }
-    } while ($added)
-    $members = @(foreach ($treeId in $treeIds) {
-        $item = Get-Process -Id $treeId -ErrorAction SilentlyContinue
+    if (-not $currentRoot -or $currentRoot.Path -ne $expectedPath -or
+        -not (Test-DesktopProcessIdentity $expectedCreatedUtc $currentRoot.StartTime)) { break }
+    $processRows = @(Get-CimInstance Win32_Process -Property ProcessId,ParentProcessId,Name,CreationDate)
+    $treeRows = @(Get-DesktopProcessTree -RootProcessId $ProcessId -RootCreatedUtc $expectedCreatedUtc -Rows $processRows)
+    if ($treeRows.Count -eq 0) { Start-Sleep -Seconds $IntervalSeconds; continue }
+    $members = @(foreach ($row in $treeRows) {
+        $item = Get-Process -Id $row.ProcessId -ErrorAction SilentlyContinue
         if ($item) {
+            try { $createdUtc = $item.StartTime.ToUniversalTime() } catch { continue }
+            if (-not (Test-DesktopProcessIdentity $row.CreationDate $createdUtc)) { continue }
             [pscustomobject]@{
-                processId = $treeId
+                processId = [int]$row.ProcessId
+                parentProcessId = [int]$row.ParentProcessId
+                createdUtc = $createdUtc.ToString('o')
                 name = $item.ProcessName
                 workingSetBytes = $item.WorkingSet64
                 privateBytes = $item.PrivateMemorySize64
@@ -54,7 +55,8 @@ while (([DateTime]::UtcNow - $started).TotalMinutes -lt $DurationMinutes) {
     if ($JcmdPath -and [DateTime]::UtcNow -ge $nextHeap) {
         foreach ($member in $members) {
             $candidate = Get-Process -Id $member.processId -ErrorAction SilentlyContinue
-            if (-not $candidate) { continue }
+            if (-not $candidate -or
+                -not (Test-DesktopProcessIdentity ([DateTime]$member.createdUtc) $candidate.StartTime)) { continue }
             try { $isJvm = @($candidate.Modules | Where-Object ModuleName -eq 'jvm.dll').Count -gt 0 }
             catch { $isJvm = $false }
             if ($isJvm) {
@@ -68,6 +70,9 @@ while (([DateTime]::UtcNow - $started).TotalMinutes -lt $DurationMinutes) {
 }
 [pscustomobject]@{
     executable = $expectedPath
+    rootProcessId = $ProcessId
+    rootCreatedUtc = $expectedCreatedUtc.ToString('o')
+    identityPolicy = 'Root PID plus creation time; every child starts no earlier than its parent; identities rechecked before sampling.'
     requestedMinutes = $DurationMinutes
     sampledSeconds = [Math]::Round(([DateTime]::UtcNow - $started).TotalSeconds, 2)
     samples = $samples.Count
