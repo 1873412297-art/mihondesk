@@ -321,6 +321,7 @@ class PageLoadCoordinator(
                     if (existing != null && !existing.cancelled) {
                         existing.visibleWaiters++
                         existing.visible = true
+                        notifyDemandChangedLocked()
                         existing to false
                     } else {
                         val fresh = Flight(
@@ -478,25 +479,33 @@ class PageLoadCoordinator(
             // Yield once so visible requests queued behind this job can register demand first,
             // then wait out any active visible load before touching the source or the ledger.
             yield()
-            awaitVisibleIdle()
+            awaitVisibleIdle(flight, frame.pageId)
             if (!flight.cancelled) runFlight(frame, flight)
         }
     }
 
-    private suspend fun awaitVisibleIdle() {
+    private suspend fun awaitVisibleIdle(flight: Flight, pageId: PageId) {
         while (true) {
             val signal = synchronized(lock) {
-                if (visibleDemand.isEmpty()) return
+                if (flight.visible || flight.cancelled) return
+                val hasOtherDemand = visibleDemand.any { (id, count) -> id != pageId && count > 0 }
+                if (!hasOtherDemand) return
                 idleSignal
             }
             signal.await()
         }
     }
 
+    private fun notifyDemandChangedLocked() {
+        val signal = idleSignal
+        idleSignal = CompletableDeferred()
+        signal.complete(Unit)
+    }
+
     private fun demandUp(pageId: PageId) {
         synchronized(lock) {
-            if (visibleDemand.isEmpty()) idleSignal = CompletableDeferred()
             visibleDemand.merge(pageId, 1, Int::plus)
+            notifyDemandChangedLocked()
         }
     }
 
@@ -504,7 +513,7 @@ class PageLoadCoordinator(
         synchronized(lock) {
             val count = (visibleDemand[pageId] ?: 0) - 1
             if (count <= 0) visibleDemand.remove(pageId) else visibleDemand[pageId] = count
-            if (visibleDemand.isEmpty()) idleSignal.complete(Unit)
+            notifyDemandChangedLocked()
         }
     }
 

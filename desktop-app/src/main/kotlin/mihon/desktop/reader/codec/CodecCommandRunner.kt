@@ -8,6 +8,7 @@ import java.io.InputStream
 import java.nio.file.Path
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeoutException
 
 data class CodecCommand(
     val executable: Path,
@@ -29,7 +30,12 @@ fun interface CodecCommandRunner {
 }
 
 object ProcessCodecCommandRunner : CodecCommandRunner {
-    override suspend fun run(command: CodecCommand): CodecCommandResult = runInterruptible(Dispatchers.IO) {
+    override suspend fun run(command: CodecCommand): CodecCommandResult = run(command, ProcessBuilder::start)
+
+    internal suspend fun run(
+        command: CodecCommand,
+        startProcess: (ProcessBuilder) -> Process,
+    ): CodecCommandResult = runInterruptible(Dispatchers.IO) {
         val executable = command.executable.toAbsolutePath().normalize()
         val codecHome = requireNotNull(executable.parent) { "codec executable must have a parent directory" }
         val processBuilder = ProcessBuilder(listOf(executable.toString()) + command.arguments)
@@ -41,7 +47,7 @@ object ProcessCodecCommandRunner : CodecCommandRunner {
             this["PATH"] = codecHome.toString()
         }
         val process = try {
-            processBuilder.start()
+            startProcess(processBuilder)
         } catch (error: IOException) {
             throw ReaderFailure.CorruptImage(error)
         }
@@ -51,16 +57,62 @@ object ProcessCodecCommandRunner : CodecCommandRunner {
         val stderr = CompletableFuture.supplyAsync {
             process.errorStream.readBounded(command.maxStderrBytes, "codec stderr")
         }
+        var failure: Throwable? = null
         try {
             if (!process.waitFor(command.timeoutMillis, TimeUnit.MILLISECONDS)) {
                 throw ReaderFailure.CorruptImage(IllegalStateException("codec process timed out"))
             }
             CodecCommandResult(process.exitValue(), stdout.get(), stderr.get())
+        } catch (error: Throwable) {
+            failure = error
+            throw error
         } finally {
             if (process.isAlive) {
-                process.descendants().forEach { it.destroyForcibly() }
-                process.destroyForcibly()
+                try {
+                    terminateAndWait(process)
+                } catch (cleanup: Throwable) {
+                    if (failure == null) throw cleanup
+                    failure.addSuppressed(cleanup)
+                }
             }
+        }
+    }
+
+    private fun terminateAndWait(process: Process) {
+        val children = process.descendants().use { it.toList() }
+        children.forEach { it.destroyForcibly() }
+        process.destroyForcibly()
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(3)
+        var interrupted = Thread.interrupted()
+        fun awaitExit(wait: (Long) -> Boolean) {
+            while (true) {
+                val remaining = deadline - System.nanoTime()
+                if (remaining <= 0) throw IOException("codec process did not exit after termination")
+                try {
+                    if (wait(remaining)) return
+                } catch (_: InterruptedException) {
+                    // Cancellation interrupts the worker, but its child must relinquish the request
+                    // directory before withEncodedInput removes it. Restore the interrupt afterwards.
+                    interrupted = true
+                }
+            }
+        }
+        try {
+            awaitExit { process.waitFor(it, TimeUnit.NANOSECONDS) }
+            children.forEach { child ->
+                if (child.isAlive) {
+                    awaitExit { remaining ->
+                        try {
+                            child.onExit().get(remaining, TimeUnit.NANOSECONDS)
+                            true
+                        } catch (_: TimeoutException) {
+                            false
+                        }
+                    }
+                }
+            }
+        } finally {
+            if (interrupted) Thread.currentThread().interrupt()
         }
     }
 
