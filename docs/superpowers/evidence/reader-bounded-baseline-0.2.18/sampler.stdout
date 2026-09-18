@@ -1,0 +1,14 @@
+{
+  "executable": "D:\\my project\\mihon-w\\build\\reader-bounded-baseline\\app\\mihondesk.exe",
+  "rootProcessId": 86288,
+  "rootCreatedUtc": "2026-09-18T01:27:41.5179275Z",
+  "identityPolicy": "Root PID plus creation time; every child starts no earlier than its parent; identities rechecked before sampling.",
+  "requestedMinutes": 32,
+  "sampledSeconds": 1813.1,
+  "samples": 308,
+  "maxWorkingSetBytes": 760786944.0,
+  "maxPrivateBytes": 870293504.0,
+  "samplesPath": "D:\\my project\\mihon-w\\build\\reader-bounded-baseline\\full\\process-memory-20260918-012741.jsonl",
+  "heapPath": null,
+  "note": "Process-tree memory sampling only; this does not prove active reading, frame times, or UI responsiveness."
+}
