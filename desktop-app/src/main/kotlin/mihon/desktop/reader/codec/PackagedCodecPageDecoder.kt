@@ -21,6 +21,7 @@ import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.Comparator
+import java.util.concurrent.TimeUnit
 
 class PackagedCodecPageDecoder(
     private val budget: BoundedReaderMemoryBudget,
@@ -39,7 +40,7 @@ class PackagedCodecPageDecoder(
                     add("%w\t%h\t%T\t%[channels]\n")
                     add("info:")
                 },
-                workingDirectory = work,
+                workingDirectory = temporaryRoot,
                 timeoutMillis = PROBE_TIMEOUT_MILLIS,
                 maxStdoutBytes = METADATA_OUTPUT_LIMIT,
             ),
@@ -134,7 +135,7 @@ class PackagedCodecPageDecoder(
                     add("BGRA:-")
                 }
                 val result = runner.run(
-                    command(arguments, work, DECODE_TIMEOUT_MILLIS, outputBytes),
+                    command(arguments, temporaryRoot, DECODE_TIMEOUT_MILLIS, outputBytes),
                 )
                 ensureSuccess(result)
                 CodecWorkerProtocol.validateBgraPayload(width, height, result.stdout.size.toLong())
@@ -164,6 +165,7 @@ class PackagedCodecPageDecoder(
     ): T = withContext(Dispatchers.IO) {
         Files.createDirectories(temporaryRoot)
         val work = Files.createTempDirectory(temporaryRoot, "request-")
+        var blockCompleted = false
         try {
             val encoded = work.resolve("page.$extension")
             input.use { bounded ->
@@ -175,9 +177,15 @@ class PackagedCodecPageDecoder(
                     }
                 }
             }
-            block(encoded, work)
+            val result = block(encoded, work)
+            blockCompleted = true
+            result
         } finally {
-            deleteTree(work)
+            try {
+                deleteTree(work)
+            } catch (cleanup: Throwable) {
+                if (!blockCompleted) throw cleanup
+            }
         }
     }
 
@@ -218,8 +226,24 @@ class PackagedCodecPageDecoder(
 
     private fun deleteTree(root: Path) {
         if (!Files.exists(root)) return
-        Files.walk(root).use { paths ->
-            paths.sorted(Comparator.reverseOrder()).forEach { Files.deleteIfExists(it) }
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(3)
+        var delayMs = 10L
+        while (true) {
+            try {
+                Files.walk(root).use { paths ->
+                    paths.sorted(Comparator.reverseOrder()).forEach { Files.deleteIfExists(it) }
+                }
+                return
+            } catch (error: IOException) {
+                if (System.nanoTime() >= deadline) throw error
+                try {
+                    Thread.sleep(delayMs)
+                } catch (_: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                    throw error
+                }
+                delayMs = minOf(delayMs * 2, 100L)
+            }
         }
     }
 

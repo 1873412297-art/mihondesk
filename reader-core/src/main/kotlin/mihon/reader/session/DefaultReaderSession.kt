@@ -281,7 +281,7 @@ class DefaultReaderSession(
         val nextIndex = nextLogicalIndex(current, direction)
         if (nextIndex in current.pages.indices) {
             navigationDirection = direction
-            _state.value = current.reduce(ReaderAction.SetViewportAnchor(ReaderPosition(nextIndex)))
+            _state.value = current.reduce(ReaderAction.SelectPage(nextIndex))
             updateContentPositionLocked()
             requestVisibleLocked()
             submitProgressLocked()

@@ -11,6 +11,11 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -40,10 +45,27 @@ internal fun ContinuousReader(
     pageSizes: Map<PageId, PageSize> = emptyMap(),
 ) {
     val initialAnchor = state.viewportAnchor
-    val listState = rememberLazyListState(
-        initialFirstVisibleItemIndex = initialAnchor.pageIndex.coerceIn(state.pages.indices),
-        initialFirstVisibleItemScrollOffset = initialAnchor.offsetPixels,
-    )
+    val listState = key(state.chapterId) {
+        rememberLazyListState(
+            initialFirstVisibleItemIndex = initialAnchor.pageIndex.coerceIn(state.pages.indices),
+            initialFirstVisibleItemScrollOffset = initialAnchor.offsetPixels,
+        )
+    }
+    // Initial composition already restores the current anchor. Only subsequent explicit navigation
+    // requests move the list; delayed viewport echoes must never cancel a user's scroll or fling.
+    var handledRequest by remember(listState) { mutableStateOf(state.navigationRequest) }
+    LaunchedEffect(listState, state.navigationRequest) {
+        val request = state.navigationRequest
+        if (request != handledRequest) {
+            handledRequest = request
+            if (request != null) {
+                listState.scrollToItem(
+                    request.position.pageIndex.coerceIn(state.pages.indices),
+                    request.position.offsetPixels,
+                )
+            }
+        }
+    }
     val gap = if (state.mode == ReadingMode.WEBTOON) 0.dp else ReaderLayout.DEFAULT_CONTINUOUS_GAP_PIXELS.dp
     val scaleMode = if (state.mode == ReadingMode.WEBTOON) ScaleMode.FIT_WIDTH else state.scaleMode
 

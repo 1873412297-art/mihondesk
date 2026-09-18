@@ -320,6 +320,20 @@ class PageLoadCoordinatorTest {
     }
 
     @Test
+    fun `visible request for page with queued prefetch flight completes without deadlock`() = runTest {
+        val harness = Harness(capacity = 4096)
+        val coordinator = harness.coordinator(backgroundScope)
+        val source = FakeChapterSource(1, 10)
+        coordinator.openChapter(source)
+
+        coordinator.updatePosition(0, listOf(source.pageId(0)), ReadingMode.SINGLE_LTR, NavigationDirection.FORWARD)
+        val visible = async { coordinator.loadVisible(source.pageId(1)) }
+        runCurrent()
+
+        visible.await()
+    }
+
+    @Test
     fun `concurrent different page prefetches all complete within the ledger`() = runTest {
         val harness = Harness(capacity = 1024)
         val coordinator = harness.coordinator(backgroundScope)

@@ -28,6 +28,9 @@ data class ReaderSessionError(
     val cause: Throwable? = null,
 )
 
+/** A navigation command, distinct from viewport observations reported by a scrolling UI. */
+data class ReaderNavigationRequest(val sequence: Long, val position: ReaderPosition)
+
 data class ReaderState(
     val loadState: ReaderLoadState = ReaderLoadState.Idle,
     val chapterId: Long? = null,
@@ -48,6 +51,7 @@ data class ReaderState(
     val cacheMetrics: CacheMetrics = EMPTY_CACHE_METRICS,
     val foreground: Boolean = true,
     val contentVisible: Boolean = true,
+    val navigationRequest: ReaderNavigationRequest? = null,
 ) {
     init {
         require(selectedIndex >= 0) { "selectedIndex must not be negative" }
@@ -71,6 +75,10 @@ data class ReaderState(
                 viewportAnchor = ReaderPosition(action.index),
                 visiblePages = listOf(pages[action.index].id),
                 pan = if (action.index == selectedIndex) pan else ReaderPan(0f, 0f),
+                navigationRequest = ReaderNavigationRequest(
+                    sequence = (navigationRequest?.sequence ?: 0L) + 1L,
+                    position = ReaderPosition(action.index),
+                ),
             )
         }
         is ReaderAction.SetViewportAnchor -> {
