@@ -8,6 +8,12 @@ $readerRows = @(Get-Content -LiteralPath (Join-Path $root 'reader-samples.jsonl'
 $memoryFile = @(Get-ChildItem -LiteralPath $root -Filter 'process-memory-*.jsonl')
 if ($memoryFile.Count -ne 1) { throw 'Expected exactly one process-memory stream' }
 $memoryRows = @(Get-Content -LiteralPath $memoryFile[0].FullName | ForEach-Object { $_ | ConvertFrom-Json })
+$missingProcessSamples = @($memoryRows | Where-Object {
+    @($_.processes).Count -eq 0 -or $null -eq $_.workingSetBytes -or $null -eq $_.privateBytes
+} | Select-Object utc,elapsedSeconds)
+$memoryRows = @($memoryRows | Where-Object {
+    @($_.processes).Count -gt 0 -and $null -ne $_.workingSetBytes -and $null -ne $_.privateBytes
+})
 $processScope = 'process tree'
 $excludedProcessSamples = @()
 if ($MainProcessesOnly) {
@@ -99,6 +105,7 @@ $analysis = [ordered]@{
     }
     readerSamples = $readerRows.Count
     processSamples = $memoryRows.Count
+    missingProcessSamples = $missingProcessSamples
     processScope = $processScope
     excludedProcessSamples = $excludedProcessSamples
     heapUsed = Describe @($readerRows | ForEach-Object { $_.heapUsedBytes })

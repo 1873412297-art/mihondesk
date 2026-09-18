@@ -32,7 +32,7 @@ while (([DateTime]::UtcNow - $started).TotalMinutes -lt $DurationMinutes) {
         if ($item) {
             try { $createdUtc = $item.StartTime.ToUniversalTime() } catch { continue }
             if (-not (Test-DesktopProcessIdentity $row.CreationDate $createdUtc)) { continue }
-            [pscustomobject]@{
+            $memberSample = [pscustomobject]@{
                 processId = [int]$row.ProcessId
                 parentProcessId = [int]$row.ParentProcessId
                 createdUtc = $createdUtc.ToString('o')
@@ -41,8 +41,12 @@ while (([DateTime]::UtcNow - $started).TotalMinutes -lt $DurationMinutes) {
                 privateBytes = $item.PrivateMemorySize64
                 cpuSeconds = $item.CPU
             }
+            if (-not $item.HasExited) { $memberSample }
         }
     })
+    # All processes can exit between identity enumeration and metric collection.
+    # An unobserved tree is not a zero-byte measurement.
+    if ($members.Count -eq 0) { Start-Sleep -Seconds $IntervalSeconds; continue }
     $sample = [pscustomobject]@{
         utc = [DateTime]::UtcNow.ToString('o')
         elapsedSeconds = [Math]::Round(([DateTime]::UtcNow - $started).TotalSeconds, 2)
