@@ -23,16 +23,16 @@ AI 辅助开发的开源项目 · 基于 Mihon · Kotlin / Compose Desktop
 
 ## 下载与安装
 
-当前版本：**0.2.13**。面向 **Windows 10 22H2 / Windows 11，x64**，发行包已内置运行环境，无需另装 Java。
+当前版本：**0.2.18**。面向 **Windows 10 22H2 / Windows 11，x64**，发行包已内置运行环境，无需另装 Java。
 
 程序、安装包和快捷方式现已统一命名为 **mihondesk**。安装版继续使用原有数据目录，支持从 MihonW 升级。
 
 | 下载 | 适用方式 |
 | --- | --- |
-| **[EXE 安装包](https://github.com/1873412297-art/mihondesk/releases/download/v0.2.13/mihondesk-0.2.13.exe)** | 推荐使用，下载后按向导安装 |
-| [MSI 安装包](https://github.com/1873412297-art/mihondesk/releases/download/v0.2.13/mihondesk-0.2.13.msi) | 需要 MSI 安装方式时使用 |
-| [便携 ZIP](https://github.com/1873412297-art/mihondesk/releases/download/v0.2.13/mihondesk-0.2.13-windows-x64-portable.zip) | 完整解压到可写目录，运行其中的 `mihondesk.exe` |
-| [SHA-256 校验文件](https://github.com/1873412297-art/mihondesk/releases/download/v0.2.13/SHA256SUMS.txt) | 校验下载文件的完整性 |
+| **[EXE 安装包](https://github.com/1873412297-art/mihondesk/releases/download/v0.2.18/mihondesk-0.2.18.exe)** | 推荐使用，下载后按向导安装 |
+| [MSI 安装包](https://github.com/1873412297-art/mihondesk/releases/download/v0.2.18/mihondesk-0.2.18.msi) | 需要 MSI 安装方式时使用 |
+| [便携 ZIP](https://github.com/1873412297-art/mihondesk/releases/download/v0.2.18/mihondesk-0.2.18-windows-x64-portable.zip) | 完整解压到可写目录，运行其中的 `mihondesk.exe` |
+| [SHA-256 校验文件](https://github.com/1873412297-art/mihondesk/releases/download/v0.2.18/SHA256SUMS.txt) | 校验下载文件的完整性 |
 
 **首次使用**：发行包不预装在线图源或扩展仓库，请自行添加仓库或安装扩展。本地文件阅读无需安装图源。升级会保留已有书架、设置和阅读数据。
 
@@ -56,14 +56,16 @@ AI 辅助开发的开源项目 · 基于 Mihon · Kotlin / Compose Desktop
 3. **阅读在线内容**：在浏览页安装扩展包，再选择图源。安装入口支持 `.mext`，也可尝试转换受支持的扩展 `.apk`。
 4. **保留阅读数据**：使用备份功能定期导出。备份不包含已下载的漫画图片。
 
-## 0.2.13 更新
+## 0.2.18 更新
 
-- 修复下载队列与本地文件状态不同步、离线章节丢失后的重试，以及特定图源图片 CDN 跳转被拒绝的问题。
-- 支持选择下载目录，设置页展示当前使用路径。
-- 修复深色与纯黑主题下阅读器工具栏、更新日历文字不清楚的问题。
-- 补齐阅读器、章节筛选、下载提示、应用锁和扩展管理的中文，统一简繁体用词与日期格式。
+- **长章节与真实窗口渲染**：支持 256+ 页超长章节流畅阅读与平滑翻页，修复可见请求与排队预取任务重叠时的优先级提权死锁；优化 Windows 下编解码进程异步终止与临时目录文件句柄清理，消除目录占用异常。
+- **连续阅读滚动定位**：修复连续阅读模式（纵向/条漫）在首帧组合后外部跳页或跨章时未能正确滚动至锚点位置的问题，并隔离用户手势与视口回传。
+- **应用内自动更新与便携版无损升级**：新增在应用内检查版本、验证发布清单与断点校验下载；便携版支持平滑退出并交接更新脚本无损替换应用，具备事务回滚与启动保护。
+- **备份恢复与进度可控性**：备份恢复支持实时进度、随时取消并提供原子回滚保证；数据库版本迁移前自动建立隔离快照备份。
+- **扩展管理与图源稳定性**：支持扩展下载和安装过程的随时取消控制；修复图源分页失败重试时已选状态与已加载条目保留；图源筛选器草稿独立隔离，仅在明确点击应用时生效。
+- **Windows 桌面体验与动效**：重构动画节奏与帧率平滑性，引入 ANGLE 加速；下载通知频率收敛，移除弹窗打扰；强化离线章节下载状态与并发标识保护。
 
-详见[本版发布说明](https://github.com/1873412297-art/mihondesk/releases/tag/v0.2.13)和[更新日志](CHANGELOG.md)。
+详见[本版发布说明](https://github.com/1873412297-art/mihondesk/releases/tag/v0.2.18)和[更新日志](CHANGELOG.md)。
 
 ## 当前限制
 
