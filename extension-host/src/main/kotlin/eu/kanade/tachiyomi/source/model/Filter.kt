@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.source.model
 sealed class Filter<T>(val name: String, var state: T) {
     open class Header(name: String) : Filter<Any>(name, 0)
     open class Separator(name: String = "") : Filter<Any>(name, 0)
+
     // Kept concrete (open) rather than abstract: real extension APKs (observed in
     // MangaPlus v1.6.66, 2026-09-20 E2E matrix) contain bytecode that instantiates
     // Filter.Select directly via the synthetic default-args constructor
