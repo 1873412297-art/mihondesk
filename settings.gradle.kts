@@ -28,6 +28,13 @@ dependencyResolutionManagement {
 
 enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
 
+plugins {
+    // Allows CI to auto-provision the JetBrains Runtime 21 toolchain required by
+    // :desktop-webview-host (JCEF); local builds find the installed JBR and never
+    // hit the resolver.
+    id("org.gradle.toolchains.foojay-resolver-convention") version "1.0.0"
+}
+
 rootProject.name = "Mihon"
 include(":app")
 include(":desktop-app")
