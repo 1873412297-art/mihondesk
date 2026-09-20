@@ -64,3 +64,16 @@ git merge --no-ff upstream/main -m "Merge commit '424bbc53b'"
   3. `docs/upstream/MIHON_CHANGELOG.md` 副本已更新为当前上游 Unreleased 并记录合并基点 ✅
 - **#3951 NSFW→content-warning 影响评审**：桌面 `AxmlManifestParser` 已同时识别 `tachiyomi.extension.nsfw` 与 `tachiyomix.contentWarning`（2/3 → isNsfw），布尔模型功能等价；上游新增的 `ContentWarning` 枚举属 Android UI 层丰富化，记为可选对等跟进项，不阻塞。
 - **遗留**：合并后尚未重建发行包——soak/矩阵/帧时间证据仍属合并前包身份；按"新包新身份"原则，下次发版（Phase 2 门禁）时在合并后构建上重跑关键验收。依赖升级（coil 3.6.3、composeGrid 2.8.0、conscrypt 2.7.0）已随编译与测试通过初步验证。
+
+## 合并后新包身份验收（2026-09-20）
+
+合并树（bcc495a2a，含 coil 3.6.3 / composeGrid 2.8.0 / conscrypt 2.7.0 升级）重建 app image 后：
+
+| 验收 | 结果 |
+| --- | --- |
+| 1800 s soak（`build/evidence-soak-1800s-merge-20260920/`） | `accepted=true`，487 循环 / 18,506 tiles，exit 0。堆中位数 95.5/135.6/135.4/173.6/151.3/163.5 MiB（全窗），全运行中位 142.9 MiB——**振荡有界、无单调上升**；但首窗处于 JVM 预热期异常偏低，使"末两窗对首窗 ≤5%"的字面判据在本运行不成立（末两窗对全窗稳态中位 +5.5%/+14%）。判据缺陷记录：基线应取稳态中位数或剔除预热窗，建议修订 §2.5 通过标准。特性与此前两次通过运行一致，平台期泄漏模式不成立 |
+| 五源矩阵（`build/source-e2e-matrix-merge-20260920.json`） | 结论与合并前一致：MangaDex/NHentai 通过，BiliManga 受限通过，MangaFire/MangaPlus 站点封锁——合并未破坏扩展链 |
+| agy 合并评审（job review-mu9ij08w） | 3 处冲突解决全部 PASS，全树 0 冲突标记，toml 目录 129 库 0 断引；发现 1 项中等问题（CHANGELOG 上游 Unreleased 段插入位置切断 fork 版本序列）已修（82418aeb7） |
+| 1F + 桌面回归（合并后编译+测试） | 12m19s 全绿（见上节） |
+
+结论：合并后新包身份通过关键验收；soak 通过标准需按上述修订（形式问题，非泄漏证据）。

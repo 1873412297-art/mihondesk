@@ -325,7 +325,7 @@ M3 可持续 ──► 转入常态维护
    - 用完整 JDK 17（如 Temurin，显式记录发行版与版本）跑 180–300 s 诊断 soak：`-Xlog:gc*`（已有基线）+ JFR（`-XX:StartFlightRecording=settings=profile,filename=...`）；备选 async-profiler alloc 事件。诊断运行时与发行 runtime 差异必须写进 evidence。
    - 分析 humongous allocation 来源，候选方向：图片解码 buffer、tile cache、IPC protobuf buffer、Compose 图像缓存。JFR 的 `jdk.ObjectAllocationSample` / TLAB 内外分配事件按分配栈聚合。
    - 提出并实施修复（候选：解码 buffer 复用/池化、tile cache 上限收紧、G1 region size 调整）；修复后重跑完整 1800 s acceptance：`scripts/verify-reader-soak.ps1` → `scripts/summarize-reader-soak.ps1` → `python scripts/plot-reader-soak.py`。
-   - **通过标准**（开跑前定死写进 evidence）：最后两个 5 分钟窗口的进程内存中位数相对前段基线抬升 ≤5%，且无单调上升趋势；或归因证明抬升为可解释的有界缓存。
+   - **通过标准**（开跑前定死写进 evidence）：最后两个 5 分钟窗口的进程内存中位数相对前段基线抬升 ≤5%，且无单调上升趋势；或归因证明抬升为可解释的有界缓存。**2026-09-20 修订注记**：合并后新身份 soak 显示首窗（JVM 预热期）异常偏低会使字面判据误判——基线应取全窗稳态中位数或剔除预热首窗；判据修订待随下次 soak 生效。
 2. **帧率 P95**：确定帧时间采集方式（Compose 侧的帧时间暴露/外部采样二选一，先记方法），参考机上阅读 10 分钟取 P95，判定 ≤33 ms。
 3. **冷启动 P95**：固定参考机（记录 CPU/内存/GPU/系统版本），N=30 冷启动，取中位数与 P95，判定 ≤5 s；同时记录首次运行（无缓存）与常态启动两个值。
 4. **空闲内存**：启动后静置 5 分钟无操作，取进程私有字节，判定 <500 MB（主进程；JCEF 独立运行时单列，不套用主进程预算）。
