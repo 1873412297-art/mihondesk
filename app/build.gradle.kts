@@ -345,6 +345,9 @@ tasks.withType<Test>().configureEach {
     providers.gradleProperty("mihonPlan2FixtureDir").orNull?.let { output ->
         systemProperty("mihon.plan2.fixtureDir", output)
     }
+    providers.gradleProperty("mihonPlan2DesktopExport").orNull?.let { export ->
+        systemProperty("mihon.plan2.desktopExport", export)
+    }
     doFirst {
         val commandLinePatterns = filter.javaClass.methods
             .singleOrNull { it.name == "getCommandLineIncludePatterns" && it.parameterCount == 0 }
