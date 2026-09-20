@@ -13,7 +13,11 @@ import java.time.ZoneId
 class MangaBakaTracker(
     baseUrl: String = "https://api.mangabaka.org",
     httpClient: OkHttpClient = defaultTrackerHttpClient(),
-) : JsonTokenTracker(11L, "MangaBaka", baseUrl, httpClient) {
+) : JsonTokenTracker(11L, "MangaBaka", baseUrl, httpClient, "x-api-key", "") {
+    // MangaBaka PATs (mb-...) are sent as `x-api-key: <token>` per the official API
+    // spec (https://mangabaka.org/api.json); `Authorization: Bearer` is rejected for
+    // PATs. Verified against spec 2026-09-20; production confirmation pending a real
+    // user token (1B).
     override val profilePath = "/v1/my/profile"
     override fun account(profile: JsonObject): String? = profile.tokenObject("data").let {
         it.tokenText("preferred_username") ?: it.tokenText("nickname") ?: it.tokenText("id")
