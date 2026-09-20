@@ -41,8 +41,16 @@ tasks.test { useJUnitPlatform() }
 tasks.register<Copy>("stageBrowserRuntime") {
     doFirst {
         val release = browserJava.get().metadata.installationPath.file("release").asFile.readText()
-        check(release.contains("JBRSDK-21.0.10+1-1163.110-jcef")) {
-            "Use the validated JBRSDK 21.0.10+1-1163.110-jcef browser runtime"
+        // Invariants: JetBrains Runtime, Java 21, JCEF bundled. The exact build is
+        // intentionally not pinned: CI provisions the toolchain via foojay, and the
+        // resolved build may drift over time.
+        val implementor = release.lineSequence()
+            .firstOrNull { it.startsWith("IMPLEMENTOR_VERSION=") }
+            ?.substringAfter("=")
+            ?.trim('"')
+            .orEmpty()
+        check("JetBrains" in release && "21." in release && "-jcef" in implementor) {
+            "Browser runtime must be a JetBrains Runtime 21 with JCEF, got: $implementor"
         }
     }
     from(browserJava.map { it.metadata.installationPath }) {
