@@ -16,7 +16,7 @@
 
 ## 与本地工作树的重叠
 
-- 唯一重叠文件：`app/build.gradle.kts`（本地未提交：测试属性转发 3 行；上游亦有改动）。合并前需处理（提交或 stash）。
+- 唯一重叠文件：`app/build.gradle.kts`（本地曾未提交：测试属性转发 3 行，现已提交 a16ffe450；上游亦有改动）。合并前需处理（提交或 stash）。
 - 上游不感知 `desktop-*`/`extension-host`/`extension-sdk` 模块，理论上无直接冲突源。
 
 ## 需要人工评审的上游变更（对 fork 有外溢影响）

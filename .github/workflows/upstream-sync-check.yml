@@ -128,8 +128,15 @@ jobs:
                           if ok_sha and sha:
                               upstream_tags[t] = sha
 
+              import re as _re
+              release_tag = _re.compile(r'^v\d+\.\d+\.\d+$')
               candidates = []
               for tag_name, sha in upstream_tags.items():
+                  if not release_tag.match(tag_name):
+                      continue  # skip experimental/backport/prerelease tags
+                  ok_merged, _ = run_git_allow_fail(['merge-base', '--is-ancestor', sha, 'upstream/main'])
+                  if not ok_merged:
+                      continue  # tag is not on the mainline release history
                   ok, out = run_git_allow_fail(['log', '-1', '--format=%ct|%cI', sha])
                   if ok and out and '|' in out:
                       parts = out.split('|')
@@ -163,20 +170,26 @@ jobs:
                   ref_date = upstream_tip_date
                   ref_ts = upstream_tip_ts
 
-              # 6. Evaluate if overdue (older than 14 days)
+              # 6. Evaluate if overdue: age of the oldest unmerged upstream reference
+              # (time since ref_ts), NOT the merge-base-to-ref commit interval - a fresh
+              # upstream release must not be flagged overdue on day zero.
               FOURTEEN_DAYS_SECONDS = 14 * 86400
-              diff_seconds = ref_ts - merge_base_ts
-              diff_days = diff_seconds / 86400.0
               now_ts = int(time.time())
               days_since_ref = (now_ts - ref_ts) / 86400.0
+              pending_span_days = (ref_ts - merge_base_ts) / 86400.0
 
               has_upstream_changes = (upstream_commits_count > 0) or has_newer_tag
-              is_overdue = has_upstream_changes and ((diff_seconds > FOURTEEN_DAYS_SECONDS) or (days_since_ref > 14.0))
+              is_overdue = has_upstream_changes and ((now_ts - ref_ts) > FOURTEEN_DAYS_SECONDS)
 
               # 7. Compare ExtensionLoader supported lib versions
               head_lib_version = get_supported_lib_versions('HEAD')
               upstream_lib_version = get_supported_lib_versions('upstream/main')
-              lib_version_diff = (head_lib_version != upstream_lib_version)
+
+              def _parsed(v):
+                  return not (v.startswith('Unavailable') or v.startswith('Unknown'))
+
+              lib_version_diff = (_parsed(head_lib_version) and _parsed(upstream_lib_version)
+                                  and head_lib_version != upstream_lib_version)
 
               # 8. Print clean summary line
               status_label = "OVERDUE" if is_overdue else "UP-TO-DATE"
@@ -184,7 +197,8 @@ jobs:
                   f"Upstream sync status: {status_label}. "
                   f"Merge-base: {merge_base_sha[:9]} ({merge_base_date}), "
                   f"Reference ({ref_type}): {ref_name} ({ref_date}), "
-                  f"Diff: {diff_days:.1f} days (threshold: 14 days), "
+                  f"Unmerged-reference age: {days_since_ref:.1f} days (threshold: 14), "
+                  f"Pending span: {pending_span_days:.1f} days, "
                   f"Upstream commits since merge-base: {upstream_commits_count}, "
                   f"ExtensionLoader libVersion mismatch: {lib_version_diff}."
               )
@@ -229,7 +243,7 @@ jobs:
                   - **Newest Upstream Tag**: `{newest_tag}` ({newest_tag_date})
                   - **Our Merge-Base**: `{merge_base_sha}` ({merge_base_date})
                   - **Upstream Reference**: `{ref_type}` `{ref_name}` ({ref_date})
-                  - **Elapsed Time Difference**: **{diff_days:.1f} days** (Threshold: 14 days)
+                  - **Unmerged Reference Age**: **{days_since_ref:.1f} days** (Threshold: 14 days)
                   - **Upstream Commits Since Merge-Base**: **{upstream_commits_count} commits**
                   - **ExtensionLoader Lib Versions**:
                     - `HEAD`: `{head_lib_version}`
