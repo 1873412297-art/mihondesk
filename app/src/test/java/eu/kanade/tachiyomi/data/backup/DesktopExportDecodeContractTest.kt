@@ -29,7 +29,9 @@ class DesktopExportDecodeContractTest {
         val configured = System.getProperty(DESKTOP_EXPORT_PROPERTY)?.takeIf(String::isNotBlank)
         assumeTrue(configured != null, "Desktop export decode contract is disabled during normal unit-test runs")
         val export = Path.of(checkNotNull(configured)).toAbsolutePath().normalize()
-        assumeTrue(Files.isRegularFile(export), "Desktop export fixture missing at $export")
+        // Explicitly configured but missing: that is a configuration error and must
+        // fail the build, not silently skip (assumeTrue would report SKIPPED).
+        require(Files.isRegularFile(export)) { "Desktop export fixture missing at $export" }
 
         val backup = export.source().gzip().buffer().use { source ->
             ProtoBuf.decodeFromByteArray(Backup.serializer(), source.readByteArray())

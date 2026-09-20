@@ -21,5 +21,5 @@
 
 - 冷启动"就绪"信号为偏好文件落盘，可能略早于首帧绘制；但结果距 5 s 上限余量 4 倍，结论稳健。
 - 空闲内存余量仅 ~7%：后续功能（新主题、后台服务常驻）应监控该指标回归。
-- 启动工具链怪癖（已绕开并记录）：经 `pwsh Start-Process`（含 `-WindowStyle Hidden`）启动 GUI 时启动器进程会立刻退出且应用不初始化；经 Git Bash 直接后台启动正常。soak/测量脚本一律用 bash 启动 + 按启动时间发现 launcher PID。
+- 启动工具链怪癖（已绕开并记录）：空闲测量曾出现经 `pwsh -Command` 内 `Start-Process` 启动时启动器随即退出的现象（当时存在残留实例持有 profile 锁，疑为主要原因）；`measure-startup-performance.ps1` 的 `Start-Process -WindowStyle Hidden` 路径经 30/30 次实测正常。soak/空闲测量采用 bash 直接启动 + 按启动时间发现 launcher PID 的稳妥路径。
 - soak 必须在安静机器执行（并发负载曾导致 fixture 故意损坏资产触发 `CorruptImage` 拒绝，见 soak 证据）。

@@ -37,4 +37,4 @@
 - **双向往返闭环成立**：codec 层（两方向）+ 真实 Android 应用层（恢复+再导出）全部通过，六类字段无 P0 差异。
 - 样本为合成但由**真实 Android 编码器/应用**产生，非 mock；数据形状覆盖设计的不保留项（私有/应用状态/未知键）。
 - 边界：未测 Suwayomi 方向（docker 起 Suwayomi-Server 互导，留待后续）；未测大库（≥1000 部）与下载图片不迁移（设计如此）；单一 Android 版本（API 35）。
-- 交付物：`DesktopExportDecodeContractTest.kt` + `app/build.gradle.kts` 属性转发（未提交）。
+- 交付物：`DesktopExportDecodeContractTest.kt` + `app/build.gradle.kts` 属性转发（已提交 a16ffe450）。

@@ -144,6 +144,9 @@ class HostClient:
                                      stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                      stderr=err, cwd=workdir)
         self.err_file = err
+        # HTTP callbacks are executed on worker threads: the reader loop must never
+        # block on network I/O or a slow host could stall the whole IPC channel.
+        self.callback_workers = concurrent.futures.ThreadPoolExecutor(4, thread_name_prefix='broker')
         self.reader = threading.Thread(target=self._reader_loop, name='ipc-reader', daemon=True)
         self.reader.start()
 
@@ -181,7 +184,7 @@ class HostClient:
             # A late answer after a client-side timeout has no waiter; drop it.
         elif frame_type.endswith('IpcCallbackRequest'):
             if frame.get('callbackType') == 'broker_http':
-                self._answer_broker_http(frame)
+                self.callback_workers.submit(self._answer_broker_http, frame)
             else:
                 self._send_frame('mihon.extension.ipc.IpcCallbackResponse', {
                     'requestId': frame.get('requestId'),
@@ -211,6 +214,7 @@ class HostClient:
 
     def _answer_broker_http(self, frame):
         request_id = frame.get('requestId')
+        request = {}
         try:
             request = json.loads(frame.get('payloadJson') or '{}')
             response = self._execute_broker_request(request)
@@ -243,10 +247,14 @@ class HostClient:
         except Exception:
             pass
 
+    # Browser-like fallback mirroring DesktopNetworkHelper; bare Python-urllib UA
+    # is blocked outright by several CDN/WAF fronts.
+    _DEFAULT_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) MihonW/1.0'
+
     def _execute_broker_request(self, request):
         method = (request.get('method') or 'GET').upper()
         url = request.get('url') or ''
-        headers = {}
+        headers = {'user-agent': self._DEFAULT_UA}
         for key, value in (request.get('headers') or {}).items():
             headers[key.lower()] = value
         for key, values in (request.get('headerValues') or {}).items():
@@ -380,6 +388,7 @@ class HostClient:
             self.proc.wait(timeout=10)
         except Exception:
             pass
+        self.callback_workers.shutdown(wait=False)
         self.err_file.close()
 
 
