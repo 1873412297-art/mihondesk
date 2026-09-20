@@ -97,9 +97,7 @@
     <string name="ext_untrusted">未信任</string>
     <string name="ext_uninstall">卸载</string>
     <string name="untrusted_extension">插件未受信任</string>
-    <string name="untrusted_extension_message">恶意插件可能会读取所有登录的账号或执行任意代码。
-\n
-\n信任此插件即代表你愿意承担上述风险。</string>
+    <string name="untrusted_extension_message">恶意插件可能会读取所有登录的账号或执行任意代码。 \n \n信任此插件即代表你愿意承担上述风险。</string>
     <string name="pref_fullscreen">全屏</string>
     <string name="pref_page_transitions">翻页动画</string>
     <string name="pref_double_tap_anim_speed">双击动画速度</string>
@@ -195,8 +193,7 @@
     <string name="manga_added_library">已添加到书架</string>
     <string name="manga_removed_library">已移出书架</string>
     <string name="delete_downloads_for_manga">要删除已下载的章节吗？</string>
-    <string name="copied_to_clipboard">已复制到剪贴板：
-\n「%1$s」</string>
+    <string name="copied_to_clipboard">已复制到剪贴板： \n「%1$s」</string>
     <string name="source_not_installed">未安装图源：%1$s</string>
     <string name="display_mode_chapter">第 %1$s 章</string>
     <string name="chapter_downloading_progress">正在下载 (%1$d/%2$d)</string>
@@ -403,9 +400,6 @@
     <string name="backup_restore_missing_trackers">尚未登录进度记录平台：</string>
     <string name="pref_remove_bookmarked_chapters">允许删除添加了书签的章节</string>
     <string name="pref_category_delete_chapters">删除章节</string>
-    <string name="ext_nsfw_warning">来自此插件的图源可能包含 NSFW (18+) 内容</string>
-    <string name="ext_nsfw_short">18+</string>
-    <string name="parental_controls_info">如果有插件标记错误，这项设置无法阻止它们展示 NSFW (18+) 内容。</string>
     <string name="no_chapters_error">没有章节</string>
     <string name="chapter_settings_updated">已更新默认章节设置</string>
     <string name="set_chapter_settings_as_default">设为默认</string>
@@ -424,10 +418,8 @@
     <string name="spen_next_page">下一页</string>
     <string name="spen_previous_page">上一页</string>
     <string name="migration_help_guide">图源迁移指南</string>
-    <string name="pref_category_nsfw_content">NSFW (18+) 图源</string>
     <string name="file_picker_error">没有文件管理器</string>
     <string name="myanimelist_relogin">请重新登录 MAL</string>
-    <string name="pref_show_nsfw_source">在图源和插件列表中显示</string>
     <string name="pref_viewer_nav">点按区域</string>
     <string name="edge_nav">两侧</string>
     <string name="kindlish_nav">Kindle</string>
@@ -581,7 +573,6 @@
     <string name="pref_reset_viewer_flags_success">已重置所有阅读器设置</string>
     <string name="pref_reset_viewer_flags_error">重置阅读器设置失败</string>
     <string name="empty_screen">呃…尴尬了</string>
-    <string name="ext_info_age_rating">分级</string>
     <string name="ext_info_version">版本</string>
     <string name="ext_info_language">语言</string>
     <string name="reading_list">在读</string>
@@ -637,8 +628,7 @@
     <string name="download_notifier_cache_renewal">正在扫描已下载章节</string>
     <string name="action_open_random_manga">随机打开作品</string>
     <string name="information_no_entries_found">此分类没有作品</string>
-    <string name="fdroid_warning">F-Droid 渠道不受官方支持。
-\n点击了解详情。</string>
+    <string name="fdroid_warning">F-Droid 渠道不受官方支持。 \n点击了解详情。</string>
     <string name="action_display_show_continue_reading_button">继续阅读按钮</string>
     <string name="pref_invalidate_download_cache">重建下载索引</string>
     <string name="track_remove_date_conf_title">要删除日期吗？</string>
@@ -759,11 +749,7 @@
     <string name="onboarding_storage_help_action">存储指南</string>
     <string name="pref_storage_location">存储位置</string>
     <string name="onboarding_storage_action_select">选择文件夹</string>
-    <string name="onboarding_storage_info">选择一个文件夹供 %1$s 存放下载章节、备份文件等。
-\n
-\n推荐使用一个专门的文件夹。
-\n
-\n已选文件夹：%2$s</string>
+    <string name="onboarding_storage_info">选择一个文件夹供 %1$s 存放下载章节、备份文件等。 \n \n推荐使用一个专门的文件夹。 \n \n已选文件夹：%2$s</string>
     <string name="onboarding_storage_selection_required">必须选择一个文件夹</string>
     <string name="available_disk_space_info">%1$s / %2$s</string>
     <string name="theme_nord">Nord</string>

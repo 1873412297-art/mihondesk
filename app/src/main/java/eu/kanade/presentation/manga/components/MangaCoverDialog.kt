@@ -35,9 +35,8 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.graphics.drawable.toDrawable
 import androidx.core.view.updatePadding
+import ca.mpreg.webgpuviewer.renderer.GainmapInput
 import ca.mpreg.webgpuviewer.renderer.Image
-import ca.mpreg.webgpuviewer.renderer.Image.Companion.invoke
-import ca.mpreg.webgpuviewer.renderer.WebGpuRenderer
 import ca.mpreg.webgpuviewer.viewer.ImagePage
 import ca.mpreg.webgpuviewer.viewer.ImageViewer
 import ca.mpreg.webgpuviewer.viewer.ImageViewerState
@@ -182,6 +181,21 @@ fun MangaCoverDialog(
                                     res.height,
                                     createMipMaps = true,
                                     backgroundColor = 0,
+                                    hdr = res.isHdr,
+                                    hdrHeadroom = res.hdrHeadroom,
+                                    gainmap = res.gainmap?.let {
+                                        GainmapInput(
+                                            pixels = it.pixels,
+                                            width = it.width,
+                                            height = it.height,
+                                            channels = it.channels,
+                                            gamma = it.gamma,
+                                            minContentBoost = it.minContentBoost,
+                                            maxContentBoost = it.maxContentBoost,
+                                            offsetSdr = it.offsetSdr,
+                                            offsetHdr = it.offsetHdr,
+                                        )
+                                    },
                                 ),
                             )
                         }
