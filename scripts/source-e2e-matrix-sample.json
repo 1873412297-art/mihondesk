@@ -1,0 +1,80 @@
+{
+  "comment": "Workstream 1A source manifest. `package` is a substring matched against .mext filenames (searched under --extensions-dir roots plus %APPDATA%\\MihonW\\extensions). `queries` all run in the search step; the step passes if at least one returns results. `attribution_hints` override the built-in error classifier (regex on the error text -> attribution + optional blocked).",
+  "sources": [
+    {
+      "name": "MangaDex",
+      "type": "普通 HTTP",
+      "package": "eu.kanade.tachiyomi.extension.all.mangadex",
+      "query": "one piece",
+      "queries": [
+        "one piece",
+        "dungeon meshi"
+      ],
+      "needs_login": false,
+      "notes": "基线源：浏览/搜索/过滤/分页/图片全链最可能全通过，作为矩阵的参照行。"
+    },
+    {
+      "name": "MangaPlus",
+      "type": "图像解密 (SHUEISHA)",
+      "package": "eu.kanade.tachiyomi.extension.all.mangaplus",
+      "query": "one piece",
+      "needs_login": false,
+      "notes": "验证重点：加密图片解密链（E3 未实证，失败概率最高）。失败优先归因 shim_limit。",
+      "attribution_hints": [
+        {
+          "pattern": "decrypt|cipher|invalid image|0 bytes",
+          "attribution": "shim_limit"
+        },
+        {
+          "pattern": "unknown error happened",
+          "attribution": "site_block",
+          "blocked": false
+        }
+      ]
+    },
+    {
+      "name": "MangaFire",
+      "type": "WebView/验证码",
+      "package": "eu.kanade.tachiyomi.extension.all.mangafire",
+      "query": "one piece",
+      "needs_login": false,
+      "notes": "验证重点：Cloudflare/验证码分支。CAPTCHA 不可自动化——命中时记 blocked+site_block 或 manual_interaction，由人工交互格承接，不算 fail。",
+      "attribution_hints": [
+        {
+          "pattern": "captcha|challenge|cloudflare|just a moment|verify you are human",
+          "attribution": "manual_interaction",
+          "blocked": true
+        }
+      ]
+    },
+    {
+      "name": "NHentai",
+      "type": "SourceFactory/偏好驱动",
+      "package": "eu.kanade.tachiyomi.extension.all.nhentai",
+      "query": "touhou",
+      "needs_login": false,
+      "notes": "验证重点：多源枚举与偏好驱动请求路径。部分区域被屏蔽时按 site_block 归因。",
+      "attribution_hints": [
+        {
+          "pattern": "blocked in your country|region|geo.?block",
+          "attribution": "site_block"
+        }
+      ]
+    },
+    {
+      "name": "BiliManga",
+      "type": "SourceFactory/偏好驱动 (登录会话)",
+      "package": "eu.kanade.tachiyomi.extension.zh.bilimanga",
+      "query": "一人之下",
+      "needs_login": true,
+      "notes": "验证重点：Cookie 登录态与过期重登。会话失效时记 blocked+manual_interaction（需人工扫码登录一次并记录会话有效期），不算 fail。",
+      "attribution_hints": [
+        {
+          "pattern": "login|登录|未登录|cookie|session|401",
+          "attribution": "manual_interaction",
+          "blocked": true
+        }
+      ]
+    }
+  ]
+}
