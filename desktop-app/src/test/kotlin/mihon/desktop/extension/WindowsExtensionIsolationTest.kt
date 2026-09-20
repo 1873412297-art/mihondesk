@@ -282,13 +282,17 @@ class WindowsExtensionIsolationTest {
     fun `real extension host runs with an AppContainer token`() = runBlocking {
         assumeTrue(Platform.isWindows())
         // CI runners (e.g. windows-2025) can restrict AppContainer sandbox launch; the
-        // pipe handshake then fails even though local dev machines work. Treat that
-        // signature as an environment limitation (skip), not a product failure.
+        // pipe handshake then fails even though local dev machines work. The launcher
+        // wraps the handshake error in IpcException, so walk the cause chain. Treat
+        // that signature as an environment limitation (skip), not a product failure.
         val manager = try {
             WindowsExtensionProcessManager(tempDir.resolve("host 中文").toFile()).apply { start() }
-        } catch (failure: IllegalStateException) {
-            if ("Sandbox pipe handshake failed" in (failure.message ?: "")) {
-                assumeTrue(false, "AppContainer sandbox unavailable in this environment: ${failure.message}")
+        } catch (failure: Exception) {
+            val chain = generateSequence<Throwable>(failure) { it.cause }
+                .map { it.message ?: it.toString() }
+                .joinToString(" <- ")
+            if ("Sandbox pipe handshake failed" in chain) {
+                assumeTrue(false, "AppContainer sandbox unavailable in this environment: $chain")
             }
             throw failure
         }
