@@ -23,8 +23,8 @@
 - 判定：自动化障碍（secure desktop），需先解决格 4 提到的 UAC 可见性再重试。真实用户交互安装不受影响。
 
 ## 状态（2026-09-21 深夜更新）
-- 已完成：格 2（MSI 干净安装）✅、格 5（MSI N-1→N 升级）✅
-- 进行中：其余 10+2 格。
+- 已完成：**MSI 行 4/4**（干净安装 ✅、N-1→N 升级 ✅、卸载保留数据 ✅、卸载删除数据 ✅）。
+- 进行中：ZIP 行 3 格、EXE 行 3 格、回滚 2 格。
 
 ## 追加工具链经验（重要）
 
@@ -37,5 +37,16 @@
 - 限制：0.2.10 中造的书架/设置在升级后的字段级核对未做（需 GUI 造数，本轮从简）；记录为后续加强项。
 - 证据快照：`msi-upgraded-0218`。
 
+## MSI 行详细结论（4/4 ✅，2026-09-21 04:2x）
+
+### 格 6：MSI 卸载（保留数据）✅
+- `msiexec /x d:\mihondesk-0.2.18.msi /qn /norestart`：程序文件全部移除（释放 ~1.7GB，mihondesk.exe 消失）。
+- **数据完整保留**：`%APPDATA%\MihonW` 全部结构（含 preferences.properties 与 database）原样存在。
+- 残留：程序目录留下两个**空目录** app/runtime（卸载时新建时间戳），无文件——记为 Cosmetic 残留。
+- 重要发现：**jpackage MSI 不在注册表 Uninstall 键注册 DisplayName**（HKCU/HKLM/WOW6432Node 三处 reg /f 搜索均 0 匹配）——控制面板可见性存疑，列为待查产品问题；卸载须用原始 MSI 路径。
+
+### 格 8：MSI 卸载（删除数据）✅
+- 重装 → 卸载 → `rmdir /s /q %APPDATA%\MihonW` → 程序目录与数据目录均"找不到文件"，完全清除。
+
 ## 下一步顺序
-MSI 行续（卸载保留数据 / 卸载删除数据——卸载键在 HKLM，matrix.cmd 需改查 HKLM）→ ZIP 行 → EXE 行（UAC 可见性问题仍待解，候选：WinRE 离线关闭 PromptOnSecureDesktop）。
+ZIP 行（干净安装/升级/删除——全程免提权）→ EXE 行（先解 UAC 可见性）→ 回滚 2 格。
