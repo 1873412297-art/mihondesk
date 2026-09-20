@@ -11,6 +11,8 @@ build
 .worktrees/
 extension-host/host-data/
 .soak-*/
+.jdks/
+scripts/__pycache__/
 
 # Configuration files
 keystore.properties
