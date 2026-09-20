@@ -14,7 +14,7 @@ import org.junit.jupiter.api.Test
 import java.net.InetSocketAddress
 
 class DesktopAdditionalTrackerApiTest {
-    @Test fun `mangabaka uses title priorities bearer profile and library put contract`() = runBlocking {
+    @Test fun `mangabaka uses title priorities x-api-key profile and library put contract`() = runBlocking {
         val requests = mutableListOf<TrackerTestRecordedRequest>()
         val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
         server.createContext("/") { exchange ->
@@ -53,7 +53,9 @@ class DesktopAdditionalTrackerApiTest {
             tracker.updateRemote(track)
             val put = requests.last()
             assertEquals("PUT", put.method)
-            assertEquals("Bearer secret", put.authorization)
+            // PATs go via x-api-key per the official MangaBaka API spec, not Bearer.
+            assertEquals(null, put.authorization)
+            assertEquals("secret", put.apiKey)
             val payload = Json.parseToJsonElement(put.body).jsonObject
             assertEquals("paused", payload["state"]!!.jsonPrimitive.content)
             assertEquals(5.5, payload["progress_chapter"]!!.jsonPrimitive.double)

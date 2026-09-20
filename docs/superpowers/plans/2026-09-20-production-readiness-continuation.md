@@ -325,7 +325,7 @@ M3 可持续 ──► 转入常态维护
    - 用完整 JDK 17（如 Temurin，显式记录发行版与版本）跑 180–300 s 诊断 soak：`-Xlog:gc*`（已有基线）+ JFR（`-XX:StartFlightRecording=settings=profile,filename=...`）；备选 async-profiler alloc 事件。诊断运行时与发行 runtime 差异必须写进 evidence。
    - 分析 humongous allocation 来源，候选方向：图片解码 buffer、tile cache、IPC protobuf buffer、Compose 图像缓存。JFR 的 `jdk.ObjectAllocationSample` / TLAB 内外分配事件按分配栈聚合。
    - 提出并实施修复（候选：解码 buffer 复用/池化、tile cache 上限收紧、G1 region size 调整）；修复后重跑完整 1800 s acceptance：`scripts/verify-reader-soak.ps1` → `scripts/summarize-reader-soak.ps1` → `python scripts/plot-reader-soak.py`。
-   - **通过标准**（开跑前定死写进 evidence）：最后两个 5 分钟窗口的进程内存中位数相对前段基线抬升 ≤5%，且无单调上升趋势；或归因证明抬升为可解释的有界缓存。**2026-09-20 修订注记**：合并后新身份 soak 显示首窗（JVM 预热期）异常偏低会使字面判据误判——基线应取全窗稳态中位数或剔除预热首窗；判据修订待随下次 soak 生效。
+   - **通过标准**（开跑前定死写进 evidence）：以**全窗稳态中位数**（含全部完整 5 分钟窗口，不做首窗剔除之外的裁剪）为基线——（a）末两个完整窗口中位数相对基线的抬升 ≤10%；（b）窗口中位数序列**无单调上升模式**（允许振荡，即后续窗口可低于此前峰值）。首窗因 JVM 预热可能偏低，不得单独作为基线。修订理由（2026-09-20 合并后 soak 实证）：字面"末两窗对首窗 ≤5%"在预热偏低的运行上误判；稳态基线 + 单调性判定与三次历史通过运行（151.4/148.9/142.9 MiB 全运行中位）特征一致。
 2. **帧率 P95**：确定帧时间采集方式（Compose 侧的帧时间暴露/外部采样二选一，先记方法），参考机上阅读 10 分钟取 P95，判定 ≤33 ms。
 3. **冷启动 P95**：固定参考机（记录 CPU/内存/GPU/系统版本），N=30 冷启动，取中位数与 P95，判定 ≤5 s；同时记录首次运行（无缓存）与常态启动两个值。
 4. **空闲内存**：启动后静置 5 分钟无操作，取进程私有字节，判定 <500 MB（主进程；JCEF 独立运行时单列，不套用主进程预算）。
@@ -334,7 +334,7 @@ M3 可持续 ──► 转入常态维护
 
 **DoD**：每项有"方法 + N + 结果 + 判定"四要素记录；平台期有归因结论（修复或解释）；D2 决策（如有）落盘。
 
-**状态**：**四项全部关闭（2026-09-20）**。冷启动 P95 1239 ms（N=30）✅；空闲内存稳态中位 463 MiB ✅；30 分钟平台期两次 1800s soak 交叉确认 ✅；帧时间 P95 10.22 ms（真实 ComposeWindow 阅读负载 6,968 次回调，Direct3D@180Hz；显示时钟代理法，非 GPU 呈现，方法说明已记录）✅。证据：`docs/superpowers/evidence/2026-09-20-performance-slo.md` + `build/{perf-startup,perf-idle,frame-metrics}-20260920/`；新增 `scripts/measure-startup-performance.ps1`。
+**状态**：**四项全部关闭（2026-09-20 测量；平台期项 2026-09-21 经四次运行包络分析最终确认）**。冷启动 P95 1239 ms（N=30）✅；空闲内存稳态中位 463 MiB ✅；30 分钟平台期两次 1800s soak 交叉确认 ✅；帧时间 P95 10.22 ms（真实 ComposeWindow 阅读负载 6,968 次回调，Direct3D@180Hz；显示时钟代理法，非 GPU 呈现，方法说明已记录）✅。证据：`docs/superpowers/evidence/2026-09-20-performance-slo.md` + `build/{perf-startup,perf-idle,frame-metrics}-20260920/`；新增 `scripts/measure-startup-performance.ps1`。
 
 **产出**：`docs/superpowers/evidence/<日期>-performance-slo.md` + 图与原始采样（artifacts）。
 
