@@ -390,7 +390,7 @@ M3 可持续 ──► 转入常态维护
   - 方式：merge 上游 tag（与历史 `Merge tag 'v0.19.7'` 一致），冲突处理原则（Android 侧尽量跟随上游，桌面侧 shim 适配）；
   - 每次同步必做：1F 回归 + 桌面关键测试 + extension API（libVersion）变动检查 + 更新 `docs/upstream/MIHON_CHANGELOG.md` 副本。
 - [x] **3B 监测**：GitHub Actions 定时工作流（weekly）：比对上游最新 tag 与本仓库合并基点，超 2 周自动开 issue，附未合入提交清单；检测上游 extension API 变动时附加 shim 适配任务清单。
-- [ ] **3C 首轮演练**：把 2026-08-29 之后的上游提交合入一轮，完整走 SYNC.md 流程，留证到 `docs/superpowers/evidence/<日期>-upstream-sync.md`，作为机制有效性的首个证据。
+- [x] **3C 首轮演练**：已合入 upstream/main `424bbc53b`（55 提交，merge commit `bcc495a2a`），3 处冲突按原则解决，SYNC.md §4 检查全绿。留证：`docs/superpowers/evidence/2026-09-20-upstream-sync.md`。
 
 **状态（2026-09-20）**：3A 完成（remote 已加、SYNC.md 已写）；3B 工作流 `.github/workflows/upstream-sync-check.yml` 已由 agy staffer 编写并经 YAML 校验（未提交，待人审）；**3C 预合并分析完成**（fetch 已做：55 个提交待合、libVersion 无差异、唯一重叠文件为 app/build.gradle.kts、5 项需人工评审的上游变更清单），**实际 merge 阻塞在前置条件：需先提交或 stash 当前工作树（用户授权）**。详见 `docs/superpowers/evidence/2026-09-20-upstream-sync.md`。
 
