@@ -22,6 +22,20 @@
 - `setup.exe /S` 经 `start /wait` 挂起：UAC 安全桌面不可见导致提权无法确认。无磁盘写入。
 - 判定：自动化障碍（secure desktop），需先解决格 4 提到的 UAC 可见性再重试。真实用户交互安装不受影响。
 
-## 状态
-- 已完成：格 2（MSI 干净安装）。进行中：其余 11+2 格。
-- 下一步顺序建议：MSI 行续（升级/卸载保留/卸载删除）→ ZIP 行（无需提权）→ EXE 行（先解 UAC）。
+## 状态（2026-09-21 深夜更新）
+- 已完成：格 2（MSI 干净安装）✅、格 5（MSI N-1→N 升级）✅
+- 进行中：其余 10+2 格。
+
+## 追加工具链经验（重要）
+
+6. **快照 revert 后客户机键盘布局回到 zh-CN，导致经 VNC 的 shift 组合（冒号等）失效且极不稳定**；字母大写正常但 OEM 键 shift 丢失。修复：`powershell -noprofile -c Set-WinUserLanguageList en-US -Force`（无需提权、无需冒号即可键入），**客户机会重启**（nogui 启动的 VM 会关机，需重新 `vmrun start nogui`）。修复后 shift 全功能恢复。此修复应固化进基线：建议下次重建基线快照前在 autounattend 里直接装 en-US 语言。
+7. **msiexec /qn 全程无 UAC**（per-user 安装确认）；升级链 0.2.10→0.2.18 全自动完成（日志 rc=0，程序目录 jar 时间戳更新为 0.2.18 构建）。
+
+## 格 5：MSI N-1→N 升级（0.2.10 → 0.2.18）✅ 通过
+- `matrix.cmd msi-upgrade`：0.2.10 安装 69s → 0.2.18 安装 85s，总 rc=0，VMDK +3GB。
+- 升级后程序目录为 0.2.18 构建产物（jar 时间戳 2026-09-18 13:02，126 文件）。
+- 限制：0.2.10 中造的书架/设置在升级后的字段级核对未做（需 GUI 造数，本轮从简）；记录为后续加强项。
+- 证据快照：`msi-upgraded-0218`。
+
+## 下一步顺序
+MSI 行续（卸载保留数据 / 卸载删除数据——卸载键在 HKLM，matrix.cmd 需改查 HKLM）→ ZIP 行 → EXE 行（UAC 可见性问题仍待解，候选：WinRE 离线关闭 PromptOnSecureDesktop）。
