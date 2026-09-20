@@ -10,6 +10,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import mihon.reader.source.ReaderFailure
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
@@ -86,6 +87,13 @@ class ProcessCodecCommandRunnerTest {
         delay(50)
         job.cancelAndJoin()
         process.isAlive shouldBe false
+        // On shared CI runners process teardown is asynchronous; descendants can
+        // outlive the direct child briefly and keep the @TempDir files locked when
+        // JUnit cleans up. Wait for the whole tree to exit first.
+        withTimeoutOrNull(5_000) {
+            while (process.descendants().anyMatch { it.isAlive }) delay(50)
+        }
+        delay(100)
         val elapsedMillis = (System.nanoTime() - startedAt) / 1_000_000
         (elapsedMillis < 5_000) shouldBe true
     }
