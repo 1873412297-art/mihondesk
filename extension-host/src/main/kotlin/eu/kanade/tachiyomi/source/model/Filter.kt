@@ -3,7 +3,14 @@ package eu.kanade.tachiyomi.source.model
 sealed class Filter<T>(val name: String, var state: T) {
     open class Header(name: String) : Filter<Any>(name, 0)
     open class Separator(name: String = "") : Filter<Any>(name, 0)
-    abstract class Select<V>(name: String, val values: Array<V>, state: Int = 0) : Filter<Int>(
+    // Kept concrete (open) rather than abstract: real extension APKs (observed in
+    // MangaPlus v1.6.66, 2026-09-20 E2E matrix) contain bytecode that instantiates
+    // Filter.Select directly via the synthetic default-args constructor
+    // (String, Object[], int, int, DefaultConstructorMarker). An abstract Select
+    // fails verification with java.lang.InstantiationError at `new Filter$Select`.
+    // Subclasses compiled against the abstract SDK keep working because extending
+    // a concrete class is JVM-legal.
+    open class Select<V>(name: String, val values: Array<V>, state: Int = 0) : Filter<Int>(
         name,
         state,
     )
