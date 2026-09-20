@@ -69,12 +69,19 @@ AI 辅助开发的开源项目 · 基于 Mihon · Kotlin / Compose Desktop
 
 ## 当前限制
 
-mihondesk 仍在持续开发，桌面端尚未覆盖 Mihon 的全部功能。
+mihondesk 仍在持续开发，桌面端尚未覆盖 Mihon 的全部功能。当前版本号为独立序列（`0.2.x`），与上游 mihon `0.20.x` 无对应关系。以下限制基于[功能覆盖快照](docs/superpowers/evidence/suwayomi-feature-coverage.md)与原设计完成标准，会随验证进展持续收敛：
 
-- **扩展兼容性因图源而异**：扩展通过桌面兼容层运行；能够安装或加载，并不代表该图源的所有功能都可用。
-- **网站验证与封锁**：登录或验证可以使用程序提供的网页入口；能否通过取决于网站。网站返回 403 或其他访问限制时，可能仍无法读取内容。
-- **旧版本升级**：0.2.4 及更早版本的内置更新检查指向旧仓库，首次升级请从[本仓库 Releases](https://github.com/1873412297-art/mihondesk/releases/latest)手动下载。
-- **备份与跟踪服务**：部分设置不会迁移，生产账户的完整登录与同步流程仍需继续验证。请查看[备份兼容范围](docs/superpowers/evidence/suwayomi-backup-compatibility.md)和[功能覆盖说明](docs/superpowers/evidence/suwayomi-feature-coverage.md)。
+- **扩展与图源兼容性**：扩展可安装并加载，不代表该图源的浏览→详情→章节→图片全链可用。部分站点需要验证码或登录。2026-09-20 端到端矩阵实测：MangaDex / NHentai 全链通过，BiliManga 除搜索外全链通过（搜索需登录），MangaFire 被 Cloudflare 封锁（需人工过验证），MangaPlus 因地区封锁不可用（其 API 对本网络返回错误信封；兼容层 Filter.Select 缺陷当日已修复，授权地区网络下有望通过）。详见[扩展兼容矩阵](docs/suwayomi-extension-compatibility.md)。
+- **Tracker 账户**：11 个服务已有实现和本地契约测试，但生产账户的登录→绑定→进度写入→刷新→退出全流程尚未全部验证；新增服务的 OAuth 自动登录配置也未完成。
+- **备份互通**：桌面端可导入/导出 Mihon 兼容备份。2026-09-20 已完成双向往返验证：真实 Android 编码器备份→桌面导入（字段级对照）、桌面导出→Android 解码器契约测试、桌面导出→Android 应用恢复→应用再导出→桌面再导入，六类字段无丢失；下载图片、密钥、SyncYomi uid、Suwayomi 私有设置不随备份迁移。详见[备份往返证据](docs/superpowers/evidence/2026-09-20-backup-roundtrip.md)。
+- **安装与升级**：MSI/EXE/便携三种形态的功能已实现，但干净 Windows 10 22H2 / Windows 11 系统上的真实安装、旧版升级、卸载、回滚尚未作为每次发版的强制验收完成。
+- **性能与稳定性**：六种阅读模式、万部库搜索等已可用。2026-09-20 四项 SLO 实测：冷启动 P95 1.24 s（目标 ≤5 s）、空闲内存中位 463 MiB（目标 <500 MB）、30 分钟阅读内存两次 1800 秒 soak 均有界、帧时间 P95 10.22 ms（真实阅读窗口负载，目标 ≤33 ms）。详见[性能证据](docs/superpowers/evidence/2026-09-20-performance-slo.md)。
+- **故障恢复**：数据库迁移前快照、备份恢复事务回滚等已实现，但真实满盘、拔盘、断电、升级失败后的只读恢复等场景尚未实测。
+- **Android 回归**：本仓库保留 Android 模块用于格式兼容，但共享改动后的 Android 全量单测 + APK 构建尚未作为桌面端发版的强制回归门槛。
+
+**旧版本升级**：0.2.4 及更早版本的内置更新检查指向旧仓库，首次升级请从[本仓库 Releases](https://github.com/1873412297-art/mihondesk/releases/latest)手动下载。
+
+遇到图源、tracker 或备份问题请在 Issues 反馈，附上 mihondesk 版本、Windows 版本、扩展名称/版本、复现步骤和错误信息。
 
 ## 反馈与开发
 

@@ -49,3 +49,10 @@ The output directory must be new; this check never opens the default user profil
 ## Update application artwork
 
 The icon source is `desktop-app/src/main/resources/icon.svg`. Export the PNG, multi-size Windows ICO and GitHub artwork with `scripts/export-brand-assets.ps1`. See [brand assets](BRANDING.md) for sizes, colors and export requirements.
+
+## Evidence and verification discipline
+
+- `build/` is already `.gitignore`d. Do not `git add` build outputs, soak samples, heap dumps, or test logs. Text summaries belong in `docs/superpowers/evidence/*.md`; large raw artifacts belong in CI artifacts or release attachments.
+- Each verification workstream follows the red-to-green convention: record the failing/uncertain state first, then the fix and passing result.
+- A rebuilt package is a new verification identity: do not inherit evidence from an earlier EXE/JAR/MSI hash.
+- Keep evidence documents small and linkable; include command, environment, and a clear pass/fail/unknown verdict.
