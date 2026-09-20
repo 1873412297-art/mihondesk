@@ -2,6 +2,18 @@
 
 **Current result:** all 7 real APKs convert and load, exposing 84 runtime sources. The final combined run (`73059`) passed 18 tests, 0 failures, 0 skips, in 32 seconds through the shared Gradle mutex wrapper. This proves conversion/loading and the specified offline contracts; it is not full live-site or image-reading verification. Later sections retain the actual red-to-green failure history.
 
+**E2E 等级（2026-09-20 首轮实测，中国大陆网络出口）**：详见 [2026-09-20-source-e2e-matrix](../superpowers/evidence/2026-09-20-source-e2e-matrix.md)。
+
+| 源 | E2E 等级 | 说明 |
+| --- | --- | --- |
+| MangaDex 1.6.0 | 通过 | 浏览→搜索→详情→章节→图片全链 |
+| NHentai 1.6.11 | 通过 | 全链（地理可访问前提下） |
+| BiliManga 1.6.14 | 受限通过 | 全链除搜索（搜索需登录态 Cookie，人工登录后可升级） |
+| MangaFire 1.6.34 | 不支持（站点封锁） | Cloudflare 403，需 WebView 人工过验证码 |
+| MangaPlus 1.6.66 | 不支持（地区封锁） | API 对本网络返回 4 字节 protobuf 错误信封；`Filter$Select` shim 缺陷当日已修复，授权地区网络下有望通过 |
+
+**仓库现状勘误（2026-09-20）**：Keiyoushi 官方仓库未失效——`index.min.json` 765 字节 stub 是官方有意迁移到 v2 仓库格式（`repo.json` → `index.pb`/`index.json`，1,396 个扩展），适配 Mihon 0.20.1+；桌面端安装器走 index.pb 与 v2 一致。legacy 完整目录可从社区 fork（如 Lood2222/nyny562/OPraga 的 `repo` 分支）获取（均已实测验证）。
+
 Worktree: `<repository>\.worktrees\suwayomi`, branch `codex/suwayomi-evolution`. No user extension installation or data was modified. APK downloads and converted artifacts remain in ignored `.superpowers/sdd/t3-samples`.
 
 ## Provenance
