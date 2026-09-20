@@ -24,7 +24,7 @@
 
 ## 状态（2026-09-21 深夜更新）
 - 已完成：**MSI 行 4/4** + **ZIP 行 3/3**（干净安装 ✅、N-1→N 升级带数据迁移 ✅、删除无残留 ✅）。
-- 进行中：EXE 行 3 格（待 UAC 可见性方案）、回滚 2 格。
+- 进行中：EXE 行剩 2 格（升级/卸载）、回滚 2 格。
 
 ## 追加工具链经验（重要）
 
@@ -63,5 +63,18 @@
 ## 追加工具链经验
 8. **revertToSnapshot 在下次开机时才应用快照设备/vmx 状态**：revert 后必须先 start 一次（应用还原），hard stop 后再改 vmx 换 ISO，否则快照的 ISO 配置会覆盖修改。现行流程：revert → 等还原完成 → start → stop → 改 vmx → start。
 
+## EXE 行进展（2026-09-21 06:3x）
+
+### UAC 问题的最终结论（重要更正）
+- **EXE 安装器不需要管理员权限**（per-user 安装到 `%LOCALAPPDATA%`，向导全程无 UAC）。此前"/S 挂起"与 UAC 无关。
+- 真实阻塞是 **jpackage EXE 的 `/S` 静默开关失效**：`setup.exe /S` 运行 4 分钟后 rc=1639，写入 182MB 后失败；tasklist 可见安装器派生 msiexec 后僵死。记为**产品问题**：EXE 静默安装不可用，仅向导模式可用。
+- 为自动化所做的 WinRE 注册表修改（PromptOnSecureDesktop=0、ConsentPromptBehaviorAdmin=0）仍然有效且有用（任何残余提权静默放行），操作路径已验证：Win+X → U → Shift+R → WinRE → 疑难解答 → 高级选项 → 命令提示符（纯键盘可达：方向键+回车；鼠标点击需"先聚焦再激活"两次）。
+
+### 格 1：EXE 干净安装 ✅（向导全流程）
+- 向导页序：欢迎 → 许可（Alt+A 接受）→ 目标文件夹（`%LOCALAPPDATA%\mihondesk`，per-user 确认）→ 准备 → 安装（进度条）→ 完成。
+- 驱动方式：VNC 键盘加速键（Alt+A/N/I/F）逐步驱动 + 逐步截图取证。
+- 结果：安装完成（VMDK +1.4GB），应用启动，书架界面完整渲染（截图）。
+- 附带发现：安装器主进程 482MB（内嵌运行时解压），派生 msiexec（EXE 实为 MSI 引导壳）。
+
 ## 下一步
-EXE 行（先解 UAC：WinRE 离线设 PromptOnSecureDesktop=0 + ConsentPromptBehaviorAdmin=0）→ 回滚 2 格。
+EXE 升级（0.2.10 向导装 → 0.2.18 向导升级）→ EXE 卸载（重跑安装器维护模式验证卸载路径）→ 回滚 2 格。
