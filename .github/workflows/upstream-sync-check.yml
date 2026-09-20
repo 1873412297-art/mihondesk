@@ -1,0 +1,327 @@
+name: Upstream Sync Check
+
+on:
+  schedule:
+    - cron: '0 6 * * 1' # Weekly every Monday at 06:00 UTC
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check-upstream-sync:
+    name: Check Upstream Sync Status
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch upstream and tags
+        run: |
+          git remote add upstream https://github.com/mihonapp/mihon || git remote set-url upstream https://github.com/mihonapp/mihon
+          git fetch upstream '+refs/heads/*:refs/remotes/upstream/*' --tags
+
+      - name: Evaluate sync status
+        id: sync_check
+        shell: python
+        run: |
+          import os
+          import re
+          import subprocess
+          import sys
+          import textwrap
+          import time
+
+          def run_git(args):
+              res = subprocess.run(
+                  ['git'] + args,
+                  capture_output=True,
+                  text=True,
+                  encoding='utf-8',
+                  errors='replace'
+              )
+              if res.returncode != 0:
+                  raise RuntimeError(f"git {' '.join(args)} failed (exit {res.returncode}):\n{res.stderr.strip()}")
+              return res.stdout.strip()
+
+          def run_git_allow_fail(args):
+              res = subprocess.run(
+                  ['git'] + args,
+                  capture_output=True,
+                  text=True,
+                  encoding='utf-8',
+                  errors='replace'
+              )
+              return res.returncode == 0, res.stdout.strip()
+
+          def get_supported_lib_versions(ref):
+              try:
+                  content = run_git(['show', f'{ref}:app/src/main/java/eu/kanade/tachiyomi/extension/util/ExtensionLoader.kt'])
+                  m = re.search(r'SUPPORTED_LIB_VERSIONS\s*=\s*(.+)', content)
+                  if m:
+                      return m.group(1).strip()
+                  m2 = re.search(r'LIB_VERSION[^\n=]*=\s*(.+)', content)
+                  if m2:
+                      return m2.group(1).strip()
+                  return "Unknown (constant pattern not found)"
+              except Exception as e:
+                  return f"Unavailable ({e})"
+
+          def main():
+              # 1. Determine the last upstream merge base in our history
+              # (the most recent commit that is an ancestor of both our main/HEAD and upstream/main)
+              ok, mb_out = run_git_allow_fail(['merge-base', '-a', 'HEAD', 'upstream/main'])
+              if not ok or not mb_out:
+                  print("::error::Could not determine merge-base between HEAD and upstream/main")
+                  sys.exit(1)
+
+              mb_candidates = mb_out.split()
+              if len(mb_candidates) == 1:
+                  merge_base_sha = mb_candidates[0]
+              else:
+                  merge_base_sha = run_git(['rev-list', '-1', '--date-order'] + mb_candidates)
+
+              merge_base_ts = int(run_git(['log', '-1', '--format=%ct', merge_base_sha]))
+              merge_base_date = run_git(['log', '-1', '--format=%cI', merge_base_sha])
+
+              # 2. Upstream main tip information
+              upstream_tip_sha = run_git(['rev-parse', 'upstream/main'])
+              upstream_tip_ts = int(run_git(['log', '-1', '--format=%ct', 'upstream/main']))
+              upstream_tip_date = run_git(['log', '-1', '--format=%cI', 'upstream/main'])
+
+              # 3. Count of upstream commits since merge-base
+              upstream_commits_count = int(run_git(['rev-list', '--count', f'{merge_base_sha}..upstream/main']))
+
+              # 4. Find newest tag on upstream and its tag date
+              # Inspect tags directly from upstream remote via git ls-remote to avoid local fork tags
+              ok, ls_remote = run_git_allow_fail(['ls-remote', '--tags', 'upstream'])
+              upstream_tags = {}
+              if ok and ls_remote:
+                  for line in ls_remote.splitlines():
+                      parts = line.split()
+                      if len(parts) >= 2:
+                          sha, ref = parts[0], parts[1]
+                          if ref.startswith('refs/tags/'):
+                              if ref.endswith('^{}'):
+                                  tag_name = ref[len('refs/tags/'):-3]
+                                  upstream_tags[tag_name] = sha  # peeled commit SHA
+                              else:
+                                  tag_name = ref[len('refs/tags/'):]
+                                  if tag_name not in upstream_tags:
+                                      upstream_tags[tag_name] = sha
+
+              # Also include any tags merged into upstream/main
+              ok, merged_tags = run_git_allow_fail(['tag', '--merged', 'upstream/main'])
+              if ok and merged_tags:
+                  for tag in merged_tags.splitlines():
+                      t = tag.strip()
+                      if t and t not in upstream_tags:
+                          ok_sha, sha = run_git_allow_fail(['rev-parse', f'{t}^{{commit}}'])
+                          if ok_sha and sha:
+                              upstream_tags[t] = sha
+
+              candidates = []
+              for tag_name, sha in upstream_tags.items():
+                  ok, out = run_git_allow_fail(['log', '-1', '--format=%ct|%cI', sha])
+                  if ok and out and '|' in out:
+                      parts = out.split('|')
+                      if parts[0].isdigit():
+                          candidates.append((int(parts[0]), parts[1], tag_name, sha))
+
+              candidates.sort(key=lambda x: x[0], reverse=True)
+              if candidates:
+                  newest_tag_ts, newest_tag_date, newest_tag, newest_tag_sha = candidates[0]
+              else:
+                  newest_tag_ts = 0
+                  newest_tag_date = "N/A"
+                  newest_tag = "None"
+                  newest_tag_sha = ""
+
+              # 5. Check if a newer tag exists compared to our merge-base
+              has_newer_tag = False
+              if newest_tag != "None":
+                  ok_anc, _ = run_git_allow_fail(['merge-base', '--is-ancestor', newest_tag_sha, merge_base_sha])
+                  has_newer_tag = (not ok_anc) and (newest_tag_ts > merge_base_ts)
+
+              # Select reference date: newest upstream tag date (or upstream main tip date when no newer tag exists)
+              if has_newer_tag:
+                  ref_type = "newest upstream tag"
+                  ref_name = newest_tag
+                  ref_date = newest_tag_date
+                  ref_ts = newest_tag_ts
+              else:
+                  ref_type = "upstream main tip"
+                  ref_name = f"upstream/main ({upstream_tip_sha[:9]})"
+                  ref_date = upstream_tip_date
+                  ref_ts = upstream_tip_ts
+
+              # 6. Evaluate if overdue (older than 14 days)
+              FOURTEEN_DAYS_SECONDS = 14 * 86400
+              diff_seconds = ref_ts - merge_base_ts
+              diff_days = diff_seconds / 86400.0
+              now_ts = int(time.time())
+              days_since_ref = (now_ts - ref_ts) / 86400.0
+
+              has_upstream_changes = (upstream_commits_count > 0) or has_newer_tag
+              is_overdue = has_upstream_changes and ((diff_seconds > FOURTEEN_DAYS_SECONDS) or (days_since_ref > 14.0))
+
+              # 7. Compare ExtensionLoader supported lib versions
+              head_lib_version = get_supported_lib_versions('HEAD')
+              upstream_lib_version = get_supported_lib_versions('upstream/main')
+              lib_version_diff = (head_lib_version != upstream_lib_version)
+
+              # 8. Print clean summary line
+              status_label = "OVERDUE" if is_overdue else "UP-TO-DATE"
+              summary_line = (
+                  f"Upstream sync status: {status_label}. "
+                  f"Merge-base: {merge_base_sha[:9]} ({merge_base_date}), "
+                  f"Reference ({ref_type}): {ref_name} ({ref_date}), "
+                  f"Diff: {diff_days:.1f} days (threshold: 14 days), "
+                  f"Upstream commits since merge-base: {upstream_commits_count}, "
+                  f"ExtensionLoader libVersion mismatch: {lib_version_diff}."
+              )
+              print(summary_line)
+
+              # Write outputs for workflow steps
+              github_output = os.environ.get('GITHUB_OUTPUT')
+              if github_output:
+                  with open(github_output, 'a', encoding='utf-8') as f:
+                      f.write(f"is_overdue={'true' if is_overdue else 'false'}\n")
+                      f.write(f"merge_base_sha={merge_base_sha}\n")
+                      f.write(f"merge_base_date={merge_base_date}\n")
+                      f.write(f"newest_upstream_tag={newest_tag}\n")
+                      f.write(f"newest_upstream_tag_date={newest_tag_date}\n")
+                      f.write(f"upstream_commits_count={upstream_commits_count}\n")
+                      f.write(f"lib_version_diff={'true' if lib_version_diff else 'false'}\n")
+
+              # Prepare markdown alert for lib version diff if applicable
+              if lib_version_diff:
+                  lib_diff_markdown = textwrap.dedent(f"""\
+                      > [!WARNING]
+                      > ### ⚠️ ExtensionLoader `SUPPORTED_LIB_VERSIONS` Diff Detected!
+                      > - **HEAD**: `{head_lib_version}`
+                      > - **upstream/main**: `{upstream_lib_version}`
+                      >
+                      > **Action Required**: Upstream has modified supported extension lib versions!
+                      > Per [SYNC.md §4 Check 3](docs/upstream/SYNC.md#4-每次同步后的强制检查清单), any changes to `SUPPORTED_LIB_VERSIONS` in `app/src/main/java/eu/kanade/tachiyomi/extension/util/ExtensionLoader.kt` must also be synchronized across the 3 desktop components:
+                      > 1. `desktop-app/src/main/kotlin/mihon/desktop/extension/ExtensionStoreService.kt`
+                      > 2. `desktop-app/src/main/kotlin/mihon/desktop/extension/compat/TachiyomiExtensionConverter.kt`
+                      > 3. `extension-sdk/src/main/kotlin/mihon/desktop/extension/ExtensionPackageValidator.kt`
+                      >
+                      > Extensions targeting newer lib versions will fail to load or validate on desktop if these shims are not updated.
+                  """)
+              else:
+                  lib_diff_markdown = f"- **ExtensionLoader `SUPPORTED_LIB_VERSIONS`**: `{head_lib_version}` (Matches `upstream/main`)\n"
+
+              issue_body = textwrap.dedent(f"""\
+                  ## Overview
+
+                  The mihon-w repository is overdue for an upstream sync with [mihonapp/mihon](https://github.com/mihonapp/mihon).
+
+                  - **Newest Upstream Tag**: `{newest_tag}` ({newest_tag_date})
+                  - **Our Merge-Base**: `{merge_base_sha}` ({merge_base_date})
+                  - **Upstream Reference**: `{ref_type}` `{ref_name}` ({ref_date})
+                  - **Elapsed Time Difference**: **{diff_days:.1f} days** (Threshold: 14 days)
+                  - **Upstream Commits Since Merge-Base**: **{upstream_commits_count} commits**
+                  - **ExtensionLoader Lib Versions**:
+                    - `HEAD`: `{head_lib_version}`
+                    - `upstream/main`: `{upstream_lib_version}`
+
+                  {lib_diff_markdown}
+                  ---
+
+                  ## Required Checklist (SYNC.md §4)
+
+                  Per [SYNC.md §4](docs/upstream/SYNC.md#4-每次同步后的强制检查清单), all of the following checks must pass with evidence archived to `docs/superpowers/evidence/<date>-upstream-sync.md` before pushing/releasing:
+
+                  - [ ] **1F Android Regression**: All Android module unit tests pass and `assembleDebug` build succeeds (`./gradlew testDebugUnitTest assembleDebug`)
+                  - [ ] **Desktop Module Critical Tests**: Key desktop suites pass (`desktop-app`, `desktop-library-data`, `desktop-webview-host`, `extension-host`, `reader-core`)
+                  - [ ] **ExtensionLoader.SUPPORTED_LIB_VERSIONS Diff Check**: Verify upstream `ExtensionLoader.SUPPORTED_LIB_VERSIONS` (`app/src/main/java/eu/kanade/tachiyomi/extension/util/ExtensionLoader.kt:51`) with desktop equivalents (`desktop-app/.../ExtensionStoreService.kt`, `desktop-app/.../compat/TachiyomiExtensionConverter.kt`, `extension-sdk/.../ExtensionPackageValidator.kt`)
+                  - [ ] **MIHON_CHANGELOG.md Update**: Append upstream changes since the last baseline into `docs/upstream/MIHON_CHANGELOG.md` copy, recording the new merge-base tag/commit
+                  - [ ] **Evidence Archival**: Record test and build evidence in `docs/superpowers/evidence/<date>-upstream-sync.md`
+
+                  ## Recommended Next Steps
+
+                  1. Inspect incoming commits:
+                     ```bash
+                     git fetch upstream --tags
+                     git log --oneline {merge_base_sha[:9]}..upstream/main
+                     ```
+                  2. Merge the upstream tag or commit per SYNC.md §3:
+                     ```bash
+                     git merge --no-ff {newest_tag if has_newer_tag else 'upstream/main'}
+                     ```
+                  3. Resolve any conflicts per SYNC.md §5 principles (Android side follows upstream, desktop shims adapt).
+                  4. Run all checklist tests and archive evidence before publishing.
+              """)
+
+              with open('issue_body.md', 'w', encoding='utf-8') as f:
+                  f.write(issue_body)
+
+              # Step summary in GitHub Actions
+              github_summary = os.environ.get('GITHUB_STEP_SUMMARY')
+              if github_summary:
+                  with open(github_summary, 'a', encoding='utf-8') as f:
+                      f.write("### Upstream Sync Check\n\n")
+                      f.write(f"**Status**: {'⚠️ Overdue' if is_overdue else '✅ Up to date'}\n\n")
+                      f.write(f"- **Merge Base**: `{merge_base_sha[:9]}` ({merge_base_date})\n")
+                      f.write(f"- **Newest Upstream Tag**: `{newest_tag}` ({newest_tag_date})\n")
+                      f.write(f"- **Upstream Reference**: `{ref_type}` `{ref_name}` ({ref_date})\n")
+                      f.write(f"- **Days Difference**: {diff_days:.1f} days (Threshold: 14 days)\n")
+                      f.write(f"- **Upstream Commits Since Merge-Base**: {upstream_commits_count}\n")
+                      f.write(f"- **ExtensionLoader Supported Lib Versions**: `HEAD`={head_lib_version}, `upstream/main`={upstream_lib_version}\n\n")
+                      if lib_version_diff:
+                          f.write(lib_diff_markdown)
+
+          if __name__ == '__main__':
+              main()
+
+      - name: Open issue if upstream sync is overdue
+        if: steps.sync_check.outputs.is_overdue == 'true'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+
+            const issueTitle = 'Upstream sync overdue';
+            const issueLabel = 'upstream-sync';
+
+            // Query open issues in the repository to avoid duplicates
+            const { data: openIssues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              per_page: 100,
+            });
+
+            const duplicate = openIssues.find(issue => issue.title.trim() === issueTitle);
+            if (duplicate) {
+              core.info(`An open issue already exists: #${duplicate.number} (${duplicate.html_url}). Skipping issue creation to avoid duplicates.`);
+              return;
+            }
+
+            let issueBody = '';
+            if (fs.existsSync('issue_body.md')) {
+              issueBody = fs.readFileSync('issue_body.md', 'utf8');
+            } else {
+              issueBody = 'Upstream sync check indicates that the repository is overdue for a sync with upstream/main.';
+            }
+
+            const newIssue = await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: issueTitle,
+              labels: [issueLabel],
+              body: issueBody,
+            });
+
+            core.info(`Created issue #${newIssue.data.number}: ${newIssue.data.html_url}`);
