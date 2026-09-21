@@ -21,9 +21,13 @@ import mihon.desktop.library.local.LocalMangaImporter
 import mihon.desktop.platform.AppDirectories
 import mihon.desktop.platform.AppDirectoryResolver
 import mihon.desktop.platform.DistributionMode
+import mihon.desktop.extension.DesktopNetworkSettingsStore
 import mihon.desktop.preferences.DesktopPreferenceStore
 import mihon.desktop.reader.DesktopReaderFactory
 import mihon.desktop.reader.DesktopReaderSettingsStore
+import mihon.desktop.track.DesktopTrackerManager
+import mihon.desktop.track.DesktopTrackerStore
+import mihon.desktop.track.defaultTrackerHttpClient
 import java.awt.EventQueue
 import java.nio.file.Path
 import java.util.concurrent.ExecutionException
@@ -400,8 +404,15 @@ object DesktopRuntimeFactory {
                 mutationPort = library,
                 scope = appScope,
             )
-            val trackerStore = mihon.desktop.track.DesktopTrackerStore(preferences)
-            val trackerManager = mihon.desktop.track.DesktopTrackerManager(store = trackerStore)
+            val trackerStore = DesktopTrackerStore(preferences)
+            val trackerManager = DesktopTrackerManager(
+                trackersList = DesktopTrackerManager.defaultTrackers(
+                    httpClient = defaultTrackerHttpClient {
+                        DesktopNetworkSettingsStore(preferences).load()
+                    },
+                ),
+                store = trackerStore,
+            )
             val trackingQueue = mihon.desktop.track.OfflineTrackingQueue(
                 queueFile = directories.root.resolve("tracking-queue.json"),
             )

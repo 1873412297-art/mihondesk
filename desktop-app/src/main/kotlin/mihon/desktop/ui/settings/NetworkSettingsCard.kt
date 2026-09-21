@@ -35,12 +35,15 @@ fun NetworkSettingsCard(preferences: DesktopPreferenceStore) {
     var saved by remember { mutableStateOf(false) }
     Card(modifier = Modifier.fillMaxWidth().testTag("network-settings-card")) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(recoveryText("Source network", "图源网络", "圖源網路"), style = MaterialTheme.typography.titleMedium)
+            Text(
+                recoveryText("Source and tracker network", "图源与跟踪器网络", "圖源與追蹤器網路"),
+                style = MaterialTheme.typography.titleMedium,
+            )
             Text(
                 recoveryText(
-                    "Changes apply to new requests. Site-specific headers take precedence.",
-                    "保存后对新请求生效，图源专用请求头优先。",
-                    "儲存後對新請求生效，圖源專用請求標頭優先。",
+                    "Changes apply to new requests. Proxy settings also apply to tracker sync (AniList, Bangumi, etc.).",
+                    "保存后对新请求生效。代理设置同时作用于跟踪器（AniList、Bangumi 等）同步流量。",
+                    "儲存後對新請求生效。代理設定同時作用於追蹤器（AniList、Bangumi 等）同步流量。",
                 ),
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
