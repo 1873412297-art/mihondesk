@@ -408,7 +408,7 @@ SYNC.md 合入；监测工作流开出一个有真实差异清单的 issue；3C 
 
 - [x] T0.1/T0.2/T0.3 完成
 - [x] 1A：5 源矩阵全格有结论，兼容矩阵文档与 README 已更新（2026-09-20 首轮：2 通过/1 受限/2 站点封锁；7 天复测到点补）
-- [ ] 1B：11 服务全有结论，主流 5 全链通过，D1 决策记录落盘（2026-09-21 Bangumi 首行：部分通过 5/6——登录/搜索绑定/重进/刷新/解绑全链过，修复 okhttp UA 被 Cloudflare 403 + okhttp5 字符串请求体强插 charset 两个生产缺陷；进度写入被 2 个桌面端缺陷（编辑按钮无响应、TrackOnReadSync 跳过非正章节号）阻断待修，证据：evidence/2026-09-21-tracker-production-bangumi.md）
+- [ ] 1B：11 服务全有结论，主流 5 全链通过，D1 决策记录落盘（2026-09-21/22 Bangumi + AniList 两行全链通过：Bangumi 6/6（含进度写入复测 ep_status 0→1）、AniList 4 项实测通过（登录/绑定/进度写入/解绑）；当日修复 okhttp UA 403、okhttp5 charset 注入、TrackingDialog 编辑按钮无响应、TrackOnReadSync 跳过非正章节号 4 个生产缺陷；遗留改进项：tracker 代理不可控。证据：evidence/2026-09-21-tracker-production-bangumi.md、evidence/2026-09-22-tracker-production-anilist.md）
 - [x] 1C：双向字段对照表无 P0 差异，README 备份范围更新（2026-09-20 闭环并提交 a16ffe450；Suwayomi 方向互导仍待补）
 - [x] 1D：12+2 格全有结论（2026-09-21；13 格格内全证据 + EXE 升级格跨格证据；产品发现 4 项入档；**残留：Win10 22H2 第二系统未测，需第二台 VM**）
 - [x] 1E：四项 SLO 有方法有结果（2026-09-20 全部通过：启动 P95 1239ms/空闲 463MiB/平台期交叉确认/帧时间 P95 10.22ms）

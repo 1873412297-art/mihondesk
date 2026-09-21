@@ -9,7 +9,7 @@
 
 | 服务 | 登录 | 搜索绑定 | 进度写入 | 退出重进 | 刷新 | 解绑 | 结论 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Bangumi | ✅ | ✅ | ❌ 断点（2 个产品缺陷，见下） | ✅ | ✅（重新打开对话框即重读本地+远端状态） | ✅（本地解绑；远端收藏不删除，API 无删除端点） | **部分通过（5/6 步）** |
+| Bangumi | ✅ | ✅ | ✅（缺陷修复后复测：阅读器退出触发 TrackOnReadSync，远端 ep_status 0→1） | ✅ | ✅（重新打开对话框即重读本地+远端状态） | ✅（本地解绑；远端收藏不删除，API 无删除端点） | **通过（6/6，2026-09-22 复测闭环）** |
 
 ## 执行记录
 
@@ -31,12 +31,16 @@
 - `DesktopBangumiTrackerApiTest.kt`：补 UA 断言 + 改用默认客户端（覆盖拦截器路径）。
 - 回归：35 项 tracker 测试全绿。
 
-## 遗留产品缺陷（待排期修复，未修）
+## 产品缺陷（当日发现当日修复，2026-09-22 提交）
 
-1. TrackingDialog 编辑按钮无响应（缺陷 A）。
-2. TrackOnReadSync 非正章节号跳过（缺陷 B）——`chapterNumber <= lastChapterRead` 需对单本场景特判（如 read=true 且 totalChapters<=1 时推 1）。
-3. tracker 客户端代理不可控（Clash 类代理下全挂）——建议复用/扩展"图源网络"代理设置至 tracker 客户端。
+1. ~~TrackingDialog"编辑"按钮无响应~~ **已修复**：根因是主 AlertDialog 与编辑 AlertDialog 同时组合时的桌面端弹层问题；修复为三个对话框互斥组合（edit > search > main）。修复验证：AniList 编辑对话框正常弹出并完成进度写入（见 2026-09-22-tracker-production-anilist.md）。
+2. ~~TrackOnReadSync 静默跳过非正章节号~~ **已修复**：`onChapterRead` 将 chapterNumber <= 0 映射为 1.0 后再比较/写入。修复验证：单本（-1.0）读完 → 远端 ep_status 0→1。新增 3 个单测（-1.0 同步 1 / 幂等 / 正章节回归）。
+3. tracker 客户端代理不可控（Clash 类代理下全挂）——**未修**，产品改进项见下节。
 
 ## 分级结论
 
-**部分通过（5/6）**：登录、搜索绑定、退出重进、刷新、解绑全链通过；进度写入被 2 个桌面端产品缺陷阻断（与 Bangumi 服务无关，Bangumi 写入通道经 curl 202 验证可用）。缺陷修复后需复测 进度写入 一格即可关行。
+**通过（2026-09-22 复测闭环 6/6）**：登录、搜索绑定、退出重进、刷新、解绑全链通过；进度写入在修复缺陷 A（TrackingDialog 编辑按钮无响应）与缺陷 B（TrackOnReadSync 跳过非正章节号）后复测通过——阅读器读完单本（chapter_number=-1.0）→ 退出触发同步 → Bangumi 远端 ep_status 0→1（updated_at 刷新）、离线队列 drain 为空。两项缺陷修复见提交 1B-defect-fixes（TrackingDialog 单对话框互斥重构 + onChapterRead 非正章节号映射为 1.0 + 3 个新单测）。
+
+### 遗留产品改进项（非缺陷，未修）
+
+- tracker 客户端代理不可控（Clash 类代理下 okhttp 请求被系统性掐断，Bangumi/AniList 均复现）——建议复用/扩展"图源网络"代理设置至 tracker 客户端。
