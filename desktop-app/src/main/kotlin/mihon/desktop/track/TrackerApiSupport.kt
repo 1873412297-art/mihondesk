@@ -3,6 +3,7 @@ package mihon.desktop.track
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
+import mihon.desktop.extension.DesktopNetworkPolicy
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Protocol
@@ -26,11 +27,14 @@ internal val defaultTrackerJson: Json = Json {
 
 internal const val DEFAULT_TRACKER_USER_AGENT = "MihonW/0.1 (Windows)"
 
-internal fun defaultTrackerHttpClient(): OkHttpClient = OkHttpClient.Builder()
+internal fun defaultTrackerHttpClient(
+    policyProvider: () -> DesktopNetworkPolicy = { DesktopNetworkPolicy() },
+): OkHttpClient = OkHttpClient.Builder()
     .callTimeout(DEFAULT_TRACKER_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
     // HTTP/1.1 only: HTTP/2 streams through local forwarding proxies (Clash/mihomo class)
     // are terminated mid-request ("unexpected end of stream"); trackers gain nothing from h2.
     .protocols(listOf(Protocol.HTTP_1_1))
+    .proxySelector(TrackerProxySelector(policyProvider))
     .addInterceptor { chain ->
         val request = chain.request()
         if (request.header("User-Agent") == null) {

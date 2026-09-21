@@ -3,6 +3,7 @@ package mihon.desktop.track
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import okhttp3.OkHttpClient
 
 class DesktopTrackerManager(
     trackersList: List<DesktopTracker> = defaultTrackers(),
@@ -107,18 +108,20 @@ class DesktopTrackerManager(
     }
 
     companion object {
-        fun defaultTrackers(): List<DesktopTracker> = listOf(
-            MyAnimeListTracker(),
-            AniListTracker(),
-            KitsuTracker(),
-            ShikimoriTracker(),
-            BangumiTracker(),
-            KomgaTracker(),
-            MangaUpdatesTracker(),
-            KavitaTracker(),
-            SuwayomiTracker(),
-            HikkaTracker(),
-            MangaBakaTracker(),
+        fun defaultTrackers(
+            httpClient: OkHttpClient = defaultTrackerHttpClient(),
+        ): List<DesktopTracker> = listOf(
+            MyAnimeListTracker(httpClient = httpClient),
+            AniListTracker(httpClient = httpClient),
+            KitsuTracker(httpClient = httpClient),
+            ShikimoriTracker(httpClient = httpClient),
+            BangumiTracker(httpClient = httpClient),
+            KomgaTracker(httpClient = httpClient),
+            MangaUpdatesTracker(httpClient = httpClient),
+            KavitaTracker(httpClient = httpClient),
+            SuwayomiTracker(httpClient = httpClient),
+            HikkaTracker(httpClient = httpClient),
+            MangaBakaTracker(httpClient = httpClient),
         )
     }
 }
