@@ -11,7 +11,6 @@ import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
 
 class KavitaTracker(
     id: Long = 8L,
@@ -35,7 +34,7 @@ class KavitaTracker(
             val authUrl = "$url/api/Plugin/authenticate".toHttpUrl().newBuilder()
                 .addQueryParameter("apiKey", key).addQueryParameter("pluginName", "Tachiyomi-Kavita").build()
             val response = execute(
-                Request.Builder().url(authUrl).post("{}".toRequestBody(TRACKER_JSON_MEDIA_TYPE)).build(),
+                Request.Builder().url(authUrl).post(jsonRequestBody("{}")).build(),
                 false,
             ) as? JsonObject ?: throw TrackerApiException("Kavita returned an invalid login response")
             val jwt = response.kString("token") ?: throw TrackerApiException("Kavita did not return a token")
@@ -144,7 +143,7 @@ class KavitaTracker(
             ) {
                 null
             } else {
-                "{}".toRequestBody(TRACKER_JSON_MEDIA_TYPE)
+                jsonRequestBody("{}")
             },
         ).build()
     private suspend fun execute(request: Request, allowEmpty: Boolean = false): kotlinx.serialization.json.JsonElement {

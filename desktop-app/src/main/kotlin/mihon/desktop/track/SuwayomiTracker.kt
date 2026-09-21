@@ -14,7 +14,6 @@ import kotlinx.serialization.json.put
 import okhttp3.Credentials
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
 
 class SuwayomiTracker(
     id: Long = 9L,
@@ -119,7 +118,7 @@ class SuwayomiTracker(
         }
         val builder = Request.Builder().url(
             requireBase() + "/api/graphql",
-        ).post(payload.toString().toRequestBody(TRACKER_JSON_MEDIA_TYPE))
+        ).post(jsonRequestBody(payload.toString()))
         if (user.isNotBlank()) {
             builder.header("Authorization", Credentials.basic(user, credential))
         } else if (credential.isNotBlank()) {

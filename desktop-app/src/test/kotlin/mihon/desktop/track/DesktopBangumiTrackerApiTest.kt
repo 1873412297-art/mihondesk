@@ -13,6 +13,7 @@ class DesktopBangumiTrackerApiTest {
     private lateinit var server: HttpServer
     private lateinit var tracker: BangumiTracker
     private val requests = mutableListOf<TrackerTestRecordedRequest>()
+    private val userAgentsByPath = mutableMapOf<String, String?>()
 
     @BeforeEach
     fun setUp() {
@@ -20,6 +21,7 @@ class DesktopBangumiTrackerApiTest {
         server.createContext("/") { exchange ->
             val request = exchange.recordTrackerTestRequest()
             requests += request
+            userAgentsByPath[request.path] = exchange.requestHeaders.getFirst("User-Agent")
             val body = when {
                 request.path == "/v0/me" -> """{"username":"reader","nickname":"Reader"}"""
                 request.path == "/v0/search/subjects" ->
@@ -42,7 +44,7 @@ class DesktopBangumiTrackerApiTest {
         server.start()
         tracker = BangumiTracker(
             baseUrl = "http://127.0.0.1:${server.address.port}",
-            httpClient = trackerTestHttpClient(),
+            httpClient = defaultTrackerHttpClient(),
         )
     }
 
@@ -52,6 +54,10 @@ class DesktopBangumiTrackerApiTest {
     @Test
     fun `Bangumi validates token searches refreshes and writes collections`() = runBlocking {
         assertTrue(tracker.login(mapOf("token" to "access-token")))
+        val meUserAgent = userAgentsByPath["/v0/me"]
+        assertTrue(!meUserAgent.isNullOrBlank())
+        assertTrue(!meUserAgent!!.startsWith("okhttp/"))
+        assertEquals(DEFAULT_TRACKER_USER_AGENT, meUserAgent)
         val result = tracker.search("one piece").single()
         assertEquals(42L, result.remoteId)
         val local = DesktopTrackRecord(mangaId = 1L, trackerId = 5L, remoteId = 42L, title = result.title)

@@ -13,7 +13,6 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -199,7 +198,7 @@ class AniListTracker(
         val requestBuilder = Request.Builder()
             .url(http.baseUrl)
             .header("Accept", "application/json")
-            .post(payload.toString().toRequestBody(TRACKER_JSON_MEDIA_TYPE))
+            .post(jsonRequestBody(payload.toString()))
         if (!authToken.isNullOrBlank()) {
             requestBuilder.header("Authorization", "Bearer $authToken")
         }

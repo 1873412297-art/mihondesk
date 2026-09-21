@@ -14,7 +14,6 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
 
 class MangaUpdatesTracker(
     baseUrl: String = "https://api.mangaupdates.com",
@@ -133,7 +132,7 @@ class MangaUpdatesTracker(
     private suspend fun jsonRequest(path: String, method: String, body: kotlinx.serialization.json.JsonElement, authenticated: Boolean = true): JsonObject {
         val builder = Request.Builder().url(http.baseUrl + path)
         if (authenticated) builder.header("Authorization", "Bearer ${token.orEmpty()}")
-        return execute(builder.method(method, body.toString().toRequestBody(TRACKER_JSON_MEDIA_TYPE)).build())
+        return execute(builder.method(method, jsonRequestBody(body.toString())).build())
     }
 
     private suspend fun execute(request: Request): JsonObject {

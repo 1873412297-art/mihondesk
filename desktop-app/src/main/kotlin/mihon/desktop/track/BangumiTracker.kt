@@ -11,7 +11,6 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
 
 private const val BANGUMI_API_URL = "https://api.bgm.tv"
 
@@ -60,7 +59,7 @@ class BangumiTracker(
         }
         val root = executeJson(
             authenticated("/v0/search/subjects?limit=20")
-                .post(body.toString().toRequestBody(TRACKER_JSON_MEDIA_TYPE)).build(),
+                .post(jsonRequestBody(body.toString())).build(),
         )
         return root["data"]?.jsonArray.orEmpty()
             .mapNotNull { it as? JsonObject }
@@ -104,12 +103,14 @@ class BangumiTracker(
 
     override suspend fun updateRemote(track: DesktopTrackRecord): DesktopTrackRecord {
         requireLogin()
-        val body = buildJsonObject {
-            put("type", TrackStatus.fromValue(track.status).toBangumiStatus())
-            put("rate", track.score.toInt().coerceIn(0, 10))
-            put("ep_status", track.lastChapterRead.toInt())
-            put("private", track.private)
-        }.toString().toRequestBody(TRACKER_JSON_MEDIA_TYPE)
+        val body = jsonRequestBody(
+            buildJsonObject {
+                put("type", TrackStatus.fromValue(track.status).toBangumiStatus())
+                put("rate", track.score.toInt().coerceIn(0, 10))
+                put("ep_status", track.lastChapterRead.toInt())
+                put("private", track.private)
+            }.toString(),
+        )
         val builder = authenticated("/v0/users/-/collections/${track.remoteId}")
         val request = if (track.libraryId > 0L) builder.patch(body).build() else builder.post(body).build()
         http.execute(request)

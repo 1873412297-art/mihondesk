@@ -11,7 +11,6 @@ import kotlinx.serialization.json.put
 import okhttp3.Credentials
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
 import java.nio.ByteBuffer
 import java.security.MessageDigest
 
@@ -61,7 +60,7 @@ class KomgaTracker(
         val http = requireClient()
         val payload = buildJsonObject { put("fullTextSearch", query.trim()) }
         val request = authenticatedRequest(http, "/api/v1/series/list?page=0&size=50")
-            .post(payload.toString().toRequestBody(TRACKER_JSON_MEDIA_TYPE))
+            .post(jsonRequestBody(payload.toString()))
             .build()
         val root = defaultTrackerJson.parseToJsonElement(http.execute(request)).jsonObject
         return root["content"]?.jsonArray.orEmpty()
@@ -90,7 +89,7 @@ class KomgaTracker(
             ?: throw TrackerApiException("Komga tracking URL does not identify a series")
         val payload = buildJsonObject { put("lastBookNumberSortRead", track.lastChapterRead) }
         val request = authenticatedRequest(http, "/api/v2/series/$seriesId/read-progress/tachiyomi")
-            .put(payload.toString().toRequestBody(TRACKER_JSON_MEDIA_TYPE))
+            .put(jsonRequestBody(payload.toString()))
             .build()
         http.execute(request)
         return findRemote(track) ?: track

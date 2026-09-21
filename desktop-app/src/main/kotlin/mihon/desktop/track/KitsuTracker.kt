@@ -12,7 +12,6 @@ import kotlinx.serialization.json.put
 import okhttp3.FormBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
 import java.time.Instant
 
 private const val KITSU_GRAPHQL_URL = "https://kitsu.app/api/graphql"
@@ -139,7 +138,7 @@ class KitsuTracker(
             .url(graphql.baseUrl)
             .header("Accept", "application/json")
             .header("Authorization", "Bearer ${authToken.orEmpty()}")
-            .post(payload.toString().toRequestBody(TRACKER_JSON_MEDIA_TYPE))
+            .post(jsonRequestBody(payload.toString()))
             .build()
         return defaultTrackerJson.parseToJsonElement(graphql.execute(request)).jsonObject
     }
