@@ -53,40 +53,22 @@ fun TrackingDialog(
     var editingTrack by remember { mutableStateOf<DesktopTrackRecord?>(null) }
     var searchingTracker by remember { mutableStateOf<DesktopTracker?>(null) }
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(strings.trackingTitle(mangaTitle)) },
-        text = {
-            Column(
-                modifier = Modifier.fillMaxWidth().testTag("tracking-dialog"),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-            ) {
-                LazyColumn(
-                    modifier = Modifier.fillMaxWidth().height(320.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    items(trackers, key = { it.id }) { tracker ->
-                        val boundTrack = currentTracks.find { it.trackerId == tracker.id }
-                        TrackerRow(
-                            tracker = tracker,
-                            track = boundTrack,
-                            onBind = { searchingTracker = tracker },
-                            onEdit = { editingTrack = boundTrack },
-                            onUnbind = { onUnbindTrack(tracker.id) },
-                        )
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss, modifier = Modifier.testTag("tracking-dialog-close")) {
-                Text(strings.dialogClose)
-            }
-        },
-    )
+    val activeEditingTrack = editingTrack?.let { et ->
+        currentTracks.find { it.trackerId == et.trackerId } ?: et
+    }
 
-    // Search dialog to bind new tracking entry
-    searchingTracker?.let { tracker ->
+    if (activeEditingTrack != null) {
+        EditTrackDetailsDialog(
+            track = activeEditingTrack,
+            tracker = trackers.firstOrNull { it.id == activeEditingTrack.trackerId },
+            onDismiss = { editingTrack = null },
+            onSave = { updated ->
+                onSaveTrack(updated)
+                editingTrack = null
+            },
+        )
+    } else if (searchingTracker != null) {
+        val tracker = searchingTracker!!
         SearchTrackDialog(
             tracker = tracker,
             initialQuery = mangaTitle,
@@ -105,17 +87,36 @@ fun TrackingDialog(
             },
             onSearch = { query -> onSearchTrack(tracker, query) },
         )
-    }
-
-    // Edit track details dialog
-    editingTrack?.let { track ->
-        EditTrackDetailsDialog(
-            track = track,
-            tracker = trackers.firstOrNull { it.id == track.trackerId },
-            onDismiss = { editingTrack = null },
-            onSave = { updated ->
-                onSaveTrack(updated)
-                editingTrack = null
+    } else {
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            title = { Text(strings.trackingTitle(mangaTitle)) },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth().testTag("tracking-dialog"),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxWidth().height(320.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        items(trackers, key = { it.id }) { tracker ->
+                            val boundTrack = currentTracks.find { it.trackerId == tracker.id }
+                            TrackerRow(
+                                tracker = tracker,
+                                track = boundTrack,
+                                onBind = { searchingTracker = tracker },
+                                onEdit = { editingTrack = boundTrack },
+                                onUnbind = { onUnbindTrack(tracker.id) },
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = onDismiss, modifier = Modifier.testTag("tracking-dialog-close")) {
+                    Text(strings.dialogClose)
+                }
             },
         )
     }
@@ -282,9 +283,25 @@ private fun EditTrackDetailsDialog(
     onSave: (DesktopTrackRecord) -> Unit,
 ) {
     val strings = LocalStrings.current
-    var lastChapterRead by remember { mutableStateOf(track.lastChapterRead.toString()) }
-    var score by remember { mutableStateOf(track.score.toString()) }
-    var status by remember { mutableStateOf(track.status) }
+    var lastChapterRead by remember(track) {
+        mutableStateOf(
+            if (track.lastChapterRead % 1.0 == 0.0) {
+                track.lastChapterRead.toInt().toString()
+            } else {
+                track.lastChapterRead.toString()
+            },
+        )
+    }
+    var score by remember(track) {
+        mutableStateOf(
+            if (track.score % 1.0 == 0.0) {
+                track.score.toInt().toString()
+            } else {
+                track.score.toString()
+            },
+        )
+    }
+    var status by remember(track) { mutableStateOf(track.status) }
 
     AlertDialog(
         onDismissRequest = onDismiss,

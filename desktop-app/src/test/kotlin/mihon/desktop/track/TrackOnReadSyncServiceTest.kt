@@ -134,4 +134,143 @@ class TrackOnReadSyncServiceTest {
         assertEquals(TrackStatus.COMPLETED.value, updated.status)
         repo.close()
     }
+
+    @Test
+    fun `oneshot chapter with negative number syncs lastChapterRead as 1 to logged in tracker`() = runBlocking {
+        val dbFile = tempDir.resolve("test-oneshot.db")
+        val repo = DesktopLibraryDatabaseFactory.open(dbFile)
+
+        val mangaId = repo.insertManga(
+            MangaRecord(
+                sourceId = 100L,
+                url = "/manga/one-shot",
+                title = "One Shot Manga",
+            ),
+        )
+
+        repo.insertTracking(
+            TrackingRecord(
+                mangaId = mangaId,
+                trackerId = 1L,
+                remoteId = 101L,
+                title = "One Shot Manga",
+                lastChapterRead = 0.0,
+                totalChapters = 1,
+            ),
+        )
+
+        val malTracker = TrackerTestFakeTracker(id = 1L, name = "MyAnimeList")
+        malTracker.login(mapOf("username" to "MALUser", "password" to "pass"))
+        val trackerManager = DesktopTrackerManager(listOf(malTracker))
+
+        val syncService = TrackOnReadSyncService(
+            repository = repo,
+            mutationPort = repo,
+            trackerManager = trackerManager,
+            trackingQueue = null,
+        )
+
+        val synced = syncService.onChapterRead(mangaId, -1.0)
+        assertEquals(1, synced)
+        assertEquals(1.0, malTracker.updates.single().lastChapterRead)
+
+        val updated = repo.trackingSnapshot(mangaId).single()
+        assertEquals(1.0, updated.lastChapterRead)
+        assertEquals(TrackStatus.COMPLETED.value, updated.status)
+        repo.close()
+    }
+
+    @Test
+    fun `second read of negative chapter number does not double sync`() = runBlocking {
+        val dbFile = tempDir.resolve("test-oneshot-idempotent.db")
+        val repo = DesktopLibraryDatabaseFactory.open(dbFile)
+
+        val mangaId = repo.insertManga(
+            MangaRecord(
+                sourceId = 100L,
+                url = "/manga/one-shot-2",
+                title = "One Shot Manga 2",
+            ),
+        )
+
+        repo.insertTracking(
+            TrackingRecord(
+                mangaId = mangaId,
+                trackerId = 1L,
+                remoteId = 101L,
+                title = "One Shot Manga 2",
+                lastChapterRead = 0.0,
+                totalChapters = 1,
+            ),
+        )
+
+        val malTracker = TrackerTestFakeTracker(id = 1L, name = "MyAnimeList")
+        malTracker.login(mapOf("username" to "MALUser", "password" to "pass"))
+        val trackerManager = DesktopTrackerManager(listOf(malTracker))
+
+        val syncService = TrackOnReadSyncService(
+            repository = repo,
+            mutationPort = repo,
+            trackerManager = trackerManager,
+            trackingQueue = null,
+        )
+
+        val syncedFirst = syncService.onChapterRead(mangaId, -1.0)
+        assertEquals(1, syncedFirst)
+        assertEquals(1, malTracker.updates.size)
+        assertEquals(1.0, malTracker.updates.last().lastChapterRead)
+
+        // Second read of the same -1.0 chapter must skip and not double-sync
+        val syncedSecond = syncService.onChapterRead(mangaId, -1.0)
+        assertEquals(0, syncedSecond)
+        assertEquals(1, malTracker.updates.size)
+
+        val updated = repo.trackingSnapshot(mangaId).single()
+        assertEquals(1.0, updated.lastChapterRead)
+        repo.close()
+    }
+
+    @Test
+    fun `positive chapter number syncs normally`() = runBlocking {
+        val dbFile = tempDir.resolve("test-positive.db")
+        val repo = DesktopLibraryDatabaseFactory.open(dbFile)
+
+        val mangaId = repo.insertManga(
+            MangaRecord(
+                sourceId = 100L,
+                url = "/manga/series",
+                title = "Series Manga",
+            ),
+        )
+
+        repo.insertTracking(
+            TrackingRecord(
+                mangaId = mangaId,
+                trackerId = 1L,
+                remoteId = 101L,
+                title = "Series Manga",
+                lastChapterRead = 5.0,
+                totalChapters = 50,
+            ),
+        )
+
+        val malTracker = TrackerTestFakeTracker(id = 1L, name = "MyAnimeList")
+        malTracker.login(mapOf("username" to "MALUser", "password" to "pass"))
+        val trackerManager = DesktopTrackerManager(listOf(malTracker))
+
+        val syncService = TrackOnReadSyncService(
+            repository = repo,
+            mutationPort = repo,
+            trackerManager = trackerManager,
+            trackingQueue = null,
+        )
+
+        val synced = syncService.onChapterRead(mangaId, 6.0)
+        assertEquals(1, synced)
+        assertEquals(6.0, malTracker.updates.single().lastChapterRead)
+
+        val updated = repo.trackingSnapshot(mangaId).single()
+        assertEquals(6.0, updated.lastChapterRead)
+        repo.close()
+    }
 }

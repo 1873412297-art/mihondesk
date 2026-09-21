@@ -101,12 +101,13 @@ class TrackOnReadSyncService(
     suspend fun onChapterRead(mangaId: Long, chapterNumber: Double): Int = readMutex.withLock {
         val tracks = repository.trackingSnapshot(mangaId)
         var synced = 0
+        val effective = if (chapterNumber <= 0) 1.0 else chapterNumber
         for (track in tracks) {
-            if (chapterNumber <= track.lastChapterRead) continue
+            if (effective <= track.lastChapterRead) continue
             val updated = track.copy(
-                lastChapterRead = chapterNumber,
+                lastChapterRead = effective,
                 status = if (track.totalChapters > 0 &&
-                    chapterNumber >= track.totalChapters
+                    effective >= track.totalChapters
                 ) {
                     TrackStatus.COMPLETED.value
                 } else {
