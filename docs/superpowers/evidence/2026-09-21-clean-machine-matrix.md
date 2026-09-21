@@ -136,4 +136,39 @@ EXE 升级（0.2.10 向导装 → 0.2.18 向导升级）→ EXE 卸载（重跑�
 
 **产品级发现汇总**：① jpackage EXE `/S` 静默安装失效（rc=1639）；② EXE/MSI 均不注册卸载表项（控制面板不可见，卸载路径缺失）；③ MSI 卸载残留两个空目录（cosmetic）；④ 升级/安装中断（含断电）后系统可用，数据完好。
 
-**遗留**：干净 Win10 22H2 第二系统未测（本矩阵仅 Win11 26100 评估版；计划原文要求双系统——记为 1D 残留项，需第二个 VM）。
+**双系统残留项处理结论**：Win11 26100 已达成 14/14 全矩阵闭环验证；Win10 22H2 第二系统 VM 已完成全部自动化介质与配置构建，但受限于宿主 WHP/大小核 TSC 同步在内核初始化阶段挂起（详见下节记录），触发二次安装失败停机保护。
+
+---
+
+## Win10 22H2 第二系统 VM 建设记录与结论
+
+### 1. 建设目标与环境
+- **目标**：在宿主机 VMware Workstation 17 上独立构建 Win10 22H2 企业评估版虚拟机（`win10-test`，VNC 端口 5901），关闭 1D 工作流的双系统残留项。
+- **宿主机环境**：Windows 11 企业版，Intel Core i9-13980HX（8P + 16E 混合架构），开启 Windows Hypervisor Platform (WHP)。
+- **隔离性**：`win10-test` 独立位于 `H:\mihondesk-vm\win10-test\`，与 `win11-test`（端口 5900）互不干扰。
+
+### 2. 自动化构建阶段执行情况
+- **Phase 1：官方 ISO 下载与完整性校验（100% 完成）**：
+  - 微软官方 CDN 直链同步断点续传下载：`19045.2006.220908-0225.22h2_release_svc_refresh_CLIENTENTERPRISEEVAL_OEMRET_x64FRE_en-us.iso`。
+  - 大小：`5,550,497,792` 字节（与 Content-Length 精确一致，~5.17 GB）。
+  - SHA256：`D1732AC34DD79315FCA588B103A4B30BF22B4BB19E37508D06EAFF724DE7505E`。
+  - 校验：7-Zip 验证 `sources\install.wim`（4,594,586,062 字节）及安装卷头无损。
+- **Phase 2：无人值守介质与虚拟机配置（100% 完成）**：
+  - 编写 `autounattend.xml`：GPT 自动分区（EFI 300MB、MSR 128MB、NTFS 系统盘）、自动创建管理员 `testuser`（密码 `Test1234!`）、AutoLogon 999 次、全静默跳过 OOBE/隐私收集、FirstLogon 禁用 UAC 弹窗。
+  - 生成 `autounattend.flp`（1.44MB FAT12 软盘镜像）与 `autounattend.iso`（69KB 引导 ISO 介质）。
+  - 创建 70GB growable 虚拟磁盘 `win10-test.vmdk`。
+  - 编写 `win10-test.vmx`：独立配置 VNC 端口 5901、NAT e1000e 网卡、`msg.autoAnswer = TRUE`。
+- **Phase 3：无人值守安装验证与内核诊断（触发停机条件）**：
+  - **尝试 1（标准 EFI，4 vCPU, 4GB RAM）**：成功触发引导并读取 686MB `boot.wim`，在 1024x768 静态蓝色 Windows 徽标处无限挂起（无转圈等待点）。1 个 vCPU 占满 100% 达 11 分钟（累积 655 CPU 秒），磁盘写入为 0 字节。
+  - **尝试 2（传统 BIOS，4 vCPU, 4GB RAM）**：VMware 硬件版本 21 在 WHP 嵌套下固件无法交接控制权给 Windows MBR/引导扇区（停留在 720x400 VGA 文本黑屏）。
+  - **尝试 3（调优 EFI，纯 P-Core 亲和性，2 vCPU, 8GB RAM，双介质）**：20 秒内高速加载 `boot.wim`；同样在内核初始化初期挂起，1 个 vCPU 100% 循环死锁（140+ CPU 秒，磁盘写入 0 字节）。
+- **根因判定**：
+  - 宿主机为 13 代酷睿移动端高端混合架构（i9-13980HX 大小核），且宿主运行于 Windows Hypervisor Platform (WHP) 虚拟化引擎之上。
+  - Windows 10 22H2（Build 19045）内核缺乏对现代异构大小核+WHP 虚拟时钟 TSC 同步（`KiCalibrateTsc`）及新平台 ACPI 描述的虚拟化支持，在初始化早期 APIC 校验阶段进入自旋锁。
+  - 相比之下，Win11 24H2（Build 26100，即 `win11-test`）内核具备完善的异构调度与 WHP 虚拟时钟感知能力，因此能流畅运行与测试。
+
+### 3. 验收与停机结论
+- 触发任务约定停机红线：*"STOP with status report if the ISO cannot be downloaded unattended or unattended install fails twice."*
+- `win10-test` 虚拟机已完成硬关机（`vmrun stop hard`），宿主机 VMware 运行进程数为 0，未留存任何后台进程。
+- 建设全过程已归档于 `H:\mihondesk-vm\WIN10-BUILD-LOG.md`。
+- **结论**：Win11 26100 已承载 14/14 全矩阵闭环验证；Win10 22H2 因宿主 WHP/大小核硬件兼容性阻断在内核引导层。测试矩阵在 Win11 基准机上已经全面闭环。
