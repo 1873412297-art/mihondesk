@@ -28,3 +28,10 @@
 ## 验收（GUI，主线执行）
 
 系统代理 ON（Clash）+ 应用网络设置切"直连"→ AniList/Bangumi 登录成功（不经系统代理）。这是该改进的端到端判据。
+
+## 执行记录（2026-09-22，agy staffer 实施 + 主线复核）
+
+- 实现：agy staffer（staffer-mubk68ki），主线逐行复核 diff 后执行构建测试
+- 单测：TrackerProxySelectorTest 4 项（SYSTEM 委托 / DIRECT / HTTP+SOCKS / 策略热切换）+ tracker 回归 40 项全绿
+- **验收（实活 API，系统代理 ON + Clash 活动）**：`DIRECT` 策略下 BangumiTracker 登录+搜索成功——即此前 100% 失败的代码路径；`SYSTEM` 模式行为不变（委托 JVM 默认 selector）
+- 提交：7a53df952
