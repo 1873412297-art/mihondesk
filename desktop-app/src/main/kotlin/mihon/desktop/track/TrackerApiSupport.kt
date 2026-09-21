@@ -5,7 +5,9 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
+import okhttp3.Protocol
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 
@@ -14,15 +16,33 @@ internal const val DEFAULT_TRACKER_TIMEOUT_MILLIS = 15_000L
 /** Sentinel used by tracker constructors: keep the timeout configured on the injected client. */
 internal const val INHERIT_CLIENT_TIMEOUT_MILLIS = 0L
 
-internal val TRACKER_JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
+internal val TRACKER_JSON_MEDIA_TYPE = "application/json".toMediaType()
+internal fun jsonRequestBody(json: String) = json.toByteArray(Charsets.UTF_8).toRequestBody(TRACKER_JSON_MEDIA_TYPE)
 
 internal val defaultTrackerJson: Json = Json {
     ignoreUnknownKeys = true
     isLenient = true
 }
 
+internal const val DEFAULT_TRACKER_USER_AGENT = "MihonW/0.1 (Windows)"
+
 internal fun defaultTrackerHttpClient(): OkHttpClient = OkHttpClient.Builder()
     .callTimeout(DEFAULT_TRACKER_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
+    // HTTP/1.1 only: HTTP/2 streams through local forwarding proxies (Clash/mihomo class)
+    // are terminated mid-request ("unexpected end of stream"); trackers gain nothing from h2.
+    .protocols(listOf(Protocol.HTTP_1_1))
+    .addInterceptor { chain ->
+        val request = chain.request()
+        if (request.header("User-Agent") == null) {
+            chain.proceed(
+                request.newBuilder()
+                    .header("User-Agent", DEFAULT_TRACKER_USER_AGENT)
+                    .build(),
+            )
+        } else {
+            chain.proceed(request)
+        }
+    }
     .build()
 
 /** Raised for any tracker API/transport failure that is not a plain HTTP status error. */

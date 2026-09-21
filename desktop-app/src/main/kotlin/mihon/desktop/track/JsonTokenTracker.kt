@@ -10,7 +10,6 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
 
 /** Token entry uses an existing authorized token; no Android OAuth client is impersonated. */
 abstract class JsonTokenTracker(
@@ -50,7 +49,7 @@ abstract class JsonTokenTracker(
         val builder = Request.Builder().url(http.baseUrl + path)
             .header("User-Agent", "MihonW/0.1 (Windows)")
         credential?.let { builder.header(authHeader, authPrefix + it) }
-        if (method != "GET") builder.method(method, payload?.toString()?.toRequestBody(TRACKER_JSON_MEDIA_TYPE))
+        if (method != "GET") builder.method(method, payload?.let { jsonRequestBody(it.toString()) })
         val body = http.execute(builder.build())
         return if (body.isBlank()) buildJsonObject { } else defaultTrackerJson.parseToJsonElement(body).jsonObject
     }

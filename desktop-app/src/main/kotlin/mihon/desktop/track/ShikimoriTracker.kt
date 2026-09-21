@@ -11,7 +11,6 @@ import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonObject
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
 
 private const val SHIKIMORI_URL = "https://shikimori.io"
 
@@ -83,7 +82,7 @@ class ShikimoriTracker(
         val path = if (track.libraryId > 0L) "/api/v2/user_rates/${track.libraryId}" else "/api/v2/user_rates"
         val builder = authenticated(path).method(
             if (track.libraryId > 0L) "PUT" else "POST",
-            payload.toString().toRequestBody(TRACKER_JSON_MEDIA_TYPE),
+            jsonRequestBody(payload.toString()),
         )
         val response = defaultTrackerJson.parseToJsonElement(http.execute(builder.build())).jsonObject
         return track.copy(libraryId = response.long("id") ?: track.libraryId)
@@ -107,7 +106,7 @@ class ShikimoriTracker(
         val root = defaultTrackerJson.parseToJsonElement(
             http.execute(
                 authenticated("/api/graphql", authToken).post(
-                    payload.toString().toRequestBody(TRACKER_JSON_MEDIA_TYPE),
+                    jsonRequestBody(payload.toString()),
                 ).build(),
             ),
         ).jsonObject
