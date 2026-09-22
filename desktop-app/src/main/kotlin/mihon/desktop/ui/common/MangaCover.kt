@@ -23,6 +23,7 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.delay
 import mihon.desktop.image.DesktopImageLoader
 import mihon.desktop.image.ImageRequest
 import mihon.desktop.image.LocalCustomCoverManager
@@ -50,14 +51,21 @@ fun MangaCover(
             return@LaunchedEffect
         }
         loading = true
-        val loaded = imageLoader.load(
-            ImageRequest(
-                uri = thumbnailUrl,
-                mangaId = mangaId,
-                localMangaPath = localMangaPath,
-                onHttpError = onCoverHttpError,
-            ),
-        )
+        var loaded: ImageBitmap? = null
+        for (attempt in 0..2) {
+            if (attempt > 0) {
+                delay(300L)
+            }
+            loaded = imageLoader.load(
+                ImageRequest(
+                    uri = thumbnailUrl,
+                    mangaId = mangaId,
+                    localMangaPath = localMangaPath,
+                    onHttpError = onCoverHttpError,
+                ),
+            )
+            if (loaded != null) break
+        }
         bitmap = loaded
         loading = false
     }
