@@ -80,6 +80,8 @@ fun DesktopShell(
     // Updates
     updatedChapters: List<mihon.desktop.updates.UpdatedChapterItem> = emptyList(),
     isUpdatingLibrary: Boolean = false,
+    isRepairingCovers: Boolean = false,
+    onRepairBrokenCovers: (() -> Unit)? = null,
     lastUpdateResult: mihon.desktop.updates.LibraryUpdateResult? = null,
     onCheckForUpdates: () -> Unit = {},
     updateRunState: mihon.desktop.library.update.LibraryUpdateRunState? = null,
@@ -323,6 +325,8 @@ fun DesktopShell(
                                 onBatchRemoveFromLibrary = onBatchRemoveFromLibrary,
                                 isUpdatingLibrary = isUpdatingLibrary,
                                 onUpdateLibrary = onUpdateLibrary,
+                                isRepairingCovers = isRepairingCovers,
+                                onRepairBrokenCovers = onRepairBrokenCovers,
                                 onEditInfo = onEditInfo,
                                 onDismissEditInfo = onDismissEditInfo,
                                 onSaveMangaInfo = onSaveMangaInfo,

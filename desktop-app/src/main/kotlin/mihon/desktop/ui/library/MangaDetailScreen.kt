@@ -139,6 +139,7 @@ fun MangaDetailScreen(
     onShowMissingChaptersChange: (Boolean) -> Unit = actions.onShowMissingChaptersChange,
     onSetChapterSettingsAsDefault: (Boolean) -> Unit = actions.onSetChapterSettingsAsDefault,
     onResetChapterSettingsToDefault: () -> Unit = actions.onResetChapterSettingsToDefault,
+    onCoverLoadFailed: ((Int) -> Unit)? = actions.onCoverLoadFailed,
 ) {
     val strings = LocalStrings.current
     Surface(
@@ -450,6 +451,11 @@ fun MangaDetailScreen(
                                                     contentDescription = manga.title,
                                                     modifier = Modifier.width(140.dp).height(200.dp),
                                                     shape = MaterialTheme.shapes.medium,
+                                                    onCoverHttpError = { code ->
+                                                        if (code == 404 || code == 410) {
+                                                            onCoverLoadFailed?.invoke(code)
+                                                        }
+                                                    },
                                                 )
                                             }
                                         }

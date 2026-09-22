@@ -195,10 +195,28 @@ fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
             downloader = runtime.downloader,
             sourceManager = runtime.sourceManager,
             extensionStoreService = runtime.extensionStoreService,
+            mangaRefreshHandler = { mangaId ->
+                val manga = runtime.library.allMangaSnapshot().find { it.id == mangaId }
+                if (manga != null && manga.sourceId != 0L) {
+                    val descriptor = runtime.sourceManager.findSourceDescriptor(manga.sourceId)
+                    if (descriptor != null && !descriptor.isLocalSource()) {
+                        runtime.onlineMangaSyncService.prepareOnlineMangaForReading(
+                            sourceId = manga.sourceId,
+                            manga = SManga(
+                                url = manga.url,
+                                title = manga.title,
+                                thumbnailUrl = manga.thumbnailUrl,
+                            ),
+                            forceRefresh = true,
+                        )
+                    }
+                }
+            },
         ).also { runtime.onShutdown(it::shutdown) }
     }
     val libraryState by libraryPresenter.state.collectAsState()
     val libraryBatchState by libraryPresenter.batchState.collectAsState()
+    val isRepairingCovers by libraryPresenter.isRepairingCovers.collectAsState()
     val repositoryMangaDetailState by libraryPresenter.detailState.collectAsState()
     val sourceNames = remember(runtime.sourceManager, libraryState.items) {
         runCatching {
@@ -724,6 +742,7 @@ fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
                                         onSetChapterSettingsAsDefault = libraryPresenter::setChapterSettingsAsDefault,
                                         onResetChapterSettingsToDefault =
                                         libraryPresenter::resetChapterSettingsToDefault,
+                                        onCoverLoadFailed = libraryPresenter::onCoverLoadFailed,
                                     )
                                     DesktopShell(
                                         appUpdateContent = {
@@ -848,6 +867,8 @@ fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
                                             navigator.navigate(DesktopDestination.Reader(chapterId))
                                         },
                                         isUpdatingLibrary = isUpdatingLibrary,
+                                        isRepairingCovers = isRepairingCovers,
+                                        onRepairBrokenCovers = libraryPresenter::repairBrokenCovers,
                                         lastUpdateResult = lastUpdateResult,
                                         updateRunState = updateRunState,
                                         updateProgress = updateProgress,

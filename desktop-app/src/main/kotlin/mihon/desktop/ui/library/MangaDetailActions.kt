@@ -43,4 +43,5 @@ data class MangaDetailActions(
     val onShowMissingChaptersChange: (Boolean) -> Unit = {},
     val onSetChapterSettingsAsDefault: (Boolean) -> Unit = {},
     val onResetChapterSettingsToDefault: () -> Unit = {},
+    val onCoverLoadFailed: ((Int) -> Unit)? = null,
 )

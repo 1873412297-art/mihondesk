@@ -39,11 +39,12 @@ fun MangaCover(
     contentScale: ContentScale = ContentScale.Crop,
     shape: Shape = RoundedCornerShape(4.dp),
     imageLoader: DesktopImageLoader? = LocalImageLoader.current,
+    onCoverHttpError: ((Int) -> Unit)? = null,
 ) {
     var bitmap by remember(thumbnailUrl, mangaId, localMangaPath) { mutableStateOf<ImageBitmap?>(null) }
     var loading by remember(thumbnailUrl, mangaId, localMangaPath) { mutableStateOf(true) }
 
-    LaunchedEffect(thumbnailUrl, mangaId, localMangaPath, imageLoader) {
+    LaunchedEffect(thumbnailUrl, mangaId, localMangaPath, imageLoader, onCoverHttpError) {
         if (imageLoader == null) {
             loading = false
             return@LaunchedEffect
@@ -54,6 +55,7 @@ fun MangaCover(
                 uri = thumbnailUrl,
                 mangaId = mangaId,
                 localMangaPath = localMangaPath,
+                onHttpError = onCoverHttpError,
             ),
         )
         bitmap = loaded
