@@ -38,3 +38,11 @@ internal fun reduceReaderOverlayVisibility(
         state.copy(chromeVisible = false, cursorVisible = false)
     }
 }
+
+/**
+ * The cursor is hidden only while actively reading. States that render interactive UI instead of
+ * pages (loading, failed, closed) always need a visible pointer - otherwise a hide triggered before
+ * the failure would leave the retry button unreachable without a cursor.
+ */
+internal fun readerCursorVisible(cursorVisible: Boolean, readerReady: Boolean): Boolean =
+    cursorVisible || !readerReady

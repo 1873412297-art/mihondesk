@@ -561,7 +561,9 @@ fun ReaderScreen(
                     event.changes.forEach { it.consume() }
                 }
             }
-            .pointerHoverIcon(rememberReaderPointerIcon(overlayVisibility.cursorVisible))
+            .pointerHoverIcon(
+                rememberReaderPointerIcon(readerCursorVisible(overlayVisibility.cursorVisible, ready)),
+            )
             .testTag("reader-screen")
             .focusRequester(focusRequester)
             .focusable()
