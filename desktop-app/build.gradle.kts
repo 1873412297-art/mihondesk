@@ -337,7 +337,7 @@ val packagePortableZip by tasks.registering(Zip::class) {
 tasks.withType<org.jetbrains.compose.desktop.application.tasks.AbstractJPackageTask>().configureEach {
     if (name in setOf("packageMsi", "packageExe")) {
         dependsOn(verifyCleanDistribution)
-    dependsOn(verifyRuntimeModules)
+        dependsOn(verifyRuntimeModules)
         inputs.dir(project.file("packaging/windows"))
         inputs.file(project.file("src/main/resources/icon.ico"))
         actions.clear()

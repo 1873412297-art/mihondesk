@@ -20,3 +20,7 @@ local.properties
 
 # macOS specific files
 .DS_Store
+
+# Local agent scratch space
+scratch/
+test.log
