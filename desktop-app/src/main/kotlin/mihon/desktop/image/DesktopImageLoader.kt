@@ -5,6 +5,9 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import mihon.desktop.reader.codec.PackagedReaderCodec
 import mihon.reader.image.ImageFormatDetector
@@ -12,6 +15,7 @@ import mihon.reader.image.ReaderImageFormat
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jetbrains.skia.Image
+import java.io.IOException
 import java.net.URI
 import java.nio.file.Files
 import java.nio.file.Path
@@ -33,6 +37,12 @@ data class ImageRequest(
     val onHttpError: ((code: Int) -> Unit)? = null,
 )
 
+internal fun shouldRetryCoverFetch(statusOrNull: Int?, ioFailure: Boolean): Boolean {
+    if (ioFailure) return true
+    if (statusOrNull == null) return false
+    return statusOrNull == 429 || statusOrNull in 500..599
+}
+
 class DesktopImageLoader(
     private val diskCacheDir: Path,
     policyProvider: () -> mihon.desktop.extension.DesktopNetworkPolicy = {
@@ -46,6 +56,7 @@ class DesktopImageLoader(
     private val customCoverManager: CustomCoverManager? = null,
     private val maxMemoryEntries: Int = 120,
 ) {
+    private val networkSemaphore = Semaphore(6)
     private val memoryCache = Collections.synchronizedMap(
         object : LinkedHashMap<String, ImageBitmap>(maxMemoryEntries, 0.75f, true) {
             override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, ImageBitmap>?): Boolean {
@@ -185,7 +196,7 @@ class DesktopImageLoader(
         }
     }
 
-    private fun loadFromNetwork(
+    private suspend fun loadFromNetwork(
         url: String,
         customHeaders: Map<String, String>,
         request: ImageRequest? = null,
@@ -200,44 +211,80 @@ class DesktopImageLoader(
             Files.deleteIfExists(diskFile)
         }
 
-        // Fetch from network
-        try {
-            val reqBuilder = Request.Builder().url(url)
-            reqBuilder.header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) MihonW/1.0")
-            customHeaders.forEach { (k, v) -> reqBuilder.header(k, v) }
+        val backoffs = listOf(300L, 900L)
+        for (attempt in 0..2) {
+            if (attempt > 0) {
+                delay(backoffs[attempt - 1])
+            }
+            var shouldRetry = false
+            val bitmap = networkSemaphore.withPermit {
+                try {
+                    val reqBuilder = Request.Builder().url(url)
+                    reqBuilder.header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) MihonW/1.0")
+                    customHeaders.forEach { (k, v) -> reqBuilder.header(k, v) }
 
-            client.newCall(reqBuilder.build()).execute().use { response ->
-                if (!response.isSuccessful) {
-                    debugLog("HTTP-${response.code} $url")
-                    if (request?.mangaId != null) {
-                        CoverFailureRegistry.record(request.mangaId, url, response.code)
+                    client.newCall(reqBuilder.build()).execute().use { response ->
+                        if (!response.isSuccessful) {
+                            val code = response.code
+                            val retryable = shouldRetryCoverFetch(statusOrNull = code, ioFailure = false)
+                            if (retryable && attempt < 2) {
+                                debugLog("HTTP-$code $url (attempt $attempt, will retry)")
+                                shouldRetry = true
+                                return@withPermit null
+                            }
+                            debugLog("HTTP-$code $url")
+                            if (request?.mangaId != null) {
+                                CoverFailureRegistry.record(request.mangaId, url, code)
+                            }
+                            request?.onHttpError?.invoke(code)
+                            return@withPermit null
+                        }
+                        val body = response.body
+                        val bytes = body.bytes()
+                        if (bytes.isEmpty()) return@withPermit null
+
+                        val decoded = decodeBytes(bytes)
+                        if (decoded == null) {
+                            debugLog("DECODE-FAIL $url bytes=${bytes.size}")
+                            return@withPermit null
+                        }
+
+                        // Save to disk cache atomically
+                        val tmpFile = diskCacheDir.resolve("$hash.tmp")
+                        Files.write(tmpFile, bytes)
+                        Files.move(
+                            tmpFile,
+                            diskFile,
+                            StandardCopyOption.REPLACE_EXISTING,
+                            StandardCopyOption.ATOMIC_MOVE,
+                        )
+
+                        return@withPermit decoded
                     }
-                    request?.onHttpError?.invoke(response.code)
-                    return null
+                } catch (c: CancellationException) {
+                    throw c
+                } catch (e: IOException) {
+                    if (shouldRetryCoverFetch(statusOrNull = null, ioFailure = true) && attempt < 2) {
+                        debugLog("FETCH-FAIL $url ${e.javaClass.name}: ${e.message} (attempt $attempt, will retry)")
+                        shouldRetry = true
+                        return@withPermit null
+                    }
+                    debugLog("FETCH-FAIL $url ${e.javaClass.name}: ${e.message}")
+                    return@withPermit null
+                } catch (e: Exception) {
+                    debugLog("FETCH-FAIL $url ${e.javaClass.name}: ${e.message}")
+                    return@withPermit null
                 }
-                val body = response.body
-                val bytes = body.bytes()
-                if (bytes.isEmpty()) return null
+            }
 
-                val bitmap = decodeBytes(bytes)
-                if (bitmap == null) {
-                    debugLog("DECODE-FAIL $url bytes=${bytes.size}")
-                    return null
-                }
-
-                // Save to disk cache atomically
-                val tmpFile = diskCacheDir.resolve("$hash.tmp")
-                Files.write(tmpFile, bytes)
-                Files.move(tmpFile, diskFile, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
-
+            if (bitmap != null) {
                 return bitmap
             }
-        } catch (c: CancellationException) {
-            throw c
-        } catch (e: Exception) {
-            debugLog("FETCH-FAIL $url ${e.javaClass.name}: ${e.message}")
-            return null
+            if (!shouldRetry) {
+                return null
+            }
         }
+        return null
     }
 
     private fun debugLog(line: String) {

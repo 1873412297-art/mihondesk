@@ -184,4 +184,24 @@ class DesktopImageLoaderTest {
         imageLoader.clearDiskCache()
         assertFalse(Files.exists(dummyCachedFile))
     }
+
+    @Test
+    fun `shouldRetryCoverFetch retry policy`() {
+        // IOException -> true
+        assertTrue(shouldRetryCoverFetch(statusOrNull = null, ioFailure = true))
+
+        // 429 -> true
+        assertTrue(shouldRetryCoverFetch(statusOrNull = 429, ioFailure = false))
+
+        // 500/503 -> true
+        assertTrue(shouldRetryCoverFetch(statusOrNull = 500, ioFailure = false))
+        assertTrue(shouldRetryCoverFetch(statusOrNull = 503, ioFailure = false))
+
+        // 404/403 -> false
+        assertFalse(shouldRetryCoverFetch(statusOrNull = 404, ioFailure = false))
+        assertFalse(shouldRetryCoverFetch(statusOrNull = 403, ioFailure = false))
+
+        // 200 -> false
+        assertFalse(shouldRetryCoverFetch(statusOrNull = 200, ioFailure = false))
+    }
 }
