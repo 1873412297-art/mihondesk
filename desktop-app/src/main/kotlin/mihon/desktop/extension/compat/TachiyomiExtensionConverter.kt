@@ -431,7 +431,7 @@ object TachiyomiExtensionConverter {
         return resolved
     }
 
-    private fun generateSourceId(name: String, lang: String): Long {
+    internal fun generateSourceId(name: String, lang: String): Long {
         val key = "${name.lowercase()}/$lang/1"
         val bytes = MessageDigest.getInstance("MD5").digest(key.toByteArray())
         val buffer = ByteBuffer.wrap(bytes).order(ByteOrder.BIG_ENDIAN)

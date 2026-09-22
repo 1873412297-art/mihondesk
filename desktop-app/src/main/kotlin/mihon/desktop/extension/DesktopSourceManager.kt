@@ -307,6 +307,27 @@ class DesktopSourceManager(
         return getSources().find { it.id == sourceId }
     }
 
+    /**
+     * Resolves a source descriptor for [sourceId] if it belongs to any builtin source
+     * or installed extension (even if disabled). Returns null if uninstalled/missing.
+     */
+    fun get(sourceId: Long): SourceDescriptor? {
+        val builtin = builtinSources[sourceId]
+        if (builtin != null) return descriptorFor(builtin)
+        return installer?.getInstalledExtensions()
+            ?.flatMap { it.manifest.sources }
+            ?.firstOrNull { it.id == sourceId }
+    }
+
+    /** Set of all source IDs known to the manager (builtins + all installed extensions). */
+    fun getInstalledSourceIds(): Set<Long> {
+        val installed = installer?.getInstalledExtensions()
+            ?.flatMap { it.manifest.sources }
+            ?.map { it.id }
+            ?: emptyList()
+        return (installed + builtinSources.keys).toSet()
+    }
+
     // ---------------------------------------------------------------------
     // Per-source / per-extension desktop settings
     // ---------------------------------------------------------------------

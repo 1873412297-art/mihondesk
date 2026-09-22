@@ -1,11 +1,15 @@
 package mihon.desktop.ui.library
 
+import mihon.desktop.extension.ExtensionStoreItem
+
 /**
  * The complete mutation surface shared by library and source-browse manga details.
  * Navigation, source refresh, and library membership remain entry-specific concerns.
  */
 data class MangaDetailActions(
     val onReadChapter: (Long) -> Unit = {},
+    val onInstallMissingSource: (ExtensionStoreItem) -> Unit = {},
+    val onIgnoreMissingSource: () -> Unit = {},
     val onEditCategories: () -> Unit = {},
     val onOpenTracking: () -> Unit = {},
     val onEditInfo: () -> Unit = {},

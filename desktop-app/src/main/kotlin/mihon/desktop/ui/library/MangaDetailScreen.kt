@@ -83,6 +83,7 @@ import androidx.compose.ui.unit.dp
 import kotlinx.serialization.json.Json
 import mihon.desktop.category.DesktopCategory
 import mihon.desktop.download.DownloadStatus
+import mihon.desktop.extension.ExtensionStoreItem
 import mihon.desktop.i18n.LocalStrings
 import mihon.desktop.i18n.UiText
 import mihon.desktop.i18n.text
@@ -99,6 +100,8 @@ fun MangaDetailScreen(
     onRetry: () -> Unit = {},
     onToggleLibrary: (() -> Unit)? = null,
     onRefreshSource: (() -> Unit)? = null,
+    onInstallMissingSource: (ExtensionStoreItem) -> Unit = actions.onInstallMissingSource,
+    onIgnoreMissingSource: () -> Unit = actions.onIgnoreMissingSource,
     isLibraryActionRunning: Boolean = false,
     isRefreshingSource: Boolean = false,
     modifier: Modifier = Modifier,
@@ -363,6 +366,62 @@ fun MangaDetailScreen(
                                         )
                                         Spacer(Modifier.width(6.dp))
                                         Text(strings.mangaDetailTracking)
+                                    }
+                                }
+
+                                state.missingSource?.let { missing ->
+                                    Surface(
+                                        modifier = Modifier.fillMaxWidth().testTag("missing-source-banner"),
+                                        shape = MaterialTheme.shapes.medium,
+                                        color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f),
+                                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f)),
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                        ) {
+                                            Column(
+                                                modifier = Modifier.weight(1f).padding(end = 16.dp),
+                                                verticalArrangement = Arrangement.spacedBy(4.dp),
+                                            ) {
+                                                val bannerTitle = if (missing.extension != null) {
+                                                    strings.missingSourceBannerTitle(
+                                                        extName = missing.extension.name.ifBlank {
+                                                            strings.missingSourceUnknownExtension
+                                                        },
+                                                        mangaCount = missing.mangaCount,
+                                                    )
+                                                } else {
+                                                    strings.missingSourceBannerNotFound
+                                                }
+                                                Text(
+                                                    text = bannerTitle,
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    color = MaterialTheme.colorScheme.onErrorContainer,
+                                                )
+                                            }
+                                            if (missing.extension != null) {
+                                                Row(
+                                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                ) {
+                                                    FilledTonalButton(
+                                                        onClick = { onInstallMissingSource(missing.extension) },
+                                                        modifier = Modifier.testTag("missing-source-install-btn"),
+                                                    ) {
+                                                        Text(strings.missingSourceBannerInstall)
+                                                    }
+                                                    TextButton(
+                                                        onClick = onIgnoreMissingSource,
+                                                        modifier = Modifier.testTag("missing-source-ignore-btn"),
+                                                    ) {
+                                                        Text(strings.missingSourceBannerIgnore)
+                                                    }
+                                                }
+                                            }
+                                        }
                                     }
                                 }
 
