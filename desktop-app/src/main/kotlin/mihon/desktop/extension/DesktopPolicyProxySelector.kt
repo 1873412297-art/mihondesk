@@ -1,4 +1,4 @@
-package mihon.desktop.track
+package mihon.desktop.extension
 
 import mihon.desktop.extension.DesktopNetworkPolicy
 import mihon.desktop.extension.DesktopProxyMode
@@ -9,7 +9,7 @@ import java.net.ProxySelector
 import java.net.SocketAddress
 import java.net.URI
 
-internal class TrackerProxySelector(
+class DesktopPolicyProxySelector(
     private val policyProvider: () -> DesktopNetworkPolicy,
     private val defaultSelector: ProxySelector? = ProxySelector.getDefault(),
 ) : ProxySelector() {

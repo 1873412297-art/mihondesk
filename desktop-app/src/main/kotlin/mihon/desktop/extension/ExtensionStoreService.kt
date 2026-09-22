@@ -53,10 +53,12 @@ data class ExtensionStoreItem(
 @OptIn(ExperimentalSerializationApi::class)
 class ExtensionStoreService(
     private val preferenceStore: DesktopPreferenceStore,
+    policyProvider: () -> DesktopNetworkPolicy = { DesktopNetworkPolicy() },
     private val httpClient: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
         .readTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
         .callTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
+        .proxySelector(DesktopPolicyProxySelector(policyProvider))
         .build(),
 ) {
     companion object {
