@@ -52,4 +52,18 @@ class ReaderOverlayVisibilityTest {
         reduceReaderOverlayVisibility(page, ReaderOverlayEvent.IdleTimeout) shouldBe
             ReaderOverlayVisibilityState(chromeVisible = false, cursorVisible = false)
     }
+
+    @Test
+    fun `non-ready reader always shows the cursor`() {
+        // A hidden cursor must never reach a state that renders interactive UI instead of pages,
+        // otherwise the retry button on the error page is unreachable.
+        readerCursorVisible(cursorVisible = false, readerReady = false) shouldBe true
+        readerCursorVisible(cursorVisible = true, readerReady = false) shouldBe true
+    }
+
+    @Test
+    fun `ready reader keeps respecting cursor hiding`() {
+        readerCursorVisible(cursorVisible = false, readerReady = true) shouldBe false
+        readerCursorVisible(cursorVisible = true, readerReady = true) shouldBe true
+    }
 }

@@ -64,12 +64,10 @@ internal fun ReaderGestureArea(
     } else {
         Modifier
     }
-    val pointerMoveModifier = if (enabled) {
-        Modifier.onPointerEvent(PointerEventType.Move, PointerEventPass.Initial) {
-            currentOnPointerMove()
-        }
-    } else {
-        Modifier
+    // Movement reporting is passive: it must keep working even when the gesture area is disabled,
+    // because a hidden cursor is only restored by movement (see readerCursorVisible).
+    val pointerMoveModifier = Modifier.onPointerEvent(PointerEventType.Move, PointerEventPass.Initial) {
+        currentOnPointerMove()
     }
 
     Box(
