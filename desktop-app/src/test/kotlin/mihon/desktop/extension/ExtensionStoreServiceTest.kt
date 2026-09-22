@@ -406,4 +406,102 @@ class ExtensionStoreServiceTest {
             server.stop(0)
         }
     }
+
+    @Test
+    fun `add then remove via different but equivalent URL form`(@TempDir tempDir: Path) {
+        val prefStore = DesktopPreferenceStore(tempDir.resolve("prefs.properties"))
+        val service = ExtensionStoreService(prefStore)
+
+        // Add via github.com/.../raw/.../index.pb, remove via raw.githubusercontent.com/...
+        service.addRepository("https://github.com/user/repo/raw/repo/index.pb")
+        service.getRepositories() shouldBe listOf("https://raw.githubusercontent.com/user/repo/repo")
+        service.removeRepository("https://raw.githubusercontent.com/user/repo/repo")
+        service.getRepositories() shouldBe emptyList()
+
+        // Vice versa: add via raw.githubusercontent.com/..., remove via github.com/.../index.pb
+        service.addRepository("https://raw.githubusercontent.com/user/repo/repo")
+        service.getRepositories() shouldBe listOf("https://raw.githubusercontent.com/user/repo/repo")
+        service.removeRepository("https://github.com/user/repo/raw/repo/index.pb")
+        service.getRepositories() shouldBe emptyList()
+
+        // Also test with trailing slash / tree variant
+        service.addRepository("https://github.com/user/repo/tree/repo/")
+        service.getRepositories() shouldBe listOf("https://raw.githubusercontent.com/user/repo/repo")
+        service.removeRepository("https://github.com/user/repo/raw/repo")
+        service.getRepositories() shouldBe emptyList()
+    }
+
+    @Test
+    fun `legacy un-normalized stored entries are migrated and removable`(@TempDir tempDir: Path) {
+        val storeFile = tempDir.resolve("prefs.properties")
+        val prefStore = DesktopPreferenceStore(storeFile)
+
+        // Seed with legacy un-normalized entries that would previously get stuck
+        prefStore.update {
+            setProperty(
+                ExtensionStoreService.PREF_KEY_REPOSITORIES,
+                "https://github.com/keiyoushi/extensions/raw/repo/index.pb\nhttps://github.com/keiyoushi/extensions/raw/repo",
+            )
+        }
+
+        val service = ExtensionStoreService(prefStore)
+        // Calling getRepositories() should normalize and dedupe in memory and migrate preference store
+        val repos = service.getRepositories()
+        repos shouldBe listOf("https://raw.githubusercontent.com/keiyoushi/extensions/repo")
+
+        // Check persisted preference store directly
+        val newStore = DesktopPreferenceStore(storeFile)
+        newStore.property(ExtensionStoreService.PREF_KEY_REPOSITORIES) shouldBe
+            "https://raw.githubusercontent.com/keiyoushi/extensions/repo"
+
+        // Entries are now cleanly removable using any equivalent form
+        service.removeRepository("https://github.com/keiyoushi/extensions/raw/repo")
+        service.getRepositories() shouldBe emptyList()
+        newStore.property(ExtensionStoreService.PREF_KEY_REPOSITORIES) shouldBe ""
+    }
+
+    @Test
+    fun `add dedupes equivalent forms`(@TempDir tempDir: Path) {
+        val prefStore = DesktopPreferenceStore(tempDir.resolve("prefs.properties"))
+        val service = ExtensionStoreService(prefStore)
+
+        service.addRepository("https://github.com/user/repo/raw/branch/index.pb")
+        service.addRepository("https://github.com/user/repo/tree/branch")
+        service.addRepository("https://raw.githubusercontent.com/user/repo/branch/index.min.json")
+        service.addRepository("https://raw.githubusercontent.com/user/repo/branch/")
+        service.addRepository("https://raw.githubusercontent.com/user/repo/branch")
+
+        service.getRepositories() shouldBe listOf("https://raw.githubusercontent.com/user/repo/branch")
+    }
+
+    @Test
+    fun `normalizeRepoUrl is idempotent`(@TempDir tempDir: Path) {
+        val prefStore = DesktopPreferenceStore(tempDir.resolve("prefs.properties"))
+        val service = ExtensionStoreService(prefStore)
+
+        val testUrls = listOf(
+            "https://github.com/keiyoushi/extensions/raw/repo/index.pb",
+            "https://github.com/keiyoushi/extensions/tree/repo",
+            "https://github.com/keiyoushi/extensions/raw/repo",
+            "https://raw.githubusercontent.com/keiyoushi/extensions/repo",
+            "https://raw.githubusercontent.com/keiyoushi/extensions/repo/",
+            "https://raw.githubusercontent.com/keiyoushi/extensions/repo///",
+            "https://example.com/custom/repo/index.min.json",
+            "https://example.com/custom/repo/index.json",
+            "https://example.com/custom/repo/repo.json",
+            "https://example.com/custom/repo/",
+            "https://example.com/custom/repo",
+            "",
+            "   ",
+        )
+
+        for (url in testUrls) {
+            val normalizedOnce = service.normalizeRepoUrl(url)
+            val normalizedTwice = service.normalizeRepoUrl(normalizedOnce)
+            val normalizedThrice = service.normalizeRepoUrl(normalizedTwice)
+
+            normalizedTwice shouldBe normalizedOnce
+            normalizedThrice shouldBe normalizedOnce
+        }
+    }
 }

@@ -2,6 +2,7 @@ package mihon.desktop.ui.browse
 
 import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.collections.shouldNotContain
+import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -22,6 +23,9 @@ import mihon.extension.model.ExtensionManifest
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+import okhttp3.OkHttpClient
+import okhttp3.ResponseBody.Companion.toResponseBody
+import java.io.IOException
 import java.nio.file.Path
 
 class BrowsePresenterTest {
@@ -227,4 +231,70 @@ class BrowsePresenterTest {
 
         db.close()
     }
+
+    @Test
+    fun `refresh isolates repository failures and surfaces error when partial or all fail`(@TempDir tempDir: Path) =
+        runBlocking {
+            val db = DesktopLibraryDatabaseFactory.open(tempDir.resolve("test.db"))
+            val prefStore = DesktopPreferenceStore(tempDir.resolve("prefs.properties"))
+            val installer = DesktopExtensionInstaller(tempDir.resolve("exts").toFile(), prefStore)
+            val sourceManager = DesktopSourceManager(
+                installer = installer,
+                processManager = null,
+                preferenceStore = prefStore,
+            )
+
+            val goodJson = """
+                [{"pkg":"ext.good","name":"Good Extension","version":"1.0.0","code":1}]
+            """.trimIndent()
+
+            val client = OkHttpClient.Builder().addInterceptor { chain ->
+                val url = chain.request().url.toString()
+                if (url.contains("good-repo")) {
+                    okhttp3.Response.Builder()
+                        .request(chain.request())
+                        .protocol(okhttp3.Protocol.HTTP_1_1)
+                        .code(200)
+                        .message("OK")
+                        .body(goodJson.toResponseBody())
+                        .build()
+                } else {
+                    throw IOException("Failed to reach bad-repo")
+                }
+            }.build()
+
+            val storeService = ExtensionStoreService(preferenceStore = prefStore, httpClient = client)
+            storeService.addRepository("https://example.com/good-repo")
+            storeService.addRepository("https://example.com/bad-repo")
+
+            val presenter = BrowsePresenter(
+                sourceManager = sourceManager,
+                installer = installer,
+                storeService = storeService,
+                libraryRepository = db,
+                preferenceStore = prefStore,
+                scope = scope,
+            )
+
+            // Wait for initial refresh to complete
+            var tries = 0
+            while ((presenter.state.value.isLoading || presenter.state.value.errorMessage == null) && tries++ < 50) {
+                kotlinx.coroutines.delay(50)
+            }
+
+            // Partial failure: good extensions are loaded, but errorMessage mentions the failure
+            presenter.state.value.availableExtensions.map { it.pkg } shouldBe listOf("ext.good")
+            presenter.state.value.errorMessage.shouldNotBeNull().startsWith("Failed to refresh 1 repository: Failed to fetch extension index from https://example.com/bad-repo") shouldBe true
+
+            // Now remove good-repo, leaving only bad-repo (complete failure)
+            presenter.removeRepository("https://example.com/good-repo")
+            tries = 0
+            while ((presenter.state.value.isLoading || presenter.state.value.availableExtensions.isNotEmpty()) && tries++ < 50) {
+                kotlinx.coroutines.delay(50)
+            }
+            presenter.state.value.availableExtensions shouldBe emptyList()
+            presenter.state.value.errorMessage.shouldNotBeNull().startsWith("Failed to refresh 1 repository: Failed to fetch extension index from https://example.com/bad-repo") shouldBe true
+
+            db.close()
+        }
 }
