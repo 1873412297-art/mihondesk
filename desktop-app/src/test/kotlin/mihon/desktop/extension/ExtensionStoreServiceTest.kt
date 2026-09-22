@@ -43,7 +43,7 @@ class ExtensionStoreServiceTest {
             requests.incrementAndGet()
             throw IOException("Unexpected repository request")
         }.build()
-        val service = ExtensionStoreService(DesktopPreferenceStore(tempDir.resolve("prefs.properties")), client)
+        val service = ExtensionStoreService(DesktopPreferenceStore(tempDir.resolve("prefs.properties")), httpClient = client)
 
         service.fetchAvailableExtensions() shouldBe emptyList()
         requests.get() shouldBe 0

@@ -76,7 +76,10 @@ class DesktopRuntime(
             preferenceStore = preferences,
         ),
     val extensionStoreService: mihon.desktop.extension.ExtensionStoreService =
-        mihon.desktop.extension.ExtensionStoreService(preferenceStore = preferences),
+        mihon.desktop.extension.ExtensionStoreService(
+            preferenceStore = preferences,
+            policyProvider = { DesktopNetworkSettingsStore(preferences).load() },
+        ),
     val processManager: mihon.desktop.extension.WindowsExtensionProcessManager? = null,
     val sourceManager: mihon.desktop.extension.DesktopSourceManager =
         mihon.desktop.extension.DesktopSourceManager(
@@ -347,7 +350,10 @@ object DesktopRuntimeFactory {
                 networkHelper.registerExtensionDomains(ext.pkg, ext.manifest.declaredDomains)
             }
 
-            val extensionStoreService = mihon.desktop.extension.ExtensionStoreService(preferenceStore = preferences)
+            val extensionStoreService = mihon.desktop.extension.ExtensionStoreService(
+            preferenceStore = preferences,
+            policyProvider = { DesktopNetworkSettingsStore(preferences).load() },
+        )
             val sourceManager = mihon.desktop.extension.DesktopSourceManager(
                 installer = extensionInstaller,
                 processManager = processManager,
