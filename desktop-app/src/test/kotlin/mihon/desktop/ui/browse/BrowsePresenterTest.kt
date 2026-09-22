@@ -20,11 +20,11 @@ import mihon.desktop.extension.builtin.BundledMangaDexSource
 import mihon.desktop.library.db.DesktopLibraryDatabaseFactory
 import mihon.desktop.preferences.DesktopPreferenceStore
 import mihon.extension.model.ExtensionManifest
+import okhttp3.OkHttpClient
+import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
-import okhttp3.OkHttpClient
-import okhttp3.ResponseBody.Companion.toResponseBody
 import java.io.IOException
 import java.nio.file.Path
 
@@ -284,16 +284,24 @@ class BrowsePresenterTest {
 
             // Partial failure: good extensions are loaded, but errorMessage mentions the failure
             presenter.state.value.availableExtensions.map { it.pkg } shouldBe listOf("ext.good")
-            presenter.state.value.errorMessage.shouldNotBeNull().startsWith("Failed to refresh 1 repository: Failed to fetch extension index from https://example.com/bad-repo") shouldBe true
+            presenter.state.value.errorMessage.shouldNotBeNull().startsWith(
+                "Failed to refresh 1 repository: Failed to fetch extension index from https://example.com/bad-repo",
+            ) shouldBe
+                true
 
             // Now remove good-repo, leaving only bad-repo (complete failure)
             presenter.removeRepository("https://example.com/good-repo")
             tries = 0
-            while ((presenter.state.value.isLoading || presenter.state.value.availableExtensions.isNotEmpty()) && tries++ < 50) {
+            while ((presenter.state.value.isLoading || presenter.state.value.availableExtensions.isNotEmpty()) &&
+                tries++ < 50
+            ) {
                 kotlinx.coroutines.delay(50)
             }
             presenter.state.value.availableExtensions shouldBe emptyList()
-            presenter.state.value.errorMessage.shouldNotBeNull().startsWith("Failed to refresh 1 repository: Failed to fetch extension index from https://example.com/bad-repo") shouldBe true
+            presenter.state.value.errorMessage.shouldNotBeNull().startsWith(
+                "Failed to refresh 1 repository: Failed to fetch extension index from https://example.com/bad-repo",
+            ) shouldBe
+                true
 
             db.close()
         }

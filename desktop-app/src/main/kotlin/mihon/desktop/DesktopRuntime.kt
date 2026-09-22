@@ -12,6 +12,7 @@ import mihon.desktop.cli.DesktopCommand
 import mihon.desktop.cli.DesktopCommandParser
 import mihon.desktop.download.DownloadCacheCleaner
 import mihon.desktop.download.DownloadDiskProvider
+import mihon.desktop.extension.DesktopNetworkSettingsStore
 import mihon.desktop.library.backup.AndroidBackupCodec
 import mihon.desktop.library.backup.AndroidBackupImporter
 import mihon.desktop.library.backup.AndroidBackupValidator
@@ -21,7 +22,6 @@ import mihon.desktop.library.local.LocalMangaImporter
 import mihon.desktop.platform.AppDirectories
 import mihon.desktop.platform.AppDirectoryResolver
 import mihon.desktop.platform.DistributionMode
-import mihon.desktop.extension.DesktopNetworkSettingsStore
 import mihon.desktop.preferences.DesktopPreferenceStore
 import mihon.desktop.reader.DesktopReaderFactory
 import mihon.desktop.reader.DesktopReaderSettingsStore
@@ -352,9 +352,9 @@ object DesktopRuntimeFactory {
             }
 
             val extensionStoreService = mihon.desktop.extension.ExtensionStoreService(
-            preferenceStore = preferences,
-            policyProvider = { DesktopNetworkSettingsStore(preferences).load() },
-        )
+                preferenceStore = preferences,
+                policyProvider = { DesktopNetworkSettingsStore(preferences).load() },
+            )
             val sourceManager = mihon.desktop.extension.DesktopSourceManager(
                 installer = extensionInstaller,
                 processManager = processManager,
