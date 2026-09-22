@@ -29,6 +29,12 @@ import kotlinx.serialization.json.Json
 import mihon.desktop.category.DesktopCategory
 import mihon.desktop.category.SYSTEM_ALL_CATEGORY
 import mihon.desktop.download.DesktopDownloader
+import mihon.desktop.extension.DesktopSourceManager
+import mihon.desktop.extension.ExtensionStoreItem
+import mihon.desktop.extension.ExtensionStoreService
+import mihon.desktop.extension.MissingSourceInfo
+import mihon.desktop.extension.MissingSourceResolver
+import mihon.desktop.extension.compat.TachiyomiExtensionConverter
 import mihon.desktop.library.db.SqlDelightLibraryRepository
 import mihon.desktop.library.model.ChapterRecord
 import mihon.desktop.library.model.LibraryChapter
@@ -88,6 +94,7 @@ data class MangaDetailUiState(
     val isChapterSettingsDialogOpen: Boolean = false,
     val chapterDownloads: Map<Long, ChapterDownloadProgress> = emptyMap(),
     val downloadsRunning: Boolean = false,
+    val missingSource: MissingSourceInfo? = null,
 )
 
 sealed interface ChapterReaderAvailability {
@@ -104,6 +111,8 @@ class LibraryPresenter(
     private val mutationPort: LibraryMutationPort? = repository as? LibraryMutationPort,
     private val preferences: DesktopPreferenceStore? = null,
     private val downloader: DesktopDownloader? = null,
+    private val sourceManager: DesktopSourceManager? = null,
+    private val extensionStoreService: ExtensionStoreService? = null,
 ) : AutoCloseable {
     private val presenterJob = SupervisorJob(scope.coroutineContext[Job])
     private val presenterScope = CoroutineScope(scope.coroutineContext + presenterJob)
@@ -345,13 +354,52 @@ class LibraryPresenter(
     private val chapterSettingsOverrides = MutableStateFlow(ChapterSettingsOverrides())
     private val isEditInfoDialogOpenState = MutableStateFlow(false)
     private val isChapterSettingsDialogOpenState = MutableStateFlow(false)
+    private val ignoredMissingSourceMangaIds = MutableStateFlow<Set<Long>>(emptySet())
+    private val cachedAvailableExtensions = MutableStateFlow<List<ExtensionStoreItem>>(emptyList())
+
+    private val missingSourceState: Flow<MissingSourceInfo?> = combine(
+        selectedRepositoryState,
+        ignoredMissingSourceMangaIds,
+        cachedAvailableExtensions,
+    ) { result, ignored, available ->
+        val manga = (result as? SelectedRepositoryState.Loaded)?.manga
+        if (manga == null || manga.sourceId == 0L || sourceManager == null) {
+            null
+        } else if (manga.id in ignored) {
+            null
+        } else if (sourceManager.get(manga.sourceId) != null) {
+            null
+        } else {
+            if (available.isEmpty() && extensionStoreService != null) {
+                presenterScope.launch {
+                    val fetched = MissingSourceResolver.ensureAvailableExtensions(extensionStoreService)
+                    cachedAvailableExtensions.value = fetched
+                }
+            }
+            val mangaCount = runCatching {
+                repository.allMangaSnapshot().count { it.sourceId == manga.sourceId }
+            }.getOrDefault(1).coerceAtLeast(1)
+            val ext = available.firstOrNull { item ->
+                item.sources.any { s ->
+                    s.id == manga.sourceId ||
+                        (s.id == 0L && TachiyomiExtensionConverter.generateSourceId(s.name, s.lang) == manga.sourceId)
+                }
+            }
+            MissingSourceInfo(
+                sourceId = manga.sourceId,
+                mangaCount = mangaCount,
+                extension = ext,
+            )
+        }
+    }
 
     val detailState: StateFlow<MangaDetailUiState> = combine(
         selectedRepositoryState,
         chapterSettingsOverrides,
         isEditInfoDialogOpenState,
         isChapterSettingsDialogOpenState,
-    ) { result, overrides, isEditInfoOpen, isChapterSettingsOpen ->
+        missingSourceState,
+    ) { result, overrides, isEditInfoOpen, isChapterSettingsOpen, missingSource ->
         when (result) {
             SelectedRepositoryState.Loading -> MangaDetailUiState(
                 loading = true,
@@ -411,6 +459,7 @@ class LibraryPresenter(
                     isEditInfoDialogOpen = isEditInfoOpen,
                     isChapterSettingsDialogOpen = isChapterSettingsOpen,
                     downloadedChapterIds = downloadedIds,
+                    missingSource = missingSource,
                 )
             }
         }
@@ -420,6 +469,18 @@ class LibraryPresenter(
             started = SharingStarted.Eagerly,
             initialValue = MangaDetailUiState(),
         )
+
+    fun ignoreMissingSource(mangaId: Long) {
+        ignoredMissingSourceMangaIds.update { it + mangaId }
+    }
+
+    fun refreshDetails() {
+        retryDetail()
+    }
+
+    fun setAvailableExtensions(extensions: List<ExtensionStoreItem>) {
+        cachedAvailableExtensions.value = extensions
+    }
 
     fun setChapterFilter(filter: ChapterFilterState) {
         val mangaId = detailMangaId.value ?: return

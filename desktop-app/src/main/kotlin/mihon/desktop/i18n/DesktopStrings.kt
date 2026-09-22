@@ -121,6 +121,18 @@ interface DesktopStrings {
     val mangaDetailResetToSource: String
     val mangaDetailSave: String
 
+    // Missing Source Banner & Dialog
+    fun missingSourceBannerTitle(extName: String, mangaCount: Int): String
+    val missingSourceBannerNotFound: String
+    val missingSourceBannerInstall: String
+    val missingSourceBannerIgnore: String
+    val missingSourceUnknownExtension: String
+    fun missingSourceDialogTitle(mangaCount: Int, extCount: Int): String
+    val missingSourceDialogInstallAll: String
+    val missingSourceDialogLater: String
+    fun missingSourceDialogNotFound(mangaCount: Int): String
+    val missingSourceInstalling: String
+
     // Chapters & Chapter Actions
     val chapters: String
     val sortSourceOrder: String
@@ -774,6 +786,21 @@ object EnglishStrings : DesktopStrings {
     override val mangaDetailNotes = "Personal Notes"
     override val mangaDetailResetToSource = "Reset to Source"
     override val mangaDetailSave = "Save"
+
+    // Missing Source Banner & Dialog
+    override fun missingSourceBannerTitle(extName: String, mangaCount: Int) =
+        "Source not installed: $extName ($mangaCount manga affected)"
+    override val missingSourceBannerNotFound = "Source not found in extension repository"
+    override val missingSourceBannerInstall = "Download and install"
+    override val missingSourceBannerIgnore = "Ignore"
+    override val missingSourceUnknownExtension = "Unknown extension"
+    override fun missingSourceDialogTitle(mangaCount: Int, extCount: Int) =
+        "$mangaCount manga missing sources ($extCount extensions available to install)"
+    override val missingSourceDialogInstallAll = "Install all"
+    override val missingSourceDialogLater = "Later"
+    override fun missingSourceDialogNotFound(mangaCount: Int) =
+        "Source(s) for $mangaCount manga not found in repository"
+    override val missingSourceInstalling = "Installing…"
 
     // Chapters & Chapter Actions
     override val chapters = "Chapters"
@@ -1505,6 +1532,21 @@ object SimplifiedChineseStrings : DesktopStrings {
     override val mangaDetailResetToSource = "恢复图源默认"
     override val mangaDetailSave = "保存"
 
+    // Missing Source Banner & Dialog
+    override fun missingSourceBannerTitle(extName: String, mangaCount: Int) =
+        "图源未安装：$extName（$mangaCount 部漫画受影响）"
+    override val missingSourceBannerNotFound = "图源在扩展仓库中未找到"
+    override val missingSourceBannerInstall = "下载并安装"
+    override val missingSourceBannerIgnore = "忽略"
+    override val missingSourceUnknownExtension = "未知扩展"
+    override fun missingSourceDialogTitle(mangaCount: Int, extCount: Int) =
+        "检测到 $mangaCount 部漫画缺少图源（$extCount 个扩展可安装）"
+    override val missingSourceDialogInstallAll = "全部安装"
+    override val missingSourceDialogLater = "稍后"
+    override fun missingSourceDialogNotFound(mangaCount: Int) =
+        "$mangaCount 部漫画的图源在仓库中未找到"
+    override val missingSourceInstalling = "正在安装…"
+
     // Chapters & Chapter Actions
     override val chapters = "章节"
     override val sortSourceOrder = "图源顺序"
@@ -2232,6 +2274,21 @@ object TraditionalChineseStrings : DesktopStrings {
     override val mangaDetailNotes = "個人筆記"
     override val mangaDetailResetToSource = "恢復圖源預設"
     override val mangaDetailSave = "儲存"
+
+    // Missing Source Banner & Dialog
+    override fun missingSourceBannerTitle(extName: String, mangaCount: Int) =
+        "圖源未安裝：$extName（$mangaCount 部漫畫受影響）"
+    override val missingSourceBannerNotFound = "圖源在擴充倉庫中未找到"
+    override val missingSourceBannerInstall = "下載並安裝"
+    override val missingSourceBannerIgnore = "忽略"
+    override val missingSourceUnknownExtension = "未知擴充"
+    override fun missingSourceDialogTitle(mangaCount: Int, extCount: Int) =
+        "偵測到 $mangaCount 部漫畫缺少圖源（$extCount 個擴充可安裝）"
+    override val missingSourceDialogInstallAll = "全部安裝"
+    override val missingSourceDialogLater = "稍後"
+    override fun missingSourceDialogNotFound(mangaCount: Int) =
+        "$mangaCount 部漫畫的圖源在倉庫中未找到"
+    override val missingSourceInstalling = "正在安裝…"
 
     // Chapters & Chapter Actions
     override val chapters = "章節"

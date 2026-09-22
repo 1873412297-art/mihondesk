@@ -3,9 +3,12 @@ package mihon.desktop.ui
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -43,6 +46,8 @@ import kotlinx.coroutines.withContext
 import mihon.desktop.DesktopRuntime
 import mihon.desktop.category.DesktopCategory
 import mihon.desktop.category.SYSTEM_ALL_CATEGORY
+import mihon.desktop.extension.MissingSourceInfo
+import mihon.desktop.extension.MissingSourceResolver
 import mihon.desktop.extension.builtin.isLocalSource
 import mihon.desktop.i18n.LocalStrings
 import mihon.desktop.i18n.UiText
@@ -63,6 +68,7 @@ import mihon.desktop.ui.category.EditMangaCategoriesDialog
 import mihon.desktop.ui.category.ManageCategoriesDialog
 import mihon.desktop.ui.library.BackupRestoreDialog
 import mihon.desktop.ui.library.BackupRestorePresenter
+import mihon.desktop.ui.library.BackupRestoreState
 import mihon.desktop.ui.library.ChapterReaderAvailability
 import mihon.desktop.ui.library.ImportActionState
 import mihon.desktop.ui.library.LibraryImportActions
@@ -181,12 +187,14 @@ fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
         )
             .also { runtime.onShutdown(it::shutdown) }
     }
-    val libraryPresenter = remember(runtime.library) {
+    val libraryPresenter = remember(runtime.library, runtime.sourceManager, runtime.extensionStoreService) {
         LibraryPresenter(
             repository = runtime.library,
             scope = presenterScope,
             preferences = runtime.preferences,
             downloader = runtime.downloader,
+            sourceManager = runtime.sourceManager,
+            extensionStoreService = runtime.extensionStoreService,
         ).also { runtime.onShutdown(it::shutdown) }
     }
     val libraryState by libraryPresenter.state.collectAsState()
@@ -245,6 +253,23 @@ fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
     var isMangaSourceRefreshing by remember { mutableStateOf(false) }
     var mangaDetailActionError by remember { mutableStateOf<String?>(null) }
     var pendingMangaOrganizationAction by remember { mutableStateOf<MangaOrganizationAction?>(null) }
+    var pendingMissingSources by remember { mutableStateOf<List<MissingSourceInfo>?>(null) }
+    var isInstallingMissingBatch by remember { mutableStateOf(false) }
+
+    LaunchedEffect(backupRestoreState) {
+        val finished = backupRestoreState as? BackupRestoreState.Finished
+        if (finished?.outcome is ImportActionState.Completed) {
+            val allManga = runtime.library.allMangaSnapshot()
+            val installedIds = runtime.sourceManager.getInstalledSourceIds()
+            val available = MissingSourceResolver.ensureAvailableExtensions(runtime.extensionStoreService)
+            if (available.isNotEmpty()) {
+                val missing = MissingSourceResolver.findMissingSources(allManga, installedIds, available)
+                if (missing.isNotEmpty()) {
+                    pendingMissingSources = missing
+                }
+            }
+        }
+    }
     DisposableEffect(libraryPresenter) {
         onDispose(libraryPresenter::close)
     }
@@ -629,6 +654,27 @@ fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
                                     val sharedMangaDetailActions = MangaDetailActions(
                                         onReadChapter = { chapterId ->
                                             navigator.navigate(DesktopDestination.Reader(chapterId))
+                                        },
+                                        onInstallMissingSource = { extItem ->
+                                            presenterScope.launch {
+                                                try {
+                                                    runtime.extensionInstaller.downloadAndInstall(
+                                                        downloadUrl = extItem.downloadUrl,
+                                                        expectedSha256 = extItem.sha256,
+                                                        repoUrl = extItem.repoUrl,
+                                                        storeItem = extItem,
+                                                    )
+                                                    libraryPresenter.refreshDetails()
+                                                } catch (e: Exception) {
+                                                    mangaDetailActionError = e.message ?: "Failed to install extension"
+                                                }
+                                            }
+                                        },
+                                        onIgnoreMissingSource = {
+                                            val manga = mangaDetailState.manga
+                                            if (manga != null) {
+                                                libraryPresenter.ignoreMissingSource(manga.id)
+                                            }
                                         },
                                         onEditCategories = {
                                             if (mangaDetailState.manga?.favorite == true) {
@@ -1087,6 +1133,100 @@ fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
                                 BackupRestoreDialog(backupRestoreState, {
                                     backupRestore.cancel()
                                 }, backupRestore::dismiss)
+                                if (backupRestoreState is BackupRestoreState.Idle) {
+                                    pendingMissingSources?.let { missingList ->
+                                        val installable = missingList.mapNotNull { it.extension }.distinctBy { it.pkg }
+                                        val missingMangaTotal = missingList.sumOf { it.mangaCount }
+                                        val unresolvedMangaCount = missingList.filter {
+                                            it.extension == null
+                                        }.sumOf { it.mangaCount }
+
+                                        AlertDialog(
+                                            onDismissRequest = {
+                                                if (!isInstallingMissingBatch) {
+                                                    pendingMissingSources = null
+                                                }
+                                            },
+                                            modifier = Modifier.testTag("missing-source-dialog"),
+                                            title = {
+                                                Text(
+                                                    strings.missingSourceDialogTitle(
+                                                        missingMangaTotal,
+                                                        installable.size,
+                                                    ),
+                                                )
+                                            },
+                                            text = {
+                                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                    if (installable.isNotEmpty()) {
+                                                        Text(installable.joinToString(", ") { it.name })
+                                                    }
+                                                    if (unresolvedMangaCount > 0) {
+                                                        Text(
+                                                            text = strings.missingSourceDialogNotFound(
+                                                                unresolvedMangaCount,
+                                                            ),
+                                                            style = MaterialTheme.typography.bodySmall,
+                                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                        )
+                                                    }
+                                                    if (isInstallingMissingBatch) {
+                                                        Row(
+                                                            verticalAlignment = Alignment.CenterVertically,
+                                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                                        ) {
+                                                            CircularProgressIndicator(modifier = Modifier.size(16.dp))
+                                                            Text(strings.missingSourceInstalling)
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            confirmButton = {
+                                                if (installable.isNotEmpty()) {
+                                                    TextButton(
+                                                        onClick = {
+                                                            presenterScope.launch {
+                                                                isInstallingMissingBatch = true
+                                                                try {
+                                                                    for (ext in installable) {
+                                                                        runtime.extensionInstaller.downloadAndInstall(
+                                                                            downloadUrl = ext.downloadUrl,
+                                                                            expectedSha256 = ext.sha256,
+                                                                            repoUrl = ext.repoUrl,
+                                                                            storeItem = ext,
+                                                                        )
+                                                                    }
+                                                                    libraryPresenter.refreshDetails()
+                                                                } catch (e: Exception) {
+                                                                    mangaDetailActionError =
+                                                                        e.message ?: "Failed to install extensions"
+                                                                } finally {
+                                                                    isInstallingMissingBatch = false
+                                                                    pendingMissingSources = null
+                                                                }
+                                                            }
+                                                        },
+                                                        enabled = !isInstallingMissingBatch,
+                                                        modifier = Modifier.testTag(
+                                                            "missing-source-dialog-install-all",
+                                                        ),
+                                                    ) {
+                                                        Text(strings.missingSourceDialogInstallAll)
+                                                    }
+                                                }
+                                            },
+                                            dismissButton = {
+                                                TextButton(
+                                                    onClick = { pendingMissingSources = null },
+                                                    enabled = !isInstallingMissingBatch,
+                                                    modifier = Modifier.testTag("missing-source-dialog-later"),
+                                                ) {
+                                                    Text(strings.missingSourceDialogLater)
+                                                }
+                                            },
+                                        )
+                                    }
+                                }
                                 exportNotification?.let { msg ->
                                     AlertDialog(
                                         onDismissRequest = { exportNotification = null },
