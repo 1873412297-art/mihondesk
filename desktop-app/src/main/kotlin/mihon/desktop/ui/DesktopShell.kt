@@ -27,6 +27,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import mihon.desktop.i18n.LocalStrings
 import mihon.desktop.i18n.UiText
 import mihon.desktop.i18n.text
@@ -198,13 +199,23 @@ fun DesktopShell(
                 ) {
                     Column {
                         primary.forEach { destination ->
-                            DestinationItem(destination, selected, onDestinationSelected)
+                            DestinationItem(
+                                destination = destination,
+                                selected = selected,
+                                onDestinationSelected = onDestinationSelected,
+                                alwaysShowLabel = true,
+                            )
                         }
                     }
                     Column {
                         HorizontalDivider()
                         secondary.forEach { destination ->
-                            DestinationItem(destination, selected, onDestinationSelected)
+                            DestinationItem(
+                                destination = destination,
+                                selected = selected,
+                                onDestinationSelected = onDestinationSelected,
+                                alwaysShowLabel = false,
+                            )
                         }
                         if (onLockNow != null) {
                             HorizontalDivider()
@@ -460,6 +471,7 @@ private fun DestinationItem(
     destination: DesktopDestination,
     selected: DesktopDestination,
     onDestinationSelected: (DesktopDestination) -> Unit,
+    alwaysShowLabel: Boolean = false,
 ) {
     val strings = mihon.desktop.i18n.LocalStrings.current
     NavigationRailItem(
@@ -471,7 +483,20 @@ private fun DestinationItem(
                 contentDescription = strings.destinationLabel(destination),
             )
         },
-        label = { Text(strings.destinationLabel(destination)) },
-        alwaysShowLabel = false,
+        label = {
+            Text(
+                text = strings.destinationLabel(destination),
+                style = androidx.compose.material3.MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                maxLines = 1,
+                softWrap = false,
+            )
+        },
+        alwaysShowLabel = alwaysShowLabel,
+        colors = androidx.compose.material3.NavigationRailItemDefaults.colors(
+            selectedIconColor = androidx.compose.material3.MaterialTheme.colorScheme.primary,
+            selectedTextColor = androidx.compose.material3.MaterialTheme.colorScheme.primary,
+            unselectedIconColor = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant,
+            unselectedTextColor = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant,
+        ),
     )
 }

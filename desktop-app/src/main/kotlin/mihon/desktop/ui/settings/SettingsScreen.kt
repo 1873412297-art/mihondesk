@@ -15,7 +15,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -66,6 +68,7 @@ import mihon.desktop.i18n.AppLanguage
 import mihon.desktop.i18n.DesktopStrings
 import mihon.desktop.i18n.LocalStrings
 import mihon.desktop.i18n.UiText
+import mihon.desktop.i18n.recoveryText
 import mihon.desktop.i18n.text
 import mihon.desktop.preferences.DesktopPreferenceStore
 import mihon.desktop.preferences.DesktopPreferences
@@ -229,43 +232,47 @@ fun SettingsScreen(
         Box(
             modifier = Modifier.weight(1f).fillMaxHeight().padding(24.dp),
         ) {
-            when (selectedSection) {
-                SettingsSection.General -> GeneralSettingsPane(preferenceStore, notifyPreferencesChanged)
-                SettingsSection.Security -> SecuritySettingsPane(
-                    preferenceStore = preferenceStore,
-                    appLockController = securityController,
-                    onPreferencesChanged = notifyPreferencesChanged,
-                )
-                SettingsSection.Appearance -> AppearanceSettingsPane(preferenceStore, notifyPreferencesChanged)
-                SettingsSection.Library -> LibrarySettingsPane(
-                    preferenceStore,
-                    updateScheduler,
-                    notifyPreferencesChanged,
-                )
-                SettingsSection.Reader -> ReaderSettingsPane(readerSettingsStore)
-                SettingsSection.Downloads -> DownloadsSettingsPane(
-                    preferenceStore = preferenceStore,
-                    onPreferencesChanged = notifyPreferencesChanged,
-                    downloadsDir = downloadsDir,
-                )
-                SettingsSection.Tracking -> TrackingSettingsPane(trackerManager)
-                SettingsSection.Backup -> BackupSettingsPane(
-                    preferenceStore = preferenceStore,
-                    backupScheduler = backupScheduler,
-                    onImportBackup = onImportBackup,
-                    onExportBackup = onExportBackup,
-                    onPreferencesChanged = notifyPreferencesChanged,
-                )
-                SettingsSection.Advanced -> AdvancedSettingsPane(
-                    preferenceStore = preferenceStore,
-                    backgroundScheduler = backgroundScheduler,
-                    onPreferencesChanged = notifyPreferencesChanged,
-                    diagnosticService = diagnosticService,
-                    onOpenCookieManager = onOpenCookieManager,
-                    downloadCacheCleaner = downloadCacheCleaner,
-                    downloadsDir = downloadsDir,
-                    diskCacheDir = diskCacheDir,
-                )
+            Box(
+                modifier = Modifier.widthIn(max = 880.dp).fillMaxWidth(),
+            ) {
+                when (selectedSection) {
+                    SettingsSection.General -> GeneralSettingsPane(preferenceStore, notifyPreferencesChanged)
+                    SettingsSection.Security -> SecuritySettingsPane(
+                        preferenceStore = preferenceStore,
+                        appLockController = securityController,
+                        onPreferencesChanged = notifyPreferencesChanged,
+                    )
+                    SettingsSection.Appearance -> AppearanceSettingsPane(preferenceStore, notifyPreferencesChanged)
+                    SettingsSection.Library -> LibrarySettingsPane(
+                        preferenceStore,
+                        updateScheduler,
+                        notifyPreferencesChanged,
+                    )
+                    SettingsSection.Reader -> ReaderSettingsPane(readerSettingsStore)
+                    SettingsSection.Downloads -> DownloadsSettingsPane(
+                        preferenceStore = preferenceStore,
+                        onPreferencesChanged = notifyPreferencesChanged,
+                        downloadsDir = downloadsDir,
+                    )
+                    SettingsSection.Tracking -> TrackingSettingsPane(trackerManager)
+                    SettingsSection.Backup -> BackupSettingsPane(
+                        preferenceStore = preferenceStore,
+                        backupScheduler = backupScheduler,
+                        onImportBackup = onImportBackup,
+                        onExportBackup = onExportBackup,
+                        onPreferencesChanged = notifyPreferencesChanged,
+                    )
+                    SettingsSection.Advanced -> AdvancedSettingsPane(
+                        preferenceStore = preferenceStore,
+                        backgroundScheduler = backgroundScheduler,
+                        onPreferencesChanged = notifyPreferencesChanged,
+                        diagnosticService = diagnosticService,
+                        onOpenCookieManager = onOpenCookieManager,
+                        downloadCacheCleaner = downloadCacheCleaner,
+                        downloadsDir = downloadsDir,
+                        diskCacheDir = diskCacheDir,
+                    )
+                }
             }
         }
     }
@@ -289,9 +296,12 @@ private fun GeneralSettingsPane(
             fontWeight = FontWeight.Bold,
         )
 
-        Card(modifier = Modifier.fillMaxWidth()) {
+        Card(
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(strings.settingsLanguageTitle, fontWeight = FontWeight.Bold)
+                Text(strings.settingsLanguageTitle, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -329,7 +339,10 @@ private fun GeneralSettingsPane(
         }
 
         // Incognito Mode Card
-        Card(modifier = Modifier.fillMaxWidth()) {
+        Card(
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
             Row(
                 modifier = Modifier.padding(16.dp).fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -339,10 +352,10 @@ private fun GeneralSettingsPane(
                     modifier = Modifier.weight(1f).padding(end = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    Text(strings.incognitoTitle, fontWeight = FontWeight.Bold)
+                    Text(strings.incognitoTitle, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     Text(
                         strings.incognitoDescription,
-                        style = MaterialTheme.typography.bodyMedium,
+                        style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
@@ -359,11 +372,20 @@ private fun GeneralSettingsPane(
             }
         }
 
-        Card(modifier = Modifier.fillMaxWidth()) {
+        Card(
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(strings.settingsAppInfoTitle, fontWeight = FontWeight.Bold)
-                Text(strings.settingsVersionLabel(mihon.desktop.updates.DesktopAppUpdateService.CURRENT_VERSION))
-                Text(strings.settingsPlatformLabel("Windows x64"))
+                Text(strings.settingsAppInfoTitle, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text(
+                    strings.settingsVersionLabel(mihon.desktop.updates.DesktopAppUpdateService.CURRENT_VERSION),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Text(
+                    strings.settingsPlatformLabel("Windows x64"),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
             }
         }
     }
@@ -1528,10 +1550,17 @@ private fun TrackingSettingsPane(trackerManager: DesktopTrackerManager?) {
             fontWeight = FontWeight.Bold,
         )
 
-        Card(modifier = Modifier.fillMaxWidth()) {
+        Card(
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(strings.settingsTrackingTitle, fontWeight = FontWeight.Bold)
-                Text(strings.settingsTrackingDescription)
+                Text(strings.settingsTrackingTitle, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text(
+                    strings.settingsTrackingDescription,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 Text(
                     strings.settingsConnectedTrackers(loggedInCount),
                     style = MaterialTheme.typography.bodyMedium,
@@ -1541,48 +1570,76 @@ private fun TrackingSettingsPane(trackerManager: DesktopTrackerManager?) {
             }
         }
 
-        trackers.forEach { tracker ->
+        val selfHostedNames = setOf("Komga", "Kavita", "Suwayomi")
+        val publicTrackers = trackers.filter { it.name !in selfHostedNames }
+        val selfHostedTrackers = trackers.filter { it.name in selfHostedNames }
+
+        @Composable
+        fun TrackerCard(tracker: DesktopTracker) {
             Card(
+                shape = RoundedCornerShape(12.dp),
                 modifier = Modifier.fillMaxWidth().testTag("tracker-setting-card-${tracker.id}"),
             ) {
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(tracker.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        if (tracker.isLoggedIn) {
+                    Row(
+                        modifier = Modifier.weight(1f).padding(end = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(28.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.surfaceVariant),
+                            contentAlignment = Alignment.Center,
+                        ) {
                             Text(
-                                strings.settingsTrackerLoggedInAs(tracker.username ?: "User", tracker.serverUrl),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.primary,
+                                text = tracker.name.take(1).uppercase(),
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
-                        } else {
+                        }
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                             Text(
-                                strings.trackingNotLoggedIn,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.outline,
+                                tracker.name,
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = FontWeight.SemiBold,
                             )
+                            if (tracker.isLoggedIn) {
+                                Text(
+                                    strings.settingsTrackerLoggedInAs(tracker.username ?: "User", tracker.serverUrl),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                )
+                            } else {
+                                Text(
+                                    strings.trackingNotLoggedIn,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.outline,
+                                )
+                            }
                         }
                     }
 
                     if (tracker.isLoggedIn) {
-                        OutlinedButton(
+                        FilledTonalButton(
                             onClick = { trackerManager?.logout(tracker.id) },
                             modifier = Modifier.testTag("tracker-logout-${tracker.id}"),
                         ) {
                             Text(strings.settingsTrackerLogout)
                         }
                     } else {
-                        Button(
+                        FilledTonalButton(
                             onClick = { loginTracker = tracker },
                             modifier = Modifier.testTag("tracker-login-${tracker.id}"),
                         ) {
                             Text(
-                                if (tracker.authType ==
-                                    TrackerAuthType.SERVER
-                                ) {
+                                if (tracker.authType == TrackerAuthType.SERVER) {
                                     strings.trackerConnect
                                 } else {
                                     strings.trackerLogin
@@ -1590,6 +1647,33 @@ private fun TrackingSettingsPane(trackerManager: DesktopTrackerManager?) {
                             )
                         }
                     }
+                }
+            }
+        }
+
+        if (publicTrackers.isNotEmpty()) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = recoveryText("Public services", "公网服务", "公網服務"),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                publicTrackers.forEach { tracker ->
+                    TrackerCard(tracker)
+                }
+            }
+        }
+
+        if (selfHostedTrackers.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(4.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = recoveryText("Self-hosted instances", "自托管实例", "自託管實例"),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                selfHostedTrackers.forEach { tracker ->
+                    TrackerCard(tracker)
                 }
             }
         }
@@ -2138,12 +2222,15 @@ private fun AdvancedSettingsPane(
         NetworkSettingsCard(preferenceStore)
 
         // Storage & Cache Cleaner Card
-        Card(modifier = Modifier.fillMaxWidth().testTag("storage-cleaner-card")) {
+        Card(
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.fillMaxWidth().testTag("storage-cleaner-card"),
+        ) {
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(strings.storageCleanerTitle, fontWeight = FontWeight.Bold)
+                Text(strings.storageCleanerTitle, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text(
                     strings.storageCleanerDescription,
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
 
@@ -2230,12 +2317,15 @@ private fun AdvancedSettingsPane(
             }
         }
 
-        Card(modifier = Modifier.fillMaxWidth()) {
+        Card(
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(strings.cookieManagerTitle, fontWeight = FontWeight.Bold)
+                Text(strings.cookieManagerTitle, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text(
                     strings.cookieManagerDescription,
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Button(
@@ -2247,9 +2337,12 @@ private fun AdvancedSettingsPane(
             }
         }
 
-        Card(modifier = Modifier.fillMaxWidth()) {
+        Card(
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(strings.settingsDiagnosticsTitle, fontWeight = FontWeight.Bold)
+                Text(strings.settingsDiagnosticsTitle, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     FilledTonalButton(
                         onClick = {

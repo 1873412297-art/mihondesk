@@ -273,7 +273,7 @@ fun MangaDetailScreen(
                                         }
                                     }
                                     onToggleLibrary?.let { toggleLibrary ->
-                                        FilledTonalButton(
+                                        OutlinedButton(
                                             onClick = toggleLibrary,
                                             enabled = !isLibraryActionRunning,
                                             modifier = Modifier.testTag("manga-detail-library-button"),
@@ -298,7 +298,7 @@ fun MangaDetailScreen(
                                         }
                                     }
                                     onRefreshSource?.let { refreshSource ->
-                                        androidx.compose.material3.OutlinedButton(
+                                        OutlinedButton(
                                             onClick = refreshSource,
                                             enabled = !isRefreshingSource,
                                             modifier = Modifier.testTag("manga-detail-refresh-button"),
@@ -312,7 +312,7 @@ fun MangaDetailScreen(
                                             Text(strings.browseRefresh)
                                         }
                                     }
-                                    androidx.compose.material3.OutlinedButton(
+                                    OutlinedButton(
                                         onClick = onEditInfo,
                                         modifier = Modifier.testTag("manga-detail-edit-info-button"),
                                     ) {
@@ -324,7 +324,7 @@ fun MangaDetailScreen(
                                         Spacer(Modifier.width(6.dp))
                                         Text(strings.mangaDetailEditInfo)
                                     }
-                                    androidx.compose.material3.OutlinedButton(
+                                    OutlinedButton(
                                         onClick = onEditCategories,
                                         modifier = Modifier.testTag("manga-detail-edit-categories-button"),
                                     ) {
@@ -336,20 +336,8 @@ fun MangaDetailScreen(
                                         Spacer(Modifier.width(6.dp))
                                         Text(strings.mangaDetailCategories)
                                     }
-                                    androidx.compose.material3.OutlinedButton(
-                                        onClick = onOpenTracking,
-                                        modifier = Modifier.testTag("manga-detail-open-tracking-button"),
-                                    ) {
-                                        Icon(
-                                            Icons.Rounded.Sync,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(16.dp),
-                                        )
-                                        Spacer(Modifier.width(6.dp))
-                                        Text(strings.mangaDetailTracking)
-                                    }
                                     if (manga.url.startsWith("http")) {
-                                        androidx.compose.material3.OutlinedButton(
+                                        OutlinedButton(
                                             onClick = {
                                                 mihon.desktop.platform.DesktopBrowserHelper.openInBrowser(manga.url)
                                             },
@@ -363,6 +351,18 @@ fun MangaDetailScreen(
                                             Spacer(Modifier.width(6.dp))
                                             Text(strings.openInBrowser)
                                         }
+                                    }
+                                    FilledTonalButton(
+                                        onClick = onOpenTracking,
+                                        modifier = Modifier.testTag("manga-detail-open-tracking-button"),
+                                    ) {
+                                        Icon(
+                                            Icons.Rounded.Sync,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(16.dp),
+                                        )
+                                        Spacer(Modifier.width(6.dp))
+                                        Text(strings.mangaDetailTracking)
                                     }
                                 }
 
@@ -446,7 +446,7 @@ fun MangaDetailScreen(
                                             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                                 Text(
                                                     strings.mangaDetailGenres,
-                                                    style = MaterialTheme.typography.labelMedium,
+                                                    style = MaterialTheme.typography.labelLarge,
                                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                                 )
                                                 // Retain for semantic & accessibility assertions
@@ -483,10 +483,17 @@ fun MangaDetailScreen(
                                             }
                                         }
                                         if (manga.categories.isNotEmpty()) {
-                                            MetadataLine(
-                                                "Categories",
-                                                manga.categories.joinToString(" · ") { it.name },
-                                            )
+                                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                                Text(
+                                                    strings.mangaDetailCategories,
+                                                    style = MaterialTheme.typography.labelLarge,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                )
+                                                Text(
+                                                    text = manga.categories.joinToString(" · ") { it.name },
+                                                    style = MaterialTheme.typography.bodyLarge,
+                                                )
+                                            }
                                         }
                                         if (manga.notes.isNotBlank()) {
                                             Row(
@@ -1080,6 +1087,9 @@ private fun MangaStatusBadge(status: Long, strings: mihon.desktop.i18n.DesktopSt
 
 @Composable
 private fun ExpandableMangaDescription(description: String) {
+    val cleanDescription = remember(description) {
+        description.replace(Regex("""\*\*([^*]+)\*\*"""), "$1")
+    }
     var expanded by remember { mutableStateOf(false) }
     Column(
         modifier = Modifier
@@ -1094,13 +1104,13 @@ private fun ExpandableMangaDescription(description: String) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Text(
-            text = description,
+            text = cleanDescription,
             style = MaterialTheme.typography.bodyMedium,
             maxLines = if (expanded) Int.MAX_VALUE else 3,
             overflow = TextOverflow.Ellipsis,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.88f),
         )
-        if (description.length > 120) {
+        if (cleanDescription.length > 120) {
             Text(
                 text = if (expanded) "▲ Show less" else "▼ Show more",
                 style = MaterialTheme.typography.labelSmall,

@@ -359,13 +359,13 @@ private fun LibraryPane(
                     }
                 }
             }
-            FilledTonalButton(
+            OutlinedButton(
                 onClick = onImportBackup,
                 modifier = Modifier.testTag("library-import-backup"),
             ) {
                 Text(strings.libraryImportBackup)
             }
-            FilledTonalButton(
+            OutlinedButton(
                 onClick = onImportLocal,
                 modifier = Modifier.testTag("library-import-local"),
             ) {
@@ -389,49 +389,65 @@ private fun LibraryPane(
             }
         }
         val libraryActionControls: @Composable () -> Unit = {
-            if (state.displayMode != LibraryDisplayMode.List) {
-                Text(
-                    text = "${state.gridSize.toInt()}dp",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.outline,
-                )
-                Slider(
-                    value = state.gridSize,
-                    onValueChange = onGridSizeChange,
-                    valueRange = 120f..280f,
-                    modifier = Modifier.width(100.dp).testTag("library-grid-slider"),
-                )
-            }
-
-            BadgedBox(
-                badge = {
-                    if (state.filterState.hasActiveFilters) {
-                        Badge(modifier = Modifier.testTag("filter-active-badge")) {
-                            Text(state.filterState.activeCount.toString())
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (state.displayMode != LibraryDisplayMode.List) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = "${state.gridSize.toInt()}dp",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.outline,
+                            )
+                            Slider(
+                                value = state.gridSize,
+                                onValueChange = onGridSizeChange,
+                                valueRange = 120f..280f,
+                                modifier = Modifier.width(100.dp).testTag("library-grid-slider"),
+                            )
                         }
                     }
-                },
-            ) {
-                OutlinedButton(
-                    onClick = onOpenFilterDialog,
-                    modifier = Modifier.testTag("library-filter-sort-button"),
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.FilterList,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp),
+
+                    BadgedBox(
+                        badge = {
+                            if (state.filterState.hasActiveFilters) {
+                                Badge(modifier = Modifier.testTag("filter-active-badge")) {
+                                    Text(state.filterState.activeCount.toString())
+                                }
+                            }
+                        },
+                    ) {
+                        OutlinedButton(
+                            onClick = onOpenFilterDialog,
+                            modifier = Modifier.testTag("library-filter-sort-button"),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.FilterList,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text(strings.libraryFilterAndSort)
+                        }
+                    }
+
+                    FilterChip(
+                        selected = state.selectionState.isSelectionMode,
+                        onClick = { onToggleSelectionMode(!state.selectionState.isSelectionMode) },
+                        label = { Text(strings.libraryBatchSelect) },
+                        modifier = Modifier.testTag("library-toggle-selection"),
                     )
-                    Spacer(Modifier.width(6.dp))
-                    Text(strings.libraryFilterAndSort)
                 }
             }
-
-            FilterChip(
-                selected = state.selectionState.isSelectionMode,
-                onClick = { onToggleSelectionMode(!state.selectionState.isSelectionMode) },
-                label = { Text(strings.libraryBatchSelect) },
-                modifier = Modifier.testTag("library-toggle-selection"),
-            )
         }
 
         Column(

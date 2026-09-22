@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.FilterChip
@@ -33,7 +34,10 @@ fun NetworkSettingsCard(preferences: DesktopPreferenceStore) {
     var readTimeout by remember { mutableStateOf(policy.readTimeoutSeconds.toString()) }
     var error by remember { mutableStateOf<String?>(null) }
     var saved by remember { mutableStateOf(false) }
-    Card(modifier = Modifier.fillMaxWidth().testTag("network-settings-card")) {
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier.fillMaxWidth().testTag("network-settings-card"),
+    ) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(
                 recoveryText("Source and tracker network", "图源与跟踪器网络", "圖源與追蹤器網路"),
