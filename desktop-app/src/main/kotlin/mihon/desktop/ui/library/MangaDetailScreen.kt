@@ -90,6 +90,7 @@ import mihon.desktop.i18n.text
 import mihon.desktop.library.model.LibraryChapter
 import mihon.desktop.ui.common.DownloadIndicator
 import mihon.desktop.ui.common.MangaBackdropBanner
+import mihon.desktop.ui.common.formatNetworkErrorMessage
 
 @Composable
 fun MangaDetailScreen(
@@ -149,7 +150,7 @@ fun MangaDetailScreen(
         when {
             state.loading -> DetailLoading(showBack, onBack)
             state.errorMessage != null -> DetailMessage(
-                message = state.errorMessage,
+                message = formatNetworkErrorMessage(state.errorMessage, strings),
                 tag = "manga-detail-error",
                 onBack = onBack,
                 showBack = showBack,

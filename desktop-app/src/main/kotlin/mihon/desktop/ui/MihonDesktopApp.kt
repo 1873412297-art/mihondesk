@@ -66,6 +66,7 @@ import mihon.desktop.track.toDesktopTrackRecord
 import mihon.desktop.track.toTrackingRecord
 import mihon.desktop.ui.category.EditMangaCategoriesDialog
 import mihon.desktop.ui.category.ManageCategoriesDialog
+import mihon.desktop.ui.common.formatNetworkErrorMessage
 import mihon.desktop.ui.library.BackupRestoreDialog
 import mihon.desktop.ui.library.BackupRestorePresenter
 import mihon.desktop.ui.library.BackupRestoreState
@@ -1106,7 +1107,7 @@ fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
                                             }
                                         },
                                         title = { Text(strings.downloadsStatusError) },
-                                        text = { Text(message) },
+                                        text = { Text(formatNetworkErrorMessage(message, strings)) },
                                     )
                                 }
                                 pendingMangaOrganizationAction?.let { pendingAction ->

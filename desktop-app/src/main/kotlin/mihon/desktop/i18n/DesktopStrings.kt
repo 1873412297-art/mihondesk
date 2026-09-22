@@ -401,6 +401,13 @@ interface DesktopStrings {
     fun backupExportSuccess(path: String): String
     fun backupExportFailed(err: String): String
 
+    // Network Error Mapping (Cloudflare)
+    val networkErrorCloudflare1005: String
+    val networkErrorCloudflare1015: String
+    val networkErrorCloudflare1016: String
+    val networkErrorCloudflare1020: String
+    fun networkErrorCloudflareOther(code: String): String
+
     // Incognito mode
     val incognitoTitle: String
     val incognitoBannerText: String
@@ -1076,6 +1083,18 @@ object EnglishStrings : DesktopStrings {
     override val backupDialogTitle = "Backup Export"
     override fun backupExportSuccess(path: String) = "Backup successfully exported to:\n$path"
     override fun backupExportFailed(err: String) = "Backup export failed:\n$err"
+
+    // Network Error Mapping (Cloudflare)
+    override val networkErrorCloudflare1005 =
+        "The site owner has banned your IP/ASN (Cloudflare error 1005). Try switching your proxy node or network."
+    override val networkErrorCloudflare1015 =
+        "The website is rate limiting requests (Cloudflare error 1015). Please wait a moment before trying again."
+    override val networkErrorCloudflare1016 =
+        "Origin DNS resolution failed (Cloudflare error 1016). This is an issue on the website side, please try again later."
+    override val networkErrorCloudflare1020 =
+        "Access denied by website firewall rules (Cloudflare error 1020)."
+    override fun networkErrorCloudflareOther(code: String) =
+        "Access denied by site (Cloudflare error code $code)"
 
     // Incognito mode
     override val incognitoTitle = "Incognito Mode"
@@ -1824,6 +1843,18 @@ object SimplifiedChineseStrings : DesktopStrings {
     override fun backupExportSuccess(path: String) = "备份已成功导出至:\n$path"
     override fun backupExportFailed(err: String) = "备份导出失败:\n$err"
 
+    // Network Error Mapping (Cloudflare)
+    override val networkErrorCloudflare1005 =
+        "站点已封锁当前 IP/ASN（Cloudflare 错误码 1005）。建议切换代理节点或网络后再试。"
+    override val networkErrorCloudflare1015 =
+        "站点请求频率受限（Cloudflare 错误码 1015）。请稍候重试。"
+    override val networkErrorCloudflare1016 =
+        "源站 DNS 解析失败（Cloudflare 错误码 1016）。此为站点端故障，请稍后重试。"
+    override val networkErrorCloudflare1020 =
+        "站点防火墙规则拒绝访问（Cloudflare 错误码 1020）。"
+    override fun networkErrorCloudflareOther(code: String) =
+        "站点拒绝访问（Cloudflare 错误码 $code）"
+
     // Incognito mode
     override val incognitoTitle = "无痕模式"
     override val incognitoBannerText = "无痕模式已启用：阅读历史与跟踪同步已暂停。"
@@ -2568,6 +2599,18 @@ object TraditionalChineseStrings : DesktopStrings {
     override val backupDialogTitle = "備份匯出"
     override fun backupExportSuccess(path: String) = "備份已成功匯出至:\n$path"
     override fun backupExportFailed(err: String) = "備份匯出失敗:\n$err"
+
+    // Network Error Mapping (Cloudflare)
+    override val networkErrorCloudflare1005 =
+        "站點已封鎖目前 IP/ASN（Cloudflare 錯誤碼 1005）。建議切換代理節點或網路後再試。"
+    override val networkErrorCloudflare1015 =
+        "站點請求頻率受限（Cloudflare 錯誤碼 1015）。請稍候重試。"
+    override val networkErrorCloudflare1016 =
+        "源站 DNS 解析失敗（Cloudflare 錯誤碼 1016）。此為站點端故障，請稍後重試。"
+    override val networkErrorCloudflare1020 =
+        "站點防火牆規則拒絕存取（Cloudflare 錯誤碼 1020）。"
+    override fun networkErrorCloudflareOther(code: String) =
+        "站點拒絕存取（Cloudflare 錯誤碼 $code）"
 
     // Incognito mode
     override val incognitoTitle = "無痕模式"
