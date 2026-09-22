@@ -211,7 +211,20 @@ compose.desktop {
             description = "mihondesk manga reader for Windows"
             vendor = "mihondesk"
             licenseFile.set(rootProject.file("LICENSE"))
-            modules("java.desktop", "java.logging", "java.prefs", "java.sql", "java.instrument", "jdk.unsupported")
+            // Every module here must be reachable at runtime: jdeps on the packaged app jar reports
+            // jdk.httpserver (WebView broker), java.net.http (jsoup) and jdk.dynalink (script engines)
+            // beyond the base set. Missing any of them fails only in the packaged build.
+            modules(
+                "java.desktop",
+                "java.logging",
+                "java.prefs",
+                "java.sql",
+                "java.instrument",
+                "jdk.unsupported",
+                "jdk.httpserver",
+                "java.net.http",
+                "jdk.dynalink",
+            )
 
             windows {
                 iconFile.set(project.file("src/main/resources/icon.ico"))
@@ -259,6 +272,22 @@ val verifyCleanDistribution by tasks.registering(Exec::class) {
     )
 }
 
+val verifyRuntimeModules by tasks.registering(Exec::class) {
+    group = "verification"
+    description = "Rejects packaged runtimes missing JDK modules the app reaches at runtime"
+    dependsOn("createDistributable")
+    commandLine(
+        "powershell.exe",
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        rootProject.file("scripts/verify-runtime-modules.ps1").absolutePath,
+        "-ImagePath",
+        layout.buildDirectory.dir("compose/binaries/main/app/mihondesk").get().asFile.absolutePath,
+    )
+}
+
 tasks.configureEach {
     if (
         name in setOf(
@@ -275,6 +304,7 @@ tasks.configureEach {
 
 val packagePortableZip by tasks.registering(Zip::class) {
     dependsOn(verifyCleanDistribution)
+    dependsOn(verifyRuntimeModules)
     group = "compose desktop"
     description = "Packages the portable distribution as a standalone ZIP archive"
 
@@ -307,6 +337,7 @@ val packagePortableZip by tasks.registering(Zip::class) {
 tasks.withType<org.jetbrains.compose.desktop.application.tasks.AbstractJPackageTask>().configureEach {
     if (name in setOf("packageMsi", "packageExe")) {
         dependsOn(verifyCleanDistribution)
+    dependsOn(verifyRuntimeModules)
         inputs.dir(project.file("packaging/windows"))
         inputs.file(project.file("src/main/resources/icon.ico"))
         actions.clear()
