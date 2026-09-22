@@ -75,6 +75,7 @@ class DesktopRuntime(
         mihon.desktop.extension.DesktopExtensionInstaller(
             installRoot = directories.root.resolve("extensions").toFile(),
             preferenceStore = preferences,
+            policyProvider = { DesktopNetworkSettingsStore(preferences).load() },
         ),
     val extensionStoreService: mihon.desktop.extension.ExtensionStoreService =
         mihon.desktop.extension.ExtensionStoreService(
@@ -346,6 +347,7 @@ object DesktopRuntimeFactory {
             val extensionInstaller = mihon.desktop.extension.DesktopExtensionInstaller(
                 installRoot = extensionDir,
                 preferenceStore = preferences,
+                policyProvider = { DesktopNetworkSettingsStore(preferences).load() },
             )
             extensionInstaller.getInstalledExtensions().filter { it.isEnabled }.forEach { ext ->
                 networkHelper.registerExtensionDomains(ext.pkg, ext.manifest.declaredDomains)

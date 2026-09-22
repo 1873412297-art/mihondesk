@@ -58,12 +58,14 @@ data class InstalledExtension(
 class DesktopExtensionInstaller(
     val installRoot: File,
     val preferenceStore: DesktopPreferenceStore,
+    policyProvider: () -> DesktopNetworkPolicy = { DesktopNetworkPolicy() },
     private val httpClient: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
         .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
         .callTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
         .followRedirects(true)
         .followSslRedirects(true)
+        .proxySelector(DesktopPolicyProxySelector(policyProvider))
         .build(),
     signatureVerifier: ExtensionVerifier = ExtensionSignatureVerifier(),
     trustStore: ExtensionTrustStore = ExtensionTrustStore(preferenceStore),
