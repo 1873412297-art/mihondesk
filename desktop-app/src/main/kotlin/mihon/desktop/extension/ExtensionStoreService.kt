@@ -77,17 +77,25 @@ class ExtensionStoreService(
     @Synchronized
     fun getRepositories(): List<String> {
         val stored = preferenceStore.property(PREF_KEY_REPOSITORIES)
-        return stored.orEmpty().split("\n").map { it.trim() }.filter { it.isNotEmpty() }.distinct()
+        val rawList = stored.orEmpty().split("\n").map { it.trim() }.filter { it.isNotEmpty() }
+        val normalizedList = rawList.map { normalizeRepoUrl(it) }.filter { it.isNotEmpty() }.distinct()
+        if (rawList != normalizedList) {
+            preferenceStore.update {
+                setProperty(PREF_KEY_REPOSITORIES, normalizedList.joinToString("\n"))
+            }
+        }
+        return normalizedList
     }
 
     @Synchronized
     fun addRepository(repoUrl: String) {
         val normalized = normalizeRepoUrl(repoUrl)
-        val current = getRepositories().toMutableList()
-        if (!current.contains(normalized)) {
-            current.add(normalized)
+        if (normalized.isBlank()) return
+        val current = getRepositories()
+        if (current.none { normalizeRepoUrl(it) == normalized }) {
+            val updated = (current + normalized).distinct()
             preferenceStore.update {
-                setProperty(PREF_KEY_REPOSITORIES, current.joinToString("\n"))
+                setProperty(PREF_KEY_REPOSITORIES, updated.joinToString("\n"))
             }
         }
     }
@@ -95,21 +103,22 @@ class ExtensionStoreService(
     @Synchronized
     fun removeRepository(repoUrl: String) {
         val normalized = normalizeRepoUrl(repoUrl)
-        val current = getRepositories().toMutableList()
-        if (current.remove(normalized)) {
+        val current = getRepositories()
+        val updated = current.filter { normalizeRepoUrl(it) != normalized }
+        if (updated.size != current.size) {
             preferenceStore.update {
-                setProperty(PREF_KEY_REPOSITORIES, current.joinToString("\n"))
+                setProperty(PREF_KEY_REPOSITORIES, updated.joinToString("\n"))
             }
         }
     }
 
     fun normalizeRepoUrl(raw: String): String {
-        var url = raw.trim().removeSuffix("/")
+        var url = raw.trim().trimEnd('/')
         // Strip any known index file suffixes so the user can paste full URLs
         val knownSuffixes = listOf("/index.min.json", "/index.json", "/index.pb", "/repo.json")
         for (suffix in knownSuffixes) {
             if (url.endsWith(suffix)) {
-                url = url.removeSuffix(suffix)
+                url = url.removeSuffix(suffix).trimEnd('/')
                 break
             }
         }
@@ -120,7 +129,7 @@ class ExtensionStoreService(
             val (user, repo, branch) = match.destructured
             url = "https://raw.githubusercontent.com/$user/$repo/$branch"
         }
-        return url.removeSuffix("/")
+        return url.trimEnd('/')
     }
 
     /**

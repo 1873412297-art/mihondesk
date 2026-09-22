@@ -125,14 +125,44 @@ class BrowsePresenter(
                 }
                 refreshMigrationCounts()
 
-                val available = storeService.fetchAvailableExtensions()
-                _state.update { it.copy(availableExtensions = available) }
+                val successfulItems = mutableListOf<ExtensionStoreItem>()
+                val repositoryFailures = mutableListOf<String>()
+                for (repo in repos) {
+                    try {
+                        val items = storeService.fetchRepository(repo)
+                        successfulItems.addAll(items)
+                    } catch (e: Exception) {
+                        if (e is CancellationException) throw e
+                        val msg = e.message?.takeIf { it.isNotBlank() } ?: e.javaClass.simpleName
+                        repositoryFailures.add(msg)
+                    }
+                }
+
+                val available = successfulItems.groupBy { it.pkg }.map { (_, items) ->
+                    items.maxByOrNull { it.versionCode }!!
+                }.sortedBy { it.name }
+
+                val repoErrorMessage = if (repositoryFailures.isNotEmpty()) {
+                    val count = repositoryFailures.size
+                    val noun = if (count == 1) "repository" else "repositories"
+                    "Failed to refresh $count $noun: ${repositoryFailures.first()}"
+                } else {
+                    null
+                }
+
+                _state.update {
+                    it.copy(
+                        availableExtensions = available,
+                        errorMessage = repoErrorMessage,
+                    )
+                }
                 val pendingUpdates = countPendingExtensionUpdates(installed, available)
                 if (pendingUpdates > 0 && pendingUpdates != lastNotifiedPendingUpdates) {
                     onExtensionUpdatesAvailable(pendingUpdates)
                 }
                 lastNotifiedPendingUpdates = pendingUpdates
             } catch (e: Exception) {
+                if (e is CancellationException) throw e
                 _state.update {
                     it.copy(
                         isLoading = false,
