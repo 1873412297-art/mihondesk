@@ -1,16 +1,19 @@
 package mihon.desktop.ui.library
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.emitAll
@@ -21,6 +24,7 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.onStart
+import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -35,6 +39,7 @@ import mihon.desktop.extension.ExtensionStoreService
 import mihon.desktop.extension.MissingSourceInfo
 import mihon.desktop.extension.MissingSourceResolver
 import mihon.desktop.extension.compat.TachiyomiExtensionConverter
+import mihon.desktop.image.CoverFailureRegistry
 import mihon.desktop.library.db.SqlDelightLibraryRepository
 import mihon.desktop.library.model.ChapterRecord
 import mihon.desktop.library.model.LibraryChapter
@@ -47,6 +52,7 @@ import mihon.desktop.library.repository.LibraryRepository
 import mihon.desktop.preferences.DesktopPreferenceStore
 import mihon.reader.source.ReaderChapterAsset
 import java.nio.file.Files
+import java.util.Collections
 
 data class LibraryUiState(
     val loading: Boolean = true,
@@ -113,7 +119,14 @@ class LibraryPresenter(
     private val downloader: DesktopDownloader? = null,
     private val sourceManager: DesktopSourceManager? = null,
     private val extensionStoreService: ExtensionStoreService? = null,
+    private val mangaRefreshHandler: (suspend (Long) -> Unit)? = null,
 ) : AutoCloseable {
+    var mangaRefreshDelegate: (suspend (Long) -> Unit)? = mangaRefreshHandler
+    private val autoRefreshedCoverMangaIds: MutableSet<Long> = Collections.synchronizedSet(mutableSetOf<Long>())
+    private var coverRepairJob: Job? = null
+    private val _isRepairingCovers = MutableStateFlow(false)
+    val isRepairingCovers: StateFlow<Boolean> = _isRepairingCovers.asStateFlow()
+
     private val presenterJob = SupervisorJob(scope.coroutineContext[Job])
     private val presenterScope = CoroutineScope(scope.coroutineContext + presenterJob)
     private val query = MutableStateFlow("")
@@ -311,6 +324,9 @@ class LibraryPresenter(
         initialValue = LibraryUiState(),
     )
 
+    // Shared so the detail state and the missing-source detector observe ONE upstream
+    // subscription - two cold collectors would race over the retry signal and starve
+    // the detail flow.
     private val selectedRepositoryState: Flow<SelectedRepositoryState> = combine(
         detailMangaId,
         detailRetryRequest,
@@ -350,6 +366,7 @@ class LibraryPresenter(
                 selectedMangaId.compareAndSet(result.selectedId, null)
             }
         }
+        .shareIn(presenterScope, SharingStarted.Eagerly, replay = 1)
 
     private val chapterSettingsOverrides = MutableStateFlow(ChapterSettingsOverrides())
     private val isEditInfoDialogOpenState = MutableStateFlow(false)
@@ -476,6 +493,71 @@ class LibraryPresenter(
 
     fun refreshDetails() {
         retryDetail()
+    }
+
+    fun onCoverLoadFailed(code: Int, targetMangaId: Long? = null) {
+        if (code != 404 && code != 410) return
+        val detailManga = detailState.value.manga
+        val mangaId = when {
+            targetMangaId != null -> targetMangaId
+            detailManga != null -> detailManga.id
+            else -> return
+        }
+        val sourceId = when {
+            detailManga != null && detailManga.id == mangaId -> detailManga.sourceId
+            else -> repository.allMangaSnapshot().find { it.id == mangaId }?.sourceId ?: return
+        }
+
+        if (sourceId == 0L) return
+        if (sourceManager?.get(sourceId) == null) return
+        if (!autoRefreshedCoverMangaIds.add(mangaId)) return
+
+        val delegate = mangaRefreshDelegate
+        if (delegate != null) {
+            presenterScope.launch {
+                try {
+                    delegate(mangaId)
+                } finally {
+                    if (detailManga?.id == mangaId) refreshDetails()
+                }
+            }
+        } else if (detailManga?.id == mangaId) {
+            refreshDetails()
+        }
+    }
+
+    fun repairBrokenCovers() {
+        if (_isRepairingCovers.value) return
+        val snapshot = CoverFailureRegistry.snapshot()
+        if (snapshot.isEmpty()) return
+        coverRepairJob = presenterScope.launch {
+            _isRepairingCovers.value = true
+            try {
+                for ((mangaId, _) in snapshot) {
+                    try {
+                        val delegate = mangaRefreshDelegate
+                        if (delegate != null) {
+                            delegate(mangaId)
+                        }
+                        refreshDetails()
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        // clear each manga after attempt completes (success or failure)
+                    } finally {
+                        CoverFailureRegistry.clear(mangaId)
+                    }
+                    delay(300)
+                }
+            } finally {
+                _isRepairingCovers.value = false
+            }
+        }
+    }
+
+    fun cancelRepairBrokenCovers() {
+        coverRepairJob?.cancel()
+        _isRepairingCovers.value = false
     }
 
     fun setAvailableExtensions(extensions: List<ExtensionStoreItem>) {

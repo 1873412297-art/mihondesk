@@ -53,6 +53,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -73,6 +74,7 @@ import mihon.desktop.i18n.LocalStrings
 import mihon.desktop.i18n.UiText
 import mihon.desktop.i18n.chapterCountLabel
 import mihon.desktop.i18n.text
+import mihon.desktop.image.CoverFailureRegistry
 import mihon.desktop.library.model.LibraryManga
 import mihon.desktop.ui.common.MangaCover
 
@@ -112,6 +114,9 @@ fun LibraryScreen(
     onBatchRemoveFromLibrary: () -> Unit = {},
     isUpdatingLibrary: Boolean = false,
     onUpdateLibrary: (() -> Unit)? = null,
+    isRepairingCovers: Boolean = false,
+    onRepairBrokenCovers: (() -> Unit)? = null,
+    onCoverLoadFailed: ((Int) -> Unit)? = null,
     // Phase 16: Edit info, chapter filter/sort & actions
     onEditInfo: () -> Unit = {},
     onDismissEditInfo: () -> Unit = {},
@@ -182,6 +187,7 @@ fun LibraryScreen(
         onShowMissingChaptersChange = onShowMissingChaptersChange,
         onSetChapterSettingsAsDefault = onSetChapterSettingsAsDefault,
         onResetChapterSettingsToDefault = onResetChapterSettingsToDefault,
+        onCoverLoadFailed = onCoverLoadFailed,
     )
     BoxWithConstraints(modifier = Modifier.fillMaxSize().testTag("library-screen")) {
         val selected = state.selectedMangaId != null
@@ -196,6 +202,8 @@ fun LibraryScreen(
                     onImportLocal = onImportLocal,
                     onUpdateLibrary = onUpdateLibrary,
                     isUpdatingLibrary = isUpdatingLibrary,
+                    isRepairingCovers = isRepairingCovers,
+                    onRepairBrokenCovers = onRepairBrokenCovers,
                     onRetry = onRetry,
                     onCategorySelected = onCategorySelected,
                     onManageCategories = onManageCategories,
@@ -253,6 +261,8 @@ fun LibraryScreen(
                 onImportLocal = onImportLocal,
                 onUpdateLibrary = onUpdateLibrary,
                 isUpdatingLibrary = isUpdatingLibrary,
+                isRepairingCovers = isRepairingCovers,
+                onRepairBrokenCovers = onRepairBrokenCovers,
                 onRetry = onRetry,
                 onCategorySelected = onCategorySelected,
                 onManageCategories = onManageCategories,
@@ -333,9 +343,12 @@ private fun LibraryPane(
     onBatchRemoveFromLibrary: () -> Unit,
     isUpdatingLibrary: Boolean = false,
     onUpdateLibrary: (() -> Unit)? = null,
+    isRepairingCovers: Boolean = false,
+    onRepairBrokenCovers: (() -> Unit)? = null,
     modifier: Modifier,
 ) {
     val strings = LocalStrings.current
+    val failedCovers by CoverFailureRegistry.failuresFlow.collectAsState()
 
     BoxWithConstraints(modifier = modifier) {
         val useNarrowControls = maxWidth < 900.dp
@@ -356,6 +369,24 @@ private fun LibraryPane(
                         Text(strings.libraryUpdating)
                     } else {
                         Text(strings.libraryUpdateNow)
+                    }
+                }
+            }
+            if (failedCovers.isNotEmpty() && onRepairBrokenCovers != null) {
+                OutlinedButton(
+                    onClick = onRepairBrokenCovers,
+                    enabled = !isRepairingCovers,
+                    modifier = Modifier.testTag("library-repair-covers-button"),
+                ) {
+                    if (isRepairingCovers) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(strings.coverRepairRunning)
+                    } else {
+                        Text(strings.coverRepairAction(failedCovers.size))
                     }
                 }
             }

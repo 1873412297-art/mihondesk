@@ -13,6 +13,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import mihon.desktop.extension.DesktopSourceManager
+import mihon.desktop.extension.builtin.BundledLocalSource
 import mihon.desktop.library.model.ImportReport
 import mihon.desktop.library.model.LibraryChapter
 import mihon.desktop.library.model.LibraryManga
@@ -21,6 +23,7 @@ import mihon.desktop.library.model.MangaRecord
 import mihon.desktop.library.reader.ReaderLibraryPort
 import mihon.desktop.library.reader.ReaderOnlineChapter
 import mihon.desktop.library.repository.LibraryRepository
+import mihon.extension.source.WindowsCatalogueSource
 import mihon.reader.session.ProgressWriteResult
 import mihon.reader.session.ReaderProgressUpdate
 import mihon.reader.source.ChapterDirection
@@ -356,6 +359,78 @@ class LibraryPresenterTest {
 
     private suspend fun LibraryPresenter.awaitState(predicate: (LibraryUiState) -> Boolean): LibraryUiState =
         withTimeout(5_000) { state.first(predicate) }
+
+    @Test
+    fun `onCoverLoadFailed refreshes once per manga and skips missing source`() = runBlocking {
+        val rows = MutableStateFlow(listOf(manga(1, "One"), manga(2, "Two")))
+        val details = mapOf(
+            1L to MutableStateFlow(details(1, "One")),
+            2L to MutableStateFlow(details(2, "Two").copy(sourceId = 0L)),
+            3L to MutableStateFlow(details(3, "Three").copy(sourceId = 999L)),
+        )
+        val chapters = mapOf(
+            1L to MutableStateFlow(listOf(chapter(11, 1))),
+            2L to MutableStateFlow(listOf(chapter(21, 2))),
+            3L to MutableStateFlow(listOf(chapter(31, 3))),
+        )
+        val refreshCount = AtomicInteger(0)
+        val sourceManager = DesktopSourceManager()
+        val testSource = object : WindowsCatalogueSource by BundledLocalSource({ null }) {
+            override val id: Long = 101L
+            override val name: String = "Test Source 101"
+        }
+        sourceManager.registerBuiltinSource(testSource)
+
+        val presenter = LibraryPresenter(
+            repository = FakeLibraryRepository(details = details, chapters = chapters, libraryFlow = { rows }),
+            scope = scope,
+            sourceManager = sourceManager,
+            mangaRefreshHandler = { refreshCount.incrementAndGet() },
+        )
+        presenter.awaitState { !it.loading && it.items.size == 2 }
+
+        // 1. Select manga 1 (installed source 101)
+        presenter.selectManga(1)
+        presenter.awaitDetail { it.manga?.id == 1L }
+
+        // 404 triggers refresh
+        presenter.onCoverLoadFailed(404)
+        // give coroutine a moment if launched
+        withTimeout(2_000) {
+            while (refreshCount.get() != 1) {
+                kotlinx.coroutines.delay(20)
+            }
+        }
+        refreshCount.get() shouldBe 1
+
+        // Calling again with 404 for same id does NOT trigger duplicate refresh (anti-loop)
+        presenter.onCoverLoadFailed(404)
+        kotlinx.coroutines.delay(50)
+        refreshCount.get() shouldBe 1
+
+        // 2. Select manga 2 (sourceId = 0, local source) -> does NOT trigger
+        presenter.selectManga(2)
+        presenter.awaitDetail { it.manga?.id == 2L }
+        presenter.onCoverLoadFailed(404)
+        kotlinx.coroutines.delay(50)
+        refreshCount.get() shouldBe 1
+
+        // 3. Open manga 3 (sourceId = 999, missing source) -> does NOT trigger
+        presenter.openMangaDetail(3)
+        presenter.awaitDetail { it.manga?.id == 3L }
+        presenter.onCoverLoadFailed(404)
+        kotlinx.coroutines.delay(50)
+        refreshCount.get() shouldBe 1
+
+        // Non-404/410 code (e.g. 500) -> does NOT trigger
+        presenter.selectManga(1)
+        presenter.awaitDetail { it.manga?.id == 1L }
+        presenter.onCoverLoadFailed(500)
+        kotlinx.coroutines.delay(50)
+        refreshCount.get() shouldBe 1
+
+        presenter.close()
+    }
 
     private suspend fun LibraryPresenter.awaitDetail(
         predicate: (MangaDetailUiState) -> Boolean,

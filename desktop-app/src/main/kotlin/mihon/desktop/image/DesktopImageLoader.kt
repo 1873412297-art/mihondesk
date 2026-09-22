@@ -30,6 +30,7 @@ data class ImageRequest(
     val mangaId: Long? = null,
     val localMangaPath: Path? = null,
     val headers: Map<String, String> = emptyMap(),
+    val onHttpError: ((code: Int) -> Unit)? = null,
 )
 
 class DesktopImageLoader(
@@ -86,7 +87,7 @@ class DesktopImageLoader(
 
         // 3. Network URL
         if (uriStr.startsWith("http://", ignoreCase = true) || uriStr.startsWith("https://", ignoreCase = true)) {
-            val bitmap = loadFromNetwork(uriStr, request.headers)
+            val bitmap = loadFromNetwork(uriStr, request.headers, request)
             if (bitmap != null) {
                 memoryCache[memKey] = bitmap
             }
@@ -184,7 +185,11 @@ class DesktopImageLoader(
         }
     }
 
-    private fun loadFromNetwork(url: String, customHeaders: Map<String, String>): ImageBitmap? {
+    private fun loadFromNetwork(
+        url: String,
+        customHeaders: Map<String, String>,
+        request: ImageRequest? = null,
+    ): ImageBitmap? {
         val hash = sha256(url)
         val diskFile = diskCacheDir.resolve("$hash.img")
 
@@ -204,6 +209,10 @@ class DesktopImageLoader(
             client.newCall(reqBuilder.build()).execute().use { response ->
                 if (!response.isSuccessful) {
                     debugLog("HTTP-${response.code} $url")
+                    if (request?.mangaId != null) {
+                        CoverFailureRegistry.record(request.mangaId, url, response.code)
+                    }
+                    request?.onHttpError?.invoke(response.code)
                     return null
                 }
                 val body = response.body

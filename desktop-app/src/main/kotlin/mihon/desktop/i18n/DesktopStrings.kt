@@ -459,6 +459,8 @@ interface DesktopStrings {
     val libraryUpdateTitle: String
     val libraryUpdateNow: String
     val libraryUpdating: String
+    fun coverRepairAction(count: Int): String
+    val coverRepairRunning: String
     val libraryUpdateInterval: String
     val libraryUpdateIntervalManual: String
     val libraryUpdateInterval6Hours: String
@@ -1133,6 +1135,8 @@ object EnglishStrings : DesktopStrings {
     override val libraryUpdateTitle = "Library Update"
     override val libraryUpdateNow = "Update Library Now"
     override val libraryUpdating = "Updating library..."
+    override fun coverRepairAction(count: Int) = "Repair broken covers ($count)"
+    override val coverRepairRunning = "Repairing covers..."
     override val libraryUpdateInterval = "Automatic Update Frequency"
     override val libraryUpdateIntervalManual = "Manual only"
     override val libraryUpdateInterval6Hours = "Every 6 hours"
@@ -1878,6 +1882,8 @@ object SimplifiedChineseStrings : DesktopStrings {
     override val libraryUpdateTitle = "书架更新"
     override val libraryUpdateNow = "立即检查书架更新"
     override val libraryUpdating = "正在检查并同步书架更新..."
+    override fun coverRepairAction(count: Int) = "修复失效封面 ($count)"
+    override val coverRepairRunning = "正在修复封面..."
     override val libraryUpdateInterval = "自动更新频率"
     override val libraryUpdateIntervalManual = "仅手动"
     override val libraryUpdateInterval6Hours = "每 6 小时"
@@ -2621,6 +2627,8 @@ object TraditionalChineseStrings : DesktopStrings {
     override val libraryUpdateTitle = "書架更新"
     override val libraryUpdateNow = "立即檢查書架更新"
     override val libraryUpdating = "正在檢查並同步書架更新..."
+    override fun coverRepairAction(count: Int) = "修復失效封面 ($count)"
+    override val coverRepairRunning = "正在修復封面..."
     override val libraryUpdateInterval = "自動更新頻率"
     override val libraryUpdateIntervalManual = "僅手動"
     override val libraryUpdateInterval6Hours = "每 6 小時"
