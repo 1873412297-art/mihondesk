@@ -301,7 +301,11 @@ private fun GeneralSettingsPane(
             modifier = Modifier.fillMaxWidth(),
         ) {
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(strings.settingsLanguageTitle, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text(
+                    strings.settingsLanguageTitle,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                )
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -352,7 +356,11 @@ private fun GeneralSettingsPane(
                     modifier = Modifier.weight(1f).padding(end = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    Text(strings.incognitoTitle, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text(
+                        strings.incognitoTitle,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
                     Text(
                         strings.incognitoDescription,
                         style = MaterialTheme.typography.bodySmall,
@@ -377,7 +385,11 @@ private fun GeneralSettingsPane(
             modifier = Modifier.fillMaxWidth(),
         ) {
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(strings.settingsAppInfoTitle, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text(
+                    strings.settingsAppInfoTitle,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                )
                 Text(
                     strings.settingsVersionLabel(mihon.desktop.updates.DesktopAppUpdateService.CURRENT_VERSION),
                     style = MaterialTheme.typography.bodyMedium,
@@ -1555,7 +1567,11 @@ private fun TrackingSettingsPane(trackerManager: DesktopTrackerManager?) {
             modifier = Modifier.fillMaxWidth(),
         ) {
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(strings.settingsTrackingTitle, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text(
+                    strings.settingsTrackingTitle,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                )
                 Text(
                     strings.settingsTrackingDescription,
                     style = MaterialTheme.typography.bodySmall,
@@ -2227,7 +2243,11 @@ private fun AdvancedSettingsPane(
             modifier = Modifier.fillMaxWidth().testTag("storage-cleaner-card"),
         ) {
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(strings.storageCleanerTitle, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text(
+                    strings.storageCleanerTitle,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                )
                 Text(
                     strings.storageCleanerDescription,
                     style = MaterialTheme.typography.bodySmall,
@@ -2322,7 +2342,11 @@ private fun AdvancedSettingsPane(
             modifier = Modifier.fillMaxWidth(),
         ) {
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(strings.cookieManagerTitle, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text(
+                    strings.cookieManagerTitle,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                )
                 Text(
                     strings.cookieManagerDescription,
                     style = MaterialTheme.typography.bodySmall,
@@ -2342,7 +2366,11 @@ private fun AdvancedSettingsPane(
             modifier = Modifier.fillMaxWidth(),
         ) {
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(strings.settingsDiagnosticsTitle, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text(
+                    strings.settingsDiagnosticsTitle,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                )
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     FilledTonalButton(
                         onClick = {

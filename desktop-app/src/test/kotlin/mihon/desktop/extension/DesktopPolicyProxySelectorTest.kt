@@ -1,7 +1,7 @@
 package mihon.desktop.extension
 
-import mihon.desktop.extension.DesktopPolicyProxySelector
 import mihon.desktop.extension.DesktopNetworkPolicy
+import mihon.desktop.extension.DesktopPolicyProxySelector
 import mihon.desktop.extension.DesktopProxyMode
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -13,7 +13,7 @@ import java.net.ProxySelector
 import java.net.SocketAddress
 import java.net.URI
 
-class TrackerProxySelectorTest {
+class DesktopPolicyProxySelectorTest {
 
     @Test
     fun `SYSTEM delegates to a supplied default selector`() {
