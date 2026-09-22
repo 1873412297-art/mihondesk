@@ -34,7 +34,14 @@ data class ImageRequest(
 
 class DesktopImageLoader(
     private val diskCacheDir: Path,
-    private val client: OkHttpClient = OkHttpClient(),
+    policyProvider: () -> mihon.desktop.extension.DesktopNetworkPolicy = {
+        mihon.desktop.extension.DesktopNetworkPolicy()
+    },
+    private val client: OkHttpClient = OkHttpClient.Builder()
+        .connectTimeout(10, TimeUnit.SECONDS)
+        .readTimeout(20, TimeUnit.SECONDS)
+        .proxySelector(mihon.desktop.extension.DesktopPolicyProxySelector(policyProvider))
+        .build(),
     private val customCoverManager: CustomCoverManager? = null,
     private val maxMemoryEntries: Int = 120,
 ) {
@@ -195,12 +202,19 @@ class DesktopImageLoader(
             customHeaders.forEach { (k, v) -> reqBuilder.header(k, v) }
 
             client.newCall(reqBuilder.build()).execute().use { response ->
-                if (!response.isSuccessful) return null
+                if (!response.isSuccessful) {
+                    debugLog("HTTP-${response.code} $url")
+                    return null
+                }
                 val body = response.body
                 val bytes = body.bytes()
                 if (bytes.isEmpty()) return null
 
-                val bitmap = decodeBytes(bytes) ?: return null
+                val bitmap = decodeBytes(bytes)
+                if (bitmap == null) {
+                    debugLog("DECODE-FAIL $url bytes=${bytes.size}")
+                    return null
+                }
 
                 // Save to disk cache atomically
                 val tmpFile = diskCacheDir.resolve("$hash.tmp")
@@ -211,8 +225,18 @@ class DesktopImageLoader(
             }
         } catch (c: CancellationException) {
             throw c
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            debugLog("FETCH-FAIL $url ${e.javaClass.name}: ${e.message}")
             return null
+        }
+    }
+
+    private fun debugLog(line: String) {
+        if (System.getenv("MIHON_IMAGE_DEBUG") == null) return
+        runCatching {
+            java.io.File(System.getenv("TEMP") ?: ".", "mihon-image-debug.log").appendText(
+                "[${java.time.LocalTime.now()}] $line\n",
+            )
         }
     }
 
