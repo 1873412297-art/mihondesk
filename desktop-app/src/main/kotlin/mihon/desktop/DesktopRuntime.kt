@@ -67,6 +67,7 @@ class DesktopRuntime(
         mihon.desktop.image.DesktopImageLoader(
             diskCacheDir = directories.cache.resolve("covers"),
             customCoverManager = customCoverManager,
+            policyProvider = { DesktopNetworkSettingsStore(preferences).load() },
         ),
     val backupExporter: mihon.desktop.library.backup.AndroidBackupExporter =
         mihon.desktop.library.backup.AndroidBackupExporter(library),
