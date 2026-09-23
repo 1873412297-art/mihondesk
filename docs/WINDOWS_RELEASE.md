@@ -49,6 +49,7 @@ EXE、MSI 和便携 ZIP 都依赖 `verifyCleanDistribution`，打包前执行 `s
 - [ ] **2C 应用内更新真实通道**：对真实已发布 release 资产完成 检查→下载→清单/SHA 校验→交接→启动 端到端一次；断点续传与校验失败路径各一次。
 - [ ] **1D 快速回归**：干净 VM 上干净安装 + 启动 + 备份导出冒烟通过。
 - [ ] **1F CI 绿**：同一提交上 Android 单测 + assembleDebug + 桌面关键测试全绿（CI run 链接附 release 说明）。
+- [ ] **2D Release 资产完整**：`scripts/verify-release-assets.ps1 -Tag v<版本>` 通过。该脚本断言 Release 同时带有 `SHA256SUMS.txt`、`desktop-version.txt`、`mihon-build-info.properties` 与三件与版本号一致的产物，清单对每个产物各有一行哈希，且各资产下载地址为应用内更新器接受的规范形式。**缺 `SHA256SUMS.txt` 会让应用内更新直接失败**，即使手动下载一切正常。
 
 历史事故区（`msi-upgrade-rollback`、便携交接、应用内更新反复出现 hotfix 的版本）必须在 release 说明中引用当版本项证据链接。
 
