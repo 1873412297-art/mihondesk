@@ -1,0 +1,27 @@
+CREATE TABLE sync_peer_state(
+    peer_device_id TEXT NOT NULL PRIMARY KEY,
+    last_pull_watermark INTEGER NOT NULL DEFAULT 0,
+    updated_at INTEGER NOT NULL DEFAULT 0
+);
+
+getPeerWatermark:
+SELECT last_pull_watermark
+FROM sync_peer_state
+WHERE peer_device_id = :peerDeviceId;
+
+getAllPeerStates:
+SELECT *
+FROM sync_peer_state;
+
+upsertPeerWatermark:
+INSERT INTO sync_peer_state(peer_device_id, last_pull_watermark, updated_at)
+VALUES (:peerDeviceId, :lastPullWatermark, :updatedAt)
+ON CONFLICT(peer_device_id)
+DO UPDATE
+SET
+    last_pull_watermark = :lastPullWatermark,
+    updated_at = :updatedAt
+WHERE peer_device_id = :peerDeviceId;
+
+deleteAll:
+DELETE FROM sync_peer_state;

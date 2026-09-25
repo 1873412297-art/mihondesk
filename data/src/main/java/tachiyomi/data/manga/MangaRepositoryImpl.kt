@@ -131,6 +131,7 @@ class MangaRepositoryImpl(
             categoryIds.forEach { categoryId ->
                 database.mangas_categoriesQueries.insert(mangaId, categoryId)
             }
+            database.mangasQueries.touchManga(mangaId)
         }
     }
 

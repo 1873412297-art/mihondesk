@@ -68,3 +68,10 @@ WHERE _id = :categoryId;
 updateAllFlags:
 UPDATE categories SET
 flags = coalesce(:flags, flags);
+
+getCategoryByName:
+SELECT *
+FROM categories
+WHERE lower(name) = lower(:name)
+LIMIT 1;
+

@@ -42,5 +42,6 @@ dependencies {
 
     implementation(libs.kotlinx.datetime)
 
+    api(projects.syncCore)
     api(libs.bundles.sqldelight)
 }

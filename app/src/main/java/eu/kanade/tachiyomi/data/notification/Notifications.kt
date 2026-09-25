@@ -65,6 +65,14 @@ object Notifications {
     const val ID_INCOGNITO_MODE = -701
 
     /**
+     * Notification channel and ids used for Library Sync.
+     */
+    const val CHANNEL_SYNC_PROGRESS = "sync_progress_channel"
+    const val ID_SYNC_PROGRESS = -601
+    const val CHANNEL_SYNC_COMPLETE = "sync_complete_channel"
+    const val ID_SYNC_COMPLETE = -602
+
+    /**
      * Notification channel and ids used for extension updates.
      */
     private const val GROUP_APK_UPDATES = "group_apk_updates"
@@ -160,7 +168,16 @@ object Notifications {
                     setGroup(GROUP_APK_UPDATES)
                     setName(context.stringResource(MR.strings.channel_ext_updates))
                 },
+                buildNotificationChannel(CHANNEL_SYNC_PROGRESS, IMPORTANCE_LOW) {
+                    setName("Library sync progress")
+                    setShowBadge(false)
+                },
+                buildNotificationChannel(CHANNEL_SYNC_COMPLETE, IMPORTANCE_LOW) {
+                    setName("Library sync complete")
+                    setShowBadge(false)
+                },
             ),
+
         )
     }
 }

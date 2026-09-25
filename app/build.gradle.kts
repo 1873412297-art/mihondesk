@@ -219,6 +219,9 @@ dependencies {
     implementation(projects.sourceLocal)
     implementation(projects.data)
     implementation(projects.domain)
+    implementation(projects.syncCore)
+    implementation(projects.syncEngine)
+    implementation(projects.syncTransportFile)
     implementation(projects.presentationCore)
     implementation(projects.presentationWidget)
     implementation(projects.telemetry)
@@ -331,6 +334,7 @@ dependencies {
     testImplementation(libs.bundles.test)
     testImplementation(project(":desktop-library-data"))
     testImplementation(project(":reader-core"))
+    testImplementation(libs.sqldelight.jdbcDriver)
     testRuntimeOnly(libs.junit.platform.launcher)
 
     // For detecting memory leaks; see https://square.github.io/leakcanary/

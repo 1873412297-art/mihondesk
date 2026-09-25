@@ -76,11 +76,14 @@ class HistoryRepositoryImpl(
 
     override suspend fun upsertHistory(historyUpdate: HistoryUpdate) {
         try {
-            database.historyQueries.upsert(
-                historyUpdate.chapterId,
-                historyUpdate.readAt,
-                historyUpdate.sessionReadDuration,
-            )
+            database.transaction {
+                database.historyQueries.upsert(
+                    historyUpdate.chapterId,
+                    historyUpdate.readAt,
+                    historyUpdate.sessionReadDuration,
+                )
+                database.chaptersQueries.touchChapter(historyUpdate.chapterId)
+            }
         } catch (e: Exception) {
             logcat(LogPriority.ERROR, throwable = e)
         }

@@ -73,3 +73,16 @@ WHERE chapter_id = :chapterId;
 getReadDuration:
 SELECT coalesce(sum(time_read), 0)
 FROM history;
+
+upsertSyncHistory:
+INSERT INTO history(chapter_id, last_read, time_read)
+VALUES (:chapterId, :readAt, :time_read)
+ON CONFLICT(chapter_id)
+DO UPDATE
+SET
+    last_read = CASE
+        WHEN :readAt IS NOT NULL AND (history.last_read IS NULL OR :readAt > history.last_read) THEN :readAt
+        ELSE history.last_read
+    END,
+    time_read = max(history.time_read, :time_read)
+WHERE chapter_id = :chapterId;
