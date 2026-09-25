@@ -2,6 +2,13 @@
 
 这里记录 mihondesk Windows 版的更新。安装包与完整发布说明见 [GitHub Releases](https://github.com/1873412297-art/mihondesk/releases)。继承自 Android 上游的历史日志保留在 [Mihon 更新日志](docs/upstream/MIHON_CHANGELOG.md)。
 
+## [0.2.20](https://github.com/1873412297-art/mihondesk/releases/tag/v0.2.20)
+
+- **手机 ↔ 桌面书架同步（内置服务器通道）**：桌面端内嵌同步服务器（Ktor + SQLite，局域网 HTTP + token）；手机支持扫码配对（桌面配对二维码，相机扫描界面带扫描框动画与手动输入兜底）、局域网自动发现（mDNS `_mihonsync._tcp`，桌面开启"允许免输入配对"后可一键配对，token 默认不进广播）、手动配对码三种方式；收藏、已读、分类、阅读进度双向 LWW 同步（协议 baseSchema 1 不变）。
+- **关闭窗口后在后台运行**：新开关（默认关）让关闭按钮隐藏窗口到系统托盘，同步服务器保持运行；托盘菜单提供显示/退出；应用更新重启等程序化退出始终真退出。
+- **同步 IP 选择记忆**：记住上次选定的同步 IP，重启自动恢复，失效自动回退。
+- 外部扫码器经 `mihonsync://` deep-link 打开 App 时需二次确认后才写入配对。
+
 ## [0.2.19](https://github.com/1873412297-art/mihondesk/releases/tag/v0.2.19)
 
 - **网络代理统一管辖**：新增统一代理策略，图源请求、Tracker 同步、扩展仓库索引、扩展包下载与封面加载全部遵循"设置 → 高级与诊断 → 网络代理"（系统代理 / 直连 / HTTP / SOCKS）。此前多处客户端各自直连系统代理，在 Clash 类代理下会静默失败。

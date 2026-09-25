@@ -23,16 +23,16 @@ AI 辅助开发的开源项目 · 基于 Mihon · Kotlin / Compose Desktop
 
 ## 下载与安装
 
-当前版本：**0.2.19**。面向 **Windows 10 22H2 / Windows 11，x64**，发行包已内置运行环境，无需另装 Java。
+当前版本：**0.2.20**。面向 **Windows 10 22H2 / Windows 11，x64**，发行包已内置运行环境，无需另装 Java。
 
 程序、安装包和快捷方式现已统一命名为 **mihondesk**。安装版继续使用原有数据目录，支持从 MihonW 升级。
 
 | 下载 | 适用方式 |
 | --- | --- |
-| **[EXE 安装包](https://github.com/1873412297-art/mihondesk/releases/download/v0.2.19/mihondesk-0.2.19.exe)** | 推荐使用，下载后按向导安装 |
-| [MSI 安装包](https://github.com/1873412297-art/mihondesk/releases/download/v0.2.19/mihondesk-0.2.19.msi) | 需要 MSI 安装方式时使用 |
-| [便携 ZIP](https://github.com/1873412297-art/mihondesk/releases/download/v0.2.19/mihondesk-0.2.19-windows-x64-portable.zip) | 完整解压到可写目录，运行其中的 `mihondesk.exe` |
-| [SHA-256 校验文件](https://github.com/1873412297-art/mihondesk/releases/download/v0.2.19/SHA256SUMS.txt) | 校验下载文件的完整性 |
+| **[EXE 安装包](https://github.com/1873412297-art/mihondesk/releases/download/v0.2.20/mihondesk-0.2.20.exe)** | 推荐使用，下载后按向导安装 |
+| [MSI 安装包](https://github.com/1873412297-art/mihondesk/releases/download/v0.2.20/mihondesk-0.2.20.msi) | 需要 MSI 安装方式时使用 |
+| [便携 ZIP](https://github.com/1873412297-art/mihondesk/releases/download/v0.2.20/mihondesk-0.2.20-windows-x64-portable.zip) | 完整解压到可写目录，运行其中的 `mihondesk.exe` |
+| [SHA-256 校验文件](https://github.com/1873412297-art/mihondesk/releases/download/v0.2.20/SHA256SUMS.txt) | 校验下载文件的完整性 |
 
 **首次使用**：发行包不预装在线图源或扩展仓库，请自行添加仓库或安装扩展。本地文件阅读无需安装图源。升级会保留已有书架、设置和阅读数据。
 
@@ -48,6 +48,7 @@ AI 辅助开发的开源项目 · 基于 Mihon · Kotlin / Compose Desktop
 | 图源浏览 | 安装扩展，浏览、搜索漫画并查看章节；支持部分 Mihon / Tachiyomi 扩展的转换与兼容运行 |
 | 离线与更新 | 章节下载、下载队列恢复、从下载页直接阅读已完成内容，以及书库章节更新 |
 | 备份与恢复 | 导入、导出 Mihon 兼容备份；具体字段支持范围见下方兼容说明 |
+| 手机书架同步 | 桌面端开启内置同步服务器后，手机扫码 / 局域网发现 / 配对码完成配对，收藏、已读、分类与阅读进度双向自动同步（0.2.20 起） |
 
 ## 开始使用
 
@@ -55,6 +56,15 @@ AI 辅助开发的开源项目 · 基于 Mihon · Kotlin / Compose Desktop
 2. **阅读本地文件**：使用本地导入入口选择漫画文件或图片目录。
 3. **阅读在线内容**：在浏览页安装扩展包，再选择图源。安装入口支持 `.mext`，也可尝试转换受支持的扩展 `.apk`。
 4. **保留阅读数据**：使用备份功能定期导出。备份不包含已下载的漫画图片。
+
+## 0.2.20 更新
+
+- **手机 ↔ 桌面书架同步（内置服务器）**：桌面端设置里一键开启同步服务器，手机通过**扫码**（桌面显示配对二维码）、**局域网自动发现**（mDNS，桌面开启"允许免输入配对"后点一下设备即配对）或**手动配对码**三种方式完成配对；之后收藏、已读、分类、阅读进度在两端自动双向同步，无需任何第三方同步工具。
+- **关闭窗口后在后台运行**（新开关，默认关）：窗口关闭后隐藏到系统托盘，同步服务器保持运行，托盘菜单可显示或彻底退出；应用更新重启不受影响。
+- **同步 IP 选择记忆**：多网卡/VPN 机器上记住上次选定的同步 IP，重启后自动恢复，失效时自动回退。
+- 扫码界面重做：扫描框 + 动画扫描线 + 无效码提示 + 手动输入兜底；外部扫码器扫二维码可经 deep-link 直达配对确认。
+
+详见[本版发布说明](https://github.com/1873412297-art/mihondesk/releases/tag/v0.2.20)和[更新日志](CHANGELOG.md)。
 
 ## 0.2.19 更新
 
