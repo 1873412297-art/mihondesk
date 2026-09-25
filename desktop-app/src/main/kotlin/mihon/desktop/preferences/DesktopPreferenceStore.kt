@@ -65,11 +65,19 @@ data class DesktopPreferences(
     val desktopNotificationsHideContent: Boolean = false,
     val lastLibraryUpdateEpochMillis: Long = 0L,
     val syncEnabled: Boolean = false,
-    val syncDirectoryPath: String = "",
     val syncIntervalMinutes: Int = 15,
     val lastSyncEpochMillis: Long = 0L,
     val lastSyncMessage: String = "",
     val syncDeviceId: String = "",
+    val syncServerEnabled: Boolean = false,
+    val syncServerPort: Int = 45831,
+    val syncServerToken: String = "",
+    /** When true, token is broadcast in mDNS TXT so phones can pair without scanning. Default false (security). */
+    val syncServerQuickPair: Boolean = false,
+    /** Display name advertised via mDNS. Defaults to hostname. */
+    val syncServerDeviceName: String = "",
+    val syncServerSelectedIp: String = "",
+    val runInBackgroundOnClose: Boolean = false,
 )
 
 class DesktopPreferenceStore(private val file: Path) {
@@ -168,11 +176,18 @@ class DesktopPreferenceStore(private val file: Path) {
             lastLibraryUpdateEpochMillis = properties.getProperty("library.last_update_epoch_millis")
                 ?.toLongOrNull() ?: 0L,
             syncEnabled = properties.getProperty("sync.enabled")?.toBooleanStrictOrNull() ?: false,
-            syncDirectoryPath = properties.getProperty("sync.directory_path") ?: "",
             syncIntervalMinutes = properties.getProperty("sync.interval_minutes")?.toIntOrNull() ?: 15,
             lastSyncEpochMillis = properties.getProperty("sync.last_epoch_millis")?.toLongOrNull() ?: 0L,
             lastSyncMessage = properties.getProperty("sync.last_message") ?: "",
             syncDeviceId = properties.getProperty("sync.device_id") ?: "",
+            syncServerEnabled = properties.getProperty("sync.server_enabled")?.toBooleanStrictOrNull() ?: false,
+            syncServerPort = properties.getProperty("sync.server_port")?.toIntOrNull() ?: 45831,
+            syncServerToken = properties.getProperty("sync.server_token") ?: "",
+            syncServerQuickPair = properties.getProperty("sync.server_quick_pair")?.toBooleanStrictOrNull() ?: false,
+            syncServerDeviceName = properties.getProperty("sync.server_device_name") ?: "",
+            syncServerSelectedIp = properties.getProperty("sync.server_selected_ip") ?: "",
+            runInBackgroundOnClose = properties.getProperty("background.run_in_background_on_close")
+                ?.toBooleanStrictOrNull() ?: false,
         )
     }
 
@@ -217,6 +232,10 @@ class DesktopPreferenceStore(private val file: Path) {
         properties.setProperty("backup.last_epoch_millis", preferences.lastAutoBackupEpochMillis.toString())
         properties.setProperty("background.tasks_enabled", preferences.backgroundTasksEnabled.toString())
         properties.setProperty(
+            "background.run_in_background_on_close",
+            preferences.runInBackgroundOnClose.toString(),
+        )
+        properties.setProperty(
             "library.update_interval_hours",
             preferences.libraryUpdateIntervalHours.toString(),
         )
@@ -254,11 +273,16 @@ class DesktopPreferenceStore(private val file: Path) {
             preferences.lastLibraryUpdateEpochMillis.toString(),
         )
         properties.setProperty("sync.enabled", preferences.syncEnabled.toString())
-        properties.setProperty("sync.directory_path", preferences.syncDirectoryPath)
         properties.setProperty("sync.interval_minutes", preferences.syncIntervalMinutes.toString())
         properties.setProperty("sync.last_epoch_millis", preferences.lastSyncEpochMillis.toString())
         properties.setProperty("sync.last_message", preferences.lastSyncMessage)
         properties.setProperty("sync.device_id", preferences.syncDeviceId)
+        properties.setProperty("sync.server_enabled", preferences.syncServerEnabled.toString())
+        properties.setProperty("sync.server_port", preferences.syncServerPort.toString())
+        properties.setProperty("sync.server_token", preferences.syncServerToken)
+        properties.setProperty("sync.server_quick_pair", preferences.syncServerQuickPair.toString())
+        properties.setProperty("sync.server_device_name", preferences.syncServerDeviceName)
+        properties.setProperty("sync.server_selected_ip", preferences.syncServerSelectedIp)
         properties.remove("window.x")
         properties.remove("window.y")
         properties.remove("window.width")
@@ -359,5 +383,13 @@ class DesktopPreferenceStore(private val file: Path) {
 
     private inline fun <reified T : Enum<T>> enumValueOrDefault(value: String?, default: T): T {
         return enumValues<T>().firstOrNull { it.name == value } ?: default
+    }
+
+    companion object {
+        fun generateSyncToken(): String {
+            val bytes = ByteArray(32)
+            java.security.SecureRandom().nextBytes(bytes)
+            return bytes.joinToString("") { "%02x".format(it) }
+        }
     }
 }

@@ -16,16 +16,7 @@ object SyncStrings {
         get() = if (isZh) "启用同步" else "Enable sync"
 
     val enableSyncSummary: String
-        get() = if (isZh) "自动或手动同步书架状态到同步目录" else "Sync library state automatically or manually"
-
-    val syncDirectory: String
-        get() = if (isZh) "同步目录" else "Sync directory"
-
-    val syncDirectorySummary: String
-        get() = if (isZh) "云盘或 WebDAV 挂载的本地文件夹" else "Cloud drive or WebDAV mounted folder"
-
-    val noDirectorySet: String
-        get() = if (isZh) "未设置同步目录" else "No directory selected"
+        get() = if (isZh) "自动或手动同步书架状态到桌面端" else "Sync library state automatically or manually with desktop"
 
     val syncFrequency: String
         get() = if (isZh) "自动同步频率" else "Sync frequency"
@@ -72,4 +63,86 @@ object SyncStrings {
         } else {
             "Note: Local manga entries do not have cross-device identities and are excluded."
         }
+
+    val pairingCode: String
+        get() = if (isZh) "配对码" else "Pairing code"
+
+    val pairingCodeSummary: String
+        get() = if (isZh) "粘贴桌面端生成的配对码 (mihonsync://...)" else "Paste pairing code from desktop (mihonsync://...)"
+
+    val pairingCodeInvalid: String
+        get() = if (isZh) "配对码格式无效" else "Invalid pairing code"
+
+    val testConnection: String
+        get() = if (isZh) "测试连接" else "Test connection"
+
+    val testingConnection: String
+        get() = if (isZh) "正在测试连接…" else "Testing connection…"
+
+    val connectionSuccess: String
+        get() = if (isZh) "连接成功" else "Connection successful"
+
+    val connectionFailed: String
+        get() = if (isZh) "连接失败" else "Connection failed"
+
+    val pairingExpired: String
+        get() = if (isZh) "配对已失效，请在桌面端重新获取配对码" else "Pairing expired, please re-pair from desktop"
+
+    val scanPairing: String
+        get() = if (isZh) "扫码配对" else "Scan QR code to pair"
+
+    val scanPairingHint: String
+        get() = if (isZh) "对准桌面端二维码以完成配对" else "Point at the desktop QR code to pair"
+
+    val scanPairingInvalidCode: String
+        get() = if (isZh) "不是有效的 Mihon 同步二维码" else "Not a valid Mihon sync QR code"
+
+    val scanPairingSuccess: String
+        get() = if (isZh) "配对成功" else "Pairing successful"
+
+    val scanPairingCameraPermissionDenied: String
+        get() = if (isZh) {
+            "需要相机权限才能扫码。请前往系统设置开启。"
+        } else {
+            "Camera permission required. Please enable it in system Settings."
+        }
+
+    val scanPairingManualInput: String
+        get() = if (isZh) "手动输入配对码" else "Enter code manually"
+
+    val scanPairingManualHint: String
+        get() = if (isZh) "粘贴 mihonsync:// 开头的配对码" else "Paste the mihonsync:// pairing code"
+
+    val discoverDevices: String
+        get() = if (isZh) "搜索局域网设备" else "Search LAN devices"
+
+    val discoverDevicesSearching: String
+        get() = if (isZh) "正在搜索…" else "Searching…"
+
+    val discoverDevicesRefresh: String
+        get() = if (isZh) "重新搜索" else "Refresh"
+
+    val discoverDevicesEmpty: String
+        get() = if (isZh) "未发现设备，请确保桌面端已开启同步服务器" else "No devices found. Make sure the desktop sync server is running."
+
+    val discoverDevicesPairSuccess: String
+        get() = if (isZh) "已配对到 %s" else "Paired with %s"
+
+    val discoverDevicesNoQuickPair: String
+        get() = if (isZh) "该设备未开启免输入配对，请扫码或粘贴配对码" else "Quick pairing not enabled. Scan QR or paste pairing code."
+
+    val cancel: String
+        get() = if (isZh) "取消" else "Cancel"
+
+    val confirmPairingTitle: String
+        get() = if (isZh) "确认同步配对" else "Confirm sync pairing"
+
+    val confirmPairingTarget: String
+        get() = if (isZh) "目标地址" else "Target address"
+
+    val confirmPairingButton: String
+        get() = if (isZh) "确认配对" else "Confirm pairing"
+
+    val confirmPairingMessage: String
+        get() = if (isZh) "是否将同步服务器连接至该地址？" else "Connect sync server to this address?"
 }

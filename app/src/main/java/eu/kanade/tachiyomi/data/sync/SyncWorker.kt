@@ -3,7 +3,6 @@ package eu.kanade.tachiyomi.data.sync
 import android.content.Context
 import android.content.pm.ServiceInfo
 import android.os.Build
-import androidx.core.net.toUri
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
@@ -14,7 +13,6 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
-import com.hippo.unifile.UniFile
 import eu.kanade.tachiyomi.data.notification.Notifications
 import eu.kanade.tachiyomi.util.system.isRunning
 import eu.kanade.tachiyomi.util.system.setForegroundSafely
@@ -41,28 +39,27 @@ class SyncWorker(
             return Result.success()
         }
 
-        val uriString = syncPreferences.syncDirectoryUri.get()
-        if (uriString.isBlank()) {
-            syncPreferences.lastSyncError.set("No sync directory configured")
-            if (isManual) notifier.showSyncError("No sync directory configured")
+        val host = syncPreferences.syncHttpHost.get().trim()
+        val port = syncPreferences.syncHttpPort.get()
+        val token = syncPreferences.syncHttpToken.get().trim()
+        if (host.isBlank() || token.isBlank()) {
+            val errMsg = "HTTP sync server or token not configured"
+            syncPreferences.lastSyncError.set(errMsg)
+            if (isManual) notifier.showSyncError(errMsg)
             return Result.failure()
         }
-
-        val directory = UniFile.fromUri(context, uriString.toUri())
-        if (directory == null || !directory.exists() || !directory.canRead()) {
-            syncPreferences.lastSyncError.set("Sync directory is inaccessible")
-            if (isManual) notifier.showSyncError("Sync directory is inaccessible")
-            return Result.failure()
-        }
+        val transport = mihon.sync.transport.http.HttpTransport(
+            baseUrl = "http://$host:$port",
+            token = token,
+            ownsClient = true,
+        )
+        val cleanupTransport: AutoCloseable = transport
 
         setForegroundSafely()
 
         return try {
             val database = appGraph.database
-            val protoBuf = appGraph.protoBuf
             val stateStore = AndroidSyncStateStore(database)
-            val deviceId = stateStore.getDeviceId()
-            val transport = UniFileSyncTransport(directory, deviceId, protoBuf)
             val localRepository = AndroidSyncLocalRepository(database, appGraph.json)
 
             val engine = SyncEngine(
@@ -94,12 +91,21 @@ class SyncWorker(
                 logcat(LogPriority.ERROR) { "Library sync failed: $err" }
                 Result.retry()
             }
+        } catch (e: mihon.sync.transport.http.SyncPairingException) {
+            logcat(LogPriority.ERROR, e) { "Library sync failed: pairing expired" }
+            val msg = SyncStrings.pairingExpired
+            syncPreferences.lastSyncError.set(msg)
+            if (isManual) notifier.showSyncError(msg)
+            Result.failure()
         } catch (e: Exception) {
             logcat(LogPriority.ERROR, e) { "Library sync worker crashed" }
             syncPreferences.lastSyncError.set(e.message ?: "Unknown error")
             if (isManual) notifier.showSyncError(e.message)
             Result.failure()
         } finally {
+            try {
+                cleanupTransport.close()
+            } catch (_: Throwable) {}
             notifier.cancelProgress()
         }
     }

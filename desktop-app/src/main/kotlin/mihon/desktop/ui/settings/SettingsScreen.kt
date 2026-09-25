@@ -34,6 +34,8 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -45,6 +47,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -53,6 +56,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
@@ -60,6 +64,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import mihon.desktop.diagnostics.DiagnosticBundleService
@@ -138,6 +143,7 @@ fun SettingsScreen(
     trackerManager: DesktopTrackerManager? = null,
     backupScheduler: mihon.desktop.backup.DesktopBackupScheduler? = null,
     syncScheduler: mihon.desktop.sync.DesktopSyncScheduler? = null,
+    syncServerManager: mihon.desktop.sync.DesktopSyncServerManager? = null,
     updateScheduler: mihon.desktop.library.update.LibraryUpdateScheduler? = null,
     onOpenCookieManager: () -> Unit = {},
     onImportBackup: () -> Unit = {},
@@ -260,6 +266,7 @@ fun SettingsScreen(
                         preferenceStore = preferenceStore,
                         backupScheduler = backupScheduler,
                         syncScheduler = syncScheduler,
+                        syncServerManager = syncServerManager,
                         onImportBackup = onImportBackup,
                         onExportBackup = onExportBackup,
                         onPreferencesChanged = notifyPreferencesChanged,
@@ -378,6 +385,46 @@ private fun GeneralSettingsPane(
                         onPreferencesChanged?.invoke(updated)
                     },
                     modifier = Modifier.testTag("incognito-switch"),
+                )
+            }
+        }
+
+        // Run In Background on Close Card
+        Card(
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Row(
+                modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(
+                    modifier = Modifier.weight(1f).padding(end = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Text(
+                        strings.runInBackgroundTitle,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        strings.runInBackgroundSummary,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                androidx.compose.material3.Switch(
+                    checked = preferences.runInBackgroundOnClose,
+                    onCheckedChange = { isChecked ->
+                        val updated = preferenceStore.updatePreferences {
+                            it.copy(runInBackgroundOnClose = isChecked)
+                        }
+                        preferences = updated
+
+                        onPreferencesChanged?.invoke(updated)
+                    },
+                    modifier = Modifier.testTag("run-in-background-switch"),
                 )
             }
         }
@@ -1713,6 +1760,7 @@ private fun BackupSettingsPane(
     preferenceStore: DesktopPreferenceStore,
     backupScheduler: mihon.desktop.backup.DesktopBackupScheduler?,
     syncScheduler: mihon.desktop.sync.DesktopSyncScheduler? = null,
+    syncServerManager: mihon.desktop.sync.DesktopSyncServerManager? = null,
     onImportBackup: () -> Unit,
     onExportBackup: () -> Unit,
     onPreferencesChanged: ((DesktopPreferences) -> Unit)?,
@@ -1935,52 +1983,328 @@ private fun BackupSettingsPane(
                     )
                 }
 
-                // Sync Directory Selection
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(strings.syncDirectoryTitle, fontWeight = FontWeight.Medium)
+                // Builtin Server Controls
+                var isServerRunning by remember { mutableStateOf(syncServerManager?.isRunning == true) }
+                var serverError by remember { mutableStateOf(syncServerManager?.lastError) }
+                var copiedFeedback by remember { mutableStateOf(false) }
+
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    // 1. Enable Builtin Server Switch
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column {
+                            Text(strings.syncServerEnableTitle, fontWeight = FontWeight.Medium)
+                            val statusText = if (isServerRunning) {
+                                strings.syncServerRunning
+                            } else {
+                                strings.syncServerStopped
+                            }
+                            val statusColor = if (isServerRunning) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            }
+                            Text(
+                                text = "${strings.syncServerStatus} $statusText",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = statusColor,
+                            )
+                            serverError?.let { err ->
+                                Text(
+                                    text = err,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.error,
+                                )
+                            }
+                        }
+                        Switch(
+                            checked = preferences.syncServerEnabled,
+                            onCheckedChange = { enabled ->
+                                var token = preferences.syncServerToken
+                                if (token.isBlank()) {
+                                    token = DesktopPreferenceStore.generateSyncToken()
+                                }
+                                if (enabled) {
+                                    syncServerManager?.start(
+                                        port = preferences.syncServerPort,
+                                        token = token,
+                                        deviceName = preferences.syncServerDeviceName,
+                                        quickPairEnabled = preferences.syncServerQuickPair,
+                                    )
+                                } else {
+                                    syncServerManager?.stop()
+                                }
+                                isServerRunning = syncServerManager?.isRunning == true
+                                serverError = syncServerManager?.lastError
+                                val updated = preferenceStore.updatePreferences {
+                                    it.copy(syncServerEnabled = enabled, syncServerToken = token)
+                                }
+                                preferences = updated
+                                onPreferencesChanged?.invoke(updated)
+                            },
+                            modifier = Modifier.testTag("sync-server-enabled-switch"),
+                        )
+                    }
+
+                    // 2. Port configuration & Token regeneration
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         OutlinedTextField(
-                            value = preferences.syncDirectoryPath,
-                            onValueChange = { path ->
-                                val updated = preferenceStore.updatePreferences {
-                                    it.copy(syncDirectoryPath = path)
-                                }
-                                preferences = updated
-                                onPreferencesChanged?.invoke(updated)
-                            },
-                            modifier = Modifier.weight(1f).testTag("sync-directory-path-field"),
-                            singleLine = true,
-                            placeholder = { Text("D:\\CloudDrive\\MihonSync") },
-                        )
-                        Button(
-                            onClick = {
-                                val chooser = javax.swing.JFileChooser().apply {
-                                    fileSelectionMode = javax.swing.JFileChooser.DIRECTORIES_ONLY
-                                    dialogTitle = strings.syncDirectoryTitle
-                                    val currentPath = preferences.syncDirectoryPath
-                                    if (currentPath.isNotBlank()) {
-                                        currentDirectory = java.io.File(currentPath)
-                                    }
-                                }
-                                val result = chooser.showOpenDialog(null)
-                                if (result == javax.swing.JFileChooser.APPROVE_OPTION) {
-                                    val selected = chooser.selectedFile.absolutePath
+                            value = preferences.syncServerPort.toString(),
+                            onValueChange = { portStr ->
+                                val port = portStr.toIntOrNull()
+                                if (port != null && port in 1024..65535) {
                                     val updated = preferenceStore.updatePreferences {
-                                        it.copy(syncDirectoryPath = selected)
+                                        it.copy(syncServerPort = port)
                                     }
                                     preferences = updated
                                     onPreferencesChanged?.invoke(updated)
+                                    if (preferences.syncServerEnabled && syncServerManager?.isRunning == true) {
+                                        syncServerManager.start(
+                                            port = port,
+                                            token = preferences.syncServerToken,
+                                            deviceName = preferences.syncServerDeviceName,
+                                            quickPairEnabled = preferences.syncServerQuickPair,
+                                        )
+                                        isServerRunning = syncServerManager.isRunning
+                                        serverError = syncServerManager.lastError
+                                    }
                                 }
                             },
-                            modifier = Modifier.testTag("sync-browse-directory-button"),
+                            label = { Text(strings.syncServerPort) },
+                            modifier = Modifier.width(160.dp).testTag("sync-server-port-field"),
+                            singleLine = true,
+                        )
+
+                        Button(
+                            onClick = {
+                                val newToken = DesktopPreferenceStore.generateSyncToken()
+                                val updated = preferenceStore.updatePreferences {
+                                    it.copy(syncServerToken = newToken)
+                                }
+                                preferences = updated
+                                onPreferencesChanged?.invoke(updated)
+                                if (preferences.syncServerEnabled && syncServerManager?.isRunning == true) {
+                                    syncServerManager.start(
+                                        port = preferences.syncServerPort,
+                                        token = newToken,
+                                        deviceName = preferences.syncServerDeviceName,
+                                        quickPairEnabled = preferences.syncServerQuickPair,
+                                    )
+                                    isServerRunning = syncServerManager.isRunning
+                                    serverError = syncServerManager.lastError
+                                }
+                            },
+                            modifier = Modifier.testTag("sync-server-regen-token-button"),
                         ) {
-                            Text(strings.syncDirectoryBrowse)
+                            Text(strings.syncServerRegenerateToken)
                         }
                     }
+
+                    // 3. Pairing Code & Copy
+                    val localIps = remember { mihon.desktop.sync.DesktopSyncServerManager.getLocalIpAddresses() }
+                    var selectedIp by remember(preferences.syncServerSelectedIp, localIps) {
+                        mutableStateOf(
+                            mihon.desktop.sync.DesktopSyncServerManager.effectiveSelectedIp(
+                                preferences.syncServerSelectedIp,
+                                localIps,
+                            ),
+                        )
+                    }
+                    var ipMenuExpanded by remember { mutableStateOf(false) }
+                    val pairingUri = remember(selectedIp, preferences.syncServerPort, preferences.syncServerToken) {
+                        if (preferences.syncServerToken.isNotBlank()) {
+                            mihon.sync.transport.http.SyncPairingCode(
+                                selectedIp,
+                                preferences.syncServerPort,
+                                preferences.syncServerToken,
+                            ).toUriString()
+                        } else {
+                            ""
+                        }
+                    }
+
+                    // Address selector: machines with VPN/TUN/virtual adapters expose many IPs;
+                    // the phone can only reach the real LAN one, so let the user pick.
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(strings.syncServerAddress, fontWeight = FontWeight.Medium)
+                        Box {
+                            OutlinedButton(onClick = { ipMenuExpanded = true }) {
+                                Text(selectedIp)
+                            }
+                            DropdownMenu(
+                                expanded = ipMenuExpanded,
+                                onDismissRequest = { ipMenuExpanded = false },
+                            ) {
+                                localIps.forEach { ip ->
+                                    DropdownMenuItem(
+                                        text = { Text(ip) },
+                                        onClick = {
+                                            selectedIp = ip
+                                            ipMenuExpanded = false
+                                            val updated = preferenceStore.updatePreferences {
+                                                it.copy(syncServerSelectedIp = ip)
+                                            }
+                                            preferences = updated
+                                            onPreferencesChanged?.invoke(updated)
+                                        },
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(strings.syncServerPairingCode, fontWeight = FontWeight.Medium)
+
+                        // QR code (above the text field, same pairingUri source)
+                        if (pairingUri.isNotBlank()) {
+                            mihon.desktop.ui.common.QrCodeImage(
+                                uri = pairingUri,
+                                sizeInDp = 200.dp,
+                            )
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            OutlinedTextField(
+                                value = pairingUri,
+                                onValueChange = {},
+                                readOnly = true,
+                                modifier = Modifier.weight(1f).testTag("sync-server-pairing-code-field"),
+                                singleLine = true,
+                            )
+                            Button(
+                                onClick = {
+                                    if (pairingUri.isNotBlank()) {
+                                        try {
+                                            val selection = java.awt.datatransfer.StringSelection(pairingUri)
+                                            val clipboard = java.awt.Toolkit.getDefaultToolkit().systemClipboard
+                                            clipboard.setContents(selection, selection)
+                                            copiedFeedback = true
+                                        } catch (_: Throwable) {}
+                                    }
+                                },
+                                enabled = pairingUri.isNotBlank(),
+                                modifier = Modifier.testTag("sync-server-copy-button"),
+                            ) {
+                                Text(strings.syncServerCopyPairingCode)
+                            }
+                        }
+                        if (copiedFeedback) {
+                            Text(
+                                strings.syncServerCopied,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                    }
+
+                    // 4. Firewall hint
+                    Text(
+                        strings.syncServerFirewallHint,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+
+                    // 5. Quick-pair toggle (security-gated, default off)
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                strings.syncServerQuickPairTitle,
+                                modifier = Modifier.weight(1f),
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                            Switch(
+                                checked = preferences.syncServerQuickPair,
+                                onCheckedChange = { enabled ->
+                                    val updated = preferenceStore.updatePreferences {
+                                        it.copy(syncServerQuickPair = enabled)
+                                    }
+                                    preferences = updated
+                                    onPreferencesChanged?.invoke(updated)
+                                    if (syncServerManager?.isRunning == true) {
+                                        syncServerManager.updateAdvertisement(
+                                            port = preferences.syncServerPort,
+                                            deviceName = preferences.syncServerDeviceName,
+                                            quickPairEnabled = enabled,
+                                            token = preferences.syncServerToken,
+                                        )
+                                    }
+                                },
+                                modifier = Modifier.testTag("sync-server-quick-pair-switch"),
+                            )
+                        }
+                        Text(
+                            strings.syncServerQuickPairWarning,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+
+                    // 6. Device name
+                    var deviceNameDraft by remember(preferences.syncServerDeviceName) {
+                        mutableStateOf(preferences.syncServerDeviceName)
+                    }
+
+                    fun commitDeviceName(name: String) {
+                        if (name != preferences.syncServerDeviceName) {
+                            val updated = preferenceStore.updatePreferences {
+                                it.copy(syncServerDeviceName = name)
+                            }
+                            preferences = updated
+                            onPreferencesChanged?.invoke(updated)
+                            if (syncServerManager?.isRunning == true) {
+                                syncServerManager.updateAdvertisement(
+                                    port = preferences.syncServerPort,
+                                    deviceName = name,
+                                    quickPairEnabled = preferences.syncServerQuickPair,
+                                    token = preferences.syncServerToken,
+                                )
+                            }
+                        }
+                    }
+
+                    LaunchedEffect(deviceNameDraft) {
+                        if (deviceNameDraft != preferences.syncServerDeviceName) {
+                            delay(500)
+                            commitDeviceName(deviceNameDraft)
+                        }
+                    }
+
+                    OutlinedTextField(
+                        value = deviceNameDraft,
+                        onValueChange = { name ->
+                            deviceNameDraft = name
+                        },
+                        label = { Text(strings.syncServerDeviceNameLabel) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .onFocusChanged { focusState ->
+                                if (!focusState.isFocused) {
+                                    commitDeviceName(deviceNameDraft)
+                                }
+                            }
+                            .testTag("sync-server-device-name-field"),
+                        singleLine = true,
+                    )
                 }
 
                 // Sync status & Sync Now button
@@ -2006,6 +2330,8 @@ private fun BackupSettingsPane(
                         modifier = Modifier.weight(1f),
                     )
                     if (syncScheduler != null) {
+                        val isSyncReady = preferences.syncServerToken.isNotBlank() &&
+                            (syncServerManager?.isRunning == true)
                         Button(
                             onClick = {
                                 scope.launch {
@@ -2025,7 +2351,7 @@ private fun BackupSettingsPane(
                                     }
                                 }
                             },
-                            enabled = !syncInProgress && preferences.syncDirectoryPath.isNotBlank(),
+                            enabled = !syncInProgress && isSyncReady,
                             modifier = Modifier.testTag("sync-now-button"),
                         ) {
                             Text(if (syncInProgress) strings.syncInProgress else strings.syncNowButton)

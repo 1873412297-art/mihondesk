@@ -16,8 +16,13 @@ kotlin {
 
 dependencies {
     api(project(":sync-transport-api"))
-    implementation(libs.kotlinx.serialization.protobuf)
+    implementation(project(":sync-core"))
+    implementation(libs.ktor.client.core)
+    implementation(libs.ktor.client.cio)
     implementation(libs.kotlinx.coroutines.core)
+    implementation(libs.kotlinx.serialization.protobuf)
+    testImplementation(project(":sync-server"))
+    testImplementation(project(":sync-engine"))
     testImplementation(libs.bundles.test)
     testRuntimeOnly(libs.junit.platform.launcher)
 }
