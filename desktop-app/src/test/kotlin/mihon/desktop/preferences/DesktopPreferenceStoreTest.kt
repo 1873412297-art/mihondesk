@@ -164,4 +164,35 @@ class DesktopPreferenceStoreTest {
         loaded.libraryUpdateCategoriesExclude shouldBe setOf(9L, 10L)
         loaded.desktopNotificationsHideContent shouldBe true
     }
+
+    @Test
+    fun `syncServerSelectedIp and runInBackgroundOnClose survive reload`() {
+        val file = tempDir.resolve("preferences-bg-ip.properties")
+        val store = DesktopPreferenceStore(file)
+        val expected = DesktopPreferences(
+            syncServerSelectedIp = "192.168.1.100",
+            runInBackgroundOnClose = true,
+        )
+        store.save(expected)
+
+        val loaded = DesktopPreferenceStore(file).load()
+        loaded.syncServerSelectedIp shouldBe "192.168.1.100"
+        loaded.runInBackgroundOnClose shouldBe true
+    }
+
+    @Test
+    fun `syncServerSelectedIp and runInBackgroundOnClose can be parsed from properties`() {
+        val file = tempDir.resolve("preferences-manual.properties")
+        Files.writeString(
+            file,
+            """
+            sync.server_selected_ip=10.0.0.42
+            background.run_in_background_on_close=true
+            """.trimIndent(),
+        )
+
+        val loaded = DesktopPreferenceStore(file).load()
+        loaded.syncServerSelectedIp shouldBe "10.0.0.42"
+        loaded.runInBackgroundOnClose shouldBe true
+    }
 }

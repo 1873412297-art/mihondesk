@@ -33,6 +33,12 @@
 
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
 
+    <!-- QR code scan pairing -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature
+        android:name="android.hardware.camera"
+        android:required="false" />
+
     <application
         android:name=".App"
         android:allowBackup="false"
@@ -107,6 +113,16 @@
                 <data android:pathPattern=".*\\..*\\..*\\..*\\..*\\.tachibk" />
                 <data android:pathPattern=".*\\..*\\..*\\..*\\..*\\..*\\.tachibk" />
                 <data android:pathPattern=".*\\..*\\..*\\..*\\..*\\..*\\..*\\.tachibk" />
+            </intent-filter>
+
+            <!-- Deep-link from external QR scanner: opens ScanSyncPairingScreen via MainActivity -->
+            <intent-filter android:label="Mihon sync pairing">
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data android:scheme="mihonsync" />
             </intent-filter>
 
             <!--suppress AndroidDomInspection -->

@@ -369,14 +369,32 @@ interface DesktopStrings {
     val syncCardTitle: String
     val syncCardDescription: String
     val syncEnableTitle: String
-    val syncDirectoryTitle: String
-    val syncDirectoryBrowse: String
     val syncNowButton: String
     val syncLastResult: String
     val syncNever: String
     val syncInProgress: String
     val syncSuccess: String
     val syncFailed: String
+    val syncServerEnableTitle: String
+    val syncServerStatus: String
+    val syncServerRunning: String
+    val syncServerStopped: String
+    val syncServerPairingCode: String
+    val syncServerCopyPairingCode: String
+    val syncServerCopied: String
+    val syncServerPort: String
+    val syncServerAddress: String
+    val syncServerRegenerateToken: String
+    val syncServerFirewallHint: String
+    val syncServerQuickPairTitle: String
+    val syncServerQuickPairWarning: String
+    val syncServerDeviceNameLabel: String
+    val runInBackgroundTitle: String
+    val runInBackgroundSummary: String
+    val trayShow: String
+    val trayQuit: String
+    val trayHiddenTitle: String
+    val trayHiddenHint: String
 
     // Settings - Advanced
     val settingsDiagnosticsTitle: String
@@ -1066,16 +1084,37 @@ object EnglishStrings : DesktopStrings {
 
     override val syncCardTitle = "Library Sync"
     override val syncCardDescription =
-        "Automatically synchronize favorites, reading progress, and categories across devices via a shared directory (Cloud Drive / WebDAV)."
+        "Automatically synchronize favorites, reading progress, and categories across devices over your local network."
     override val syncEnableTitle = "Enable Sync"
-    override val syncDirectoryTitle = "Sync Directory"
-    override val syncDirectoryBrowse = "Browse"
     override val syncNowButton = "Sync Now"
     override val syncLastResult = "Last sync:"
     override val syncNever = "Never synced"
     override val syncInProgress = "Syncing..."
     override val syncSuccess = "Sync completed successfully"
     override val syncFailed = "Sync failed"
+    override val syncServerEnableTitle = "Enable Builtin Sync Server"
+    override val syncServerStatus = "Server Status:"
+    override val syncServerRunning = "Running"
+    override val syncServerStopped = "Stopped"
+    override val syncServerPairingCode = "Pairing Code"
+    override val syncServerCopyPairingCode = "Copy"
+    override val syncServerCopied = "Pairing code copied to clipboard"
+    override val syncServerPort = "Port"
+    override val syncServerAddress = "Server Address"
+    override val syncServerRegenerateToken = "Regenerate Token"
+    override val syncServerFirewallHint =
+        "Note: Please ensure Windows Firewall allows private network access. The mobile device must be on the same Wi-Fi network."
+    override val syncServerQuickPairTitle = "Allow Quick Pairing (No QR scan needed)"
+    override val syncServerQuickPairWarning =
+        "Any device on the same Wi-Fi network can connect to your library without scanning the QR code."
+    override val syncServerDeviceNameLabel = "Device name (shown on phone)"
+    override val runInBackgroundTitle = "Keep running in background after closing"
+    override val runInBackgroundSummary =
+        "Close button hides the window to the system tray; sync server stays alive"
+    override val trayShow = "Show mihondesk"
+    override val trayQuit = "Quit"
+    override val trayHiddenTitle = "mihondesk"
+    override val trayHiddenHint = "mihondesk is running in the background. Click the tray icon to show."
 
     override val settingsDiagnosticsTitle = "Database & System Diagnostics"
     override val settingsRunIntegrityCheck = "Run Integrity Check"
@@ -1838,16 +1877,36 @@ object SimplifiedChineseStrings : DesktopStrings {
 
     override val syncCardTitle = "书架同步"
     override val syncCardDescription =
-        "通过共享目录（网盘/WebDAV）与手机端自动双向同步收藏、已读状态与分类。"
+        "通过局域网与手机端自动双向同步收藏、已读状态与分类。"
     override val syncEnableTitle = "启用同步"
-    override val syncDirectoryTitle = "同步目录"
-    override val syncDirectoryBrowse = "浏览"
     override val syncNowButton = "立即同步"
     override val syncLastResult = "最近同步："
     override val syncNever = "从未同步"
     override val syncInProgress = "同步中..."
     override val syncSuccess = "同步成功"
     override val syncFailed = "同步失败"
+    override val syncServerEnableTitle = "启用内置同步服务器"
+    override val syncServerStatus = "服务器状态："
+    override val syncServerRunning = "运行中"
+    override val syncServerStopped = "已停止"
+    override val syncServerPairingCode = "配对码"
+    override val syncServerCopyPairingCode = "复制"
+    override val syncServerCopied = "配对码已复制到剪贴板"
+    override val syncServerPort = "服务端口"
+    override val syncServerAddress = "服务器地址"
+    override val syncServerRegenerateToken = "重新生成 Token"
+    override val syncServerFirewallHint =
+        "提示：请确保 Windows 防火墙允许本程序通过专用网络访问，手机需与电脑处于同一局域网 Wi-Fi。"
+    override val syncServerQuickPairTitle = "允许免扫码配对"
+    override val syncServerQuickPairWarning =
+        "同一 Wi-Fi 下的任何设备将无需扫码即可连接你的书架同步。"
+    override val syncServerDeviceNameLabel = "设备名称（显示在手机端）"
+    override val runInBackgroundTitle = "关闭窗口后在后台运行"
+    override val runInBackgroundSummary = "点关闭后窗口隐藏到系统托盘，同步服务器保持运行，托盘菜单可彻底退出"
+    override val trayShow = "显示 mihondesk"
+    override val trayQuit = "退出"
+    override val trayHiddenTitle = "mihondesk"
+    override val trayHiddenHint = "mihondesk 仍在后台运行，点击托盘图标显示"
 
     override val settingsDiagnosticsTitle = "数据库与系统诊断"
     override val settingsRunIntegrityCheck = "运行完整性检查"
@@ -2608,16 +2667,36 @@ object TraditionalChineseStrings : DesktopStrings {
 
     override val syncCardTitle = "書架同步"
     override val syncCardDescription =
-        "透過共享目錄（網盤/WebDAV）與手機端自動雙向同步收藏、已讀狀態與分類。"
+        "透過區域網路與手機端自動雙向同步收藏、已讀狀態與分類。"
     override val syncEnableTitle = "啟用同步"
-    override val syncDirectoryTitle = "同步目錄"
-    override val syncDirectoryBrowse = "瀏覽"
     override val syncNowButton = "立即同步"
     override val syncLastResult = "最近同步："
     override val syncNever = "從未同步"
     override val syncInProgress = "同步中..."
     override val syncSuccess = "同步成功"
     override val syncFailed = "同步失敗"
+    override val syncServerEnableTitle = "啟用內建同步伺服器"
+    override val syncServerStatus = "伺服器狀態："
+    override val syncServerRunning = "運行中"
+    override val syncServerStopped = "已停止"
+    override val syncServerPairingCode = "配對碼"
+    override val syncServerCopyPairingCode = "複製"
+    override val syncServerCopied = "配對碼已複製到剪貼簿"
+    override val syncServerPort = "服務連接埠"
+    override val syncServerAddress = "伺服器位址"
+    override val syncServerRegenerateToken = "重新產生 Token"
+    override val syncServerFirewallHint =
+        "提示：請確保 Windows 防火牆允許本程式透過專用網路存取，手機需與電腦處於同一區域網路 Wi-Fi。"
+    override val syncServerQuickPairTitle = "允許免掃碼配對"
+    override val syncServerQuickPairWarning =
+        "同一 Wi-Fi 下的任何裝置將無需掃碼即可連接你的書架同步。"
+    override val syncServerDeviceNameLabel = "裝置名稱（顯示在手機端）"
+    override val runInBackgroundTitle = "關閉視窗後在背景執行"
+    override val runInBackgroundSummary = "點關閉後視窗隱藏到系統匣，同步伺服器保持執行，系統匣選單可徹底結束"
+    override val trayShow = "顯示 mihondesk"
+    override val trayQuit = "結束"
+    override val trayHiddenTitle = "mihondesk"
+    override val trayHiddenHint = "mihondesk 仍於背景執行，按一下系統匣圖示即可顯示"
 
     override val settingsDiagnosticsTitle = "資料庫與系統診斷"
     override val settingsRunIntegrityCheck = "執行完整性檢查"

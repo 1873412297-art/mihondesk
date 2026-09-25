@@ -56,6 +56,7 @@ class DesktopRuntime(
     val statsService: mihon.desktop.stats.DesktopStatsService? = null,
     val backupScheduler: mihon.desktop.backup.DesktopBackupScheduler? = null,
     val syncScheduler: mihon.desktop.sync.DesktopSyncScheduler? = null,
+    val syncServerManager: mihon.desktop.sync.DesktopSyncServerManager? = null,
     val cookieStore: mihon.desktop.extension.DesktopCookieStore? = null,
     val desktopNotificationService: mihon.desktop.platform.DesktopNotificationService? = null,
     val libraryUpdateService: mihon.desktop.library.update.LibraryUpdateService? = null,
@@ -451,6 +452,9 @@ object DesktopRuntimeFactory {
                 library = library,
                 scope = appScope,
             )
+            val syncServerManager = mihon.desktop.sync.DesktopSyncServerManager(
+                storageDir = directories.root.resolve("sync-server"),
+            )
             val desktopNotificationService = mihon.desktop.platform.DesktopNotificationService(
                 enabledProvider = { preferences.load().desktopNotificationsEnabled },
                 hideContentProvider = { preferences.load().desktopNotificationsHideContent },
@@ -470,6 +474,20 @@ object DesktopRuntimeFactory {
             )
             if (command == DesktopCommand.LaunchUi) {
                 backupScheduler.start()
+                val currentPrefs = preferences.load()
+                if (currentPrefs.syncServerEnabled) {
+                    var token = currentPrefs.syncServerToken
+                    if (token.isBlank()) {
+                        token = DesktopPreferenceStore.generateSyncToken()
+                        preferences.updatePreferences { it.copy(syncServerToken = token) }
+                    }
+                    syncServerManager.start(
+                        port = currentPrefs.syncServerPort,
+                        token = token,
+                        deviceName = currentPrefs.syncServerDeviceName,
+                        quickPairEnabled = currentPrefs.syncServerQuickPair,
+                    )
+                }
                 syncScheduler.start()
                 trackSyncService.start(appScope)
             }
@@ -519,6 +537,7 @@ object DesktopRuntimeFactory {
                 statsService = statsService,
                 backupScheduler = backupScheduler,
                 syncScheduler = syncScheduler,
+                syncServerManager = syncServerManager,
                 cookieStore = cookieStore,
                 desktopNotificationService = desktopNotificationService,
                 libraryUpdateService = libraryUpdateService,
@@ -531,6 +550,7 @@ object DesktopRuntimeFactory {
                 sourceManager = sourceManager,
                 onlineMangaSyncService = onlineMangaSyncService,
                 closeReaderServices = {
+                    syncServerManager.stop()
                     backupScheduler.stop()
                     syncScheduler.stop()
                     libraryUpdateScheduler.stop()

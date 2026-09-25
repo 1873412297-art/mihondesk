@@ -13,8 +13,6 @@ class SyncPreferences(
 ) {
     val isSyncEnabled: Preference<Boolean> = preferenceStore.getBoolean("sync_enabled", false)
 
-    val syncDirectoryUri: Preference<String> = preferenceStore.getString("sync_directory_uri", "")
-
     val syncIntervalMinutes: Preference<Int> = preferenceStore.getInt("sync_interval_minutes", 0) // 0 = manual only
 
     val syncOnlyOnWifi: Preference<Boolean> = preferenceStore.getBoolean("sync_only_on_wifi", false)
@@ -33,4 +31,19 @@ class SyncPreferences(
         Preference.appStateKey("sync_last_error"),
         "",
     )
+
+    val syncPairingCode: Preference<String> = preferenceStore.getString("sync_pairing_code", "")
+
+    val syncHttpHost: Preference<String> = preferenceStore.getString("sync_http_host", "")
+
+    val syncHttpPort: Preference<Int> = preferenceStore.getInt("sync_http_port", 45831)
+
+    val syncHttpToken: Preference<String> = preferenceStore.getString("sync_http_token", "")
+
+    fun updateFromPairingCode(code: mihon.sync.transport.http.SyncPairingCode) {
+        syncPairingCode.set(code.toUriString())
+        syncHttpHost.set(code.host)
+        syncHttpPort.set(code.port)
+        syncHttpToken.set(code.token)
+    }
 }

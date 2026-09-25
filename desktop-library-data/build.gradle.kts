@@ -12,7 +12,7 @@ dependencies {
     api(project(":reader-core"))
     api(project(":sync-core"))
     api(project(":sync-engine"))
-    api(project(":sync-transport-file"))
+    api(project(":sync-transport-api"))
     implementation(libs.sqldelight.jdbcDriver)
     implementation(libs.sqldelight.coroutines)
     implementation(libs.kotlinx.coroutines.core)

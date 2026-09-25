@@ -221,7 +221,7 @@ dependencies {
     implementation(projects.domain)
     implementation(projects.syncCore)
     implementation(projects.syncEngine)
-    implementation(projects.syncTransportFile)
+    implementation(projects.syncTransportHttp)
     implementation(projects.presentationCore)
     implementation(projects.presentationWidget)
     implementation(projects.telemetry)
@@ -263,6 +263,10 @@ dependencies {
     implementation(libs.androidx.profileInstaller)
 
     implementation(libs.bundles.androidx.lifecycle)
+
+    // QR code scanning (sync pairing)
+    implementation(libs.zxing.core)
+    implementation(libs.bundles.androidx.camera)
 
     // Job scheduling
     implementation(libs.androidx.work)

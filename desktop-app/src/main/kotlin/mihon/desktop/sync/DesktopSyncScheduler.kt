@@ -21,8 +21,7 @@ import mihon.desktop.library.sync.SqlDelightSyncStateStore
 import mihon.desktop.preferences.DesktopPreferenceStore
 import mihon.sync.engine.SyncEngine
 import mihon.sync.engine.SyncReport
-import mihon.sync.transport.file.FileTransport
-import java.nio.file.Path
+import mihon.sync.transport.http.HttpTransport
 import java.util.UUID
 
 class DesktopSyncScheduler(
@@ -61,9 +60,12 @@ class DesktopSyncScheduler(
 
     suspend fun checkAndRunAutoSync(): SyncReport? = syncMutex.withLock {
         val prefs = preferenceStore.load()
-        if (!prefs.syncEnabled || prefs.syncDirectoryPath.isBlank() || prefs.syncIntervalMinutes <= 0) {
+        if (!prefs.syncEnabled || prefs.syncIntervalMinutes <= 0) {
             return@withLock null
         }
+        val isConfigured = prefs.syncServerEnabled && prefs.syncServerToken.isNotBlank()
+        if (!isConfigured) return@withLock null
+
         val intervalMillis = prefs.syncIntervalMinutes.toLong() * 60_000L
         val now = clock()
         if (now - prefs.lastSyncEpochMillis >= intervalMillis) {
@@ -78,7 +80,14 @@ class DesktopSyncScheduler(
 
     private suspend fun performSyncLocked(): SyncReport = withContext(Dispatchers.IO) {
         val prefs = preferenceStore.load()
-        if (prefs.syncDirectoryPath.isBlank()) {
+
+        var deviceId = prefs.syncDeviceId
+        if (deviceId.isBlank()) {
+            deviceId = UUID.randomUUID().toString()
+            preferenceStore.updatePreferences { it.copy(syncDeviceId = deviceId) }
+        }
+
+        if (prefs.syncServerToken.isBlank()) {
             val errReport = SyncReport(
                 success = false,
                 pulledChangesetCount = 0,
@@ -88,25 +97,32 @@ class DesktopSyncScheduler(
                 chapterMerged = 0,
                 categoriesLinked = 0,
                 pushedChangeset = null,
-                errorMessage = "Sync directory not configured",
+                errorMessage = "Builtin sync server token not configured",
             )
             lastReport = errReport
             return@withContext errReport
         }
 
-        var deviceId = prefs.syncDeviceId
-        if (deviceId.isBlank()) {
-            deviceId = UUID.randomUUID().toString()
-            preferenceStore.updatePreferences { it.copy(syncDeviceId = deviceId) }
-        }
+        val sourceIdentifier = "http://127.0.0.1:${prefs.syncServerPort}"
+        val transport = HttpTransport(
+            baseUrl = sourceIdentifier,
+            token = prefs.syncServerToken,
+            ownsClient = true,
+        )
 
-        val syncDir = Path.of(prefs.syncDirectoryPath)
-        val transport = FileTransport(syncDir, deviceId)
         val syncLocalRepo = SqlDelightSyncLocalRepository(library.database)
         val syncStateStore = SqlDelightSyncStateStore(library.database) { deviceId }
         val engine = SyncEngine(syncLocalRepo, transport, syncStateStore, clock)
 
-        val report = engine.syncNow()
+        val report = try {
+            engine.syncNow()
+        } finally {
+            if (transport is AutoCloseable) {
+                try {
+                    transport.close()
+                } catch (_: Throwable) {}
+            }
+        }
         lastReport = report
 
         // Record import report in database
@@ -116,7 +132,7 @@ class DesktopSyncScheduler(
             val reportId = library.insertReport(
                 ImportReportRecord(
                     importType = ImportType.SYNC,
-                    sourcePath = prefs.syncDirectoryPath,
+                    sourcePath = sourceIdentifier,
                     status = status,
                     startedAt = now - report.durationMs,
                     finishedAt = now,
