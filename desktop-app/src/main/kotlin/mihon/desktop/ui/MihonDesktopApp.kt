@@ -171,7 +171,49 @@ fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
         ReaderWindowEscape.CloseReader -> true
     }
     val presenterScope = rememberCoroutineScope()
-    fun closeApplication() {
+    lateinit var closeApplicationRef: (Boolean) -> Unit
+    val tray = remember {
+        DesktopTray(
+            stringsProvider = { mihon.desktop.i18n.DesktopStrings.resolve(preferences.language) },
+            onShow = {
+                composeWindow?.let { window ->
+                    java.awt.EventQueue.invokeLater {
+                        if (!window.isVisible) {
+                            window.isVisible = true
+                        }
+                        if ((window.extendedState and Frame.ICONIFIED) != 0) {
+                            window.extendedState = window.extendedState and Frame.ICONIFIED.inv()
+                        }
+                        window.toFront()
+                        window.requestFocus()
+                    }
+                }
+            },
+            onQuit = {
+                closeApplicationRef(true)
+            },
+        ).also { runtime.onShutdown(it::dispose) }
+    }
+    fun closeApplication(forceQuit: Boolean = false) {
+        if (DesktopTray.shouldStayInBackground(
+                enabled = preferences.runInBackgroundOnClose,
+                traySupported = tray.isSupported,
+                windowAvailable = composeWindow != null,
+                forceQuit = forceQuit,
+            )
+        ) {
+            composeWindow?.let {
+                preferences = runtime.preferences.updatePreferences { current ->
+                    current.copy(windowPlacement = currentWindowPlacement().sanitize(screen))
+                }
+            }
+            tray.ensureInstalled()
+            composeWindow?.isVisible = false
+            val strings = mihon.desktop.i18n.DesktopStrings.resolve(preferences.language)
+            tray.showNotificationOnce(strings.trayHiddenTitle, strings.trayHiddenHint)
+            return
+        }
+        tray.dispose()
         composeWindow?.let {
             preferences = runtime.preferences.updatePreferences { current ->
                 current.copy(windowPlacement = currentWindowPlacement().sanitize(screen))
@@ -179,12 +221,13 @@ fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
         }
         exitApplication()
     }
+    closeApplicationRef = ::closeApplication
     val appUpdatePresenter = remember(runtime.appUpdateService) {
         mihon.desktop.updates.AppUpdatePresenter(
             runtime.appUpdateService,
             presenterScope,
             runtime.appUpdateInstaller,
-            ::closeApplication,
+            { closeApplication(forceQuit = true) },
         )
             .also { runtime.onShutdown(it::shutdown) }
     }
@@ -408,7 +451,7 @@ fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
 
     key(readerWindowMode == ReaderWindowMode.BORDERLESS) {
         Window(
-            onCloseRequest = ::closeApplication,
+            onCloseRequest = { closeApplication() },
             state = windowState,
             title = "mihondesk",
             icon = appIcon,
@@ -905,6 +948,7 @@ fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
                                         trackSyncService = runtime.trackSyncService,
                                         backupScheduler = runtime.backupScheduler,
                                         syncScheduler = runtime.syncScheduler,
+                                        syncServerManager = runtime.syncServerManager,
                                         backgroundScheduler = runtime.backgroundScheduler,
                                         updateScheduler = runtime.libraryUpdateScheduler,
                                         cookieStore = runtime.cookieStore,
