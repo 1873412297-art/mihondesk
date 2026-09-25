@@ -39,18 +39,21 @@ CREATE INDEX idx_mangas_source ON mangas(source);
 
 CREATE TRIGGER update_last_favorited_at_mangas
 AFTER UPDATE OF favorite ON mangas
+FOR EACH ROW
+WHEN new.is_syncing = 0 AND old.is_syncing = 0
 BEGIN
   UPDATE mangas
-  SET favorite_modified_at = strftime('%s', 'now')
+  SET favorite_modified_at = (CAST(strftime('%s', 'now') AS INTEGER) * 1000)
   WHERE _id = new._id;
 END;
 
 CREATE TRIGGER update_last_modified_at_mangas
 AFTER UPDATE ON mangas
 FOR EACH ROW
+WHEN new.is_syncing = 0 AND old.is_syncing = 0 AND new.last_modified_at = old.last_modified_at
 BEGIN
   UPDATE mangas
-  SET last_modified_at = strftime('%s', 'now')
+  SET last_modified_at = (CAST(strftime('%s', 'now') AS INTEGER) * 1000)
   WHERE _id = new._id;
 END;
 
@@ -291,3 +294,28 @@ insertNetworkManga {
     AND url = :url
     LIMIT 1;
 }
+
+selectMangaModifiedSince:
+SELECT *
+FROM mangas
+WHERE last_modified_at > :sinceWatermark;
+
+touchManga:
+UPDATE mangas
+SET
+    last_modified_at = (CAST(strftime('%s', 'now') AS INTEGER) * 1000),
+    version = version + 1
+WHERE _id = :mangaId;
+
+touchMangaLastModified:
+UPDATE mangas
+SET
+    last_modified_at = max(last_modified_at, :lastModifiedAt)
+WHERE _id = :mangaId;
+
+setFavoriteModifiedAt:
+UPDATE mangas
+SET favorite_modified_at = :favoriteModifiedAt
+WHERE _id = :mangaId;
+
+

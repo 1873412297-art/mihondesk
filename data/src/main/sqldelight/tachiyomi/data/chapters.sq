@@ -29,9 +29,10 @@ CREATE INDEX idx_chapters_url ON chapters(url);
 CREATE TRIGGER update_last_modified_at_chapters
 AFTER UPDATE ON chapters
 FOR EACH ROW
+WHEN new.is_syncing = 0 AND old.is_syncing = 0 AND new.last_modified_at = old.last_modified_at
 BEGIN
   UPDATE chapters
-  SET last_modified_at = strftime('%s', 'now')
+  SET last_modified_at = (CAST(strftime('%s', 'now') AS INTEGER) * 1000)
   WHERE _id = new._id;
 END;
 
@@ -126,3 +127,22 @@ SET manga_id = coalesce(:mangaId, manga_id),
     is_syncing = coalesce(:isSyncing, is_syncing),
     memo = coalesce(:memo, memo)
 WHERE _id = :chapterId;
+
+selectChaptersModifiedSince:
+SELECT *
+FROM chapters
+WHERE last_modified_at > :sinceWatermark;
+
+touchChapter:
+UPDATE chapters
+SET
+    last_modified_at = (CAST(strftime('%s', 'now') AS INTEGER) * 1000),
+    version = version + 1
+WHERE _id = :chapterId;
+
+touchChapterLastModified:
+UPDATE chapters
+SET
+    last_modified_at = max(last_modified_at, :lastModifiedAt)
+WHERE _id = :chapterId;
+

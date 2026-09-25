@@ -1,0 +1,62 @@
+CREATE TABLE sync_state(
+    device_id TEXT NOT NULL PRIMARY KEY,
+    last_push_cursor INTEGER NOT NULL DEFAULT 0,
+    last_pull_cursor INTEGER NOT NULL DEFAULT 0,
+    updated_at INTEGER NOT NULL DEFAULT 0,
+    sync_clock INTEGER NOT NULL DEFAULT 0,
+    last_push_watermark INTEGER NOT NULL DEFAULT 0
+);
+
+getSyncState:
+SELECT *
+FROM sync_state
+WHERE device_id = :deviceId;
+
+getFirstSyncState:
+SELECT *
+FROM sync_state
+LIMIT 1;
+
+upsertSyncState:
+INSERT INTO sync_state(device_id, last_push_cursor, last_pull_cursor, updated_at, sync_clock, last_push_watermark)
+VALUES (:deviceId, :lastPushCursor, :lastPullCursor, :updatedAt, :syncClock, :lastPushWatermark)
+ON CONFLICT(device_id)
+DO UPDATE
+SET
+    last_push_cursor = :lastPushCursor,
+    last_pull_cursor = :lastPullCursor,
+    updated_at = :updatedAt,
+    sync_clock = :syncClock,
+    last_push_watermark = :lastPushWatermark
+WHERE device_id = :deviceId;
+
+updateLastPushCursor:
+UPDATE sync_state
+SET
+    last_push_cursor = :lastPushCursor,
+    updated_at = :updatedAt
+WHERE device_id = :deviceId;
+
+updateLastPushWatermark:
+UPDATE sync_state
+SET
+    last_push_watermark = :lastPushWatermark,
+    updated_at = :updatedAt
+WHERE device_id = :deviceId;
+
+updateLastPullCursor:
+UPDATE sync_state
+SET
+    last_pull_cursor = :lastPullCursor,
+    updated_at = :updatedAt
+WHERE device_id = :deviceId;
+
+updateSyncClock:
+UPDATE sync_state
+SET
+    sync_clock = :syncClock,
+    updated_at = :updatedAt
+WHERE device_id = :deviceId;
+
+deleteAll:
+DELETE FROM sync_state;

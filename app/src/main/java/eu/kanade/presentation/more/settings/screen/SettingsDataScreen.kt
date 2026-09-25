@@ -102,9 +102,41 @@ object SettingsDataScreen : SearchableSettings {
             getStorageLocationPref(storagePreferences = storagePreferences),
             Preference.PreferenceItem.InfoPreference(stringResource(MR.strings.pref_storage_location_info)),
 
+            getSyncGroup(),
             getBackupAndRestoreGroup(backupPreferences = backupPreferences),
             getDataGroup(),
             getExportGroup(),
+        )
+    }
+
+    @Composable
+    private fun getSyncGroup(): Preference.PreferenceGroup {
+        val navigator = LocalNavigator.currentOrThrow
+        val context = LocalContext.current
+        val syncPreferences = remember { context.appGraph.syncPreferences }
+        val isSyncEnabled by syncPreferences.isSyncEnabled.collectAsState()
+        val lastSyncTimestamp by syncPreferences.lastSyncTimestamp.collectAsState()
+
+        val subtitle = if (!isSyncEnabled) {
+            "Disabled"
+        } else if (lastSyncTimestamp <= 0L) {
+            "Never synced"
+        } else {
+            "Last synced: " + java.text.DateFormat.getDateTimeInstance(
+                java.text.DateFormat.SHORT,
+                java.text.DateFormat.SHORT,
+            ).format(java.util.Date(lastSyncTimestamp))
+        }
+
+        return Preference.PreferenceGroup(
+            title = eu.kanade.tachiyomi.data.sync.SyncStrings.librarySync,
+            preferenceItems = listOf(
+                Preference.PreferenceItem.TextPreference(
+                    title = eu.kanade.tachiyomi.data.sync.SyncStrings.librarySync,
+                    subtitle = subtitle,
+                    onClick = { navigator.push(SettingsLibrarySyncScreen) },
+                ),
+            ),
         )
     }
 

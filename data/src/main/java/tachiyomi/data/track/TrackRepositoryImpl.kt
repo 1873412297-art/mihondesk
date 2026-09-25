@@ -44,10 +44,13 @@ class TrackRepositoryImpl(
     }
 
     override suspend fun delete(mangaId: Long, trackerId: Long) {
-        database.manga_syncQueries.delete(
-            mangaId = mangaId,
-            syncId = trackerId,
-        )
+        database.transaction {
+            database.manga_syncQueries.delete(
+                mangaId = mangaId,
+                syncId = trackerId,
+            )
+            database.mangasQueries.touchManga(mangaId)
+        }
     }
 
     override suspend fun insert(track: Track) {
@@ -76,6 +79,9 @@ class TrackRepositoryImpl(
                     finishDate = mangaTrack.finishDate,
                     private = mangaTrack.private,
                 )
+            }
+            tracks.map { it.mangaId }.distinct().forEach { mangaId ->
+                database.mangasQueries.touchManga(mangaId)
             }
         }
     }
