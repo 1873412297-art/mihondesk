@@ -137,6 +137,7 @@ fun SettingsScreen(
     diagnosticService: DiagnosticBundleService? = null,
     trackerManager: DesktopTrackerManager? = null,
     backupScheduler: mihon.desktop.backup.DesktopBackupScheduler? = null,
+    syncScheduler: mihon.desktop.sync.DesktopSyncScheduler? = null,
     updateScheduler: mihon.desktop.library.update.LibraryUpdateScheduler? = null,
     onOpenCookieManager: () -> Unit = {},
     onImportBackup: () -> Unit = {},
@@ -258,6 +259,7 @@ fun SettingsScreen(
                     SettingsSection.Backup -> BackupSettingsPane(
                         preferenceStore = preferenceStore,
                         backupScheduler = backupScheduler,
+                        syncScheduler = syncScheduler,
                         onImportBackup = onImportBackup,
                         onExportBackup = onExportBackup,
                         onPreferencesChanged = notifyPreferencesChanged,
@@ -1710,6 +1712,7 @@ private fun TrackingSettingsPane(trackerManager: DesktopTrackerManager?) {
 private fun BackupSettingsPane(
     preferenceStore: DesktopPreferenceStore,
     backupScheduler: mihon.desktop.backup.DesktopBackupScheduler?,
+    syncScheduler: mihon.desktop.sync.DesktopSyncScheduler? = null,
     onImportBackup: () -> Unit,
     onExportBackup: () -> Unit,
     onPreferencesChanged: ((DesktopPreferences) -> Unit)?,
@@ -1719,6 +1722,8 @@ private fun BackupSettingsPane(
     var preferences by remember { mutableStateOf(preferenceStore.load()) }
     var backupInProgress by remember { mutableStateOf(false) }
     var backupMessage by remember { mutableStateOf<String?>(null) }
+    var syncInProgress by remember { mutableStateOf(false) }
+    var syncMessage by remember { mutableStateOf<String?>(null) }
 
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
@@ -1889,6 +1894,146 @@ private fun BackupSettingsPane(
                 }
 
                 backupMessage?.let { msg ->
+                    Text(
+                        text = msg,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            }
+        }
+
+        // Library Sync Card
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(strings.syncCardTitle, fontWeight = FontWeight.Bold)
+                    Text(
+                        strings.syncCardDescription,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+
+                // Enable Sync Switch
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(strings.syncEnableTitle, fontWeight = FontWeight.Medium)
+                    Switch(
+                        checked = preferences.syncEnabled,
+                        onCheckedChange = { enabled ->
+                            val updated = preferenceStore.updatePreferences {
+                                it.copy(syncEnabled = enabled)
+                            }
+                            preferences = updated
+                            onPreferencesChanged?.invoke(updated)
+                        },
+                        modifier = Modifier.testTag("sync-enabled-switch"),
+                    )
+                }
+
+                // Sync Directory Selection
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(strings.syncDirectoryTitle, fontWeight = FontWeight.Medium)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        OutlinedTextField(
+                            value = preferences.syncDirectoryPath,
+                            onValueChange = { path ->
+                                val updated = preferenceStore.updatePreferences {
+                                    it.copy(syncDirectoryPath = path)
+                                }
+                                preferences = updated
+                                onPreferencesChanged?.invoke(updated)
+                            },
+                            modifier = Modifier.weight(1f).testTag("sync-directory-path-field"),
+                            singleLine = true,
+                            placeholder = { Text("D:\\CloudDrive\\MihonSync") },
+                        )
+                        Button(
+                            onClick = {
+                                val chooser = javax.swing.JFileChooser().apply {
+                                    fileSelectionMode = javax.swing.JFileChooser.DIRECTORIES_ONLY
+                                    dialogTitle = strings.syncDirectoryTitle
+                                    val currentPath = preferences.syncDirectoryPath
+                                    if (currentPath.isNotBlank()) {
+                                        currentDirectory = java.io.File(currentPath)
+                                    }
+                                }
+                                val result = chooser.showOpenDialog(null)
+                                if (result == javax.swing.JFileChooser.APPROVE_OPTION) {
+                                    val selected = chooser.selectedFile.absolutePath
+                                    val updated = preferenceStore.updatePreferences {
+                                        it.copy(syncDirectoryPath = selected)
+                                    }
+                                    preferences = updated
+                                    onPreferencesChanged?.invoke(updated)
+                                }
+                            },
+                            modifier = Modifier.testTag("sync-browse-directory-button"),
+                        ) {
+                            Text(strings.syncDirectoryBrowse)
+                        }
+                    }
+                }
+
+                // Sync status & Sync Now button
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    val lastSyncStr = if (preferences.lastSyncEpochMillis > 0L) {
+                        val timeStr = java.time.LocalDateTime.ofInstant(
+                            java.time.Instant.ofEpochMilli(preferences.lastSyncEpochMillis),
+                            java.time.ZoneId.systemDefault(),
+                        ).format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
+                        val msg = preferences.lastSyncMessage
+                        if (msg.isNotBlank()) "$timeStr ($msg)" else timeStr
+                    } else {
+                        strings.syncNever
+                    }
+                    Text(
+                        text = "${strings.syncLastResult} $lastSyncStr",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.weight(1f),
+                    )
+                    if (syncScheduler != null) {
+                        Button(
+                            onClick = {
+                                scope.launch {
+                                    syncInProgress = true
+                                    try {
+                                        val report = syncScheduler.syncNow()
+                                        preferences = preferenceStore.load()
+                                        syncMessage = if (report.success) {
+                                            "${strings.syncSuccess}: ${preferences.lastSyncMessage}"
+                                        } else {
+                                            "${strings.syncFailed}: ${report.errorMessage}"
+                                        }
+                                    } catch (e: Exception) {
+                                        syncMessage = "${strings.syncFailed}: ${e.message}"
+                                    } finally {
+                                        syncInProgress = false
+                                    }
+                                }
+                            },
+                            enabled = !syncInProgress && preferences.syncDirectoryPath.isNotBlank(),
+                            modifier = Modifier.testTag("sync-now-button"),
+                        ) {
+                            Text(if (syncInProgress) strings.syncInProgress else strings.syncNowButton)
+                        }
+                    }
+                }
+
+                syncMessage?.let { msg ->
                     Text(
                         text = msg,
                         style = MaterialTheme.typography.bodySmall,

@@ -43,7 +43,7 @@ import java.nio.file.Path
 
 class SqlDelightLibraryRepository(
     private val driver: SqlDriver,
-    private val database: DesktopLibraryDatabase,
+    val database: DesktopLibraryDatabase,
 ) : LibraryRepository, LibraryMutationPort, ReaderLibraryPort, AutoCloseable {
     private val queries = database.libraryQueries
     private val readerProgressMutex = Mutex()
@@ -221,15 +221,21 @@ class SqlDelightLibraryRepository(
             if (accepted != null && incoming <= accepted) return@withLock ProgressWriteResult.STALE
 
             database.transaction {
+                val now = maxOf(update.lastReadEpochMillis, System.currentTimeMillis())
                 queries.updateReaderChapterProgress(
                     last_page_read = update.pageIndex,
                     completed = update.completed,
                     chapter_id = update.chapterId,
+                    last_modified_at = now,
                 )
                 queries.accumulateReaderHistory(
                     chapter_id = update.chapterId,
                     last_read = update.lastReadEpochMillis,
                     read_duration_delta = update.readDurationDeltaMillis,
+                )
+                queries.touchChapterLastModified(
+                    chapter_id = update.chapterId,
+                    last_modified_at = now,
                 )
             }
             acceptedReaderProgress[update.chapterId] = incoming
@@ -381,7 +387,10 @@ class SqlDelightLibraryRepository(
     }
 
     override fun upsertHistory(value: HistoryRecord) {
-        queries.upsertHistory(value.chapterId, value.lastRead, value.readDuration)
+        database.transaction {
+            queries.upsertHistory(value.chapterId, value.lastRead, value.readDuration)
+            queries.touchChapterLastModified(value.chapterId, value.lastRead)
+        }
     }
 
     override fun deleteHistory(chapterId: Long) {
@@ -796,7 +805,7 @@ private fun Manga.toDetails(categories: List<CategoryRecord>) = MangaDetails(
     categories = categories,
 )
 
-private fun Chapter.toRecord() = ChapterRecord(
+internal fun Chapter.toRecord() = ChapterRecord(
     id = id,
     mangaId = manga_id,
     url = url,
@@ -832,9 +841,9 @@ private fun Chapter.toModel() = LibraryChapter(
     memoJson = memo_json,
 )
 
-private fun Category.toRecord() = CategoryRecord(id, name, sort_order, flags)
+internal fun Category.toRecord() = CategoryRecord(id, name, sort_order, flags)
 
-private fun Tracking.toRecord() = TrackingRecord(
+internal fun Tracking.toRecord() = TrackingRecord(
     id = id,
     mangaId = manga_id,
     trackerId = tracker_id,

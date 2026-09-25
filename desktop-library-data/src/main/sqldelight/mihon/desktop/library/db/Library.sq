@@ -455,7 +455,13 @@ SELECT * FROM history WHERE chapter_id = ?;
 updateReaderChapterProgress:
 UPDATE chapter
 SET last_page_read = :last_page_read,
-    read = (read OR :completed)
+    read = (read OR :completed),
+    last_modified_at = MAX(last_modified_at, :last_modified_at)
+WHERE id = :chapter_id;
+
+touchChapterLastModified:
+UPDATE chapter
+SET last_modified_at = MAX(last_modified_at, :last_modified_at)
 WHERE id = :chapter_id;
 
 accumulateReaderHistory:
@@ -675,3 +681,25 @@ SELECT * FROM preference_snapshot ORDER BY key ASC;
 
 selectAllSourcePreferenceSnapshotsForExport:
 SELECT * FROM source_preference_snapshot ORDER BY source_key ASC, key ASC;
+
+selectMangaModifiedSince:
+SELECT * FROM manga
+WHERE source_id != 0 AND last_modified_at > :since_cursor
+ORDER BY last_modified_at ASC, id ASC;
+
+selectChaptersModifiedSince:
+SELECT chapter.*
+FROM chapter
+JOIN manga ON manga.id = chapter.manga_id
+WHERE manga.source_id != 0 AND chapter.last_modified_at > :since_cursor
+ORDER BY chapter.last_modified_at ASC, chapter.id ASC;
+
+selectMetadata:
+SELECT value FROM library_metadata WHERE name = ?;
+
+selectAllMetadataWithPrefix:
+SELECT name, value FROM library_metadata WHERE name LIKE :prefix;
+
+upsertMetadata:
+INSERT INTO library_metadata(name, value) VALUES (?, ?)
+ON CONFLICT(name) DO UPDATE SET value = excluded.value;

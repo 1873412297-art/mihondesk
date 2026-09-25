@@ -64,6 +64,12 @@ data class DesktopPreferences(
     val desktopNotificationsEnabled: Boolean = true,
     val desktopNotificationsHideContent: Boolean = false,
     val lastLibraryUpdateEpochMillis: Long = 0L,
+    val syncEnabled: Boolean = false,
+    val syncDirectoryPath: String = "",
+    val syncIntervalMinutes: Int = 15,
+    val lastSyncEpochMillis: Long = 0L,
+    val lastSyncMessage: String = "",
+    val syncDeviceId: String = "",
 )
 
 class DesktopPreferenceStore(private val file: Path) {
@@ -161,6 +167,12 @@ class DesktopPreferenceStore(private val file: Path) {
             ) ?: false,
             lastLibraryUpdateEpochMillis = properties.getProperty("library.last_update_epoch_millis")
                 ?.toLongOrNull() ?: 0L,
+            syncEnabled = properties.getProperty("sync.enabled")?.toBooleanStrictOrNull() ?: false,
+            syncDirectoryPath = properties.getProperty("sync.directory_path") ?: "",
+            syncIntervalMinutes = properties.getProperty("sync.interval_minutes")?.toIntOrNull() ?: 15,
+            lastSyncEpochMillis = properties.getProperty("sync.last_epoch_millis")?.toLongOrNull() ?: 0L,
+            lastSyncMessage = properties.getProperty("sync.last_message") ?: "",
+            syncDeviceId = properties.getProperty("sync.device_id") ?: "",
         )
     }
 
@@ -241,6 +253,12 @@ class DesktopPreferenceStore(private val file: Path) {
             "library.last_update_epoch_millis",
             preferences.lastLibraryUpdateEpochMillis.toString(),
         )
+        properties.setProperty("sync.enabled", preferences.syncEnabled.toString())
+        properties.setProperty("sync.directory_path", preferences.syncDirectoryPath)
+        properties.setProperty("sync.interval_minutes", preferences.syncIntervalMinutes.toString())
+        properties.setProperty("sync.last_epoch_millis", preferences.lastSyncEpochMillis.toString())
+        properties.setProperty("sync.last_message", preferences.lastSyncMessage)
+        properties.setProperty("sync.device_id", preferences.syncDeviceId)
         properties.remove("window.x")
         properties.remove("window.y")
         properties.remove("window.width")

@@ -365,6 +365,19 @@ interface DesktopStrings {
     val settingsExportBackupButton: String
     val settingsImportBackupButton: String
 
+    // Settings - Sync
+    val syncCardTitle: String
+    val syncCardDescription: String
+    val syncEnableTitle: String
+    val syncDirectoryTitle: String
+    val syncDirectoryBrowse: String
+    val syncNowButton: String
+    val syncLastResult: String
+    val syncNever: String
+    val syncInProgress: String
+    val syncSuccess: String
+    val syncFailed: String
+
     // Settings - Advanced
     val settingsDiagnosticsTitle: String
     val settingsRunIntegrityCheck: String
@@ -1050,6 +1063,19 @@ object EnglishStrings : DesktopStrings {
         "mihondesk produces full Android-compatible ProtoBuf .tachibk backups (gzipped) containing your library, categories, reading history, tracking records, and preferences."
     override val settingsExportBackupButton = "Export Backup (.tachibk)"
     override val settingsImportBackupButton = "Import Backup (.tachibk)"
+
+    override val syncCardTitle = "Library Sync"
+    override val syncCardDescription =
+        "Automatically synchronize favorites, reading progress, and categories across devices via a shared directory (Cloud Drive / WebDAV)."
+    override val syncEnableTitle = "Enable Sync"
+    override val syncDirectoryTitle = "Sync Directory"
+    override val syncDirectoryBrowse = "Browse"
+    override val syncNowButton = "Sync Now"
+    override val syncLastResult = "Last sync:"
+    override val syncNever = "Never synced"
+    override val syncInProgress = "Syncing..."
+    override val syncSuccess = "Sync completed successfully"
+    override val syncFailed = "Sync failed"
 
     override val settingsDiagnosticsTitle = "Database & System Diagnostics"
     override val settingsRunIntegrityCheck = "Run Integrity Check"
@@ -1810,6 +1836,19 @@ object SimplifiedChineseStrings : DesktopStrings {
     override val settingsExportBackupButton = "导出备份 (.tachibk)"
     override val settingsImportBackupButton = "导入备份 (.tachibk)"
 
+    override val syncCardTitle = "书架同步"
+    override val syncCardDescription =
+        "通过共享目录（网盘/WebDAV）与手机端自动双向同步收藏、已读状态与分类。"
+    override val syncEnableTitle = "启用同步"
+    override val syncDirectoryTitle = "同步目录"
+    override val syncDirectoryBrowse = "浏览"
+    override val syncNowButton = "立即同步"
+    override val syncLastResult = "最近同步："
+    override val syncNever = "从未同步"
+    override val syncInProgress = "同步中..."
+    override val syncSuccess = "同步成功"
+    override val syncFailed = "同步失败"
+
     override val settingsDiagnosticsTitle = "数据库与系统诊断"
     override val settingsRunIntegrityCheck = "运行完整性检查"
     override val settingsExportDiagnosticBundle = "导出诊断包 (.zip)"
@@ -2566,6 +2605,19 @@ object TraditionalChineseStrings : DesktopStrings {
         "mihondesk 可生成與 Android 端完全相容的 ProtoBuf .tachibk 備份 (gzip壓縮)，包含書架、分類、閱讀歷史、追蹤記錄及設定。"
     override val settingsExportBackupButton = "匯出備份 (.tachibk)"
     override val settingsImportBackupButton = "匯入備份 (.tachibk)"
+
+    override val syncCardTitle = "書架同步"
+    override val syncCardDescription =
+        "透過共享目錄（網盤/WebDAV）與手機端自動雙向同步收藏、已讀狀態與分類。"
+    override val syncEnableTitle = "啟用同步"
+    override val syncDirectoryTitle = "同步目錄"
+    override val syncDirectoryBrowse = "瀏覽"
+    override val syncNowButton = "立即同步"
+    override val syncLastResult = "最近同步："
+    override val syncNever = "從未同步"
+    override val syncInProgress = "同步中..."
+    override val syncSuccess = "同步成功"
+    override val syncFailed = "同步失敗"
 
     override val settingsDiagnosticsTitle = "資料庫與系統診斷"
     override val settingsRunIntegrityCheck = "執行完整性檢查"
