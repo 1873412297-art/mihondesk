@@ -3,6 +3,7 @@ package mihon.desktop.library.model
 enum class ImportType {
     ANDROID_BACKUP,
     LOCAL_DIRECTORY,
+    SYNC,
 }
 
 enum class ImportStatus {

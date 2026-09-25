@@ -55,6 +55,7 @@ class DesktopRuntime(
     val diagnosticService: mihon.desktop.diagnostics.DiagnosticBundleService? = null,
     val statsService: mihon.desktop.stats.DesktopStatsService? = null,
     val backupScheduler: mihon.desktop.backup.DesktopBackupScheduler? = null,
+    val syncScheduler: mihon.desktop.sync.DesktopSyncScheduler? = null,
     val cookieStore: mihon.desktop.extension.DesktopCookieStore? = null,
     val desktopNotificationService: mihon.desktop.platform.DesktopNotificationService? = null,
     val libraryUpdateService: mihon.desktop.library.update.LibraryUpdateService? = null,
@@ -445,6 +446,11 @@ object DesktopRuntimeFactory {
                 defaultBackupDir = backupDir,
                 scope = appScope,
             )
+            val syncScheduler = mihon.desktop.sync.DesktopSyncScheduler(
+                preferenceStore = preferences,
+                library = library,
+                scope = appScope,
+            )
             val desktopNotificationService = mihon.desktop.platform.DesktopNotificationService(
                 enabledProvider = { preferences.load().desktopNotificationsEnabled },
                 hideContentProvider = { preferences.load().desktopNotificationsHideContent },
@@ -464,6 +470,7 @@ object DesktopRuntimeFactory {
             )
             if (command == DesktopCommand.LaunchUi) {
                 backupScheduler.start()
+                syncScheduler.start()
                 trackSyncService.start(appScope)
             }
             val packagedExecutable = ProcessHandle.current().info().command().orElse(null)?.let(Path::of)
@@ -511,6 +518,7 @@ object DesktopRuntimeFactory {
                 diagnosticService = diagnosticService,
                 statsService = statsService,
                 backupScheduler = backupScheduler,
+                syncScheduler = syncScheduler,
                 cookieStore = cookieStore,
                 desktopNotificationService = desktopNotificationService,
                 libraryUpdateService = libraryUpdateService,
@@ -524,6 +532,7 @@ object DesktopRuntimeFactory {
                 onlineMangaSyncService = onlineMangaSyncService,
                 closeReaderServices = {
                     backupScheduler.stop()
+                    syncScheduler.stop()
                     libraryUpdateScheduler.stop()
                     trackSyncService.close()
                     runBlocking { downloader.shutdown() }

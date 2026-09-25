@@ -328,7 +328,7 @@ private fun AndroidBackupChapter.toRecord(mangaId: Long, memoJson: String) = Cha
 )
 
 @Suppress("DEPRECATION")
-private fun AndroidBackupTracking.toRecord(mangaId: Long) = TrackingRecord(
+internal fun AndroidBackupTracking.toRecord(mangaId: Long) = TrackingRecord(
     mangaId = mangaId,
     trackerId = syncId.toLong(),
     remoteId = if (mediaIdInt != 0) mediaIdInt.toLong() else mediaId,

@@ -904,6 +904,7 @@ fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
                                         trackerManager = runtime.trackerManager,
                                         trackSyncService = runtime.trackSyncService,
                                         backupScheduler = runtime.backupScheduler,
+                                        syncScheduler = runtime.syncScheduler,
                                         backgroundScheduler = runtime.backgroundScheduler,
                                         updateScheduler = runtime.libraryUpdateScheduler,
                                         cookieStore = runtime.cookieStore,
