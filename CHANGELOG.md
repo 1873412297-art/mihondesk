@@ -2,6 +2,13 @@
 
 这里记录 mihondesk Windows 版的更新。安装包与完整发布说明见 [GitHub Releases](https://github.com/1873412297-art/mihondesk/releases)。继承自 Android 上游的历史日志保留在 [Mihon 更新日志](docs/upstream/MIHON_CHANGELOG.md)。
 
+## [0.2.21](https://github.com/1873412297-art/mihondesk/releases/tag/v0.2.21)
+
+- **图源修复**：扩展不支持「热门/最新」时显示引导空态而非裸异常（J-Novel）；修复 vomic 裸 NullPointerException（宿主注入 `http.agent`）；哔哩漫画等防盗链图源封面恢复显示（封面请求附带 Referer，403 纳入失败登记）；扩展包文件丢失时启动自动清理脏记录并提示重新安装。
+- **性能优化（15 项）**：偏好快照缓存（文件戳校验，网络请求/下载通知/图源状态不再全量读盘）、已安装扩展列表解码缓存、下载队列合并落盘与紧凑存储、下载完整性扫描移出启动主线程、IPC 单次 JSON 解析与扩展包重复解压消除、IPC 超时正确性修复、封面双重重试移除与请求头缓存、自定义封面负缓存、本地源快照去重。
+- **设置页流畅度**：「备份与还原」的网卡枚举与配对二维码生成移出 UI 线程，进入不再卡顿。
+- **测试基建**：AppContainer 隔离测试在 MSIX 等受限环境跳过而非失败。
+
 ## [0.2.20](https://github.com/1873412297-art/mihondesk/releases/tag/v0.2.20)
 
 - **手机 ↔ 桌面书架同步（内置服务器通道）**：桌面端内嵌同步服务器（Ktor + SQLite，局域网 HTTP + token）；手机支持扫码配对（桌面配对二维码，相机扫描界面带扫描框动画与手动输入兜底）、局域网自动发现（mDNS `_mihonsync._tcp`，桌面开启"允许免输入配对"后可一键配对，token 默认不进广播）、手动配对码三种方式；收藏、已读、分类、阅读进度双向 LWW 同步（协议 baseSchema 1 不变）。
