@@ -23,16 +23,16 @@ AI 辅助开发的开源项目 · 基于 Mihon · Kotlin / Compose Desktop
 
 ## 下载与安装
 
-当前版本：**0.2.20**。面向 **Windows 10 22H2 / Windows 11，x64**，发行包已内置运行环境，无需另装 Java。
+当前版本：**0.2.21**。面向 **Windows 10 22H2 / Windows 11，x64**，发行包已内置运行环境，无需另装 Java。
 
 程序、安装包和快捷方式现已统一命名为 **mihondesk**。安装版继续使用原有数据目录，支持从 MihonW 升级。
 
 | 下载 | 适用方式 |
 | --- | --- |
-| **[EXE 安装包](https://github.com/1873412297-art/mihondesk/releases/download/v0.2.20/mihondesk-0.2.20.exe)** | 推荐使用，下载后按向导安装 |
-| [MSI 安装包](https://github.com/1873412297-art/mihondesk/releases/download/v0.2.20/mihondesk-0.2.20.msi) | 需要 MSI 安装方式时使用 |
-| [便携 ZIP](https://github.com/1873412297-art/mihondesk/releases/download/v0.2.20/mihondesk-0.2.20-windows-x64-portable.zip) | 完整解压到可写目录，运行其中的 `mihondesk.exe` |
-| [SHA-256 校验文件](https://github.com/1873412297-art/mihondesk/releases/download/v0.2.20/SHA256SUMS.txt) | 校验下载文件的完整性 |
+| **[EXE 安装包](https://github.com/1873412297-art/mihondesk/releases/download/v0.2.21/mihondesk-0.2.21.exe)** | 推荐使用，下载后按向导安装 |
+| [MSI 安装包](https://github.com/1873412297-art/mihondesk/releases/download/v0.2.21/mihondesk-0.2.21.msi) | 需要 MSI 安装方式时使用 |
+| [便携 ZIP](https://github.com/1873412297-art/mihondesk/releases/download/v0.2.21/mihondesk-0.2.21-windows-x64-portable.zip) | 完整解压到可写目录，运行其中的 `mihondesk.exe` |
+| [SHA-256 校验文件](https://github.com/1873412297-art/mihondesk/releases/download/v0.2.21/SHA256SUMS.txt) | 校验下载文件的完整性 |
 
 **首次使用**：发行包不预装在线图源或扩展仓库，请自行添加仓库或安装扩展。本地文件阅读无需安装图源。升级会保留已有书架、设置和阅读数据。
 
@@ -56,6 +56,14 @@ AI 辅助开发的开源项目 · 基于 Mihon · Kotlin / Compose Desktop
 2. **阅读本地文件**：使用本地导入入口选择漫画文件或图片目录。
 3. **阅读在线内容**：在浏览页安装扩展包，再选择图源。安装入口支持 `.mext`，也可尝试转换受支持的扩展 `.apk`。
 4. **保留阅读数据**：使用备份功能定期导出。备份不包含已下载的漫画图片。
+
+## 0.2.21 更新
+
+- **图源修复**：扩展不支持「热门/最新」时显示「请使用搜索」的引导页而非报错；修复 vomic 等扩展因缺少 Android `http.agent` 系统属性导致的裸 NullPointerException；哔哩漫画等防盗链图源封面恢复显示（封面请求自动附带 Referer）；扩展包文件丢失时启动自动清理脏记录并提示重装。
+- **性能优化**：偏好与扩展列表缓存（网络请求/下载通知不再全量读盘）、下载进度合并落盘、启动不再同步扫描下载文件、IPC 每请求只解析一次 JSON、封面加载去除双重重试并恢复懒列表重组跳过、书架滚动零磁盘探测。
+- **设置页流畅度**：进入「备份与还原」不再卡顿（网卡枚举与二维码生成移出 UI 线程）。
+
+详见[本版发布说明](https://github.com/1873412297-art/mihondesk/releases/tag/v0.2.21)和[更新日志](CHANGELOG.md)。
 
 ## 0.2.20 更新
 
