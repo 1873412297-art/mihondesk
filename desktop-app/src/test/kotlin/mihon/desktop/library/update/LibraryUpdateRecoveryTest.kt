@@ -194,8 +194,10 @@ class LibraryUpdateRecoveryTest {
                 registerBuiltinSource(Source(1) { kotlinx.coroutines.awaitCancellation() })
                 registerBuiltinSource(Source(2) { emptyList() })
             }
-            val service = LibraryUpdateService(repo, OnlineMangaSyncService(repo, manager), requestTimeoutMs = 100)
-            val report = withTimeout(3_000) { service.updateLibrary(throttleDelayMs = 0) }
+            val service = LibraryUpdateService(repo, OnlineMangaSyncService(repo, manager), requestTimeoutMs = 1_000)
+            // Loaded CI runners can starve dispatchers; keep margins wide so even the
+            // instant healthy source cannot accidentally hit the request timeout.
+            val report = withTimeout(10_000) { service.updateLibrary(throttleDelayMs = 0) }
             assertEquals(2, report.totalMangaChecked)
             assertEquals(1, report.errors.size)
             assertTrue(report.errors.single().contains("timed out"))
