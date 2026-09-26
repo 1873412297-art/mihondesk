@@ -50,6 +50,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -2108,7 +2109,18 @@ private fun BackupSettingsPane(
                     }
 
                     // 3. Pairing Code & Copy
-                    val localIps = remember { mihon.desktop.sync.DesktopSyncServerManager.getLocalIpAddresses() }
+                    // Network-interface enumeration can block for hundreds of ms on machines
+                    // with VPN/TUN adapters, so load it off the UI thread.
+                    val localIps by produceState(
+                        initialValue = preferences.syncServerSelectedIp
+                            .takeIf { it.isNotBlank() }
+                            ?.let { listOf(it) }
+                            ?: listOf("127.0.0.1"),
+                    ) {
+                        value = withContext(Dispatchers.IO) {
+                            mihon.desktop.sync.DesktopSyncServerManager.getLocalIpAddresses()
+                        }
+                    }
                     var selectedIp by remember(preferences.syncServerSelectedIp, localIps) {
                         mutableStateOf(
                             mihon.desktop.sync.DesktopSyncServerManager.effectiveSelectedIp(
