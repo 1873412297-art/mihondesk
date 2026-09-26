@@ -156,6 +156,7 @@ class DesktopDownloaderTest {
             ),
         )
         DesktopDownloader(store, disk, networkHelper).use { downloader ->
+            downloader.awaitStartupRecovery()
             downloader.deleteDownloadedChapter(manga, chapter) shouldBe true
             downloader.queueState.value shouldBe emptyList()
             store.restore() shouldBe emptyList()

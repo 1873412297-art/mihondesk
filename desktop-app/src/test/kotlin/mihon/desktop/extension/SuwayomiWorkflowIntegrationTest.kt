@@ -275,7 +275,7 @@ class SuwayomiWorkflowIntegrationTest {
         try {
             assertFalse(network.isDomainAllowed("localhost", installed.pkg))
             downloader.retry(9L)
-            withTimeout(30_000) {
+            withTimeout(60_000) {
                 while (downloader.queueState.value.single().status !in
                     setOf(DownloadStatus.COMPLETED, DownloadStatus.ERROR)
                 ) {

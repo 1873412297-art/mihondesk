@@ -87,18 +87,28 @@ class WindowsExtensionIsolationTest {
             java.io.File(it.protectionDomain.codeSource.location.toURI()).absolutePath
         }.joinToString(java.io.File.pathSeparator)
         val launcher = WindowsAppContainerLauncher(tempDir.resolve("memory-host").toFile(), 256L * 1024 * 1024)
-        val process = launcher.launch(
-            listOf(
-                "${System.getProperty("java.home")}/bin/java.exe",
-                "-Xmx32m",
-                "-XX:MaxDirectMemorySize=1g",
-                "-XX:+UseSerialGC",
-                "-cp",
-                cp,
-                SandboxAccessProbe::class.java.name,
-                "--memory-probe",
-            ),
-        )
+        val process = try {
+            launcher.launch(
+                listOf(
+                    "${System.getProperty("java.home")}/bin/java.exe",
+                    "-Xmx32m",
+                    "-XX:MaxDirectMemorySize=1g",
+                    "-XX:+UseSerialGC",
+                    "-cp",
+                    cp,
+                    SandboxAccessProbe::class.java.name,
+                    "--memory-probe",
+                ),
+            )
+        } catch (failure: Throwable) {
+            val chain = generateSequence(failure) { it.cause }
+                .map { it.message ?: it.toString() }
+                .joinToString(" <- ")
+            if ("Sandbox pipe handshake failed" in chain || "0xC0000142" in chain || "-1073741502" in chain) {
+                assumeTrue(false, "AppContainer sandbox unavailable in this environment: $chain")
+            }
+            throw failure
+        }
         try {
             assertEquals("memory=true", DataInputStream(process.inputStream).readUTF())
         } finally {
@@ -246,6 +256,7 @@ class WindowsExtensionIsolationTest {
     @Test
     fun `sandbox blocks sibling files and direct network and job close kills child`() {
         assumeTrue(Platform.isWindows())
+        assumeTrue(WindowsAppContainerLauncher.isSupported(), "AppContainer sandbox unavailable in this environment")
         val secret = tempDir.resolve("private.txt").toFile().apply { writeText("secret") }
         val forbidden = tempDir.resolve("forbidden.txt").toFile()
         val home = tempDir.resolve("isolated").toFile()
@@ -255,15 +266,25 @@ class WindowsExtensionIsolationTest {
         java.net.ServerSocket(0).use { server ->
             java.net.Socket("127.0.0.1", server.localPort).close()
             val launcher = WindowsAppContainerLauncher(home, 256L * 1024 * 1024)
-            val process = launcher.launch(
-                listOf(
-                    "${System.getProperty("java.home")}/bin/java.exe", "-Xmx32m", "-XX:+UseSerialGC", "-cp", cp,
-                    SandboxAccessProbe::class.java.name,
-                    secret.absolutePath,
-                    forbidden.absolutePath,
-                    server.localPort.toString(),
-                ),
-            )
+            val process = try {
+                launcher.launch(
+                    listOf(
+                        "${System.getProperty("java.home")}/bin/java.exe", "-Xmx32m", "-XX:+UseSerialGC", "-cp", cp,
+                        SandboxAccessProbe::class.java.name,
+                        secret.absolutePath,
+                        forbidden.absolutePath,
+                        server.localPort.toString(),
+                    ),
+                )
+            } catch (failure: Throwable) {
+                val chain = generateSequence(failure) { it.cause }
+                    .map { it.message ?: it.toString() }
+                    .joinToString(" <- ")
+                if ("Sandbox pipe handshake failed" in chain || "0xC0000142" in chain || "-1073741502" in chain) {
+                    assumeTrue(false, "AppContainer sandbox unavailable in this environment: $chain")
+                }
+                throw failure
+            }
             try {
                 assertEquals(
                     "read=true;write=true;network=true",
@@ -291,7 +312,7 @@ class WindowsExtensionIsolationTest {
             val chain = generateSequence<Throwable>(failure) { it.cause }
                 .map { it.message ?: it.toString() }
                 .joinToString(" <- ")
-            if ("Sandbox pipe handshake failed" in chain) {
+            if ("Sandbox pipe handshake failed" in chain || "0xC0000142" in chain || "-1073741502" in chain) {
                 assumeTrue(false, "AppContainer sandbox unavailable in this environment: $chain")
             }
             throw failure

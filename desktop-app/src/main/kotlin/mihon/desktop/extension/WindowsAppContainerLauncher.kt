@@ -2,6 +2,7 @@ package mihon.desktop.extension
 
 import com.sun.jna.Memory
 import com.sun.jna.Native
+import com.sun.jna.Platform
 import com.sun.jna.WString
 import com.sun.jna.platform.win32.Kernel32
 import com.sun.jna.platform.win32.WinBase
@@ -258,6 +259,73 @@ internal class WindowsAppContainerLauncher(
     companion object {
         private val runtimeCaches = mutableMapOf<String, File>()
         private val runtimeUsers = mutableMapOf<String, Int>()
+
+        private val supported: Boolean by lazy {
+            detectAppContainerSupport()
+        }
+
+        fun isSupported(): Boolean = supported
+
+        private fun detectAppContainerSupport(): Boolean {
+            if (!Platform.isWindows()) return false
+            if (isInsideAppxPackage()) return false
+            if (isTempAccessibleByAllPackages()) return false
+            return true
+        }
+
+        private fun isInsideAppxPackage(): Boolean {
+            try {
+                val length = IntByReference(0)
+                // APPMODEL_ERROR_NO_PACKAGE = 15700
+                val rc = WindowsSandboxNative.kernel.GetCurrentPackageFamilyName(length, null)
+                if (rc != 15700) return true
+            } catch (_: Throwable) {
+            }
+            try {
+                var handle: ProcessHandle? = ProcessHandle.current()
+                while (handle != null) {
+                    val command = handle.info().command().orElse("")
+                    if (command.contains("WindowsApps", ignoreCase = true)) {
+                        return true
+                    }
+                    val hProcess = Kernel32.INSTANCE.OpenProcess(0x1000, false, handle.pid().toInt())
+                    if (hProcess != null && hProcess != WinBase.INVALID_HANDLE_VALUE) {
+                        try {
+                            val length = IntByReference(0)
+                            val rc = WindowsSandboxNative.kernel.GetPackageFamilyName(hProcess, length, null)
+                            if (rc != 15700) return true
+                        } finally {
+                            Kernel32.INSTANCE.CloseHandle(hProcess)
+                        }
+                    }
+                    handle = handle.parent().orElse(null)
+                }
+            } catch (_: Throwable) {
+            }
+            val path = System.getenv("PATH").orEmpty()
+            if (path.contains("WindowsApps", ignoreCase = true)) {
+                return true
+            }
+            return false
+        }
+
+        private fun isTempAccessibleByAllPackages(): Boolean {
+            return try {
+                val probe = java.nio.file.Files.createTempDirectory("appcontainer-probe").toFile()
+                try {
+                    val process = ProcessBuilder("icacls", probe.absolutePath)
+                        .redirectErrorStream(true)
+                        .start()
+                    val output = process.inputStream.bufferedReader().readText()
+                    process.waitFor()
+                    output.contains("ALL APPLICATION PACKAGES", ignoreCase = true)
+                } finally {
+                    probe.delete()
+                }
+            } catch (_: Throwable) {
+                false
+            }
+        }
     }
 
     private fun grant(path: File, rights: String) {
