@@ -51,6 +51,7 @@ class DownloadRecoveryTest {
         )
         val network = DesktopNetworkHelper()
         val downloader = DesktopDownloader(store, disk, network)
+        downloader.awaitStartupRecovery()
         try {
             if (missingPages > 0) {
                 downloader.queueState.value.single().status shouldBe DownloadStatus.ERROR
@@ -117,6 +118,7 @@ class DownloadRecoveryTest {
         )
         val network = DesktopNetworkHelper()
         val downloader = DesktopDownloader(store, disk, network)
+        downloader.awaitStartupRecovery()
         try {
             downloader.retry(1)
             withTimeout(5_000) { while (downloader.isRunning.value) delay(10) }

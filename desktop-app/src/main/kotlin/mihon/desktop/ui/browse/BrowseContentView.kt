@@ -20,6 +20,7 @@ import mihon.desktop.DesktopRuntime
 import mihon.desktop.extension.SourceState
 import mihon.desktop.extension.builtin.isLocalSource
 import mihon.desktop.library.model.LibraryChapter
+import mihon.desktop.library.model.LibraryManga
 import mihon.desktop.library.model.MangaDetails
 import mihon.desktop.library.reader.ReaderLibraryPort
 import mihon.desktop.ui.library.ChapterFilterState
@@ -33,6 +34,7 @@ import mihon.desktop.ui.library.MangaDetailActions
 import mihon.desktop.ui.library.MangaDetailScreen
 import mihon.desktop.ui.library.MangaDetailUiState
 import mihon.desktop.ui.library.TriStateFilter
+import mihon.extension.ipc.IpcException
 import mihon.extension.ipc.findNetworkFailure
 import mihon.extension.ipc.toFilterList
 import mihon.extension.ipc.toFilterListDto
@@ -168,6 +170,7 @@ fun BrowseContentView(
                     isLoadingMore = append,
                     errorMessage = null,
                     networkFailure = null,
+                    unsupportedMode = null,
                     mode = mode,
                     page = if (append) sourceUiState.page else page,
                     hasNextPage = append && sourceUiState.hasNextPage,
@@ -184,11 +187,17 @@ fun BrowseContentView(
                                 filters,
                             )
                         }
-                        val inLibrary = withContext(Dispatchers.IO) {
-                            runtime.library.librarySnapshot(null)
-                                .filter { it.sourceId == nav.source.id }.map { it.url }.toSet()
+                        val (inLibrary, chapterCounts) = withContext(Dispatchers.IO) {
+                            val sourceMangas = runtime.library.librarySnapshot(null)
+                                .filter { it.sourceId == nav.source.id }
+                            val inLib = sourceMangas.map { it.url }.toSet()
+                            val counts = if (nav.source.isLocalSource()) {
+                                sourceMangas.associate { it.url to it.chapterCount }
+                            } else {
+                                emptyMap()
+                            }
+                            inLib to counts
                         }
-                        val chapterCounts = loadLocalChapterCounts(runtime, nav.source)
                         currentCoroutineContext().ensureActive()
                         sourceUiState = sourceUiState.copy(
                             isLoading = false,
@@ -204,12 +213,28 @@ fun BrowseContentView(
                         throw cancelled
                     } catch (e: Exception) {
                         currentCoroutineContext().ensureActive()
-                        sourceUiState = sourceUiState.copy(
-                            isLoading = false,
-                            isLoadingMore = false,
-                            errorMessage = e.message ?: "Failed to load source page",
-                            networkFailure = e.findNetworkFailure(),
-                        )
+                        val isUnsupported = generateSequence<Throwable>(e) { it.cause }.any {
+                            it is UnsupportedOperationException ||
+                                (it as? IpcException)?.errorKind == "UnsupportedOperationException" ||
+                                it.message?.startsWith("UnsupportedOperationException") == true
+                        }
+                        if (isUnsupported) {
+                            sourceUiState = sourceUiState.copy(
+                                isLoading = false,
+                                isLoadingMore = false,
+                                unsupportedMode = mode,
+                                errorMessage = null,
+                                networkFailure = null,
+                            )
+                        } else {
+                            sourceUiState = sourceUiState.copy(
+                                isLoading = false,
+                                isLoadingMore = false,
+                                unsupportedMode = null,
+                                errorMessage = e.message ?: "Failed to load source page",
+                                networkFailure = e.findNetworkFailure(),
+                            )
+                        }
                     }
                 }
             }
@@ -370,6 +395,7 @@ fun BrowseContentView(
                 MangaDetailScreen(
                     state = displayedState,
                     actions = detailActions.copy(onReadChapter = onReadChapter),
+                    sourceBaseUrl = nav.source.baseUrl,
                     onBack = {
                         loadJob?.cancel()
                         libraryJob?.cancel()
@@ -504,8 +530,12 @@ private data class OnlineDetailLoadState(
 private suspend fun loadLocalChapterCounts(
     runtime: DesktopRuntime,
     source: SourceDescriptor,
+    sourceMangas: List<LibraryManga>? = null,
 ): Map<String, Long> {
     if (!source.isLocalSource()) return emptyMap()
+    if (sourceMangas != null) {
+        return sourceMangas.associate { it.url to it.chapterCount }
+    }
     return withContext(Dispatchers.IO) {
         runtime.library.librarySnapshot(null)
             .filter { it.sourceId == source.id }

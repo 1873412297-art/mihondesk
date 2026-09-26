@@ -10,6 +10,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -33,6 +34,7 @@ import java.io.IOException
 import java.nio.file.Files
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.atomic.AtomicReference
 
 class DesktopDownloader(
     val store: DownloadStore,
@@ -65,7 +67,10 @@ class DesktopDownloader(
     val storageError: StateFlow<String?> = _storageError.asStateFlow()
     private var lastClaimedSource: Long? = null
 
-    private fun persistQueue() = synchronized(persistenceLock) {
+    private val debouncePersistJob = AtomicReference<Job?>(null)
+
+    private fun persistQueueImmediate() = synchronized(persistenceLock) {
+        debouncePersistJob.getAndSet(null)?.cancel()
         try {
             store.save(_queueState.value)
             _storageError.value = null
@@ -76,6 +81,30 @@ class DesktopDownloader(
             throw error
         }
     }
+
+    private fun persistQueue() = persistQueueImmediate()
+
+    private fun scheduleDebouncedPersist() {
+        if (debouncePersistJob.get() != null) return
+        val job = scope.launch {
+            delay(500)
+            debouncePersistJob.set(null)
+            synchronized(persistenceLock) {
+                try {
+                    store.save(_queueState.value)
+                    _storageError.value = null
+                } catch (error: Exception) {
+                    _storageError.value = "下载队列无法保存，已停止调度：${error.message}"
+                    _isRunning.value = false
+                    downloadJob?.cancel()
+                }
+            }
+        }
+        if (!debouncePersistJob.compareAndSet(null, job)) {
+            job.cancel()
+        }
+    }
+
     private val activeDownloadJobs = ConcurrentHashMap<Long, Job>()
     private val pendingCleanupJobs = ConcurrentHashMap<Long, Job>()
     private val sessionBytes = AtomicLong(0L)
@@ -83,11 +112,39 @@ class DesktopDownloader(
     private var downloadJob: Job? = null
     private var sessionStartedAt = 0L
 
+    val startupRecoveryJob: Job?
+
     init {
         val restored = store.restore()
         diskProvider.adoptLegacyDownloads(restored)
-        _queueState.value = restored.map(::recoverMissingFiles)
-        if (_queueState.value != restored) persistQueue()
+        _queueState.value = restored
+        startupRecoveryJob = if (restored.any { it.status == DownloadStatus.COMPLETED }) {
+            scope.launch(Dispatchers.IO) {
+                var changed = false
+                _queueState.update { currentList ->
+                    currentList.map { download ->
+                        if (download.status == DownloadStatus.COMPLETED) {
+                            val recovered = recoverMissingFiles(download)
+                            if (recovered != download) {
+                                changed = true
+                                recovered
+                            } else {
+                                download
+                            }
+                        } else {
+                            download
+                        }
+                    }
+                }
+                if (changed) persistQueueImmediate()
+            }
+        } else {
+            null
+        }
+    }
+
+    suspend fun awaitStartupRecovery() {
+        startupRecoveryJob?.join()
     }
 
     /** A persisted completion marker cannot outlive either its files or offline database record. */
@@ -670,17 +727,27 @@ class DesktopDownloader(
                 Files.copy(publishedPage, temporaryPage, java.nio.file.StandardCopyOption.REPLACE_EXISTING)
             }
         }
-        val validPages = pages.filter { diskProvider.isValidPage(diskProvider.getPageFile(tempDir, it.index)) }
-        val totalBytes = AtomicLong(validPages.sumOf { Files.size(diskProvider.getPageFile(tempDir, it.index)) })
+        val pageSizes = mutableMapOf<Int, Long>()
+        val validPageIndexes = hashSetOf<Int>()
+        for (page in pages) {
+            val pageFile = diskProvider.getPageFile(tempDir, page.index)
+            if (diskProvider.isValidPage(pageFile)) {
+                val size = Files.size(pageFile)
+                pageSizes[page.index] = size
+                validPageIndexes.add(page.index)
+            }
+        }
+        val totalBytes = AtomicLong(pageSizes.values.sum())
         updateDownload(download.chapterId) { item ->
             item.copy(
                 bytesDownloaded = totalBytes.get(),
                 pages = item.pages.map { page ->
-                    if (validPages.any { it.index == page.index }) {
+                    val size = pageSizes[page.index]
+                    if (size != null) {
                         page.copy(
                             status = PageStatus.READY,
                             progress = 1f,
-                            bytesWritten = Files.size(diskProvider.getPageFile(tempDir, page.index)),
+                            bytesWritten = size,
                             error = null,
                         )
                     } else {
@@ -695,13 +762,14 @@ class DesktopDownloader(
             pages.map { page ->
                 async {
                     pageSemaphore.withPermit {
-                        if (validPages.any { it.index == page.index }) {
+                        val existingSize = pageSizes[page.index]
+                        if (existingSize != null) {
                             updatePageStatus(
                                 download.chapterId,
                                 page.index,
                                 PageStatus.READY,
                                 1.0f,
-                                bytesWritten = Files.size(diskProvider.getPageFile(tempDir, page.index)),
+                                bytesWritten = existingSize,
                             )
                             return@withPermit
                         }
@@ -795,25 +863,35 @@ class DesktopDownloader(
         throw IllegalStateException("No page list fetcher available")
     }
 
-    @Synchronized
-    private fun updateDownload(chapterId: Long, transform: (DesktopDownload) -> DesktopDownload): DesktopDownload? {
+    private fun updateDownload(
+        chapterId: Long,
+        persistImmediately: Boolean = false,
+        transform: (DesktopDownload) -> DesktopDownload,
+    ): DesktopDownload? {
         var updatedItem: DesktopDownload? = null
         _queueState.update { list ->
-            list.map { item ->
-                if (item.chapterId == chapterId) {
-                    val updated = transform(item)
-                    val readyCount = updated.pages.count { it.status == PageStatus.READY }
-                    val progress = if (updated.pages.isNotEmpty()) readyCount.toFloat() / updated.pages.size else 0f
-                    val finalItem = updated.copy(progress = progress)
-                    updatedItem = finalItem
-                    finalItem
-                } else {
-                    item
-                }
-            }
+            val index = list.indexOfFirst { it.chapterId == chapterId }
+            if (index == -1) return@update list
+            val item = list[index]
+            val updated = transform(item)
+            val readyCount = updated.pages.count { it.status == PageStatus.READY }
+            val progress = if (updated.pages.isNotEmpty()) readyCount.toFloat() / updated.pages.size else 0f
+            val finalItem = updated.copy(progress = progress)
+            updatedItem = finalItem
+            val mutable = list.toMutableList()
+            mutable[index] = finalItem
+            mutable
         }
-        persistQueue()
-        return updatedItem
+        val item = updatedItem
+        val persistNow =
+            persistImmediately ||
+                (item != null && (item.status == DownloadStatus.COMPLETED || item.status == DownloadStatus.ERROR))
+        if (persistNow) {
+            persistQueueImmediate()
+        } else {
+            scheduleDebouncedPersist()
+        }
+        return item
     }
 
     private fun updatePageStatus(
@@ -825,19 +903,17 @@ class DesktopDownloader(
         bytesWritten: Long? = null,
     ) {
         updateDownload(chapterId) { download ->
-            val updatedPages = download.pages.map { p ->
-                if (p.index == pageIndex) {
-                    p.copy(
-                        status = status,
-                        progress = progress,
-                        error = error,
-                        bytesWritten = bytesWritten ?: p.bytesWritten,
-                    )
-                } else {
-                    p
-                }
-            }
-            download.copy(pages = updatedPages)
+            val pageIdx = download.pages.indexOfFirst { it.index == pageIndex }
+            if (pageIdx == -1) return@updateDownload download
+            val mutablePages = download.pages.toMutableList()
+            val p = mutablePages[pageIdx]
+            mutablePages[pageIdx] = p.copy(
+                status = status,
+                progress = progress,
+                error = error,
+                bytesWritten = bytesWritten ?: p.bytesWritten,
+            )
+            download.copy(pages = mutablePages)
         }
     }
 

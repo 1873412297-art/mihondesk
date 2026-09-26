@@ -74,6 +74,7 @@ data class BrowseSourceUiState(
     val filterList: FilterList = FilterList(),
     val defaultFilterList: FilterList? = null,
     val isFilterDialogOpen: Boolean = false,
+    val unsupportedMode: SourceListingMode? = null,
 ) {
     val activeFilterCount: Int
         get() {
@@ -257,6 +258,20 @@ fun BrowseSourceScreen(
             Box(modifier = Modifier.fillMaxSize().weight(1f), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(modifier = Modifier.testTag("source-loading-indicator"))
             }
+        } else if (state.unsupportedMode != null) {
+            Box(modifier = Modifier.fillMaxSize().weight(1f), contentAlignment = Alignment.Center) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.padding(16.dp).testTag("source-unsupported-message"),
+                ) {
+                    Text(
+                        strings.browseSourceUnsupportedOperation(state.unsupportedMode),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
         } else if (state.mangas.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize().weight(1f), contentAlignment = Alignment.Center) {
                 Column(
@@ -279,6 +294,9 @@ fun BrowseSourceScreen(
                 }
             }
         } else {
+            val gridCoverHeaders = remember(state.source.baseUrl) {
+                mihon.desktop.ui.common.coverHeaders(state.source.baseUrl, null)
+            }
             LazyVerticalGrid(
                 state = gridState,
                 columns = GridCells.Adaptive(180.dp),
@@ -307,6 +325,7 @@ fun BrowseSourceScreen(
                                     thumbnailUrl = manga.thumbnailUrl,
                                     contentDescription = manga.title,
                                     modifier = Modifier.fillMaxSize(),
+                                    headers = gridCoverHeaders,
                                 )
                                 if (inLibrary) {
                                     Surface(

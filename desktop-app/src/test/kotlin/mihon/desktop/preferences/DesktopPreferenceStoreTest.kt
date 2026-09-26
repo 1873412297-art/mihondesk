@@ -195,4 +195,43 @@ class DesktopPreferenceStoreTest {
         loaded.syncServerSelectedIp shouldBe "10.0.0.42"
         loaded.runInBackgroundOnClose shouldBe true
     }
+
+    @Test
+    fun `cached preferences are reused and invalidated on save and update`() {
+        val file = tempDir.resolve("preferences-cache.properties")
+        val store = DesktopPreferenceStore(file)
+        val initial = DesktopPreferences(themeMode = ThemeMode.Light)
+        store.save(initial)
+
+        val firstLoad = store.load()
+        firstLoad shouldBe initial
+
+        // External modification is picked up via file-stamp validation
+        Files.writeString(file, "theme=Dark\n")
+        val refreshedLoad = store.load()
+        refreshedLoad.themeMode shouldBe ThemeMode.Dark
+
+        // save() updates cache immediately
+        val updated = DesktopPreferences(themeMode = ThemeMode.System)
+        store.save(updated)
+        store.load().themeMode shouldBe ThemeMode.System
+
+        // update() invalidates and applies mutation
+        store.update { setProperty("theme", "Dark") }
+        store.load().themeMode shouldBe ThemeMode.Dark
+    }
+
+    @Test
+    fun `writes from one store instance are visible to another instance on the same file`() {
+        val file = tempDir.resolve("preferences-shared.properties")
+        val writer = DesktopPreferenceStore(file)
+        val reader = DesktopPreferenceStore(file)
+
+        writer.update { setProperty("theme", "Dark") }
+        reader.property("theme") shouldBe "Dark"
+
+        writer.update { setProperty("theme", "Light") }
+        reader.property("theme") shouldBe "Light"
+        reader.load().themeMode shouldBe ThemeMode.Light
+    }
 }

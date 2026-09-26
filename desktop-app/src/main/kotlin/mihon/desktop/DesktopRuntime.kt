@@ -351,7 +351,8 @@ object DesktopRuntimeFactory {
                 preferenceStore = preferences,
                 policyProvider = { DesktopNetworkSettingsStore(preferences).load() },
             )
-            extensionInstaller.getInstalledExtensions().filter { it.isEnabled }.forEach { ext ->
+            val installedExtensions = extensionInstaller.reconcileInstalledExtensions()
+            installedExtensions.filter { it.isEnabled }.forEach { ext ->
                 networkHelper.registerExtensionDomains(ext.pkg, ext.manifest.declaredDomains)
             }
 
@@ -496,8 +497,9 @@ object DesktopRuntimeFactory {
             val backgroundScheduler = packagedExecutable?.let {
                 mihon.desktop.platform.WindowsBackgroundScheduler(it, directories.root)
             }
-            if (command == DesktopCommand.LaunchUi && preferences.load().backgroundTasksEnabled) {
-                val schedulePreferences = preferences.load()
+            val launchPreferences = preferences.load()
+            if (command == DesktopCommand.LaunchUi && launchPreferences.backgroundTasksEnabled) {
+                val schedulePreferences = launchPreferences
                 runCatching {
                     backgroundScheduler?.reconcile(
                         true,

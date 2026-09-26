@@ -267,6 +267,11 @@ fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
             runtime.sourceManager.getSources().associate { it.id to it.name }
         }.getOrDefault(emptyMap())
     }
+    val sourceBaseUrls = remember(runtime.sourceManager, libraryState.items) {
+        runCatching {
+            runtime.sourceManager.getSources().associate { it.id to it.baseUrl }
+        }.getOrDefault(emptyMap())
+    }
     val upcomingPresenter = remember(runtime.library) {
         UpcomingPresenter(
             repository = runtime.library,
@@ -998,6 +1003,7 @@ fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
                                         sourceNameFor = { sourceId ->
                                             sourceNames[sourceId] ?: strings.text(UiText.SourceFallback, sourceId)
                                         },
+                                        sourceBaseUrlFor = { sourceId -> sourceBaseUrls[sourceId] },
                                         downloadCacheCleaner = runtime.downloadCacheCleaner,
                                         downloadsDir = runtime.downloader?.diskProvider?.downloadsDir
                                             ?: runtime.directories.root.resolve("media").resolve("downloads"),

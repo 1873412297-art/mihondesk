@@ -16,7 +16,7 @@ data class DownloadRecoveryReport(val message: String, val recoveredFrom: Path? 
 class DownloadStore(
     private val storeFile: Path,
     private val json: Json = Json {
-        prettyPrint = true
+        prettyPrint = false
         ignoreUnknownKeys = true
     },
 ) {
@@ -25,9 +25,19 @@ class DownloadStore(
     private val _recoveryReport = MutableStateFlow<DownloadRecoveryReport?>(null)
     val recoveryReport: StateFlow<DownloadRecoveryReport?> = _recoveryReport.asStateFlow()
 
+    private var lastWrittenSize: Long? = null
+    private var lastWrittenMtime: Long? = null
+
     fun save(queue: List<DesktopDownload>) = synchronized(lock) {
         storeFile.parent?.let { Files.createDirectories(it) }
-        if (Files.exists(storeFile)) {
+        val currentSize = if (Files.exists(storeFile)) Files.size(storeFile) else null
+        val currentMtime = if (Files.exists(storeFile)) Files.getLastModifiedTime(storeFile).toMillis() else null
+        val isKnownClean = lastWrittenSize != null &&
+            currentSize == lastWrittenSize &&
+            currentMtime == lastWrittenMtime &&
+            Files.exists(backupFile)
+
+        if (Files.exists(storeFile) && !isKnownClean) {
             if (runCatching { decode(storeFile) }.isSuccess) {
                 atomicWrite(backupFile, Files.readString(storeFile))
             } else {
@@ -37,7 +47,10 @@ class DownloadStore(
                     DownloadRecoveryReport("下载队列损坏，已保留原文件", backupFile.takeIf { Files.exists(it) }, preserved)
             }
         }
-        atomicWrite(storeFile, json.encodeToString(queue))
+        val encoded = json.encodeToString(queue)
+        atomicWrite(storeFile, encoded)
+        lastWrittenSize = Files.size(storeFile)
+        lastWrittenMtime = Files.getLastModifiedTime(storeFile).toMillis()
     }
 
     private fun atomicWrite(file: Path, content: String) {
@@ -59,16 +72,19 @@ class DownloadStore(
     fun restore(): List<DesktopDownload> = synchronized(lock) {
         _recoveryReport.value = null
         val raw = if (!Files.exists(storeFile) && !Files.exists(backupFile)) {
+            lastWrittenSize = null
+            lastWrittenMtime = null
             emptyList()
         } else {
             try {
-                decode(storeFile)
+                val decoded = decode(storeFile)
+                lastWrittenSize = Files.size(storeFile)
+                lastWrittenMtime = Files.getLastModifiedTime(storeFile).toMillis()
+                decoded
             } catch (error: Exception) {
                 val backup = runCatching { decode(backupFile) }.getOrNull()
                 _recoveryReport.value = DownloadRecoveryReport(
-                    if (backup !=
-                        null
-                    ) {
+                    if (backup != null) {
                         "下载队列无法读取，已从最近有效快照恢复：${error.message}"
                     } else {
                         "下载队列及快照无法读取，原文件已保留：${error.message}"
@@ -76,6 +92,8 @@ class DownloadStore(
                     recoveredFrom = backupFile.takeIf { backup != null },
                     preservedFile = storeFile.takeIf { Files.exists(it) },
                 )
+                lastWrittenSize = null
+                lastWrittenMtime = null
                 backup.orEmpty()
             }
         }
@@ -85,6 +103,8 @@ class DownloadStore(
     fun clear() = synchronized(lock) {
         Files.deleteIfExists(storeFile)
         Files.deleteIfExists(backupFile)
+        lastWrittenSize = null
+        lastWrittenMtime = null
         _recoveryReport.value = null
     }
 }

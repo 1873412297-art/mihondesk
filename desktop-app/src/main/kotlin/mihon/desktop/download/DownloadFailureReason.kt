@@ -23,6 +23,7 @@ enum class DownloadFailureReason {
     SITE_BLOCKED,
     DOMAIN_DENIED,
     SOURCE_UNAVAILABLE,
+    EXTENSION_MISSING,
     EMPTY_CHAPTER,
     INVALID_IMAGE,
     STORAGE_FULL,
@@ -63,6 +64,11 @@ fun classifyDownloadFailure(error: Throwable): DownloadFailureReason {
         chain.any { it is SocketTimeoutException } -> DownloadFailureReason.TIMEOUT
         chain.any { it is UnknownHostException } -> DownloadFailureReason.OFFLINE
         chain.any { it is AccessDeniedException } -> DownloadFailureReason.STORAGE_ACCESS
+        chain.any {
+            val msg = it.message.orEmpty().lowercase(java.util.Locale.ROOT)
+            "extension package file missing" in msg || "扩展包文件缺失" in msg ||
+                "please reinstall the extension" in msg || "请重新安装该扩展" in msg
+        } -> DownloadFailureReason.EXTENSION_MISSING
         else -> classifyDownloadFailure(chain.joinToString("\n") { it.message.orEmpty() })
     }
 }
@@ -72,6 +78,9 @@ fun classifyDownloadFailure(message: String?): DownloadFailureReason {
     val text = message.orEmpty().lowercase(java.util.Locale.ROOT)
     return when {
         "access denied: domain" in text || "domain_denied" in text -> DownloadFailureReason.DOMAIN_DENIED
+        "extension package file missing" in text || "扩展包文件缺失" in text ||
+            "please reinstall the extension" in text || "请重新安装该扩展" in text ->
+            DownloadFailureReason.EXTENSION_MISSING
         "no isolated host registered" in text || ("source with id" in text && "not found" in text) ||
             "source unavailable" in text -> DownloadFailureReason.SOURCE_UNAVAILABLE
         "tls:" in text || "sslhandshakeexception" in text || "terminated the handshake" in text ->

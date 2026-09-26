@@ -125,6 +125,8 @@ class ExtensionHostEngineTest {
 
         override suspend fun searchManga(page: Int, query: String, filters: FilterList): MangasPage {
             if (query == "error") throw IllegalStateException("Search forced failure")
+            if (query == "uoe") throw UnsupportedOperationException()
+            if (query == "npe") throw NullPointerException()
             return MangasPage(
                 mangas = listOf(SManga(url = "/manga/search", title = "Query: $query")),
                 hasNextPage = false,
@@ -272,7 +274,27 @@ class ExtensionHostEngineTest {
             )
             unknownSourceRes.success shouldBe false
             unknownSourceRes.error shouldContain "Source with ID 9999 not found"
+
+            val uoeRes = engine.handleRequest(
+                IpcRequest(3, IpcCommands.SEARCH_MANGA, json.encodeToString(SearchPayload(1001L, 1, "uoe"))),
+            )
+            uoeRes.success shouldBe false
+            uoeRes.errorKind shouldBe "UnsupportedOperationException"
+            uoeRes.error shouldContain "UnsupportedOperationException at "
+
+            val npeRes = engine.handleRequest(
+                IpcRequest(4, IpcCommands.SEARCH_MANGA, json.encodeToString(SearchPayload(1001L, 1, "npe"))),
+            )
+            npeRes.success shouldBe false
+            npeRes.errorKind shouldBe "NullPointerException"
+            npeRes.error shouldContain "NullPointerException at "
         }
+    }
+
+    @Test
+    fun `engine initializes http agent system property`() {
+        ExtensionHostEngine(BrokeredHttpClient { null })
+        System.getProperty("http.agent") shouldBe eu.kanade.tachiyomi.network.NetworkHelper.DEFAULT_USER_AGENT
     }
 
     @Test

@@ -27,6 +27,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.Key
@@ -44,6 +45,7 @@ import mihon.desktop.i18n.LocalStrings
 import mihon.desktop.ui.common.ErrorDetails
 import mihon.desktop.ui.common.FailureExplanation
 import mihon.desktop.ui.common.MangaCover
+import mihon.desktop.ui.common.coverHeaders
 import mihon.extension.model.SourceDescriptor
 import mihon.extension.source.model.SManga
 
@@ -182,6 +184,9 @@ fun GlobalSearchScreen(
                                 modifier = Modifier.padding(vertical = 8.dp),
                             )
                         } else if (item.mangas.isNotEmpty()) {
+                            val rowCoverHeaders = remember(item.source.baseUrl) {
+                                coverHeaders(item.source.baseUrl, null)
+                            }
                             LazyRow(
                                 modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
                                 horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -200,6 +205,7 @@ fun GlobalSearchScreen(
                                                 thumbnailUrl = manga.thumbnailUrl,
                                                 contentDescription = manga.title,
                                                 modifier = Modifier.fillMaxWidth().height(175.dp),
+                                                headers = rowCoverHeaders,
                                             )
                                             Text(
                                                 text = manga.title,

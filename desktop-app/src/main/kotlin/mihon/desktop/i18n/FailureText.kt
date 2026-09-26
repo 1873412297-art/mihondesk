@@ -15,6 +15,7 @@ internal val DownloadFailureReason.title: UiText
         DownloadFailureReason.SITE_BLOCKED -> UiText.FailureBlocked
         DownloadFailureReason.DOMAIN_DENIED -> UiText.FailureDomain
         DownloadFailureReason.SOURCE_UNAVAILABLE -> UiText.FailureSource
+        DownloadFailureReason.EXTENSION_MISSING -> UiText.FailureExtensionMissing
         DownloadFailureReason.EMPTY_CHAPTER -> UiText.FailureEmpty
         DownloadFailureReason.INVALID_IMAGE -> UiText.FailureImage
         DownloadFailureReason.STORAGE_FULL -> UiText.FailureSpace
@@ -36,6 +37,7 @@ internal val DownloadFailureReason.hint: UiText
         DownloadFailureReason.SITE_BLOCKED -> UiText.HintBlocked
         DownloadFailureReason.DOMAIN_DENIED -> UiText.HintDomain
         DownloadFailureReason.SOURCE_UNAVAILABLE -> UiText.HintSource
+        DownloadFailureReason.EXTENSION_MISSING -> UiText.HintExtensionMissing
         DownloadFailureReason.EMPTY_CHAPTER, DownloadFailureReason.INVALID_IMAGE -> UiText.HintSourcePage
         DownloadFailureReason.STORAGE_FULL -> UiText.HintSpace
         DownloadFailureReason.STORAGE_ACCESS -> UiText.HintStorage

@@ -180,9 +180,11 @@ class IpcSessionTest {
         )
 
         try {
-            assertThrows<IpcException> {
+            val ex = assertThrows<IpcException> {
                 mainSession.sendRequest("slow", timeoutMillis = 50)
             }
+            ex.message shouldContain "timed out"
+            ex.isTimeout shouldBe true
         } finally {
             mainSession.close()
             hostSession.close()

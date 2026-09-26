@@ -13,7 +13,7 @@ class CoverFailureRegistryTest {
     }
 
     @Test
-    fun `records only 404 and 410 error codes`() {
+    fun `records only 403, 404, and 410 error codes`() {
         CoverFailureRegistry.record(1L, "https://example.com/cover1.jpg", 404)
         CoverFailureRegistry.record(2L, "https://example.com/cover2.jpg", 410)
         CoverFailureRegistry.record(3L, "https://example.com/cover3.jpg", 200)
@@ -23,9 +23,10 @@ class CoverFailureRegistryTest {
         CoverFailureRegistry.record(7L, "https://example.com/cover7.jpg", 502)
 
         val snapshot = CoverFailureRegistry.snapshot()
-        snapshot.size shouldBe 2
+        snapshot.size shouldBe 3
         snapshot[1L] shouldBe "https://example.com/cover1.jpg"
         snapshot[2L] shouldBe "https://example.com/cover2.jpg"
+        snapshot[4L] shouldBe "https://example.com/cover4.jpg"
     }
 
     @Test

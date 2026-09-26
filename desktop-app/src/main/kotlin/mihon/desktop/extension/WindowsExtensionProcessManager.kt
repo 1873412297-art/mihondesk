@@ -37,6 +37,7 @@ import mihon.extension.ipc.decodeFilterList
 import mihon.extension.ipc.decodeSourcePreferenceValue
 import mihon.extension.ipc.decodeSourcePreferences
 import mihon.extension.ipc.encodeFilterList
+import mihon.extension.model.ExtensionManifest
 import mihon.extension.model.SourceDescriptor
 import mihon.extension.source.model.FilterList
 import mihon.extension.source.model.MangasPage
@@ -107,7 +108,7 @@ open class WindowsExtensionProcessManager(
     private var lastStderr: String = ""
         private set
 
-    suspend fun start() = mutex.withLock {
+    open suspend fun start() = mutex.withLock {
         if (state == HostProcessState.RUNNING && process?.isAlive == true && session != null) return@withLock
         if (state == HostProcessState.RUNNING) {
             closeInternal()
@@ -203,11 +204,7 @@ open class WindowsExtensionProcessManager(
         scope.launch(Dispatchers.IO) {
             val code = proc.waitFor()
             lastExitCode = code
-            lastStderr = try {
-                stderrLog.readText().trim().take(8192)
-            } catch (_: Exception) {
-                ""
-            }
+            lastStderr = readStderrTail(stderrLog)
             if (process === proc && (state == HostProcessState.RUNNING || state == HostProcessState.STARTING)) {
                 state = HostProcessState.CRASHED
                 try {
@@ -231,14 +228,26 @@ open class WindowsExtensionProcessManager(
             closeInternal()
             // Give a moment for stderr to flush to file
             kotlinx.coroutines.delay(300)
-            lastStderr = try {
-                stderrLog.readText().trim().take(8192)
-            } catch (_: Exception) {
-                ""
-            }
+            lastStderr = readStderrTail(stderrLog)
             state = HostProcessState.CRASHED
             val stderrInfo = if (lastStderr.isNotEmpty()) "\nStderr: $lastStderr" else ""
             throw IpcException("Failed to establish IPC handshake with extension host: ${e.message}$stderrInfo", e)
+        }
+    }
+
+    private fun readStderrTail(file: File, maxBytes: Int = 16384): String {
+        if (!file.exists()) return ""
+        return try {
+            java.io.RandomAccessFile(file, "r").use { raf ->
+                val length = raf.length()
+                val seekPos = maxOf(0L, length - maxBytes)
+                raf.seek(seekPos)
+                val buffer = ByteArray((length - seekPos).toInt())
+                raf.readFully(buffer)
+                String(buffer, Charsets.UTF_8).trim().takeLast(8192)
+            }
+        } catch (_: Exception) {
+            ""
         }
     }
 
@@ -269,13 +278,30 @@ open class WindowsExtensionProcessManager(
         }
     }
 
-    open suspend fun loadExtension(packageFile: File): List<SourceDescriptor> {
+    open suspend fun loadExtension(packageFile: File): List<SourceDescriptor> =
+        loadExtensionInternal(packageFile, null)
+
+    open suspend fun loadExtension(
+        packageFile: File,
+        validatedManifest: ExtensionManifest?,
+    ): List<SourceDescriptor> {
+        if (validatedManifest == null) {
+            return loadExtension(packageFile)
+        }
+        return loadExtensionInternal(packageFile, validatedManifest)
+    }
+
+    private suspend fun loadExtensionInternal(
+        packageFile: File,
+        validatedManifest: ExtensionManifest?,
+    ): List<SourceDescriptor> {
         if (routesPackages) {
+            val manifest = validatedManifest
+                ?: mihon.extension.validator.ExtensionPackageValidator.validatePackage(packageFile)
             return routingMutex.withLock {
-                val manifest = mihon.extension.validator.ExtensionPackageValidator.validatePackage(packageFile)
                 packageHosts[manifest.id]?.let { existing ->
                     val current = existing.getSources()
-                    val sources = if (current.isNotEmpty()) current else existing.loadExtension(packageFile)
+                    val sources = if (current.isNotEmpty()) current else existing.loadExtension(packageFile, manifest)
                     registerRoutes(existing, sources)
                     return@withLock sources
                 }
@@ -292,7 +318,7 @@ open class WindowsExtensionProcessManager(
                     isolatedLeaf = true,
                 )
                 try {
-                    val sources = child.loadExtension(packageFile)
+                    val sources = child.loadExtension(packageFile, manifest)
                     registerRoutes(child, sources)
                     packageHosts[manifest.id] = child
                     packageFiles[manifest.id] = packageFile
@@ -304,7 +330,8 @@ open class WindowsExtensionProcessManager(
             }
         }
         val session = ensureRunningSession()
-        val manifest = mihon.extension.validator.ExtensionPackageValidator.validatePackage(packageFile)
+        val manifest = validatedManifest
+            ?: mihon.extension.validator.ExtensionPackageValidator.validatePackage(packageFile)
         brokerPackages.add(manifest.id)
         networkHelper?.registerExtensionDomains(manifest.id, ExtensionPackageDomains.resolve(packageFile, manifest))
         manifest.sources.forEach { source ->
@@ -380,11 +407,22 @@ open class WindowsExtensionProcessManager(
     open suspend fun getSources(): List<SourceDescriptor> {
         if (routesPackages) {
             ensureRunningSession()
-            return routingMutex.withLock {
-                packageHosts.entries.flatMap { (pkg, child) ->
-                    child.getSources().ifEmpty { child.loadExtension(packageFiles.getValue(pkg)) }
-                        .also { registerRoutes(child, it) }
+            val hostsSnapshot = routingMutex.withLock {
+                packageHosts.entries.map { (pkg, child) -> Triple(pkg, child, packageFiles[pkg]) }
+            }
+            return hostsSnapshot.flatMap { (pkg, child, file) ->
+                val current = child.getSources()
+                val sources = if (current.isNotEmpty()) {
+                    current
+                } else {
+                    file?.let { child.loadExtension(it) }.orEmpty()
                 }
+                routingMutex.withLock {
+                    if (packageHosts[pkg] === child) {
+                        registerRoutes(child, sources)
+                    }
+                }
+                sources
             }
         }
         val session = ensureRunningSession()
@@ -470,7 +508,7 @@ open class WindowsExtensionProcessManager(
             timeoutMillis = 120_000L,
         )
         val name = json.decodeFromString<ImageFilePayload>(response).fileName ?: return null
-        require(name.matches(Regex("page-[a-zA-Z0-9-]+\\.img"))) { "Invalid image transfer filename" }
+        require(name.matches(PAGE_IMAGE_REGEX)) { "Invalid image transfer filename" }
         val file = File(hostWorkingDirectory, "page-images/$name")
         try {
             require(file.length() <= 64L * 1024 * 1024) { "Source image exceeds 64 MiB" }
@@ -559,7 +597,10 @@ open class WindowsExtensionProcessManager(
         brokerPackages.clear()
         brokerSources.clear()
         File(hostWorkingDirectory, "broker-responses").listFiles()?.filter {
-            it.isFile && it.name.matches(Regex("broker-[a-zA-Z0-9-]+\\.bin"))
+            it.isFile && it.name.matches(BROKER_RESPONSE_REGEX)
+        }?.forEach { it.delete() }
+        File(hostWorkingDirectory, "page-images").listFiles()?.filter {
+            it.isFile && it.name.matches(PAGE_IMAGE_REGEX)
         }?.forEach { it.delete() }
     }
 
@@ -634,5 +675,10 @@ open class WindowsExtensionProcessManager(
             "mihon.extension.host.MainKt",
             "--stdio",
         )
+    }
+
+    companion object {
+        private val PAGE_IMAGE_REGEX = Regex("^page-[a-zA-Z0-9-]+\\.img$")
+        private val BROKER_RESPONSE_REGEX = Regex("^broker-[a-zA-Z0-9-]+\\.bin$")
     }
 }

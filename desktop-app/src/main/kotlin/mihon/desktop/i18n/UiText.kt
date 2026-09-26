@@ -166,6 +166,7 @@ enum class UiText(val english: String, val simplified: String, val traditional: 
     FailureBlocked("Website blocked access", "网站已封锁访问", "網站已封鎖存取"),
     FailureDomain("Extension domain permission is missing", "扩展缺少此图片域名的访问权限", "擴充套件缺少此圖片網域的存取權限"),
     FailureSource("Source is unavailable", "图源暂时不可用", "圖源暫時無法使用"),
+    FailureExtensionMissing("Extension package file missing", "扩展包文件缺失", "擴充包檔案缺失"),
     FailureEmpty("Chapter has no pages", "图源没有返回章节图片", "圖源沒有傳回章節圖片"),
     FailureImage("Page is not a valid image", "返回的页面不是有效图片", "傳回的頁面不是有效圖片"),
     FailureSpace("Not enough disk space", "下载磁盘空间不足", "下載磁碟空間不足"),
@@ -208,6 +209,11 @@ enum class UiText(val english: String, val simplified: String, val traditional: 
         "Check that the source extension is installed and enabled, then retry.",
         "请在图源中确认对应扩展已安装并启用，再重试。",
         "請在圖源中確認對應擴充套件已安裝並啟用，再重試。",
+    ),
+    HintExtensionMissing(
+        "The extension package file was not found on disk. Please reinstall the extension.",
+        "未在磁盘上找到扩展包文件，请重新安装该扩展。",
+        "未在磁碟上找到擴充包檔案，請重新安裝該擴充。",
     ),
     HintSourcePage(
         "Check this chapter on the source website and check for an extension update.",

@@ -51,6 +51,7 @@ class DesktopSourceManagerTest {
         var lookups = 0
         var requests = 0
         val process = object : WindowsExtensionProcessManager(tempDir.resolve("host").toFile()) {
+            override suspend fun start() {}
             override suspend fun loadExtension(packageFile: File): List<SourceDescriptor> {
                 loads++
                 return listOf(source)
@@ -199,6 +200,8 @@ class DesktopSourceManagerTest {
             var hostSources = emptyList<mihon.extension.model.SourceDescriptor>()
             val processWorkDir = tempDir.resolve("work").toFile()
             val customProcManager = object : WindowsExtensionProcessManager(processWorkDir) {
+                override suspend fun start() {}
+
                 override suspend fun loadExtension(
                     packageFile: java.io.File,
                 ): List<mihon.extension.model.SourceDescriptor> {
@@ -266,6 +269,8 @@ class DesktopSourceManagerTest {
             var loadedCount = 0
             var hostSources = emptyList<mihon.extension.model.SourceDescriptor>()
             val process = object : WindowsExtensionProcessManager(tempDir.resolve("host").toFile()) {
+                override suspend fun start() {}
+
                 override suspend fun loadExtension(
                     packageFile: java.io.File,
                 ): List<mihon.extension.model.SourceDescriptor> {
@@ -322,6 +327,8 @@ class DesktopSourceManagerTest {
             var loadCount = 0
             var popularAttempts = 0
             val processManager = object : WindowsExtensionProcessManager(tempDir.resolve("host").toFile()) {
+                override suspend fun start() {}
+
                 override suspend fun loadExtension(packageFile: File): List<SourceDescriptor> {
                     loadCount++
                     hostSources = manifest.sources
@@ -543,6 +550,68 @@ class DesktopSourceManagerTest {
         manager.registerBuiltinSource(BundledMangaDexSource())
         manager.clearSourceCookies(BundledMangaDexSource.MANGADEX_SOURCE_ID) shouldBe 1
         cookieStore.getDomainConfig("api.mangadex.org") shouldBe null
+    }
+
+    @Test
+    fun `loadSource throws IllegalStateException and unloads package when package file is missing`(
+        @TempDir tempDir: Path,
+    ) = runBlocking {
+        val source = SourceDescriptor(9123L, "MissingPkg", "en", "fixture.Source")
+        val manifest = ExtensionManifest("ext.missingpkg", "MissingPkg", "1.0", 1, 1.4, "en", sources = listOf(source))
+        val preferences = DesktopPreferenceStore(tempDir.resolve("preferences.properties"))
+        val installer = DesktopExtensionInstaller(tempDir.resolve("extensions").toFile(), preferences)
+        val file = tempDir.resolve("missingpkg.mext").toFile()
+        writeMext(file, manifest)
+        val installed = installer.installFromLocalFile(file, trustOnInstall = true)
+
+        val process = object : WindowsExtensionProcessManager(tempDir.resolve("host").toFile()) {
+            override suspend fun start() {}
+            override suspend fun loadExtension(packageFile: File): List<SourceDescriptor> = listOf(source)
+            override suspend fun getSources(): List<SourceDescriptor> = listOf(source)
+        }
+
+        DesktopSourceManager(installer, process, preferences).use { manager ->
+            manager.loadSource(source.id)
+
+            File(installed.packageFile).delete() shouldBe true
+
+            val ex = assertThrows<IllegalStateException> {
+                manager.loadSource(source.id)
+            }
+            ex.message shouldBe "扩展包文件缺失：${installed.packageFile}，请重新安装该扩展"
+        }
+    }
+
+    @Test
+    fun `withLoadedExtensionSource fails fast with actionable message when package file is missing`(
+        @TempDir tempDir: Path,
+    ) = runBlocking {
+        val source = SourceDescriptor(9124L, "MissingRoute", "en", "fixture.Source")
+        val manifest =
+            ExtensionManifest("ext.missingroute", "MissingRoute", "1.0", 1, 1.4, "en", sources = listOf(source))
+        val preferences = DesktopPreferenceStore(tempDir.resolve("preferences.properties"))
+        val installer = DesktopExtensionInstaller(tempDir.resolve("extensions").toFile(), preferences)
+        val file = tempDir.resolve("missingroute.mext").toFile()
+        writeMext(file, manifest)
+        val installed = installer.installFromLocalFile(file, trustOnInstall = true)
+
+        val process = object : WindowsExtensionProcessManager(tempDir.resolve("host").toFile()) {
+            override suspend fun start() {}
+            override suspend fun loadExtension(packageFile: File): List<SourceDescriptor> = listOf(source)
+            override suspend fun getSources(): List<SourceDescriptor> = emptyList()
+            override suspend fun getPopular(sourceId: Long, page: Int): MangasPage {
+                throw IpcException("No isolated host registered for source $sourceId")
+            }
+        }
+
+        File(installed.packageFile).delete() shouldBe true
+
+        DesktopSourceManager(installer, process, preferences).use { manager ->
+            val ex = assertThrows<IllegalStateException> {
+                manager.getPopular(source.id, 1)
+            }
+            ex.message shouldBe "扩展包文件缺失：${installed.packageFile}，请重新安装该扩展"
+        }
     }
 
     private fun writeMext(file: File, manifest: ExtensionManifest) {

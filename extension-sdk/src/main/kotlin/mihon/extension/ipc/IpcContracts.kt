@@ -22,6 +22,7 @@ data class IpcResponse(
     val payloadJson: String = "",
     val error: String? = null,
     val networkFailure: NetworkFailure? = null,
+    val errorKind: String? = null,
 ) : IpcMessage
 
 @Serializable

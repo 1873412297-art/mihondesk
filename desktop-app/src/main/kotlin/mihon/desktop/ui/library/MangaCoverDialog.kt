@@ -67,6 +67,7 @@ fun MangaCoverDialog(
     onChangeCover: () -> Unit,
     onResetCover: () -> Unit,
     coverFileProvider: () -> Path? = { null },
+    headers: Map<String, String> = emptyMap(),
     modifier: Modifier = Modifier,
 ) {
     val strings = LocalStrings.current
@@ -143,6 +144,7 @@ fun MangaCoverDialog(
                             .clip(RoundedCornerShape(12.dp))
                             .testTag("manga-cover-dialog-image"),
                         shape = RoundedCornerShape(12.dp),
+                        headers = headers,
                     )
 
                     saveStatusMessage?.let { status ->

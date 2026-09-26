@@ -12,6 +12,9 @@ import kotlin.system.exitProcess
 
 fun main(args: Array<String>) {
     System.setProperty("mihon.extension.host", "true")
+    if (System.getProperty("http.agent").isNullOrBlank()) {
+        System.setProperty("http.agent", eu.kanade.tachiyomi.network.NetworkHelper.DEFAULT_USER_AGENT)
+    }
     // Windows redirects GetTempPath into this AppContainer's private profile. With a
     // relocated LOCALAPPDATA that directory is not provisioned by the OS.
     val temporaryDirectory = File(System.getProperty("java.io.tmpdir"))

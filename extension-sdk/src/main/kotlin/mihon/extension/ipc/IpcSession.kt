@@ -7,6 +7,7 @@ import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.isActive
@@ -25,6 +26,8 @@ class IpcException @JvmOverloads constructor(
     message: String,
     cause: Throwable? = null,
     override val networkFailure: NetworkFailure? = null,
+    val errorKind: String? = null,
+    val isTimeout: Boolean = cause is TimeoutCancellationException,
 ) : RuntimeException(message, cause), NetworkFailureProvider
 
 class IpcSession(
@@ -64,6 +67,7 @@ class IpcSession(
                                 false,
                                 error = error.message ?: error::class.java.simpleName,
                                 networkFailure = error.findNetworkFailure(),
+                                errorKind = error::class.java.simpleName,
                             )
                         }
                         writeMessage(response)
@@ -131,18 +135,24 @@ class IpcSession(
                     currentCoroutineContext()[RequestPriority]?.value ?: RequestPriority.NORMAL,
                 ),
             )
-            val response = withTimeout(timeoutMillis) { deferred.await() }
+            val response = try {
+                withTimeout(timeoutMillis) { deferred.await() }
+            } catch (timeout: TimeoutCancellationException) {
+                cancelRemote(id, callback = false)
+                throw IpcException("IPC request '$command' timed out", timeout)
+            }
             if (!response.success) {
                 throw IpcException(
                     response.error ?: "IPC request failed without error description",
                     networkFailure = response.networkFailure,
+                    errorKind = response.errorKind,
                 )
             }
             return response.payloadJson
         } catch (cancelled: CancellationException) {
             cancelRemote(id, callback = false)
             currentCoroutineContext().ensureActive()
-            throw IpcException("IPC request '$command' timed out", cancelled)
+            throw IpcException("IPC request '$command' cancelled", cancelled)
         } catch (error: Exception) {
             if (error is IpcException) throw error
             throw IpcException("IPC request '$command' failed: ${error.message}", error)
@@ -157,13 +167,18 @@ class IpcSession(
         pendingCallbackResponses[id] = deferred
         try {
             writeMessage(IpcCallbackRequest(id, callbackType, payloadJson))
-            val response = withTimeout(timeoutMillis) { deferred.await() }
+            val response = try {
+                withTimeout(timeoutMillis) { deferred.await() }
+            } catch (timeout: TimeoutCancellationException) {
+                cancelRemote(id, callback = true)
+                throw IpcException("IPC callback '$callbackType' timed out", timeout)
+            }
             if (!response.success) throw IpcException(response.error ?: "IPC callback failed without error description")
             return response.payloadJson
         } catch (cancelled: CancellationException) {
             cancelRemote(id, callback = true)
             currentCoroutineContext().ensureActive()
-            throw IpcException("IPC callback '$callbackType' timed out", cancelled)
+            throw IpcException("IPC callback '$callbackType' cancelled", cancelled)
         } catch (error: Exception) {
             if (error is IpcException) throw error
             throw IpcException("IPC callback '$callbackType' failed: ${error.message}", error)
