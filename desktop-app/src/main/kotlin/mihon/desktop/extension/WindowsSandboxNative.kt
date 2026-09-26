@@ -59,6 +59,12 @@ internal interface SandboxKernel : StdCallLibrary {
     fun ConnectNamedPipe(pipe: HANDLE, overlapped: Pointer?): Boolean
     fun GetNamedPipeClientProcessId(pipe: HANDLE, pid: IntByReference): Boolean
     fun CancelIoEx(handle: HANDLE, overlapped: Pointer?): Boolean
+    fun GetCurrentPackageFamilyName(packageFamilyNameLength: IntByReference, packageFamilyName: CharArray?): Int
+    fun GetPackageFamilyName(
+        process: HANDLE,
+        packageFamilyNameLength: IntByReference,
+        packageFamilyName: CharArray?,
+    ): Int
 }
 internal interface SandboxUserEnv : StdCallLibrary {
     fun CreateAppContainerProfile(
