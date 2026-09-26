@@ -77,6 +77,7 @@ import mihon.desktop.i18n.text
 import mihon.desktop.image.CoverFailureRegistry
 import mihon.desktop.library.model.LibraryManga
 import mihon.desktop.ui.common.MangaCover
+import mihon.desktop.ui.common.coverHeaders
 
 @Composable
 fun LibraryScreen(
@@ -159,6 +160,7 @@ fun LibraryScreen(
     onDuplicateAddAnyway: () -> Unit = {},
     onDuplicateDismiss: () -> Unit = {},
     sourceNameFor: (Long) -> String = { "Source #$it" },
+    sourceBaseUrlFor: (Long) -> String? = { null },
 ) {
     val resolvedMangaDetailActions = mangaDetailActions ?: MangaDetailActions(
         onReadChapter = onReadChapter,
@@ -223,11 +225,13 @@ fun LibraryScreen(
                     onBatchMarkRead = onBatchMarkRead,
                     onBatchDownload = onBatchDownload,
                     onBatchRemoveFromLibrary = onBatchRemoveFromLibrary,
+                    sourceBaseUrlFor = sourceBaseUrlFor,
                     modifier = Modifier.weight(0.55f).fillMaxHeight().testTag("library-grid-pane"),
                 )
                 VerticalDivider()
                 MangaDetailScreen(
                     state = detailState,
+                    sourceBaseUrl = detailState.manga?.sourceId?.let(sourceBaseUrlFor),
                     onBack = onBackFromDetail,
                     actions = resolvedMangaDetailActions,
                     onRetry = onDetailRetry,
@@ -242,6 +246,7 @@ fun LibraryScreen(
         } else if (selected || standaloneDetails) {
             MangaDetailScreen(
                 state = detailState,
+                sourceBaseUrl = detailState.manga?.sourceId?.let(sourceBaseUrlFor),
                 onBack = onBackFromDetail,
                 actions = resolvedMangaDetailActions,
                 onRetry = onDetailRetry,
@@ -282,6 +287,7 @@ fun LibraryScreen(
                 onBatchMarkRead = onBatchMarkRead,
                 onBatchDownload = onBatchDownload,
                 onBatchRemoveFromLibrary = onBatchRemoveFromLibrary,
+                sourceBaseUrlFor = sourceBaseUrlFor,
                 modifier = Modifier.fillMaxSize().testTag("library-grid-pane"),
             )
         }
@@ -345,6 +351,7 @@ private fun LibraryPane(
     onUpdateLibrary: (() -> Unit)? = null,
     isRepairingCovers: Boolean = false,
     onRepairBrokenCovers: (() -> Unit)? = null,
+    sourceBaseUrlFor: (Long) -> String? = { null },
     modifier: Modifier,
 ) {
     val strings = LocalStrings.current
@@ -637,6 +644,7 @@ private fun LibraryPane(
                 onToggleMangaSelection = onToggleMangaSelection,
                 onRetry = onRetry,
                 onClearFilters = onClearFilters,
+                sourceBaseUrlFor = sourceBaseUrlFor,
                 modifier = Modifier.weight(1f).fillMaxWidth(),
             )
         }
@@ -666,6 +674,7 @@ private fun LibraryContent(
     onToggleMangaSelection: (Long) -> Unit,
     onRetry: () -> Unit,
     onClearFilters: () -> Unit,
+    sourceBaseUrlFor: (Long) -> String? = { null },
     modifier: Modifier,
 ) {
     when {
@@ -696,6 +705,7 @@ private fun LibraryContent(
                                 manga = manga,
                                 isSelectionMode = state.selectionState.isSelectionMode,
                                 isSelected = state.selectionState.selectedMangaIds.contains(manga.id),
+                                sourceBaseUrl = sourceBaseUrlFor(manga.sourceId),
                                 onClick = {
                                     if (state.selectionState.isSelectionMode) {
                                         onToggleMangaSelection(manga.id)
@@ -727,6 +737,7 @@ private fun LibraryContent(
                                 manga = manga,
                                 isSelectionMode = state.selectionState.isSelectionMode,
                                 isSelected = state.selectionState.selectedMangaIds.contains(manga.id),
+                                sourceBaseUrl = sourceBaseUrlFor(manga.sourceId),
                                 onClick = {
                                     if (state.selectionState.isSelectionMode) {
                                         onToggleMangaSelection(manga.id)
@@ -758,6 +769,7 @@ private fun LibraryContent(
                                 manga = manga,
                                 isSelectionMode = state.selectionState.isSelectionMode,
                                 isSelected = state.selectionState.selectedMangaIds.contains(manga.id),
+                                sourceBaseUrl = sourceBaseUrlFor(manga.sourceId),
                                 onClick = {
                                     if (state.selectionState.isSelectionMode) {
                                         onToggleMangaSelection(manga.id)
@@ -780,6 +792,7 @@ private fun LibraryContent(
                                 manga = manga,
                                 isSelectionMode = state.selectionState.isSelectionMode,
                                 isSelected = state.selectionState.selectedMangaIds.contains(manga.id),
+                                sourceBaseUrl = sourceBaseUrlFor(manga.sourceId),
                                 onClick = {
                                     if (state.selectionState.isSelectionMode) {
                                         onToggleMangaSelection(manga.id)
@@ -802,6 +815,7 @@ private fun ComfortableMangaCard(
     manga: LibraryManga,
     isSelectionMode: Boolean,
     isSelected: Boolean,
+    sourceBaseUrl: String? = null,
     onClick: () -> Unit,
 ) {
     val strings = LocalStrings.current
@@ -823,11 +837,15 @@ private fun ComfortableMangaCard(
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             Box(modifier = Modifier.fillMaxWidth().aspectRatio(0.68f)) {
+                val itemCoverHeaders = remember(sourceBaseUrl, manga.thumbnailUrl) {
+                    coverHeaders(sourceBaseUrl, manga.thumbnailUrl)
+                }
                 MangaCover(
                     thumbnailUrl = manga.thumbnailUrl,
                     mangaId = manga.id,
                     contentDescription = manga.title,
                     modifier = Modifier.fillMaxSize(),
+                    headers = itemCoverHeaders,
                 )
 
                 if (manga.unreadCount > 0) {
@@ -898,6 +916,7 @@ private fun CompactMangaCard(
     manga: LibraryManga,
     isSelectionMode: Boolean,
     isSelected: Boolean,
+    sourceBaseUrl: String? = null,
     onClick: () -> Unit,
 ) {
     Surface(
@@ -910,11 +929,15 @@ private fun CompactMangaCard(
         tonalElevation = if (isSelected) 6.dp else 2.dp,
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
+            val itemCoverHeaders = remember(sourceBaseUrl, manga.thumbnailUrl) {
+                coverHeaders(sourceBaseUrl, manga.thumbnailUrl)
+            }
             MangaCover(
                 thumbnailUrl = manga.thumbnailUrl,
                 mangaId = manga.id,
                 contentDescription = manga.title,
                 modifier = Modifier.fillMaxSize(),
+                headers = itemCoverHeaders,
             )
 
             // Bottom gradient overlay
@@ -983,6 +1006,7 @@ private fun CoverOnlyMangaCard(
     manga: LibraryManga,
     isSelectionMode: Boolean,
     isSelected: Boolean,
+    sourceBaseUrl: String? = null,
     onClick: () -> Unit,
 ) {
     Surface(
@@ -995,11 +1019,15 @@ private fun CoverOnlyMangaCard(
         tonalElevation = if (isSelected) 6.dp else 1.dp,
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
+            val itemCoverHeaders = remember(sourceBaseUrl, manga.thumbnailUrl) {
+                coverHeaders(sourceBaseUrl, manga.thumbnailUrl)
+            }
             MangaCover(
                 thumbnailUrl = manga.thumbnailUrl,
                 mangaId = manga.id,
                 contentDescription = manga.title,
                 modifier = Modifier.fillMaxSize(),
+                headers = itemCoverHeaders,
             )
 
             // Top-right unread badge
@@ -1046,6 +1074,7 @@ private fun ListMangaItem(
     manga: LibraryManga,
     isSelectionMode: Boolean,
     isSelected: Boolean,
+    sourceBaseUrl: String? = null,
     onClick: () -> Unit,
 ) {
     val strings = LocalStrings.current
@@ -1077,6 +1106,9 @@ private fun ListMangaItem(
                 )
             }
 
+            val itemCoverHeaders = remember(sourceBaseUrl, manga.thumbnailUrl) {
+                coverHeaders(sourceBaseUrl, manga.thumbnailUrl)
+            }
             MangaCover(
                 thumbnailUrl = manga.thumbnailUrl,
                 mangaId = manga.id,
@@ -1085,6 +1117,7 @@ private fun ListMangaItem(
                     .width(55.dp)
                     .height(78.dp)
                     .clip(RoundedCornerShape(6.dp)),
+                headers = itemCoverHeaders,
             )
 
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {

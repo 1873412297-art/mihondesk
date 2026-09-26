@@ -7,6 +7,10 @@ import kotlinx.coroutines.job
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.decodeFromJsonElement
+import kotlinx.serialization.json.jsonPrimitive
 import mihon.extension.compat.TachiyomiCatalogueSourceAdapter
 import mihon.extension.ipc.ChapterPayload
 import mihon.extension.ipc.GetPagePayload
@@ -63,6 +67,9 @@ class ExtensionHostEngine(
     private val preferenceContext: android.content.Context
         get() = ExtensionExecutionContext.currentApplication()
     init {
+        if (System.getProperty("http.agent").isNullOrBlank()) {
+            System.setProperty("http.agent", eu.kanade.tachiyomi.network.NetworkHelper.DEFAULT_USER_AGENT)
+        }
         eu.kanade.tachiyomi.network.NetworkHelper.installBroker(httpClient)
         mihon.extension.host.WebViewBridge.install(httpClient::webView)
         bootstrapInjekt()
@@ -215,13 +222,23 @@ class ExtensionHostEngine(
         }
     }
 
+    private inline fun <reified T> decodePayload(request: IpcRequest, element: JsonElement?): T {
+        return if (element != null) {
+            json.decodeFromJsonElement<T>(element)
+        } else {
+            json.decodeFromString<T>(request.payloadJson)
+        }
+    }
+
     suspend fun handleRequest(request: IpcRequest): IpcResponse {
+        val payloadElement = runCatching {
+            json.parseToJsonElement(request.payloadJson)
+        }.getOrNull()
         val sourceId = runCatching {
-            (json.parseToJsonElement(request.payloadJson) as? kotlinx.serialization.json.JsonObject)
-                ?.get("sourceId")?.toString()?.toLongOrNull()
+            (payloadElement as? JsonObject)?.get("sourceId")?.jsonPrimitive?.content?.toLongOrNull()
         }.getOrNull()
         val identity = sourceId?.let { sourceContexts[it] }
-        if (identity == null) return handleBoundRequest(request)
+        if (identity == null) return handleBoundRequest(request, payloadElement)
         return coroutineScope {
             val job = currentCoroutineContext().job
             val pkg = requireNotNull(identity.packageId)
@@ -231,7 +248,7 @@ class ExtensionHostEngine(
             }
             try {
                 ExtensionExecutionContext.withIdentity(identity.copy(priority = request.priority)) {
-                    handleBoundRequest(request)
+                    handleBoundRequest(request, payloadElement)
                 }
             } finally {
                 synchronized(sourceRegistryLock) {
@@ -244,19 +261,19 @@ class ExtensionHostEngine(
         }
     }
 
-    private suspend fun handleBoundRequest(request: IpcRequest): IpcResponse {
+    private suspend fun handleBoundRequest(request: IpcRequest, payloadElement: JsonElement? = null): IpcResponse {
         return try {
             when (request.command) {
                 IpcCommands.PING -> IpcResponse(request.requestId, success = true, payloadJson = "pong")
 
                 IpcCommands.LOAD_EXTENSION -> {
-                    val payload = json.decodeFromString<LoadExtensionPayload>(request.payloadJson)
+                    val payload = decodePayload<LoadExtensionPayload>(request, payloadElement)
                     val sources = loadExtension(File(payload.packagePath), File(payload.workingDir))
                     IpcResponse(request.requestId, success = true, payloadJson = json.encodeToString(sources))
                 }
 
                 IpcCommands.UNLOAD_EXTENSION -> {
-                    val payload = json.decodeFromString<mihon.extension.ipc.UnloadExtensionPayload>(request.payloadJson)
+                    val payload = decodePayload<mihon.extension.ipc.UnloadExtensionPayload>(request, payloadElement)
                     unloadExtension(payload.pkg)
                     IpcResponse(request.requestId, success = true)
                 }
@@ -278,21 +295,21 @@ class ExtensionHostEngine(
                 }
 
                 IpcCommands.GET_POPULAR -> {
-                    val payload = json.decodeFromString<GetPagePayload>(request.payloadJson)
+                    val payload = decodePayload<GetPagePayload>(request, payloadElement)
                     val catalogue = getCatalogueSource(payload.sourceId)
                     val mangasPage = catalogue.getPopularManga(payload.page)
                     IpcResponse(request.requestId, success = true, payloadJson = json.encodeToString(mangasPage))
                 }
 
                 IpcCommands.GET_LATEST -> {
-                    val payload = json.decodeFromString<GetPagePayload>(request.payloadJson)
+                    val payload = decodePayload<GetPagePayload>(request, payloadElement)
                     val catalogue = getCatalogueSource(payload.sourceId)
                     val mangasPage = catalogue.getLatestUpdates(payload.page)
                     IpcResponse(request.requestId, success = true, payloadJson = json.encodeToString(mangasPage))
                 }
 
                 IpcCommands.SEARCH_MANGA -> {
-                    val payload = json.decodeFromString<SearchPayload>(request.payloadJson)
+                    val payload = decodePayload<SearchPayload>(request, payloadElement)
                     val catalogue = getCatalogueSource(payload.sourceId)
                     val requestedFilters = decodeFilterList(payload.filtersJson)
                     val mangasPage = if (catalogue is TachiyomiCatalogueSourceAdapter) {
@@ -314,7 +331,7 @@ class ExtensionHostEngine(
                 }
 
                 IpcCommands.GET_MANGA_DETAILS -> {
-                    val payload = json.decodeFromString<MangaPayload>(request.payloadJson)
+                    val payload = decodePayload<MangaPayload>(request, payloadElement)
                     val catalogue = getCatalogueSource(payload.sourceId)
                     val manga = json.decodeFromString<SManga>(payload.mangaJson)
                     val details = catalogue.getMangaDetails(manga)
@@ -322,7 +339,7 @@ class ExtensionHostEngine(
                 }
 
                 IpcCommands.GET_CHAPTER_LIST -> {
-                    val payload = json.decodeFromString<MangaPayload>(request.payloadJson)
+                    val payload = decodePayload<MangaPayload>(request, payloadElement)
                     val catalogue = getCatalogueSource(payload.sourceId)
                     val manga = json.decodeFromString<SManga>(payload.mangaJson)
                     val chapters = catalogue.getChapterList(manga)
@@ -330,7 +347,7 @@ class ExtensionHostEngine(
                 }
 
                 IpcCommands.GET_PAGE_LIST -> {
-                    val payload = json.decodeFromString<ChapterPayload>(request.payloadJson)
+                    val payload = decodePayload<ChapterPayload>(request, payloadElement)
                     val catalogue = getCatalogueSource(payload.sourceId)
                     val chapter = json.decodeFromString<SChapter>(payload.chapterJson)
                     val pages = catalogue.getPageList(chapter)
@@ -338,7 +355,7 @@ class ExtensionHostEngine(
                 }
 
                 IpcCommands.GET_IMAGE -> {
-                    val payload = json.decodeFromString<ImagePayload>(request.payloadJson)
+                    val payload = decodePayload<ImagePayload>(request, payloadElement)
                     val source = getCatalogueSource(payload.sourceId)
                     val image = if (source is WindowsImageSource) {
                         val bytes = source.getImage(payload.page)
@@ -358,7 +375,7 @@ class ExtensionHostEngine(
                 }
 
                 IpcCommands.GET_FILTER_LIST -> {
-                    val payload = json.decodeFromString<SourcePayload>(request.payloadJson)
+                    val payload = decodePayload<SourcePayload>(request, payloadElement)
                     val catalogue = getCatalogueSource(payload.sourceId)
                     val filterList = if (catalogue is TachiyomiCatalogueSourceAdapter) {
                         catalogue.getIpcFilterList()
@@ -369,7 +386,7 @@ class ExtensionHostEngine(
                 }
 
                 IpcCommands.GET_SOURCE_PREFERENCES -> {
-                    val payload = json.decodeFromString<SourcePayload>(request.payloadJson)
+                    val payload = decodePayload<SourcePayload>(request, payloadElement)
                     val source = loadedSources[payload.sourceId]
                         ?: throw IllegalArgumentException("Source with ID ${payload.sourceId} not found")
                     val configurable = source.configurableSourceOrNull()
@@ -393,7 +410,7 @@ class ExtensionHostEngine(
                 }
 
                 IpcCommands.SET_SOURCE_PREFERENCE -> {
-                    val payload = json.decodeFromString<SetSourcePreferencePayload>(request.payloadJson)
+                    val payload = decodePayload<SetSourcePreferencePayload>(request, payloadElement)
                     val source = loadedSources[payload.sourceId]
                         ?: throw IllegalArgumentException("Source with ID ${payload.sourceId} not found")
                     val configurable = source.configurableSourceOrNull()
@@ -418,12 +435,51 @@ class ExtensionHostEngine(
             if (e is VirtualMachineError || e is ThreadDeath) throw e
             System.err.println("Extension request failed: ${request.command}")
             e.printStackTrace(System.err)
+            val unwrapped = generateSequence(e) { it.cause }.firstOrNull {
+                it !is java.lang.reflect.InvocationTargetException &&
+                    it !is java.util.concurrent.ExecutionException
+            } ?: e
+            val errorKind = unwrapped::class.java.simpleName
             IpcResponse(
                 request.requestId,
                 success = false,
-                error = e.message ?: e::class.java.simpleName,
+                error = formatErrorMessage(unwrapped),
                 networkFailure = e.findNetworkFailure(),
+                errorKind = errorKind,
             )
+        }
+    }
+
+    private fun formatErrorMessage(e: Throwable): String {
+        val className = e::class.java.simpleName
+        val topFrame = e.stackTrace.firstOrNull { frame ->
+            val name = frame.className
+            !name.startsWith("mihon.extension.host.ExtensionHostEngine") &&
+                !name.startsWith("kotlinx.coroutines.") &&
+                !name.startsWith("java.lang.reflect.") &&
+                !name.startsWith("jdk.internal.")
+        } ?: e.stackTrace.firstOrNull()
+
+        val location = if (topFrame != null) {
+            val fileAndLine = if (topFrame.fileName != null && topFrame.lineNumber > 0) {
+                "(${topFrame.fileName}:${topFrame.lineNumber})"
+            } else if (topFrame.fileName != null) {
+                "(${topFrame.fileName})"
+            } else {
+                ""
+            }
+            " at ${topFrame.className}.${topFrame.methodName}$fileAndLine"
+        } else {
+            ""
+        }
+
+        val message = e.message
+        return if (message.isNullOrBlank()) {
+            "$className$location"
+        } else if (message.startsWith(className)) {
+            "$message$location"
+        } else {
+            "$className: $message$location"
         }
     }
 }

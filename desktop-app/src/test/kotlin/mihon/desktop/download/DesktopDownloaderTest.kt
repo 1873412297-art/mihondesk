@@ -70,6 +70,7 @@ class DesktopDownloaderTest {
             )
 
             DesktopDownloader(store, disk, networkHelper, mutationPort = repository).use { downloader ->
+                runBlocking { downloader.awaitStartupRecovery() }
                 Files.isRegularFile(
                     disk.getChapterDir(sourceId, manga.title, chapter.name).resolve(".mihon-download.json"),
                 ) shouldBe true
@@ -125,6 +126,7 @@ class DesktopDownloaderTest {
         )
 
         DesktopDownloader(store, disk, networkHelper).use { downloader ->
+            runBlocking { downloader.awaitStartupRecovery() }
             downloader.queueState.value.single().status shouldBe DownloadStatus.ERROR
             downloader.queueState.value.single().pages.single().status shouldBe PageStatus.ERROR
             downloader.isChapterDownloaded(manga.sourceId, manga.title, chapter.id, chapter.name) shouldBe false

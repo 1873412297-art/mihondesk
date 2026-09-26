@@ -167,7 +167,7 @@ class BrokerTransport(
                                     pending.cancel()
                                     break
                                 }
-                                delay(10)
+                                delay(100)
                             }
                         }
                     try {

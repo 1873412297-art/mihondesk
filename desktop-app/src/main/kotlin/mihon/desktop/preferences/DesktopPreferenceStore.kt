@@ -11,6 +11,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption.ATOMIC_MOVE
 import java.nio.file.StandardCopyOption.REPLACE_EXISTING
+import java.nio.file.attribute.BasicFileAttributes
 import java.util.Properties
 import java.util.UUID
 
@@ -82,6 +83,46 @@ data class DesktopPreferences(
 
 class DesktopPreferenceStore(private val file: Path) {
 
+    private data class FileStamp(val lastModifiedMillis: Long, val size: Long)
+
+    @Volatile
+    private var cachedProperties: Properties? = null
+
+    @Volatile
+    private var cachedPreferences: DesktopPreferences? = null
+
+    @Volatile
+    private var cacheStamp: FileStamp? = null
+
+    @Synchronized
+    fun invalidateCache() {
+        cachedProperties = null
+        cachedPreferences = null
+        cacheStamp = null
+    }
+
+    private fun currentStamp(): FileStamp = try {
+        val attributes = Files.readAttributes(file, BasicFileAttributes::class.java)
+        FileStamp(attributes.lastModifiedTime().toMillis(), attributes.size())
+    } catch (_: IOException) {
+        FileStamp(-1L, -1L)
+    }
+
+    private fun getOrReadProperties(): Properties {
+        // A single stat per read keeps the cache honest across instances and external
+        // writers while still avoiding a full file read + parse on hot paths.
+        val stamp = currentStamp()
+        if (stamp == cacheStamp) cachedProperties?.let { return it }
+        synchronized(this) {
+            val secondStamp = currentStamp()
+            if (secondStamp == cacheStamp) cachedProperties?.let { return it }
+            val loaded = readProperties()
+            cachedProperties = loaded
+            cacheStamp = secondStamp
+            return loaded
+        }
+    }
+
     /** Apply an edit to the latest snapshot under the same lock as other preference writers. */
     @Synchronized
     fun updatePreferences(transform: (DesktopPreferences) -> DesktopPreferences): DesktopPreferences {
@@ -92,7 +133,8 @@ class DesktopPreferenceStore(private val file: Path) {
 
     @Synchronized
     fun load(): DesktopPreferences {
-        val properties = readProperties()
+        if (currentStamp() == cacheStamp) cachedPreferences?.let { return it }
+        val properties = getOrReadProperties()
         val storedAppLockHash = properties.getProperty("security.app_lock.pin_hash") ?: ""
         val storedAppLockSalt = properties.getProperty("security.app_lock.pin_salt") ?: ""
         val storedAppLockIterations = properties.getProperty("security.app_lock.pin_iterations")
@@ -109,7 +151,7 @@ class DesktopPreferenceStore(private val file: Path) {
             ?.toIntOrNull()
             ?.takeIf { it in 0..(24 * 60) }
             ?: 5
-        return DesktopPreferences(
+        val loadedPreferences = DesktopPreferences(
             themeMode = enumValueOrDefault(properties.getProperty("theme"), ThemeMode.System),
             appTheme = enumValueOrDefault(properties.getProperty("app_theme"), DesktopAppTheme.DEFAULT),
             themeDarkAmoled = properties.getProperty("theme_dark_amoled")?.toBooleanStrictOrNull() ?: false,
@@ -189,11 +231,13 @@ class DesktopPreferenceStore(private val file: Path) {
             runInBackgroundOnClose = properties.getProperty("background.run_in_background_on_close")
                 ?.toBooleanStrictOrNull() ?: false,
         )
+        cachedPreferences = loadedPreferences
+        return loadedPreferences
     }
 
     @Synchronized
     fun save(preferences: DesktopPreferences) {
-        val properties = readProperties()
+        val properties = Properties().apply { putAll(getOrReadProperties()) }
         properties.setProperty("theme", preferences.themeMode.name)
         properties.setProperty("app_theme", preferences.appTheme.name)
         properties.setProperty("theme_dark_amoled", preferences.themeDarkAmoled.toString())
@@ -296,20 +340,28 @@ class DesktopPreferenceStore(private val file: Path) {
             properties.setProperty("window.maximized", placement.maximized.toString())
         }
         writeProperties(properties)
+        cachedProperties = properties
+        cachedPreferences = preferences
+        cacheStamp = currentStamp()
     }
 
     @Synchronized
-    fun property(key: String): String? = readProperties().getProperty(key)
+    fun property(key: String): String? = getOrReadProperties().getProperty(key)
 
     @Synchronized
-    fun propertiesWithPrefix(prefix: String): Map<String, String> = readProperties().let { properties ->
+    fun propertiesWithPrefix(prefix: String): Map<String, String> = getOrReadProperties().let { properties ->
         properties.stringPropertyNames().filter { it.startsWith(prefix) }
             .associateWith { properties.getProperty(it) }
     }
 
     @Synchronized
     fun update(block: Properties.() -> Unit) {
-        writeProperties(readProperties().apply(block))
+        val properties = Properties().apply { putAll(getOrReadProperties()) }
+        properties.apply(block)
+        writeProperties(properties)
+        cachedProperties = properties
+        cachedPreferences = null
+        cacheStamp = currentStamp()
     }
 
     private fun readProperties(): Properties {
@@ -339,6 +391,7 @@ class DesktopPreferenceStore(private val file: Path) {
     }
 
     private fun quarantineInvalidFile() {
+        invalidateCache()
         val corruptFile = file.resolveSibling("${file.fileName}.corrupt-${UUID.randomUUID()}")
         try {
             Files.move(file, corruptFile)

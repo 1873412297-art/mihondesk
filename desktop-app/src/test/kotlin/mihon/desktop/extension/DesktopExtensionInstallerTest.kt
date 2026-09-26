@@ -386,4 +386,77 @@ class DesktopExtensionInstallerTest {
             }
         }
     }
+
+    @Test
+    fun `reconcileInstalledExtensions removes missing package files from preferences`(
+        @TempDir tempDir: Path,
+    ) = runBlocking {
+        val installRoot = tempDir.resolve("installed").toFile()
+        val prefStore = DesktopPreferenceStore(tempDir.resolve("prefs.properties"))
+        val installer = DesktopExtensionInstaller(installRoot, prefStore)
+
+        val manifest1 = ExtensionManifest(
+            id = "ext.test.first",
+            name = "First Source",
+            version = "1.0.0",
+            versionCode = 1,
+            libVersion = 1.4,
+            lang = "en",
+            sources = listOf(SourceDescriptor(11L, "First", "en", "ext.First")),
+        )
+        val manifest2 = ExtensionManifest(
+            id = "ext.test.second",
+            name = "Second Source",
+            version = "1.0.0",
+            versionCode = 1,
+            libVersion = 1.4,
+            lang = "en",
+            sources = listOf(SourceDescriptor(22L, "Second", "en", "ext.Second")),
+        )
+        val file1 = tempDir.resolve("first.mext").toFile()
+        val file2 = tempDir.resolve("second.mext").toFile()
+        createDummyMext(file1, manifest1)
+        createDummyMext(file2, manifest2)
+
+        val installed1 = installer.installFromLocalFile(file1, trustOnInstall = true)
+        val installed2 = installer.installFromLocalFile(file2, trustOnInstall = true)
+
+        installer.getInstalledExtensions().map { it.pkg } shouldBe listOf("ext.test.first", "ext.test.second")
+
+        File(installed2.packageFile).delete() shouldBe true
+
+        val reconciled = installer.reconcileInstalledExtensions()
+        reconciled.map { it.pkg } shouldBe listOf("ext.test.first")
+        installer.getInstalledExtensions().map { it.pkg } shouldBe listOf("ext.test.first")
+    }
+
+    @Test
+    fun `installed extensions list is cached in memory and refreshed on save and reconcile`(
+        @TempDir tempDir: Path,
+    ) = runBlocking {
+        val installRoot = tempDir.resolve("installed").toFile()
+        val prefStore = DesktopPreferenceStore(tempDir.resolve("prefs.properties"))
+        val installer = DesktopExtensionInstaller(installRoot, prefStore)
+
+        val manifest = ExtensionManifest(
+            id = "ext.test.cache",
+            name = "Cache Source",
+            version = "1.0.0",
+            versionCode = 1,
+            libVersion = 1.4,
+            lang = "en",
+            sources = listOf(SourceDescriptor(55L, "Cache", "en", "ext.Cache")),
+        )
+        val file = tempDir.resolve("cache.mext").toFile()
+        createDummyMext(file, manifest)
+        installer.installFromLocalFile(file, trustOnInstall = true)
+
+        val first = installer.getInstalledExtensions()
+        val second = installer.getInstalledExtensions()
+        (first === second) shouldBe true
+
+        val reconciled = installer.reconcileInstalledExtensions()
+        val third = installer.getInstalledExtensions()
+        (third === reconciled) shouldBe true
+    }
 }

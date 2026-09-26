@@ -180,6 +180,7 @@ fun DesktopShell(
     onDuplicateAddAnyway: () -> Unit = {},
     onDuplicateDismiss: () -> Unit = {},
     sourceNameFor: (Long) -> String = { "Source #$it" },
+    sourceBaseUrlFor: (Long) -> String? = { null },
     downloadCacheCleaner: mihon.desktop.download.DownloadCacheCleaner? = null,
     downloadsDir: java.nio.file.Path? = null,
     diskCacheDir: java.nio.file.Path? = null,
@@ -362,6 +363,7 @@ fun DesktopShell(
                                 onDuplicateAddAnyway = onDuplicateAddAnyway,
                                 onDuplicateDismiss = onDuplicateDismiss,
                                 sourceNameFor = sourceNameFor,
+                                sourceBaseUrlFor = sourceBaseUrlFor,
                             )
                         }
                         DesktopDestination.History -> {

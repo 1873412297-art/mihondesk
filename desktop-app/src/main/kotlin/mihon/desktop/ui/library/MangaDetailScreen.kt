@@ -106,6 +106,7 @@ fun MangaDetailScreen(
     isLibraryActionRunning: Boolean = false,
     isRefreshingSource: Boolean = false,
     modifier: Modifier = Modifier,
+    sourceBaseUrl: String? = null,
     showBack: Boolean = true,
     onEditCategories: () -> Unit = actions.onEditCategories,
     onOpenTracking: () -> Unit = actions.onOpenTracking,
@@ -446,17 +447,27 @@ fun MangaDetailScreen(
                                                     .clickable { isCoverDialogOpen = true }
                                                     .testTag("manga-detail-cover-clickable"),
                                             ) {
+                                                val detailCoverHeaders = remember(sourceBaseUrl, manga.thumbnailUrl) {
+                                                    mihon.desktop.ui.common.coverHeaders(
+                                                        sourceBaseUrl,
+                                                        manga.thumbnailUrl,
+                                                    )
+                                                }
+                                                val onCoverError = remember(onCoverLoadFailed) {
+                                                    { code: Int ->
+                                                        if (code == 403 || code == 404 || code == 410) {
+                                                            onCoverLoadFailed?.invoke(code)
+                                                        }
+                                                    }
+                                                }
                                                 mihon.desktop.ui.common.MangaCover(
                                                     thumbnailUrl = manga.thumbnailUrl,
                                                     mangaId = manga.id,
                                                     contentDescription = manga.title,
                                                     modifier = Modifier.width(140.dp).height(200.dp),
                                                     shape = MaterialTheme.shapes.medium,
-                                                    onCoverHttpError = { code ->
-                                                        if (code == 404 || code == 410) {
-                                                            onCoverLoadFailed?.invoke(code)
-                                                        }
-                                                    },
+                                                    headers = detailCoverHeaders,
+                                                    onCoverHttpError = onCoverError,
                                                 )
                                             }
                                         }
@@ -1031,6 +1042,7 @@ fun MangaDetailScreen(
                         thumbnailUrl = manga.thumbnailUrl,
                         mangaId = manga.id,
                         isCustomCover = hasCustomCover,
+                        headers = mihon.desktop.ui.common.coverHeaders(sourceBaseUrl, manga.thumbnailUrl),
                         onDismissRequest = { isCoverDialogOpen = false },
                         onChangeCover = {
                             val picked = chooseCoverImage(strings.text(UiText.ChooseCover))

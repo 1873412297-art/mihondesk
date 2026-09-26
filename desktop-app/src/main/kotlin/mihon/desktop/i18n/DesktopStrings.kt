@@ -9,6 +9,7 @@ import mihon.desktop.reader.ReaderClickAction
 import mihon.desktop.reader.ReaderColorFilter
 import mihon.desktop.reader.ReaderWheelBehavior
 import mihon.desktop.track.TrackStatus
+import mihon.desktop.ui.browse.SourceListingMode
 import mihon.desktop.ui.theme.DesktopAppTheme
 import mihon.reader.model.ReaderErrorCode
 import mihon.reader.model.ReadingMode
@@ -633,6 +634,7 @@ interface DesktopStrings {
     val browseSearchButton: String
     fun browseFiltersButton(count: Int): String
     val browseNoMangaFound: String
+    fun browseSourceUnsupportedOperation(mode: SourceListingMode): String
     val browseInLibraryBadge: String
     val browsePrevPage: String
     fun browsePageNumber(page: Int): String
@@ -1425,6 +1427,11 @@ object EnglishStrings : DesktopStrings {
     override val browseSearchButton = "Search"
     override fun browseFiltersButton(count: Int) = if (count > 0) "Filters ($count)" else "Filters"
     override val browseNoMangaFound = "No manga found"
+    override fun browseSourceUnsupportedOperation(mode: SourceListingMode) = when (mode) {
+        SourceListingMode.Popular -> "This source does not support browsing, please use search"
+        SourceListingMode.Latest -> "This source does not support latest updates, please use search"
+        SourceListingMode.Search -> "This source does not support search"
+    }
     override val browseInLibraryBadge = "IN LIBRARY"
     override val browsePrevPage = "Previous"
     override fun browsePageNumber(page: Int) = "Page $page"
@@ -2220,6 +2227,11 @@ object SimplifiedChineseStrings : DesktopStrings {
     override val browseSearchButton = "搜索"
     override fun browseFiltersButton(count: Int) = if (count > 0) "筛选 ($count)" else "筛选"
     override val browseNoMangaFound = "未找到任何漫画"
+    override fun browseSourceUnsupportedOperation(mode: SourceListingMode) = when (mode) {
+        SourceListingMode.Popular -> "该图源不支持浏览，请使用搜索"
+        SourceListingMode.Latest -> "该图源不支持最新，请使用搜索"
+        SourceListingMode.Search -> "该图源不支持搜索"
+    }
     override val browseInLibraryBadge = "已在书架"
     override val browsePrevPage = "上一页"
     override fun browsePageNumber(page: Int) = "第 $page 页"
@@ -3010,6 +3022,11 @@ object TraditionalChineseStrings : DesktopStrings {
     override val browseSearchButton = "搜尋"
     override fun browseFiltersButton(count: Int) = if (count > 0) "篩選 ($count)" else "篩選"
     override val browseNoMangaFound = "找不到任何漫畫"
+    override fun browseSourceUnsupportedOperation(mode: SourceListingMode) = when (mode) {
+        SourceListingMode.Popular -> "該圖源不支援瀏覽，請使用搜尋"
+        SourceListingMode.Latest -> "該圖源不支援最新，請使用搜尋"
+        SourceListingMode.Search -> "該圖源不支援搜尋"
+    }
     override val browseInLibraryBadge = "已在書架"
     override val browsePrevPage = "上一頁"
     override fun browsePageNumber(page: Int) = "第 $page 頁"

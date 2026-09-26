@@ -196,4 +196,30 @@ class BrowseSourceScreenTest {
         onNodeWithTag("manga-chapter-count-${sampleManga.url}", useUnmergedTree = true).assertIsDisplayed()
         onNodeWithText("3 chapters").assertIsDisplayed()
     }
+
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun `unsupported mode renders friendly prompt without showing error card`() = runComposeUiTest {
+        setContent {
+            androidx.compose.runtime.CompositionLocalProvider(
+                mihon.desktop.i18n.LocalStrings provides mihon.desktop.i18n.SimplifiedChineseStrings,
+            ) {
+                BrowseSourceScreen(
+                    state = BrowseSourceUiState(
+                        source = testSource,
+                        unsupportedMode = SourceListingMode.Popular,
+                    ),
+                    onBack = {},
+                    onModeChange = {},
+                    onQueryChange = {},
+                    onSearch = {},
+                    onPageChange = {},
+                    onMangaSelected = {},
+                )
+            }
+        }
+
+        onNodeWithTag("source-unsupported-message").assertIsDisplayed()
+        onNodeWithText("该图源不支持浏览，请使用搜索").assertIsDisplayed()
+    }
 }

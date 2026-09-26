@@ -36,6 +36,7 @@ import kotlinx.coroutines.launch
 import mihon.desktop.i18n.LocalStrings
 import mihon.desktop.library.model.LibraryManga
 import mihon.desktop.ui.common.MangaCover
+import mihon.desktop.ui.common.coverHeaders
 import mihon.extension.model.SourceDescriptor
 import mihon.extension.source.model.SManga
 
@@ -135,6 +136,13 @@ fun MigrateSourceScreen(
                 }
             }
 
+            val selectedBaseUrl = remember(availableTargetSources, selectedSource) {
+                availableTargetSources.find { it.id == selectedSource?.sourceId }?.baseUrl
+            }
+            val migrateCoverHeaders = remember(selectedBaseUrl) {
+                coverHeaders(selectedBaseUrl, null)
+            }
+
             LazyColumn(modifier = Modifier.fillMaxSize().testTag("migration-manga-list")) {
                 items(mangasForSelectedSource, key = { it.id }) { manga ->
                     Row(
@@ -151,6 +159,7 @@ fun MigrateSourceScreen(
                                 thumbnailUrl = manga.thumbnailUrl,
                                 contentDescription = manga.title,
                                 modifier = Modifier.width(48.dp).height(68.dp),
+                                headers = migrateCoverHeaders,
                             )
                             Spacer(modifier = Modifier.width(12.dp))
                             Column {
@@ -305,6 +314,7 @@ private fun MigrateMangaDialog(
                                         thumbnailUrl = candidate.thumbnailUrl,
                                         contentDescription = candidate.title,
                                         modifier = Modifier.width(36.dp).height(50.dp),
+                                        headers = coverHeaders(selectedTargetSource?.baseUrl, candidate.thumbnailUrl),
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text(

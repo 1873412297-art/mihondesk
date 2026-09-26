@@ -59,6 +59,8 @@ class DesktopSourceManagerSourcePreferenceIpcTest {
         var response: SourcePreferencesDto,
     ) : WindowsExtensionProcessManager(workingDirectory) {
 
+        override suspend fun start() {}
+
         val setCalls = mutableListOf<Triple<Long, String, SourcePreferenceValueDto>>()
 
         private fun loadedSource() = SourceDescriptor(

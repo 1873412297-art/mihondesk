@@ -31,6 +31,12 @@ class DownloadFailureExperienceTest {
             DownloadFailureReason.TLS
         classifyDownloadFailure("No isolated host registered for source 7698513740234984368") shouldBe
             DownloadFailureReason.SOURCE_UNAVAILABLE
+        classifyDownloadFailure("扩展包文件缺失：D:\\appdata\\ext.mext，请重新安装该扩展") shouldBe
+            DownloadFailureReason.EXTENSION_MISSING
+        classifyDownloadFailure(
+            "Extension package file missing: D:\\appdata\\ext.mext, please reinstall the extension",
+        ) shouldBe
+            DownloadFailureReason.EXTENSION_MISSING
         classifyDownloadFailure(
             "Brokered HTTP request failed: Access denied: domain 'i4.nhentaimg.com' is not declared",
         ) shouldBe

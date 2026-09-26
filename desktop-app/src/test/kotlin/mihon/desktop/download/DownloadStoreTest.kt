@@ -74,4 +74,77 @@ class DownloadStoreTest {
 
         store.restore() shouldBe emptyList()
     }
+
+    @Test
+    fun `save produces compact JSON without pretty print`(@TempDir tempDir: Path) {
+        val storeFile = tempDir.resolve("downloads.json")
+        val store = DownloadStore(storeFile)
+        val queue = listOf(
+            DesktopDownload(
+                chapterId = 303L,
+                mangaId = 3L,
+                sourceId = 10L,
+                mangaTitle = "Naruto",
+                chapterName = "Chapter 1",
+                chapterUrl = "/ch1",
+                status = DownloadStatus.QUEUED,
+            ),
+        )
+        store.save(queue)
+        val text = java.nio.file.Files.readString(storeFile)
+        text.contains("\n  \"chapterId\"") shouldBe false
+        store.restore() shouldHaveSize 1
+    }
+
+    @Test
+    fun `consecutive saves skip backup rewrite when known clean`(@TempDir tempDir: Path) {
+        val storeFile = tempDir.resolve("downloads.json")
+        val bakFile = tempDir.resolve("downloads.json.bak")
+        val store = DownloadStore(storeFile)
+        val queue1 = listOf(
+            DesktopDownload(
+                chapterId = 1L,
+                mangaId = 1L,
+                sourceId = 1L,
+                mangaTitle = "Manga",
+                chapterName = "Ch 1",
+                chapterUrl = "/1",
+                status = DownloadStatus.QUEUED,
+            ),
+        )
+        store.save(queue1)
+        java.nio.file.Files.exists(bakFile) shouldBe false
+
+        // Second save creates bakFile containing queue1
+        val queue2 = queue1 + DesktopDownload(
+            chapterId = 2L,
+            mangaId = 1L,
+            sourceId = 1L,
+            mangaTitle = "Manga",
+            chapterName = "Ch 2",
+            chapterUrl = "/2",
+            status = DownloadStatus.QUEUED,
+        )
+        store.save(queue2)
+        java.nio.file.Files.exists(bakFile) shouldBe true
+        val bakContentAfterSave2 = java.nio.file.Files.readString(bakFile)
+        bakContentAfterSave2.contains("\"chapterId\":1") shouldBe true
+        bakContentAfterSave2.contains("\"chapterId\":2") shouldBe false
+
+        // Third save when clean should skip rewriting bakFile
+        val queue3 = queue2 + DesktopDownload(
+            chapterId = 3L,
+            mangaId = 1L,
+            sourceId = 1L,
+            mangaTitle = "Manga",
+            chapterName = "Ch 3",
+            chapterUrl = "/3",
+            status = DownloadStatus.QUEUED,
+        )
+        store.save(queue3)
+        // bakFile was not rewritten, still contains original content
+        val bakContentAfterSave3 = java.nio.file.Files.readString(bakFile)
+        bakContentAfterSave3 shouldBe bakContentAfterSave2
+        store.restore() shouldHaveSize 3
+    }
 }

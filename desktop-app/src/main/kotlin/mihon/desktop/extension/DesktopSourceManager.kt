@@ -543,7 +543,7 @@ class DesktopSourceManager(
         }
     }
 
-    private suspend fun loadSource(sourceId: Long) {
+    internal suspend fun loadSource(sourceId: Long) {
         val proc = processManager ?: throw IllegalStateException("Extension host process manager is unavailable")
 
         // Starting the host can advance its epoch after a crash. Do this before consulting the
@@ -576,17 +576,18 @@ class DesktopSourceManager(
         if (!hostHasSource) {
             loadedPackages.remove(targetExt.pkg)
             val packageFile = java.io.File(targetExt.packageFile)
-            if (packageFile.exists()) {
-                val loadedSources = proc.loadExtension(packageFile)
-                check(loadedSources.any { it.id == sourceId }) {
-                    "Extension ${targetExt.pkg} loaded without requested source $sourceId " +
-                        "(registered=${loadedSources.map { it.id }})"
-                }
-                // Publish the package hint only after every saved source setting has been restored.
-                // Call IPC directly while holding the load mutex; recursively ensuring here deadlocks.
-                loadedSources.forEach { source -> restoreSourcePreferences(proc, source.id) }
-                loadedPackages.add(targetExt.pkg)
+            if (!packageFile.exists()) {
+                throw IllegalStateException("扩展包文件缺失：${targetExt.packageFile}，请重新安装该扩展")
             }
+            val loadedSources = proc.loadExtension(packageFile)
+            check(loadedSources.any { it.id == sourceId }) {
+                "Extension ${targetExt.pkg} loaded without requested source $sourceId " +
+                    "(registered=${loadedSources.map { it.id }})"
+            }
+            // Publish the package hint only after every saved source setting has been restored.
+            // Call IPC directly while holding the load mutex; recursively ensuring here deadlocks.
+            loadedSources.forEach { source -> restoreSourcePreferences(proc, source.id) }
+            loadedPackages.add(targetExt.pkg)
         }
     }
 
@@ -784,11 +785,24 @@ class DesktopSourceManager(
             operation(proc)
         } catch (error: IpcException) {
             if (!error.isMissingSource(sourceId)) throw error
-            installer?.getInstalledExtensions()
+            val targetExt = installer?.getInstalledExtensions()
                 ?.firstOrNull { extension -> extension.manifest.sources.any { it.id == sourceId } }
-                ?.let { extension -> loadedPackages.remove(extension.pkg) }
+            targetExt?.let { extension -> loadedPackages.remove(extension.pkg) }
+            if (targetExt != null && !java.io.File(targetExt.packageFile).exists()) {
+                throw IllegalStateException("扩展包文件缺失：${targetExt.packageFile}，请重新安装该扩展", error)
+            }
             ensureSourceLoaded(sourceId)
-            operation(proc)
+            try {
+                operation(proc)
+            } catch (retryError: IpcException) {
+                if (retryError.isMissingSource(sourceId)) {
+                    if (targetExt != null && !java.io.File(targetExt.packageFile).exists()) {
+                        throw IllegalStateException("扩展包文件缺失：${targetExt.packageFile}，请重新安装该扩展", retryError)
+                    }
+                    throw IllegalStateException("扩展包文件缺失：${targetExt?.packageFile ?: sourceId}，请重新安装该扩展", retryError)
+                }
+                throw retryError
+            }
         }
     }
 

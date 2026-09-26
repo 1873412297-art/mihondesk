@@ -93,6 +93,9 @@ class DesktopExtensionInstaller(
         prettyPrint = true
     }
 
+    @Volatile
+    private var cachedInstalledExtensions: List<InstalledExtension>? = null
+
     init {
         if (!installRoot.exists()) {
             installRoot.mkdirs()
@@ -102,12 +105,15 @@ class DesktopExtensionInstaller(
 
     @Synchronized
     fun getInstalledExtensions(): List<InstalledExtension> {
+        cachedInstalledExtensions?.let { return it }
         val raw = preferenceStore.property(PREF_KEY_INSTALLED_EXTENSIONS) ?: return emptyList()
-        return try {
+        val decoded = try {
             json.decodeFromString<List<InstalledExtension>>(raw)
         } catch (_: Exception) {
             emptyList()
         }
+        cachedInstalledExtensions = decoded
+        return decoded
     }
 
     @Synchronized
@@ -116,6 +122,25 @@ class DesktopExtensionInstaller(
         preferenceStore.update {
             setProperty(PREF_KEY_INSTALLED_EXTENSIONS, raw)
         }
+        cachedInstalledExtensions = list
+    }
+
+    @Synchronized
+    fun reconcileInstalledExtensions(): List<InstalledExtension> {
+        cachedInstalledExtensions = null
+        val current = getInstalledExtensions()
+        val (valid, missing) = current.partition { File(it.packageFile).exists() }
+        if (missing.isNotEmpty()) {
+            missing.forEach { ext ->
+                System.err.println(
+                    "Reconcile: Extension package file missing for ${ext.pkg} at ${ext.packageFile}, removing from installed list",
+                )
+            }
+            saveInstalledExtensions(valid)
+        } else {
+            cachedInstalledExtensions = valid
+        }
+        return valid
     }
 
     suspend fun downloadAndInstall(

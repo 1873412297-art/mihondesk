@@ -96,7 +96,6 @@ internal class WindowsAppContainerLauncher(
                     listOf(
                         "--pipe-read=${channel.readName}",
                         "--pipe-write=${channel.writeName}",
-                        "--stderr=${File(directory, "extension-host-stderr.log").absolutePath}",
                     )
             val size = Memory(Native.POINTER_SIZE.toLong()).apply { clear() }
             native.kernel.InitializeProcThreadAttributeList(null, 2, 0, size)
@@ -174,6 +173,11 @@ internal class WindowsAppContainerLauncher(
                 val packagedAppDirectory = stagedRuntime.resolve("app")
                 if (packagedAppDirectory.resolve("${sandboxExecutable.nameWithoutExtension}.cfg").isFile) {
                     envValues["PATH"] = packagedAppDirectory.absolutePath
+                } else {
+                    envValues["PATH"] = listOfNotNull(
+                        sandboxExecutable.parentFile?.absolutePath,
+                        System.getenv("SystemRoot")?.let { "$it\\System32" },
+                    ).joinToString(File.pathSeparator)
                 }
                 envValues["TEMP"] = directory.absolutePath
                 envValues["TMP"] = directory.absolutePath

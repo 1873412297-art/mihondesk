@@ -11,7 +11,7 @@ object CoverFailureRegistry {
     val failuresFlow: StateFlow<Map<Long, String>> = _failuresFlow.asStateFlow()
 
     fun record(mangaId: Long, url: String, code: Int) {
-        if (code == 404 || code == 410) {
+        if (code == 403 || code == 404 || code == 410) {
             failures[mangaId] = url
             _failuresFlow.value = HashMap(failures)
         }

@@ -57,4 +57,30 @@ class CustomCoverManagerTest {
         // Old jpg should have been cleaned up
         assertFalse(Files.exists(manager.customDir.resolve("custom_99.jpg")))
     }
+
+    @Test
+    fun `negative cache avoids disk stat and invalidates on set and remove`(@TempDir tempDir: Path) {
+        val manager = CustomCoverManager(tempDir)
+        val mangaId = 123L
+
+        // Initial check: doesn't exist, populates negative cache
+        assertNull(manager.getCustomCover(mangaId))
+
+        // Create file behind manager's back to prove negative cache is consulted
+        val stealthCover = manager.customDir.resolve("custom_123.jpg")
+        Files.createDirectories(manager.customDir)
+        Files.writeString(stealthCover, "stealth")
+        // Negative cache hit: still returns null
+        assertNull(manager.getCustomCover(mangaId))
+
+        // setCustomCover invalidates negative cache
+        val sample = tempDir.resolve("sample.png")
+        Files.writeString(sample, "real")
+        manager.setCustomCover(mangaId, sample)
+        assertNotNull(manager.getCustomCover(mangaId))
+
+        // removeCustomCover invalidates cache and sets negative cache
+        manager.removeCustomCover(mangaId)
+        assertNull(manager.getCustomCover(mangaId))
+    }
 }
