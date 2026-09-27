@@ -167,6 +167,93 @@ class DesktopReaderContentPipelineTest {
         cache.close()
     }
 
+    @Test
+    fun `custom preload window expands prefetch beyond the core default`() = runTest {
+        val source = CountingSource(asset(7), pageCount = 12)
+        val cache = WeightedTileCache(4L * 1024L * 1024L)
+        val budget = BoundedReaderMemoryBudget(4L * 1024L * 1024L) { cache.relievePressure() }
+        val pipeline = DesktopReaderContentPipeline(
+            decoder = ImageIoPageDecoder(budget),
+            cache = cache,
+            scope = backgroundScope,
+            sourceFactory = ChapterSourceFactory { error("no adjacent chapter expected") },
+            preloadPages = { 6 },
+        )
+
+        pipeline.open(source)
+        pipeline.updatePosition(
+            ReaderContentPosition(
+                selectedIndex = 1,
+                visiblePages = listOf(source.pages[1].id),
+                mode = ReadingMode.SINGLE_LTR,
+                direction = NavigationDirection.FORWARD,
+                foreground = true,
+                contentVisible = true,
+            ),
+        )
+        pipeline.loadVisible(source.pages[1].id)?.close()
+        runCurrent()
+
+        // Visible 1, six ahead (2..7), one behind (0). Decode hops run on Dispatchers.IO and
+        // resume on the virtual-time scheduler, so poll real time while pumping the scheduler.
+        waitForOpened(source, expected = (0..7).toSet()) { runCurrent() }
+        source.openedIndexes.distinct().sorted().shouldContainExactly((0..7).toList())
+        pipeline.close()
+        budget.close()
+        cache.close()
+    }
+
+    @Test
+    fun `custom preload window shrinks prefetch below the core default`() = runTest {
+        val source = CountingSource(asset(7), pageCount = 12)
+        val cache = WeightedTileCache(4L * 1024L * 1024L)
+        val budget = BoundedReaderMemoryBudget(4L * 1024L * 1024L) { cache.relievePressure() }
+        val pipeline = DesktopReaderContentPipeline(
+            decoder = ImageIoPageDecoder(budget),
+            cache = cache,
+            scope = backgroundScope,
+            sourceFactory = ChapterSourceFactory { error("no adjacent chapter expected") },
+            preloadPages = { 1 },
+        )
+
+        pipeline.open(source)
+        pipeline.updatePosition(
+            ReaderContentPosition(
+                selectedIndex = 1,
+                visiblePages = listOf(source.pages[1].id),
+                mode = ReadingMode.SINGLE_LTR,
+                direction = NavigationDirection.FORWARD,
+                foreground = true,
+                contentVisible = true,
+            ),
+        )
+        pipeline.loadVisible(source.pages[1].id)?.close()
+        runCurrent()
+
+        // Visible 1, one ahead (2), one behind (0) - the core's four-ahead prefetch is cancelled.
+        waitForOpened(source, expected = setOf(0, 1, 2)) { runCurrent() }
+        source.openedIndexes.distinct().sorted().shouldContainExactly(listOf(0, 1, 2))
+        pipeline.close()
+        budget.close()
+        cache.close()
+    }
+
+    /**
+     * The decoder works on [kotlinx.coroutines.Dispatchers.IO]; its completions resume on the
+     * virtual-time scheduler, so poll real time while [pump] drains scheduler continuations.
+     */
+    private fun waitForOpened(source: CountingSource, expected: Set<Int>, pump: () -> Unit) {
+        val deadline = System.currentTimeMillis() + 10_000
+        while (System.currentTimeMillis() < deadline) {
+            pump()
+            if (expected.all { it in source.openedIndexes }) {
+                pump()
+                return
+            }
+            Thread.sleep(10)
+        }
+    }
+
     private class CountingSource(
         override val asset: ReaderChapterAsset,
         pageCount: Int,
@@ -175,7 +262,9 @@ class DesktopReaderContentPipelineTest {
         val pages = (0 until pageCount).map { index ->
             PageDescriptor(PageId(asset.chapterId.toString(), "page-$index.png"), 4, 4)
         }
-        val openedIndexes = mutableListOf<Int>()
+        val openedIndexes = java.util.Collections.synchronizedList(mutableListOf<Int>())
+
+        @Volatile
         var pagesCalls = 0
 
         override suspend fun pages(): List<PageDescriptor> {

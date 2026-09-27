@@ -1,5 +1,7 @@
 package mihon.desktop.ui.reader
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -12,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
@@ -35,8 +38,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
@@ -540,6 +545,29 @@ fun ReaderScreen(
     }
 
     val ready = state.loadState is ReaderLoadState.Ready
+    // Transient page-number toast: only while chrome is hidden, so page turns stay readable
+    // without permanently covering the page. The last acknowledged (index, chapter) pair keeps
+    // chrome toggles and chapter boundaries from re-triggering the toast for the same page.
+    var acknowledgedIndicator by remember(session) { mutableStateOf(-1 to 0L) }
+    var pageIndicatorIndex by remember(session) { mutableStateOf<Int?>(null) }
+    val pageIndicatorAlpha = remember(session) { Animatable(0f) }
+    LaunchedEffect(state.selectedIndex, state.chapterId, overlayVisibility.chromeVisible, ready) {
+        val chapterId = state.chapterId ?: 0L
+        val index = state.selectedIndex
+        if (!ready || overlayVisibility.chromeVisible || index < 0) {
+            acknowledgedIndicator = index to chapterId
+            pageIndicatorIndex = null
+            pageIndicatorAlpha.snapTo(0f)
+            return@LaunchedEffect
+        }
+        if (acknowledgedIndicator == index to chapterId) return@LaunchedEffect
+        acknowledgedIndicator = index to chapterId
+        pageIndicatorIndex = index
+        pageIndicatorAlpha.snapTo(1f)
+        delay(READER_PAGE_INDICATOR_MILLIS)
+        pageIndicatorAlpha.animateTo(0f, animationSpec = tween(READER_PAGE_INDICATOR_FADE_MILLIS))
+        pageIndicatorIndex = null
+    }
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -736,6 +764,29 @@ fun ReaderScreen(
         ) {
             overlayVisibility = reduceReaderOverlayVisibility(overlayVisibility, ReaderOverlayEvent.PointerAtEdge)
             hideGeneration++
+        }
+        if (!overlayVisibility.chromeVisible && pageIndicatorIndex != null && ready) {
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 40.dp)
+                    .alpha(pageIndicatorAlpha.value),
+                shape = RoundedCornerShape(999.dp),
+                color = Color(0xB3000000),
+                contentColor = Color.White,
+            ) {
+                Text(
+                    text = strings.text(
+                        UiText.PageNumberOverlay,
+                        (pageIndicatorIndex ?: 0) + 1,
+                        state.pages.size.coerceAtLeast(1),
+                    ),
+                    style = MaterialTheme.typography.labelMedium,
+                    modifier = Modifier
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                        .testTag("reader-page-indicator"),
+                )
+            }
         }
     }
     chapterTransition?.let { transition ->
@@ -1035,4 +1086,6 @@ private class ReaderPanAccumulator {
 }
 
 private const val CHROME_HIDE_DELAY_MILLIS = 2_500L
+private const val READER_PAGE_INDICATOR_MILLIS = 1_000L
+private const val READER_PAGE_INDICATOR_FADE_MILLIS = 250
 private val TOP_REVEAL_HEIGHT = 24.dp

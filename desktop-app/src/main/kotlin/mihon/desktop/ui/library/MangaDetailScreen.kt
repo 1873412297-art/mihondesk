@@ -1155,6 +1155,10 @@ private fun MangaStatusBadge(status: Long, strings: mihon.desktop.i18n.DesktopSt
     val (dotColor, label) = when (status) {
         1L -> Color(0xFF4CAF50) to strings.mangaDetailStatusOngoing
         2L -> MaterialTheme.colorScheme.primary to strings.mangaDetailStatusCompleted
+        3L -> MaterialTheme.colorScheme.error to strings.mangaDetailStatusLicensed
+        4L -> MaterialTheme.colorScheme.primary to strings.mangaDetailStatusPublishingFinished
+        5L -> MaterialTheme.colorScheme.error to strings.statsStatusCancelled
+        6L -> Color(0xFFF57C00) to strings.statsStatusHiatus
         else -> MaterialTheme.colorScheme.outline to strings.mangaDetailStatusUnknown
     }
     Surface(

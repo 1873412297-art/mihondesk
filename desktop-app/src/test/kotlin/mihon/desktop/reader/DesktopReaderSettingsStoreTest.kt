@@ -44,6 +44,7 @@ class DesktopReaderSettingsStoreTest {
             cropBordersWebtoon = true,
             webtoonMaxWidth = 1000,
             webtoonSidePadding = 15,
+            preloadPages = 8,
         )
 
         store.save(expected)
@@ -56,6 +57,18 @@ class DesktopReaderSettingsStoreTest {
         Files.readString(file).contains("reader.v1.crop-borders-webtoon=true") shouldBe true
         Files.readString(file).contains("reader.v1.webtoon-max-width=1000") shouldBe true
         Files.readString(file).contains("reader.v1.webtoon-side-padding=15") shouldBe true
+        Files.readString(file).contains("reader.v1.preload-pages=8") shouldBe true
+    }
+
+    @Test
+    fun `preload pages clamp into the supported range`() {
+        val file = tempDir.resolve("preferences.properties")
+        Files.writeString(file, "reader.v1.preload-pages=42")
+
+        DesktopReaderSettingsStore(DesktopPreferenceStore(file)).load().preloadPages shouldBe 10
+
+        Files.writeString(file, "reader.v1.preload-pages=0")
+        DesktopReaderSettingsStore(DesktopPreferenceStore(file)).load().preloadPages shouldBe 1
     }
 
     @Test

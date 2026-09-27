@@ -146,6 +146,29 @@ class DesktopPreferenceStoreTest {
     }
 
     @Test
+    fun `library display badge preferences can be saved and restored`() {
+        val file = tempDir.resolve("preferences.properties")
+        val store = DesktopPreferenceStore(file)
+        store.save(
+            DesktopPreferences(
+                libraryBadgeUnread = false,
+                libraryBadgeDownloaded = false,
+            ),
+        )
+
+        val loaded = store.load()
+        loaded.libraryBadgeUnread shouldBe false
+        loaded.libraryBadgeDownloaded shouldBe false
+        store.property("library.badge_unread") shouldBe "false"
+        store.property("library.badge_downloaded") shouldBe "false"
+
+        // Defaults stay enabled for existing installs without the new keys.
+        val fresh = DesktopPreferenceStore(tempDir.resolve("fresh.properties"))
+        fresh.load().libraryBadgeUnread shouldBe true
+        fresh.load().libraryBadgeDownloaded shouldBe true
+    }
+
+    @Test
     fun `Android backup preference aliases are understood`() {
         val file = tempDir.resolve("preferences-android-aliases.properties")
         Files.writeString(

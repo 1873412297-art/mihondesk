@@ -64,6 +64,8 @@ data class LibraryUiState(
     val selectedCategoryId: Long = SYSTEM_ALL_CATEGORY.id,
     val displayMode: LibraryDisplayMode = LibraryDisplayMode.ComfortableGrid,
     val gridSize: Float = 180f,
+    val showUnreadBadge: Boolean = true,
+    val showDownloadedBadge: Boolean = true,
     val filterState: LibraryFilterState = LibraryFilterState(),
     val sortState: LibrarySortState = LibrarySortState(),
     val selectionState: LibrarySelectionState = LibrarySelectionState(),
@@ -150,6 +152,10 @@ class LibraryPresenter(
     private val gridSizeState = MutableStateFlow(
         initialPrefs?.libraryGridSize ?: 180f,
     )
+
+    private val showUnreadBadgeState = MutableStateFlow(initialPrefs?.libraryBadgeUnread ?: true)
+
+    private val showDownloadedBadgeState = MutableStateFlow(initialPrefs?.libraryBadgeDownloaded ?: true)
 
     private val filterStateFlow = MutableStateFlow(
         LibraryFilterState(
@@ -250,10 +256,23 @@ class LibraryPresenter(
             selectedMangaId,
             displayModeState,
             gridSizeState,
+            showUnreadBadgeState,
+            showDownloadedBadgeState,
             selectionStateFlow,
             layoutExtrasFlow,
-        ) { selId, mode, size, selState, (filterOpen, duplicateDialog) ->
-            LayoutAndSelectionData(selId, mode, size, selState, filterOpen, duplicateDialog)
+        ) { values: Array<Any?> ->
+            @Suppress("UNCHECKED_CAST")
+            val extras = values[6] as Pair<Boolean, DuplicateMangaDialogState?>
+            LayoutAndSelectionData(
+                selectedMangaId = values[0] as Long?,
+                displayMode = values[1] as LibraryDisplayMode,
+                gridSize = values[2] as Float,
+                showUnreadBadge = values[3] as Boolean,
+                showDownloadedBadge = values[4] as Boolean,
+                selectionState = values[5] as LibrarySelectionState,
+                isFilterDialogOpen = extras.first,
+                duplicateDialog = extras.second,
+            )
         },
     ) { processed, layout ->
         when (processed.repoResult) {
@@ -264,6 +283,8 @@ class LibraryPresenter(
                 selectedCategoryId = processed.selectedCategoryId,
                 displayMode = layout.displayMode,
                 gridSize = layout.gridSize,
+                showUnreadBadge = layout.showUnreadBadge,
+                showDownloadedBadge = layout.showDownloadedBadge,
                 filterState = processed.filters,
                 sortState = processed.sort,
                 selectionState = layout.selectionState,
@@ -279,6 +300,8 @@ class LibraryPresenter(
                 selectedCategoryId = processed.selectedCategoryId,
                 displayMode = layout.displayMode,
                 gridSize = layout.gridSize,
+                showUnreadBadge = layout.showUnreadBadge,
+                showDownloadedBadge = layout.showDownloadedBadge,
                 filterState = processed.filters,
                 sortState = processed.sort,
                 selectionState = layout.selectionState,
@@ -913,6 +936,29 @@ class LibraryPresenter(
         detailRetryRequest.value = System.currentTimeMillis()
     }
 
+    /** Marks a chapter read from surfaces that do not have the detail page open (e.g. Updates). */
+    fun markChapterRead(mangaId: Long, chapterId: Long) {
+        val chapter = repository.chapterSnapshot(mangaId).find { it.id == chapterId } ?: return
+        if (chapter.read) return
+        mutationPort?.updateChapter(
+            chapter.copy(read = true, lastModifiedAt = System.currentTimeMillis()).toChapterRecord(),
+        )
+    }
+
+    /** Enqueues a chapter download from surfaces that do not have the detail page open. */
+    fun enqueueChapterDownload(mangaId: Long, chapterId: Long) {
+        val manga = repository.librarySnapshot().firstOrNull { it.id == mangaId } ?: return
+        val chapter = repository.chapterSnapshot(mangaId).find { it.id == chapterId } ?: return
+        presenterScope.launch {
+            downloader?.enqueue(
+                sourceId = manga.sourceId,
+                mangaId = manga.id,
+                mangaTitle = manga.title,
+                chapters = listOf(chapter),
+            )
+        }
+    }
+
     fun updateMangaInfo(
         mangaId: Long,
         title: String,
@@ -1027,6 +1073,20 @@ class LibraryPresenter(
         gridSizeState.value = size
         preferences?.update {
             setProperty("library.grid_size", size.toString())
+        }
+    }
+
+    fun setUnreadBadgeVisible(visible: Boolean) {
+        showUnreadBadgeState.value = visible
+        preferences?.update {
+            setProperty("library.badge_unread", visible.toString())
+        }
+    }
+
+    fun setDownloadedBadgeVisible(visible: Boolean) {
+        showDownloadedBadgeState.value = visible
+        preferences?.update {
+            setProperty("library.badge_downloaded", visible.toString())
         }
     }
 
@@ -1327,6 +1387,8 @@ private data class LayoutAndSelectionData(
     val selectedMangaId: Long?,
     val displayMode: LibraryDisplayMode,
     val gridSize: Float,
+    val showUnreadBadge: Boolean,
+    val showDownloadedBadge: Boolean,
     val selectionState: LibrarySelectionState,
     val isFilterDialogOpen: Boolean,
     val duplicateDialog: DuplicateMangaDialogState?,

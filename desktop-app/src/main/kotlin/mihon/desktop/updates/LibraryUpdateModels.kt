@@ -8,6 +8,8 @@ data class UpdatedChapterItem(
     val chapterNumber: Double,
     val dateFetch: Long,
     val mangaThumbnailUrl: String? = null,
+    val read: Boolean = false,
+    val downloaded: Boolean = false,
 )
 
 data class LibraryUpdateResult(

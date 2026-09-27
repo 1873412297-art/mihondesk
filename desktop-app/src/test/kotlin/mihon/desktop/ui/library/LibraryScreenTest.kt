@@ -3,8 +3,10 @@ package mihon.desktop.ui.library
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -124,7 +126,7 @@ class LibraryScreenTest {
             "display-mode-CompactGrid",
             "display-mode-CoverOnly",
             "display-mode-List",
-            "library-grid-slider",
+            "library-display-options",
             "library-filter-sort-button",
             "library-toggle-selection",
             "library-manage-categories-button",
@@ -173,6 +175,103 @@ class LibraryScreenTest {
         retries shouldBe 1
     }
 
+    @Test
+    fun `display options dialog hosts grid slider and badge toggles`() = runComposeUiTest {
+        var gridSize: Float? = null
+        var unreadBadge: Boolean? = null
+        var downloadedBadge: Boolean? = null
+        setContent {
+            MaterialTheme {
+                Box(modifier = Modifier.requiredSize(1000.dp, 800.dp)) {
+                    LibraryScreen(
+                        state = LibraryUiState(loading = false, items = listOf(manga(42, "Options"))),
+                        onQueryChange = {},
+                        onMangaSelected = {},
+                        onImportBackup = {},
+                        onImportLocal = {},
+                        onGridSizeChange = { gridSize = it },
+                        onUnreadBadgeChange = { unreadBadge = it },
+                        onDownloadedBadgeChange = { downloadedBadge = it },
+                    )
+                }
+            }
+        }
+
+        onNodeWithTag("library-grid-slider").assertDoesNotExist()
+        onNodeWithTag("library-display-options").performClick()
+        onNodeWithTag("library-display-options-dialog").assertExists()
+        onNodeWithTag("library-grid-slider").assertExists()
+        onNodeWithTag("library-badge-unread").assertIsOn()
+        onNodeWithTag("library-badge-downloaded").assertIsOn()
+
+        onNodeWithTag("library-badge-unread").performClick()
+        unreadBadge shouldBe false
+        onNodeWithTag("library-badge-downloaded").performClick()
+        downloadedBadge shouldBe false
+        onNodeWithTag("library-display-options-close").performClick()
+        onNodeWithTag("library-display-options-dialog").assertDoesNotExist()
+    }
+
+    @Test
+    fun `downloaded badge follows display options and repository counts`() = runComposeUiTest {
+        val state = mutableStateOf(
+            LibraryUiState(
+                loading = false,
+                items = listOf(manga(42, "Downloaded title", downloaded = 3)),
+                showDownloadedBadge = true,
+            ),
+        )
+        setContent {
+            MaterialTheme {
+                Box(modifier = Modifier.requiredSize(1000.dp, 800.dp)) {
+                    LibraryScreen(
+                        state = state.value,
+                        onQueryChange = {},
+                        onMangaSelected = {},
+                        onImportBackup = {},
+                        onImportLocal = {},
+                    )
+                }
+            }
+        }
+
+        onNodeWithTag("library-item-downloaded-42", true).assertExists()
+
+        state.value = state.value.copy(showDownloadedBadge = false)
+
+        onNodeWithTag("library-item-downloaded-42", true).assertDoesNotExist()
+    }
+
+    @Test
+    fun `unread badge follows display option`() = runComposeUiTest {
+        val state = mutableStateOf(
+            LibraryUiState(
+                loading = false,
+                items = listOf(manga(42, "Unread title", unread = 4)),
+                showUnreadBadge = false,
+            ),
+        )
+        setContent {
+            MaterialTheme {
+                Box(modifier = Modifier.requiredSize(1000.dp, 800.dp)) {
+                    LibraryScreen(
+                        state = state.value,
+                        onQueryChange = {},
+                        onMangaSelected = {},
+                        onImportBackup = {},
+                        onImportLocal = {},
+                    )
+                }
+            }
+        }
+
+        onNodeWithText("4 unread").assertDoesNotExist()
+
+        state.value = state.value.copy(showUnreadBadge = true)
+
+        onNodeWithText("4 unread").assertExists()
+    }
+
     private fun androidx.compose.ui.test.ComposeUiTest.setLibraryContent(
         state: LibraryUiState,
         onMangaSelected: (Long) -> Unit = {},
@@ -202,6 +301,7 @@ class LibraryScreenTest {
         title: String,
         chapters: Long = 1,
         unread: Long = 0,
+        downloaded: Long = 0,
     ) = LibraryManga(
         id = id,
         sourceId = id + 100,
@@ -210,5 +310,6 @@ class LibraryScreenTest {
         thumbnailUrl = null,
         chapterCount = chapters,
         unreadCount = unread,
+        downloadedCount = downloaded,
     )
 }

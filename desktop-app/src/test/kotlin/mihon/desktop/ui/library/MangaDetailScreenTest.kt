@@ -120,6 +120,32 @@ class MangaDetailScreenTest {
         onNodeWithTag("manga-detail-missing").assertExists()
     }
 
+    @Test
+    fun `status badge maps hiatus and cancelled statuses to labels`() = runComposeUiTest {
+        setContent {
+            MaterialTheme {
+                Box(Modifier.requiredSize(1280.dp, 1000.dp)) {
+                    MangaDetailScreen(detailState(status = 6L), onBack = {})
+                }
+            }
+        }
+
+        onNodeWithText("On Hiatus").assertExists()
+    }
+
+    @Test
+    fun `status badge maps cancelled status to label`() = runComposeUiTest {
+        setContent {
+            MaterialTheme {
+                Box(Modifier.requiredSize(1280.dp, 1000.dp)) {
+                    MangaDetailScreen(detailState(status = 5L), onBack = {})
+                }
+            }
+        }
+
+        onNodeWithText("Cancelled").assertExists()
+    }
+
     private fun androidx.compose.ui.test.ComposeUiTest.setScreen(
         width: androidx.compose.ui.unit.Dp,
         onBack: () -> Unit = {},
@@ -144,10 +170,10 @@ class MangaDetailScreenTest {
         }
     }
 
-    private fun detailState() = MangaDetailUiState(
+    private fun detailState(status: Long = 0) = MangaDetailUiState(
         manga = MangaDetails(
             7, 107, "/7", "Real title", null, "Author name", "Real description", "[\"Drama\",\"Mystery\"]",
-            0, null, true, 0, 0, 0, "ALWAYS_UPDATE", 0, null, "[]", 0, "Private notes", true, "{}",
+            status, null, true, 0, 0, 0, "ALWAYS_UPDATE", 0, null, "[]", 0, "Private notes", true, "{}",
             listOf(CategoryRecord(1, "Favorites")),
         ),
         chapters = listOf(

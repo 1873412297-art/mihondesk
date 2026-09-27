@@ -417,10 +417,30 @@ fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
         }
     }
     val allMangaList = libraryState.items
-    val updatedChapters = remember(lastReport, allMangaList) {
+    // Per-chapter row state for the Updates feed: the update report is a point-in-time
+    // snapshot, so read/download changes made from the feed itself are tracked as in-memory
+    // overrides until the next update run replaces them.
+    var updatesRowOverrides by remember { mutableStateOf<Map<Long, UpdatesRowFlags>>(emptyMap()) }
+    LaunchedEffect(lastReport, allMangaList, downloader) {
+        updatesRowOverrides = lastReport?.results?.flatMap { res ->
+            val manga = allMangaList.firstOrNull { it.id == res.mangaId }
+            res.newChapters.map { ch ->
+                val downloaded = manga != null && downloader?.isChapterDownloaded(
+                    manga.sourceId,
+                    manga.title,
+                    ch.id,
+                    ch.name,
+                    manga.id,
+                ) == true
+                ch.id to UpdatesRowFlags(read = ch.read, downloaded = downloaded)
+            }
+        }.orEmpty().toMap()
+    }
+    val updatedChapters = remember(lastReport, allMangaList, updatesRowOverrides) {
         lastReport?.results?.flatMap { res ->
             val mangaCover = allMangaList.firstOrNull { it.id == res.mangaId }?.thumbnailUrl
             res.newChapters.map { ch ->
+                val flags = updatesRowOverrides[ch.id] ?: UpdatesRowFlags(read = ch.read, downloaded = false)
                 mihon.desktop.updates.UpdatedChapterItem(
                     mangaId = res.mangaId,
                     chapterId = ch.id,
@@ -429,6 +449,8 @@ fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
                     chapterNumber = ch.chapterNumber,
                     dateFetch = ch.dateFetch,
                     mangaThumbnailUrl = mangaCover,
+                    read = flags.read,
+                    downloaded = flags.downloaded,
                 )
             }
         } ?: emptyList()
@@ -1048,6 +1070,8 @@ fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
                                         onEditMangaCategories = { isEditMangaCategoriesDialogOpen = true },
                                         onDisplayModeChange = libraryPresenter::setDisplayMode,
                                         onGridSizeChange = libraryPresenter::setGridSize,
+                                        onUnreadBadgeChange = libraryPresenter::setUnreadBadgeVisible,
+                                        onDownloadedBadgeChange = libraryPresenter::setDownloadedBadgeVisible,
                                         onOpenFilterDialog = { libraryPresenter.setFilterDialogOpen(true) },
                                         onCloseFilterDialog = { libraryPresenter.setFilterDialogOpen(false) },
                                         onFilterChange = libraryPresenter::setFilterState,
@@ -1132,6 +1156,22 @@ fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
                                         updatedChapters = updatedChapters,
                                         onCheckForUpdates = {
                                             presenterScope.launch { runtime.libraryUpdateScheduler?.triggerUpdateNow() }
+                                        },
+                                        onMarkUpdatesChapterRead = { mangaId, chapterId ->
+                                            updatesRowOverrides = updatesRowOverrides +
+                                                (
+                                                    chapterId to (updatesRowOverrides[chapterId] ?: UpdatesRowFlags())
+                                                        .copy(read = true)
+                                                    )
+                                            libraryPresenter.markChapterRead(mangaId, chapterId)
+                                        },
+                                        onDownloadUpdatesChapter = { mangaId, chapterId ->
+                                            updatesRowOverrides = updatesRowOverrides +
+                                                (
+                                                    chapterId to (updatesRowOverrides[chapterId] ?: UpdatesRowFlags())
+                                                        .copy(downloaded = true)
+                                                    )
+                                            libraryPresenter.enqueueChapterDownload(mangaId, chapterId)
                                         },
                                         // Browse
                                         browseContent = {
@@ -1572,6 +1612,12 @@ private enum class MangaOrganizationAction {
     Categories,
     Tracking,
 }
+
+/** Live row state for the Updates feed; the update report itself is a point-in-time snapshot. */
+private data class UpdatesRowFlags(
+    val read: Boolean = false,
+    val downloaded: Boolean = false,
+)
 
 @Composable
 private fun ReaderDestination(

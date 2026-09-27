@@ -107,6 +107,10 @@ class DesktopStringsTest {
             bundle.mangaDetailDescriptionLabel.shouldNotBeBlank()
             bundle.mangaDetailSaveSuccess.shouldNotBeBlank()
             bundle.mangaDetailStatusOption(1L).shouldNotBeBlank()
+            bundle.mangaDetailStatusOption(5L).shouldNotBeBlank()
+            bundle.mangaDetailStatusOption(6L).shouldNotBeBlank()
+            bundle.statsStatusHiatus.shouldNotBeBlank()
+            bundle.statsStatusCancelled.shouldNotBeBlank()
 
             // Cookie Manager Dialog
             bundle.cookieManagerTitle.shouldNotBeBlank()

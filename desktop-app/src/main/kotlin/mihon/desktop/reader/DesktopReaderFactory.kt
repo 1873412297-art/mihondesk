@@ -96,6 +96,7 @@ class DesktopReaderFactory(
             scope = sessionScope,
             sourceFactory = sourceFactory,
             maxFullPagePixels = MAX_DISPLAY_PIXELS,
+            preloadPages = { settings.load().preloadPages },
         )
         val animationCoordinator = AnimationCoordinator(
             scope = sessionScope,

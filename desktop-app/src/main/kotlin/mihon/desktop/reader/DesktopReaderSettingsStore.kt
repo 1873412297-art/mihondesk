@@ -3,6 +3,7 @@ package mihon.desktop.reader
 import mihon.desktop.preferences.DesktopPreferenceStore
 import mihon.reader.model.ReadingMode
 import mihon.reader.model.ScaleMode
+import mihon.reader.prefetch.PrefetchPolicy
 import mihon.reader.session.ReaderSettings
 
 enum class ReaderColorFilter {
@@ -39,6 +40,7 @@ data class DesktopReaderSettings(
     val skipReadChapters: Boolean = false,
     val skipFilteredChapters: Boolean = true,
     val skipDuplicateChapters: Boolean = false,
+    val preloadPages: Int = PrefetchPolicy.AHEAD_PAGES,
 ) {
     fun toCoreSettings(): ReaderSettings = ReaderSettings(mode, coverOffset, scaleMode)
 }
@@ -111,6 +113,9 @@ class DesktopReaderSettingsStore(private val preferences: DesktopPreferenceStore
                 ?: defaults.skipFilteredChapters,
             skipDuplicateChapters = preferences.property(SKIP_DUPLICATE)?.toBooleanStrictOrNull()
                 ?: defaults.skipDuplicateChapters,
+            preloadPages = preferences.property(PRELOAD_PAGES)?.toIntOrNull()
+                ?.coerceIn(DesktopPreloadPolicy.MIN_PRELOAD_PAGES, DesktopPreloadPolicy.MAX_PRELOAD_PAGES)
+                ?: defaults.preloadPages,
         )
     }
 
@@ -136,6 +141,7 @@ class DesktopReaderSettingsStore(private val preferences: DesktopPreferenceStore
             setProperty(SKIP_READ, settings.skipReadChapters.toString())
             setProperty(SKIP_FILTERED, settings.skipFilteredChapters.toString())
             setProperty(SKIP_DUPLICATE, settings.skipDuplicateChapters.toString())
+            setProperty(PRELOAD_PAGES, settings.preloadPages.toString())
         }
     }
 
@@ -187,5 +193,6 @@ class DesktopReaderSettingsStore(private val preferences: DesktopPreferenceStore
         const val SKIP_READ = "reader.v1.skip-read"
         const val SKIP_FILTERED = "reader.v1.skip-filtered"
         const val SKIP_DUPLICATE = "reader.v1.skip-duplicate"
+        const val PRELOAD_PAGES = "reader.v1.preload-pages"
     }
 }

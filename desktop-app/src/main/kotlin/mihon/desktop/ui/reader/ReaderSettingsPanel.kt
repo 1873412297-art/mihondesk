@@ -27,6 +27,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import mihon.desktop.i18n.LocalStrings
+import mihon.desktop.i18n.UiText
+import mihon.desktop.i18n.text
 import mihon.desktop.reader.DesktopReaderSettings
 import mihon.desktop.reader.ReaderBackgroundColor
 import mihon.desktop.reader.ReaderClickAction
@@ -34,6 +36,7 @@ import mihon.desktop.reader.ReaderColorFilter
 import mihon.desktop.reader.ReaderWheelBehavior
 import mihon.reader.model.ReadingMode
 import mihon.reader.model.ScaleMode
+import kotlin.math.roundToInt
 
 private enum class ReaderSettingsPage {
     READING,
@@ -196,6 +199,16 @@ private fun GeneralSettingsPage(settings: DesktopReaderSettings, onChange: (Desk
         modifier = Modifier.testTag("reader-setting-center-boundary"),
     )
     WheelMenu(settings.wheelBehavior) { onChange(settings.copy(wheelBehavior = it)) }
+    Text(strings.text(UiText.ReaderPreloadPages, settings.preloadPages))
+    Slider(
+        value = settings.preloadPages.toFloat(),
+        onValueChange = { value ->
+            onChange(settings.copy(preloadPages = value.roundToInt().coerceIn(1, 10)))
+        },
+        valueRange = 1f..10f,
+        steps = 8,
+        modifier = Modifier.testTag("reader-setting-preload-pages"),
+    )
     Text(strings.readerChapterTransitions, style = MaterialTheme.typography.titleSmall)
     SettingCheckBox(
         "reader-setting-always-show-transition",

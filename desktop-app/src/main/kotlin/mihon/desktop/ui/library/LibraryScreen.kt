@@ -31,8 +31,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.CollectionsBookmark
+import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.FilterList
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
@@ -106,6 +108,8 @@ fun LibraryScreen(
     // Phase 11: Display mode, grid zoom, filter & sort, selection callbacks
     onDisplayModeChange: (LibraryDisplayMode) -> Unit = {},
     onGridSizeChange: (Float) -> Unit = {},
+    onUnreadBadgeChange: (Boolean) -> Unit = {},
+    onDownloadedBadgeChange: (Boolean) -> Unit = {},
     onOpenFilterDialog: () -> Unit = {},
     onCloseFilterDialog: () -> Unit = {},
     onFilterChange: (LibraryFilterState) -> Unit = {},
@@ -221,6 +225,8 @@ fun LibraryScreen(
                     onManageCategories = onManageCategories,
                     onDisplayModeChange = onDisplayModeChange,
                     onGridSizeChange = onGridSizeChange,
+                    onUnreadBadgeChange = onUnreadBadgeChange,
+                    onDownloadedBadgeChange = onDownloadedBadgeChange,
                     onOpenFilterDialog = onOpenFilterDialog,
                     onClearFilters = {
                         onQueryChange("")
@@ -283,6 +289,8 @@ fun LibraryScreen(
                 onManageCategories = onManageCategories,
                 onDisplayModeChange = onDisplayModeChange,
                 onGridSizeChange = onGridSizeChange,
+                onUnreadBadgeChange = onUnreadBadgeChange,
+                onDownloadedBadgeChange = onDownloadedBadgeChange,
                 onOpenFilterDialog = onOpenFilterDialog,
                 onClearFilters = {
                     onQueryChange("")
@@ -347,6 +355,8 @@ private fun LibraryPane(
     onManageCategories: () -> Unit,
     onDisplayModeChange: (LibraryDisplayMode) -> Unit,
     onGridSizeChange: (Float) -> Unit,
+    onUnreadBadgeChange: (Boolean) -> Unit,
+    onDownloadedBadgeChange: (Boolean) -> Unit,
     onOpenFilterDialog: () -> Unit,
     onClearFilters: () -> Unit,
     onToggleSelectionMode: (Boolean) -> Unit,
@@ -366,6 +376,7 @@ private fun LibraryPane(
 ) {
     val strings = LocalStrings.current
     val failedCovers by CoverFailureRegistry.failuresFlow.collectAsState()
+    var showDisplayOptions by remember { mutableStateOf(false) }
 
     BoxWithConstraints(modifier = modifier) {
         val useNarrowControls = maxWidth < 900.dp
@@ -446,21 +457,14 @@ private fun LibraryPane(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    if (state.displayMode != LibraryDisplayMode.List) {
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
+                    DesktopTooltipBox(text = strings.text(UiText.LibraryDisplayOptions)) {
+                        IconButton(
+                            onClick = { showDisplayOptions = true },
+                            modifier = Modifier.testTag("library-display-options"),
                         ) {
-                            Text(
-                                text = "${state.gridSize.toInt()}dp",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.outline,
-                            )
-                            Slider(
-                                value = state.gridSize,
-                                onValueChange = onGridSizeChange,
-                                valueRange = 120f..280f,
-                                modifier = Modifier.width(100.dp).testTag("library-grid-slider"),
+                            Icon(
+                                imageVector = Icons.Rounded.Tune,
+                                contentDescription = strings.text(UiText.LibraryDisplayOptions),
                             )
                         }
                     }
@@ -690,6 +694,20 @@ private fun LibraryPane(
             )
         }
 
+        // Display Options Dialog
+        if (showDisplayOptions) {
+            LibraryDisplayOptionsDialog(
+                showUnreadBadge = state.showUnreadBadge,
+                showDownloadedBadge = state.showDownloadedBadge,
+                gridSize = state.gridSize,
+                showGridSize = state.displayMode != LibraryDisplayMode.List,
+                onUnreadBadgeChange = onUnreadBadgeChange,
+                onDownloadedBadgeChange = onDownloadedBadgeChange,
+                onGridSizeChange = onGridSizeChange,
+                onDismiss = { showDisplayOptions = false },
+            )
+        }
+
         // Floating Batch Action Bar at bottom
         if (state.selectionState.isSelectionMode || state.selectionState.isAnySelected) {
             LibraryBatchActionBar(
@@ -706,6 +724,71 @@ private fun LibraryPane(
             )
         }
     }
+}
+
+@Composable
+private fun LibraryDisplayOptionsDialog(
+    showUnreadBadge: Boolean,
+    showDownloadedBadge: Boolean,
+    gridSize: Float,
+    showGridSize: Boolean,
+    onUnreadBadgeChange: (Boolean) -> Unit,
+    onDownloadedBadgeChange: (Boolean) -> Unit,
+    onGridSizeChange: (Float) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val strings = LocalStrings.current
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        modifier = Modifier.testTag("library-display-options-dialog"),
+        title = { Text(strings.text(UiText.LibraryDisplayOptions)) },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(
+                        checked = showUnreadBadge,
+                        onCheckedChange = onUnreadBadgeChange,
+                        modifier = Modifier.testTag("library-badge-unread"),
+                    )
+                    Text(strings.text(UiText.LibraryBadgeUnread))
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(
+                        checked = showDownloadedBadge,
+                        onCheckedChange = onDownloadedBadgeChange,
+                        modifier = Modifier.testTag("library-badge-downloaded"),
+                    )
+                    Text(strings.text(UiText.LibraryBadgeDownloaded))
+                }
+                if (showGridSize) {
+                    HorizontalDivider()
+                    Text(strings.libraryGridSize, style = MaterialTheme.typography.titleSmall)
+                    Text(
+                        text = "${gridSize.toInt()}dp",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Slider(
+                        value = gridSize,
+                        onValueChange = onGridSizeChange,
+                        valueRange = 120f..280f,
+                        modifier = Modifier.fillMaxWidth().testTag("library-grid-slider"),
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = onDismiss,
+                modifier = Modifier.testTag("library-display-options-close"),
+            ) {
+                Text(strings.dialogDone)
+            }
+        },
+    )
 }
 
 @Composable
@@ -815,6 +898,8 @@ private fun LibraryContent(
                                     manga = manga,
                                     isSelectionMode = state.selectionState.isSelectionMode,
                                     isSelected = state.selectionState.selectedMangaIds.contains(manga.id),
+                                    showUnreadBadge = state.showUnreadBadge,
+                                    showDownloadedBadge = state.showDownloadedBadge,
                                     sourceBaseUrl = sourceBaseUrlFor(manga.sourceId),
                                     onClick = {
                                         if (state.selectionState.isSelectionMode) {
@@ -860,6 +945,8 @@ private fun LibraryContent(
                                     manga = manga,
                                     isSelectionMode = state.selectionState.isSelectionMode,
                                     isSelected = state.selectionState.selectedMangaIds.contains(manga.id),
+                                    showUnreadBadge = state.showUnreadBadge,
+                                    showDownloadedBadge = state.showDownloadedBadge,
                                     sourceBaseUrl = sourceBaseUrlFor(manga.sourceId),
                                     onClick = {
                                         if (state.selectionState.isSelectionMode) {
@@ -905,6 +992,8 @@ private fun LibraryContent(
                                     manga = manga,
                                     isSelectionMode = state.selectionState.isSelectionMode,
                                     isSelected = state.selectionState.selectedMangaIds.contains(manga.id),
+                                    showUnreadBadge = state.showUnreadBadge,
+                                    showDownloadedBadge = state.showDownloadedBadge,
                                     sourceBaseUrl = sourceBaseUrlFor(manga.sourceId),
                                     onClick = {
                                         if (state.selectionState.isSelectionMode) {
@@ -941,6 +1030,8 @@ private fun LibraryContent(
                                     manga = manga,
                                     isSelectionMode = state.selectionState.isSelectionMode,
                                     isSelected = state.selectionState.selectedMangaIds.contains(manga.id),
+                                    showUnreadBadge = state.showUnreadBadge,
+                                    showDownloadedBadge = state.showDownloadedBadge,
                                     sourceBaseUrl = sourceBaseUrlFor(manga.sourceId),
                                     onClick = {
                                         if (state.selectionState.isSelectionMode) {
@@ -975,6 +1066,8 @@ private fun ComfortableMangaCard(
     manga: LibraryManga,
     isSelectionMode: Boolean,
     isSelected: Boolean,
+    showUnreadBadge: Boolean,
+    showDownloadedBadge: Boolean,
     sourceBaseUrl: String? = null,
     onClick: () -> Unit,
 ) {
@@ -1008,7 +1101,7 @@ private fun ComfortableMangaCard(
                     headers = itemCoverHeaders,
                 )
 
-                if (manga.unreadCount > 0) {
+                if (showUnreadBadge && manga.unreadCount > 0) {
                     Surface(
                         modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
                         color = MaterialTheme.colorScheme.primary,
@@ -1024,6 +1117,15 @@ private fun ComfortableMangaCard(
                             modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
                         )
                     }
+                }
+
+                if (showDownloadedBadge && manga.downloadedCount > 0) {
+                    DownloadedBadge(
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(8.dp)
+                            .testTag("library-item-downloaded-${manga.id}"),
+                    )
                 }
 
                 if (isSelectionMode) {
@@ -1076,6 +1178,8 @@ private fun CompactMangaCard(
     manga: LibraryManga,
     isSelectionMode: Boolean,
     isSelected: Boolean,
+    showUnreadBadge: Boolean,
+    showDownloadedBadge: Boolean,
     sourceBaseUrl: String? = null,
     onClick: () -> Unit,
 ) {
@@ -1123,7 +1227,7 @@ private fun CompactMangaCard(
             }
 
             // Top-right unread badge
-            if (manga.unreadCount > 0) {
+            if (showUnreadBadge && manga.unreadCount > 0) {
                 Surface(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
@@ -1142,6 +1246,15 @@ private fun CompactMangaCard(
             }
 
             // Selection Checkbox
+            if (showDownloadedBadge && manga.downloadedCount > 0) {
+                DownloadedBadge(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(6.dp)
+                        .testTag("library-item-downloaded-${manga.id}"),
+                )
+            }
+
             if (isSelectionMode) {
                 Box(
                     modifier = Modifier
@@ -1166,6 +1279,8 @@ private fun CoverOnlyMangaCard(
     manga: LibraryManga,
     isSelectionMode: Boolean,
     isSelected: Boolean,
+    showUnreadBadge: Boolean,
+    showDownloadedBadge: Boolean,
     sourceBaseUrl: String? = null,
     onClick: () -> Unit,
 ) {
@@ -1191,7 +1306,7 @@ private fun CoverOnlyMangaCard(
             )
 
             // Top-right unread badge
-            if (manga.unreadCount > 0) {
+            if (showUnreadBadge && manga.unreadCount > 0) {
                 Surface(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
@@ -1210,6 +1325,15 @@ private fun CoverOnlyMangaCard(
             }
 
             // Selection Checkbox
+            if (showDownloadedBadge && manga.downloadedCount > 0) {
+                DownloadedBadge(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(4.dp)
+                        .testTag("library-item-downloaded-${manga.id}"),
+                )
+            }
+
             if (isSelectionMode) {
                 Box(
                     modifier = Modifier
@@ -1228,12 +1352,35 @@ private fun CoverOnlyMangaCard(
     }
 }
 
+/**
+ * Downloaded indicator shared by the library cards. Relies on [LibraryManga.downloadedCount],
+ * which the repository derives from registered chapter assets - no disk scanning here.
+ */
+@Composable
+private fun DownloadedBadge(modifier: Modifier = Modifier) {
+    val strings = LocalStrings.current
+    Surface(
+        modifier = modifier,
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
+        contentColor = MaterialTheme.colorScheme.primary,
+        shape = CircleShape,
+    ) {
+        Icon(
+            imageVector = Icons.Rounded.Download,
+            contentDescription = strings.text(UiText.LibraryBadgeDownloaded),
+            modifier = Modifier.padding(4.dp).size(14.dp),
+        )
+    }
+}
+
 // 4. List Item: Full horizontal row
 @Composable
 private fun ListMangaItem(
     manga: LibraryManga,
     isSelectionMode: Boolean,
     isSelected: Boolean,
+    showUnreadBadge: Boolean,
+    showDownloadedBadge: Boolean,
     sourceBaseUrl: String? = null,
     onClick: () -> Unit,
 ) {
@@ -1301,7 +1448,7 @@ private fun ListMangaItem(
                 )
             }
 
-            if (manga.unreadCount > 0) {
+            if (showUnreadBadge && manga.unreadCount > 0) {
                 Surface(
                     color = MaterialTheme.colorScheme.primaryContainer,
                     shape = RoundedCornerShape(12.dp),
@@ -1314,6 +1461,15 @@ private fun ListMangaItem(
                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
                     )
                 }
+            }
+
+            if (showDownloadedBadge && manga.downloadedCount > 0) {
+                Icon(
+                    imageVector = Icons.Rounded.Download,
+                    contentDescription = strings.text(UiText.LibraryBadgeDownloaded),
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(18.dp).testTag("library-item-downloaded-${manga.id}"),
+                )
             }
         }
     }

@@ -4,9 +4,12 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.yield
 import mihon.desktop.ui.reader.AnimationVisibilityReporter
 import mihon.desktop.ui.reader.ComposeTileBridge
 import mihon.desktop.ui.reader.IntrinsicPageSizeCache
@@ -22,7 +25,11 @@ import mihon.reader.image.TilePlanner
 import mihon.reader.model.FrameId
 import mihon.reader.model.PageDescriptor
 import mihon.reader.model.PageId
+import mihon.reader.model.ReadingMode
+import mihon.reader.prefetch.NavigationDirection
 import mihon.reader.prefetch.PageLoadCoordinator
+import mihon.reader.prefetch.PageLoadPriority
+import mihon.reader.prefetch.PrefetchPolicy
 import mihon.reader.session.AdjacentChapterWarmup
 import mihon.reader.session.AnimationCoordinator
 import mihon.reader.session.AnimationProbe
@@ -39,11 +46,16 @@ class DesktopReaderContentPipeline(
     private val scope: CoroutineScope,
     private val sourceFactory: ChapterSourceFactory,
     private val maxFullPagePixels: Long = DEFAULT_MAX_FULL_PAGE_PIXELS,
+    private val preloadPages: () -> Int = { PrefetchPolicy.AHEAD_PAGES },
 ) : ReaderContentPipeline {
     private val lock = Any()
     private var coordinator: PageLoadCoordinator? = null
     private var warmupRequest: AdjacentChapterWarmup? = null
     private var warmupJob: Job? = null
+    private var extendedPrefetchJob: Job? = null
+    private var chapterSource: ChapterSource? = null
+    private var chapterPages: List<PageDescriptor> = emptyList()
+    private val preloadFailures = HashSet<PageId>()
     private val closed = AtomicBoolean(false)
 
     override suspend fun open(source: ChapterSource): List<PageDescriptor> {
@@ -52,7 +64,13 @@ class DesktopReaderContentPipeline(
         val next = newCoordinator()
         synchronized(lock) { coordinator = next }
         return try {
-            next.openChapter(source)
+            val opened = next.openChapter(source)
+            synchronized(lock) {
+                chapterPages = opened
+                chapterSource = source
+                preloadFailures.clear()
+            }
+            opened
         } catch (failure: Throwable) {
             synchronized(lock) { if (coordinator === next) coordinator = null }
             next.close()
@@ -69,8 +87,19 @@ class DesktopReaderContentPipeline(
                 mode = position.mode,
                 direction = position.direction,
             )
+            val requested = DesktopPreloadPolicy.clamp(preloadPages())
+            if (requested == PrefetchPolicy.AHEAD_PAGES) {
+                // Native coordinator path: keep its proven prefetch cancellation semantics.
+                cancelExtendedPrefetch()
+            } else {
+                // The core window is hardcoded, so a custom window is scheduled here instead:
+                // drop the coordinator's native prefetch and run ours for the requested size.
+                active.cancelPrefetch()
+                scheduleExtendedPrefetch(active, position, requested)
+            }
         } else {
             active.cancelPrefetch()
+            cancelExtendedPrefetch()
         }
     }
 
@@ -107,8 +136,12 @@ class DesktopReaderContentPipeline(
             val oldWarmup = warmupJob
             warmupJob = null
             warmupRequest = null
+            chapterPages = emptyList()
+            chapterSource = null
+            preloadFailures.clear()
             oldCoordinator to oldWarmup
         }
+        cancelExtendedPrefetch()
         warm?.cancel()
         active?.close()
     }
@@ -169,6 +202,115 @@ class DesktopReaderContentPipeline(
     private fun activeCoordinator(): PageLoadCoordinator = synchronized(lock) {
         check(!closed.get()) { "reader content pipeline is closed" }
         checkNotNull(coordinator) { "reader content pipeline has no open chapter" }
+    }
+
+    private fun cancelExtendedPrefetch() {
+        val job = synchronized(lock) {
+            val current = extendedPrefetchJob
+            extendedPrefetchJob = null
+            current
+        }
+        job?.cancel()
+    }
+
+    /**
+     * Launches a background prefetch for the user-configured window. Runs only when the
+     * requested size differs from the core default; the coordinator's native prefetch is
+     * cancelled first so the two windows never double-load. Jobs are superseded per position
+     * update and share the chapter source and tile cache with visible loads, so identical
+     * [TileKey]s single-flight instead of decoding twice.
+     */
+    private fun scheduleExtendedPrefetch(
+        coordinator: PageLoadCoordinator,
+        position: ReaderContentPosition,
+        aheadPages: Int,
+    ) {
+        val snapshot = synchronized(lock) {
+            val pages = chapterPages
+            if (pages.isEmpty()) null else pages to chapterSource
+        } ?: return
+        val pages = snapshot.first
+        val source = snapshot.second ?: return
+        val visibleSet = position.visiblePages.toSet()
+        val wanted = DesktopPreloadPolicy.plan(
+            pageCount = pages.size,
+            selectedIndex = position.selectedIndex,
+            mode = position.mode,
+            direction = position.direction,
+            aheadPages = aheadPages,
+        )
+            .map { pages[it].id }
+            .filter { it !in visibleSet }
+        if (wanted.isEmpty()) {
+            cancelExtendedPrefetch()
+            return
+        }
+        val previous = synchronized(lock) {
+            val current = extendedPrefetchJob
+            extendedPrefetchJob = scope.launch(PageLoadPriority { false }) {
+                runExtendedPrefetch(coordinator, source, wanted)
+            }
+            current
+        }
+        previous?.cancel()
+    }
+
+    private suspend fun runExtendedPrefetch(
+        coordinator: PageLoadCoordinator,
+        source: ChapterSource,
+        pageIds: List<PageId>,
+    ) {
+        // Let visible demand queued behind this job register first, mirroring the core prefetch.
+        yield()
+        for (pageId in pageIds) {
+            currentCoroutineContext().ensureActive()
+            val alreadyFailed = synchronized(lock) { pageId in preloadFailures }
+            if (alreadyFailed) continue
+            val metadata = coordinator.loadedMetadata(pageId) ?: probeMetadata(source, pageId)
+            if (metadata == null) {
+                synchronized(lock) { preloadFailures += pageId }
+                continue
+            }
+            val key = extendedFullPageKey(pageId, metadata)
+            val loaded = try {
+                cache.getOrLoad(key) {
+                    decoder.decodeFull(source.open(pageId), metadata, FrameId(pageId, 0))
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                synchronized(lock) { preloadFailures += pageId }
+                continue
+            }
+            if (!loaded.resident) loaded.tile.close()
+        }
+    }
+
+    private suspend fun probeMetadata(source: ChapterSource, pageId: PageId): ImageMetadata? = try {
+        decoder.probe(source.open(pageId))
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (_: Exception) {
+        null
+    }
+
+    /** Mirrors the coordinator's full-page tile key so prefetch and visible loads share tiles. */
+    private fun extendedFullPageKey(pageId: PageId, meta: ImageMetadata): TileKey {
+        var sampleSize = 1
+        if (!meta.isAnimated) {
+            while (
+                ((meta.width.toLong() + sampleSize - 1) / sampleSize) *
+                ((meta.height.toLong() + sampleSize - 1) / sampleSize) > maxFullPagePixels
+            ) {
+                sampleSize = Math.multiplyExact(sampleSize, 2)
+            }
+        }
+        return TileKey(
+            pageId = pageId,
+            frameId = if (meta.isAnimated) FrameId(pageId, 0) else null,
+            bounds = IntRect(0, 0, meta.width, meta.height),
+            sampleSize = sampleSize,
+        )
     }
 
     private fun newCoordinator() = PageLoadCoordinator(
