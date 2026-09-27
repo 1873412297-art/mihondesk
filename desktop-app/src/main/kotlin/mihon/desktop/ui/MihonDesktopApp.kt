@@ -9,6 +9,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -25,6 +28,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.awt.ComposeWindow
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -52,8 +56,10 @@ import mihon.desktop.extension.builtin.isLocalSource
 import mihon.desktop.i18n.LocalStrings
 import mihon.desktop.i18n.UiText
 import mihon.desktop.i18n.text
+import mihon.desktop.navigation.DesktopBackHandler
 import mihon.desktop.navigation.DesktopDestination
 import mihon.desktop.navigation.DesktopNavigator
+import mihon.desktop.navigation.LocalDesktopNavigator
 import mihon.desktop.reader.DesktopReaderSettingsStore
 import mihon.desktop.reader.ReaderChapterBookmarkStore
 import mihon.desktop.reader.ReaderWindowMode
@@ -66,6 +72,9 @@ import mihon.desktop.track.toDesktopTrackRecord
 import mihon.desktop.track.toTrackingRecord
 import mihon.desktop.ui.category.EditMangaCategoriesDialog
 import mihon.desktop.ui.category.ManageCategoriesDialog
+import mihon.desktop.ui.common.LocalSearchFocusRequester
+import mihon.desktop.ui.common.LocalSnackbarHostState
+import mihon.desktop.ui.common.LocalTextInputTracker
 import mihon.desktop.ui.common.formatNetworkErrorMessage
 import mihon.desktop.ui.library.BackupRestoreDialog
 import mihon.desktop.ui.library.BackupRestorePresenter
@@ -82,6 +91,9 @@ import mihon.desktop.ui.reader.DecodedReaderPage
 import mihon.desktop.ui.reader.LibraryChapterBookmarkStore
 import mihon.desktop.ui.reader.ReaderChapterTransitionChapter
 import mihon.desktop.ui.reader.ReaderScreen
+import mihon.desktop.ui.shortcut.DesktopShortcutMatcher
+import mihon.desktop.ui.shortcut.DesktopShortcutsDialog
+import mihon.desktop.ui.shortcut.ShellShortcutAction
 import mihon.desktop.ui.track.TrackingDialog
 import mihon.desktop.ui.upcoming.UpcomingPresenter
 import mihon.desktop.ui.upcoming.UpcomingScreen
@@ -118,6 +130,15 @@ fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
             preferences = runtime.preferences.updatePreferences { it.copy(lastDestination = destination) }
         }
     }
+    val snackbarHostState = remember { SnackbarHostState() }
+    val searchFocusRequester = remember { FocusRequester() }
+    val textInputFocused = remember { java.util.concurrent.atomic.AtomicBoolean(false) }
+    val textInputTracker = remember {
+        mihon.desktop.ui.common.TextInputTracker { focused ->
+            textInputFocused.set(focused)
+        }
+    }
+    var showShortcutsHelp by remember { mutableStateOf(false) }
     val windowState = rememberWindowState(
         placement = if (savedPlacement.maximized) {
             ComposeWindowPlacement.Maximized
@@ -283,12 +304,6 @@ fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
     DisposableEffect(upcomingPresenter) {
         onDispose(upcomingPresenter::close)
     }
-    var isUpcomingOpen by remember { mutableStateOf(false) }
-    LaunchedEffect(navigator.current) {
-        if (navigator.current != DesktopDestination.Updates) {
-            isUpcomingOpen = false
-        }
-    }
     val categoryService = runtime.categoryService
     val categories by (
         categoryService?.categories ?: remember {
@@ -318,7 +333,6 @@ fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
     var isEditMangaCategoriesDialogOpen by remember { mutableStateOf(false) }
     var isMangaLibraryActionRunning by remember { mutableStateOf(false) }
     var isMangaSourceRefreshing by remember { mutableStateOf(false) }
-    var mangaDetailActionError by remember { mutableStateOf<String?>(null) }
     var pendingMangaOrganizationAction by remember { mutableStateOf<MangaOrganizationAction?>(null) }
     var pendingMissingSources by remember { mutableStateOf<List<MissingSourceInfo>?>(null) }
     var isInstallingMissingBatch by remember { mutableStateOf(false) }
@@ -437,7 +451,6 @@ fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
             statsService?.refresh()
         }
     }
-    var exportNotification: String? by remember { mutableStateOf(null) }
 
     val appIcon = remember {
         try {
@@ -454,19 +467,106 @@ fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
         }
     }
 
+    val currentLanguageStrings = remember(preferences.language) {
+        mihon.desktop.i18n.DesktopStrings.resolve(preferences.language)
+    }
+    val destination = navigator.current
+    val windowTitle = remember(destination, mangaDetailState, currentLanguageStrings) {
+        val prefix = "mihondesk"
+        when (destination) {
+            is DesktopDestination.Reader -> {
+                val mTitle = mangaDetailState.manga?.title
+                val cTitle = mangaDetailState.allChapters
+                    .firstOrNull { it.id == destination.chapterId }
+                    ?.let { chapter ->
+                        chapterDisplayLabel(
+                            chapter,
+                            mangaDetailState.chapterSettings.displayMode,
+                            currentLanguageStrings,
+                        )
+                    } ?: currentLanguageStrings.text(UiText.ChapterNumberLabel, destination.chapterId)
+                if (mTitle != null) {
+                    "$prefix — $mTitle — $cTitle"
+                } else {
+                    "$prefix — $cTitle"
+                }
+            }
+            is DesktopDestination.MangaDetails -> {
+                val mTitle = mangaDetailState.manga?.title
+                if (mTitle != null) {
+                    "$prefix — $mTitle"
+                } else {
+                    prefix
+                }
+            }
+            DesktopDestination.Upcoming -> "$prefix — ${currentLanguageStrings.text(UiText.Upcoming)}"
+            is DesktopDestination -> "$prefix — ${currentLanguageStrings.destinationLabel(destination)}"
+        }
+    }
+
     key(readerWindowMode == ReaderWindowMode.BORDERLESS) {
         Window(
             onCloseRequest = { closeApplication() },
             state = windowState,
-            title = "mihondesk",
+            title = windowTitle,
             icon = appIcon,
             undecorated = readerWindowMode == ReaderWindowMode.BORDERLESS,
             onPreviewKeyEvent = { event ->
                 appLockController.recordActivity()
-                false
+                val action = DesktopShortcutMatcher.matchAction(event, textInputFocused.get())
+                if (action != null) {
+                    when (action) {
+                        ShellShortcutAction.NavigateDestination1 -> navigator.navigate(DesktopDestination.Library)
+                        ShellShortcutAction.NavigateDestination2 -> navigator.navigate(DesktopDestination.Updates)
+                        ShellShortcutAction.NavigateDestination3 -> navigator.navigate(DesktopDestination.History)
+                        ShellShortcutAction.NavigateDestination4 -> navigator.navigate(DesktopDestination.Browse)
+                        ShellShortcutAction.NavigateDestination5 -> navigator.navigate(DesktopDestination.Downloads)
+                        ShellShortcutAction.NavigateDestination6 -> navigator.navigate(DesktopDestination.Stats)
+                        ShellShortcutAction.NavigateDestination7 -> navigator.navigate(DesktopDestination.Settings)
+                        ShellShortcutAction.NavigateDestination8 -> navigator.navigate(DesktopDestination.About)
+                        ShellShortcutAction.FocusSearch -> {
+                            runCatching { searchFocusRequester.requestFocus() }
+                        }
+                        ShellShortcutAction.RefreshCurrentPage -> {
+                            when (navigator.current) {
+                                DesktopDestination.Library, DesktopDestination.Updates -> {
+                                    presenterScope.launch {
+                                        runtime.libraryUpdateScheduler?.triggerUpdateNow()
+                                    }
+                                }
+                                DesktopDestination.Stats -> {
+                                    presenterScope.launch { statsService?.refresh() }
+                                }
+                                DesktopDestination.Downloads -> {
+                                    runtime.downloader?.resume()
+                                }
+                                is DesktopDestination.MangaDetails -> {
+                                    libraryPresenter.retryDetail()
+                                }
+                                else -> {}
+                            }
+                        }
+                        ShellShortcutAction.NavigateBack -> {
+                            if (showShortcutsHelp) {
+                                showShortcutsHelp = false
+                            } else {
+                                navigator.back()
+                            }
+                        }
+                        ShellShortcutAction.ShowShortcutsHelp -> {
+                            showShortcutsHelp = true
+                        }
+                    }
+                    true
+                } else {
+                    false
+                }
             },
         ) {
-            SideEffect { composeWindow = window }
+            SideEffect {
+                composeWindow = window
+                window.minimumSize = java.awt.Dimension(960, 640)
+            }
             MihonDesktopTheme(
                 themeMode = preferences.themeMode,
                 appTheme = preferences.appTheme,
@@ -476,6 +576,10 @@ fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
                     androidx.compose.runtime.CompositionLocalProvider(
                         mihon.desktop.image.LocalImageLoader provides runtime.imageLoader,
                         mihon.desktop.image.LocalCustomCoverManager provides runtime.customCoverManager,
+                        LocalDesktopNavigator provides navigator,
+                        LocalSnackbarHostState provides snackbarHostState,
+                        LocalSearchFocusRequester provides searchFocusRequester,
+                        LocalTextInputTracker provides textInputTracker,
                     ) {
                         Box(
                             modifier = Modifier.fillMaxSize().pointerInput(appLockController) {
@@ -639,6 +743,13 @@ fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
                                         afterClose()
                                     }
 
+                                    DesktopBackHandler {
+                                        if (handleReaderEscape()) {
+                                            leaveReader { navigator.pop() }
+                                        }
+                                        true
+                                    }
+
                                     ReaderDestination(
                                         destination = destination,
                                         runtime = runtime,
@@ -695,11 +806,13 @@ fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
                                         onEscape = ::handleReaderEscape,
                                     )
                                 } else {
-                                    val upcomingContent: (@Composable () -> Unit)? = if (isUpcomingOpen) {
+                                    val upcomingContent: (@Composable () -> Unit)? = if (destination ==
+                                        DesktopDestination.Upcoming
+                                    ) {
                                         {
                                             UpcomingScreen(
                                                 state = upcomingState,
-                                                onBack = { isUpcomingOpen = false },
+                                                onBack = { navigator.back() },
                                                 onPreviousMonth = upcomingPresenter::previousMonth,
                                                 onNextMonth = upcomingPresenter::nextMonth,
                                                 onSelectDate = upcomingPresenter::selectDate,
@@ -708,7 +821,6 @@ fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
                                                 onCycleCategory = upcomingPresenter::cycleCategory,
                                                 onClearFilters = upcomingPresenter::clearFilters,
                                                 onOpenManga = { mangaId ->
-                                                    isUpcomingOpen = false
                                                     navigator.navigate(DesktopDestination.Library)
                                                     libraryPresenter.selectManga(mangaId)
                                                 },
@@ -733,7 +845,12 @@ fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
                                                     )
                                                     libraryPresenter.refreshDetails()
                                                 } catch (e: Exception) {
-                                                    mangaDetailActionError = e.message ?: "Failed to install extension"
+                                                    snackbarHostState.showSnackbar(
+                                                        formatNetworkErrorMessage(
+                                                            e.message ?: "Failed to install extension",
+                                                            strings,
+                                                        ),
+                                                    )
                                                 }
                                             }
                                         },
@@ -767,7 +884,19 @@ fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
                                         onToggleRead = libraryPresenter::toggleChapterRead,
                                         onMarkPreviousRead = libraryPresenter::markPreviousChaptersRead,
                                         onDownloadChapter = libraryPresenter::downloadChapter,
-                                        onDeleteDownload = libraryPresenter::deleteChapterDownload,
+                                        onDeleteDownload = { chapterId ->
+                                            libraryPresenter.deleteChapterDownload(chapterId)
+                                            presenterScope.launch {
+                                                val result = snackbarHostState.showSnackbar(
+                                                    message = strings.text(UiText.DownloadDeleted),
+                                                    actionLabel = strings.text(UiText.Undo),
+                                                    duration = SnackbarDuration.Short,
+                                                )
+                                                if (result == SnackbarResult.ActionPerformed) {
+                                                    libraryPresenter.downloadChapter(chapterId)
+                                                }
+                                            }
+                                        },
                                         onDownloadBatch = { amount ->
                                             if (amount == -1) {
                                                 libraryPresenter.downloadNextChapters(null, unreadOnly = false)
@@ -778,7 +907,19 @@ fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
                                         onBatchBookmarkChapters = libraryPresenter::batchBookmarkChapters,
                                         onBatchMarkChaptersRead = libraryPresenter::batchMarkChaptersRead,
                                         onBatchDownloadChapters = libraryPresenter::batchDownloadChapters,
-                                        onBatchDeleteDownloads = libraryPresenter::batchDeleteChapterDownloads,
+                                        onBatchDeleteDownloads = { chapterIds ->
+                                            libraryPresenter.batchDeleteChapterDownloads(chapterIds)
+                                            presenterScope.launch {
+                                                val result = snackbarHostState.showSnackbar(
+                                                    message = strings.text(UiText.DownloadDeleted),
+                                                    actionLabel = strings.text(UiText.Undo),
+                                                    duration = SnackbarDuration.Short,
+                                                )
+                                                if (result == SnackbarResult.ActionPerformed) {
+                                                    chapterIds.forEach { libraryPresenter.downloadChapter(it) }
+                                                }
+                                            }
+                                        },
                                         onOpenChapterSettings = {
                                             libraryPresenter.setChapterSettingsDialogOpen(true)
                                         },
@@ -803,7 +944,6 @@ fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
                                         selected = destination as? DesktopDestination ?: DesktopDestination.Library,
                                         standaloneMangaDetails = destination is DesktopDestination.MangaDetails,
                                         onDestinationSelected = { selectedDestination ->
-                                            isUpcomingOpen = false
                                             navigator.navigate(selectedDestination)
                                         },
                                         libraryState = libraryState,
@@ -814,8 +954,28 @@ fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
                                             val manga = mangaDetailState.manga
                                             if (manga != null) {
                                                 isMangaLibraryActionRunning = true
-                                                if (!libraryPresenter.setDetailFavorite(!manga.favorite)) {
-                                                    mangaDetailActionError = "Unable to update library membership"
+                                                val wasFavorite = manga.favorite
+                                                if (wasFavorite) {
+                                                    if (libraryPresenter.setDetailFavorite(false)) {
+                                                        presenterScope.launch {
+                                                            val result = snackbarHostState.showSnackbar(
+                                                                message = strings.text(UiText.LibraryRemoved),
+                                                                actionLabel = strings.text(UiText.Undo),
+                                                                duration = SnackbarDuration.Short,
+                                                            )
+                                                            if (result == SnackbarResult.ActionPerformed) {
+                                                                libraryPresenter.setDetailFavorite(true)
+                                                            }
+                                                        }
+                                                    } else {
+                                                        presenterScope.launch {
+                                                            snackbarHostState.showSnackbar(
+                                                                "Unable to update library membership",
+                                                            )
+                                                        }
+                                                    }
+                                                } else {
+                                                    libraryPresenter.setDetailFavorite(true)
                                                 }
                                                 isMangaLibraryActionRunning = false
                                             }
@@ -845,8 +1005,12 @@ fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
                                                             libraryPresenter.retryDetail()
                                                         }
                                                     } catch (error: Exception) {
-                                                        mangaDetailActionError =
-                                                            error.message ?: "Unable to refresh manga"
+                                                        snackbarHostState.showSnackbar(
+                                                            formatNetworkErrorMessage(
+                                                                error.message ?: "Unable to refresh manga",
+                                                                strings,
+                                                            ),
+                                                        )
                                                     } finally {
                                                         isMangaSourceRefreshing = false
                                                     }
@@ -899,7 +1063,22 @@ fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
                                         },
                                         onBatchMarkRead = libraryPresenter::batchMarkRead,
                                         onBatchDownload = libraryPresenter::batchDownload,
-                                        onBatchRemoveFromLibrary = libraryPresenter::batchRemoveFromLibrary,
+                                        onBatchRemoveFromLibrary = {
+                                            val selectedIds = libraryState.selectionState.selectedMangaIds.toSet()
+                                            libraryPresenter.batchRemoveFromLibrary { removedIds ->
+                                                val toRestore = if (removedIds.isNotEmpty()) removedIds else selectedIds
+                                                presenterScope.launch {
+                                                    val result = snackbarHostState.showSnackbar(
+                                                        message = strings.text(UiText.LibraryRemoved),
+                                                        actionLabel = strings.text(UiText.Undo),
+                                                        duration = SnackbarDuration.Short,
+                                                    )
+                                                    if (result == SnackbarResult.ActionPerformed) {
+                                                        libraryPresenter.restoreLibraryManga(toRestore)
+                                                    }
+                                                }
+                                            }
+                                        },
                                         downloadsQueue = downloadsQueue,
                                         isDownloaderRunning = isDownloaderRunning,
                                         downloadSpeedBytesPerSec = downloadSpeed,
@@ -907,8 +1086,36 @@ fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
                                         downloadStorageError = downloadStorageError,
                                         onPauseAllDownloads = { downloader?.pause() },
                                         onResumeAllDownloads = { downloader?.resume() },
-                                        onClearCompletedDownloads = { downloader?.clearCompleted() },
-                                        onCancelDownload = { downloader?.cancel(it) },
+                                        onClearCompletedDownloads = {
+                                            val cleared = downloader?.clearCompleted() ?: emptyList()
+                                            if (cleared.isNotEmpty()) {
+                                                presenterScope.launch {
+                                                    val result = snackbarHostState.showSnackbar(
+                                                        message = strings.text(UiText.CompletedDownloadsCleared),
+                                                        actionLabel = strings.text(UiText.Undo),
+                                                        duration = SnackbarDuration.Short,
+                                                    )
+                                                    if (result == SnackbarResult.ActionPerformed) {
+                                                        downloader?.restoreDownloads(cleared)
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        onCancelDownload = { chapterId ->
+                                            val cancelled = downloader?.cancel(chapterId)
+                                            if (cancelled != null) {
+                                                presenterScope.launch {
+                                                    val result = snackbarHostState.showSnackbar(
+                                                        message = strings.text(UiText.DownloadCancelled),
+                                                        actionLabel = strings.text(UiText.Undo),
+                                                        duration = SnackbarDuration.Short,
+                                                    )
+                                                    if (result == SnackbarResult.ActionPerformed) {
+                                                        downloader.restoreDownloads(listOf(cancelled))
+                                                    }
+                                                }
+                                            }
+                                        },
                                         onRetryDownload = { downloader?.retry(it) },
                                         onRetryAllFailedDownloads = { downloader?.retryAllFailed() },
                                         onReadDownloadedChapter = { mangaId, chapterId ->
@@ -941,7 +1148,23 @@ fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
                                         historyGroups = historyState.groups,
                                         historyQuery = historyState.query,
                                         onHistoryQueryChange = { historyService?.setQuery(it) },
-                                        onDeleteHistoryItem = { historyService?.deleteItem(it) },
+                                        onDeleteHistoryItem = { chapterId ->
+                                            val item = historyState.groups.flatMap { it.items }.find {
+                                                it.chapterId ==
+                                                    chapterId
+                                            }
+                                            historyService?.deleteItem(chapterId)
+                                            presenterScope.launch {
+                                                val result = snackbarHostState.showSnackbar(
+                                                    message = strings.text(UiText.HistoryItemDeleted),
+                                                    actionLabel = strings.text(UiText.Undo),
+                                                    duration = SnackbarDuration.Short,
+                                                )
+                                                if (result == SnackbarResult.ActionPerformed && item != null) {
+                                                    historyService?.restoreItem(item)
+                                                }
+                                            }
+                                        },
                                         onClearAllHistory = { historyService?.clearAll() },
                                         // Settings & Diagnostics
                                         preferenceStore = runtime.preferences,
@@ -972,7 +1195,19 @@ fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
                                         onToggleRead = libraryPresenter::toggleChapterRead,
                                         onMarkPreviousRead = libraryPresenter::markPreviousChaptersRead,
                                         onDownloadChapter = libraryPresenter::downloadChapter,
-                                        onDeleteDownload = libraryPresenter::deleteChapterDownload,
+                                        onDeleteDownload = { chapterId ->
+                                            libraryPresenter.deleteChapterDownload(chapterId)
+                                            presenterScope.launch {
+                                                val result = snackbarHostState.showSnackbar(
+                                                    message = strings.text(UiText.DownloadDeleted),
+                                                    actionLabel = strings.text(UiText.Undo),
+                                                    duration = SnackbarDuration.Short,
+                                                )
+                                                if (result == SnackbarResult.ActionPerformed) {
+                                                    libraryPresenter.downloadChapter(chapterId)
+                                                }
+                                            }
+                                        },
                                         onDownloadBatch = { amount ->
                                             if (amount == -1) {
                                                 libraryPresenter.downloadNextChapters(null, unreadOnly = false)
@@ -983,7 +1218,19 @@ fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
                                         onBatchBookmarkChapters = libraryPresenter::batchBookmarkChapters,
                                         onBatchMarkChaptersRead = libraryPresenter::batchMarkChaptersRead,
                                         onBatchDownloadChapters = libraryPresenter::batchDownloadChapters,
-                                        onBatchDeleteDownloads = libraryPresenter::batchDeleteChapterDownloads,
+                                        onBatchDeleteDownloads = { chapterIds ->
+                                            libraryPresenter.batchDeleteChapterDownloads(chapterIds)
+                                            presenterScope.launch {
+                                                val result = snackbarHostState.showSnackbar(
+                                                    message = strings.text(UiText.DownloadDeleted),
+                                                    actionLabel = strings.text(UiText.Undo),
+                                                    duration = SnackbarDuration.Short,
+                                                )
+                                                if (result == SnackbarResult.ActionPerformed) {
+                                                    chapterIds.forEach { libraryPresenter.downloadChapter(it) }
+                                                }
+                                            }
+                                        },
                                         onOpenChapterSettings = {
                                             libraryPresenter.setChapterSettingsDialogOpen(true)
                                         },
@@ -1020,9 +1267,13 @@ fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
                                                     withContext(Dispatchers.IO) {
                                                         runtime.backupExporter.export(path)
                                                     }
-                                                    exportNotification = strings.backupExportSuccess(path.toString())
+                                                    snackbarHostState.showSnackbar(
+                                                        strings.backupExportSuccess(path.toString()),
+                                                    )
                                                 } catch (e: Exception) {
-                                                    exportNotification = strings.backupExportFailed(e.message ?: "")
+                                                    snackbarHostState.showSnackbar(
+                                                        strings.backupExportFailed(e.message ?: ""),
+                                                    )
                                                 }
                                             }
                                         },
@@ -1041,10 +1292,10 @@ fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
                                             preferences = updated
                                         },
                                         // Upcoming calendar (transient view opened from Updates)
-                                        isUpcomingOpen = isUpcomingOpen,
+                                        isUpcomingOpen = destination == DesktopDestination.Upcoming,
                                         upcomingContent = upcomingContent,
-                                        onOpenUpcoming = { isUpcomingOpen = true },
-                                        onCloseUpcoming = { isUpcomingOpen = false },
+                                        onOpenUpcoming = { navigator.navigate(DesktopDestination.Upcoming) },
+                                        onCloseUpcoming = { navigator.back() },
                                         // App lock (desktop security)
                                         appLockController = appLockController,
                                         onLockNow = if (preferences.appLockEnabled) {
@@ -1053,6 +1304,17 @@ fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
                                             null
                                         },
                                     )
+                                    if (destination is DesktopDestination.MangaDetails) {
+                                        DesktopBackHandler {
+                                            libraryPresenter.selectManga(null)
+                                            navigator.pop()
+                                        }
+                                    }
+                                    if (destination == DesktopDestination.Upcoming) {
+                                        DesktopBackHandler {
+                                            navigator.pop()
+                                        }
+                                    }
                                 }
                                 if (isManageCategoriesDialogOpen) {
                                     categoryService?.let { service ->
@@ -1149,18 +1411,6 @@ fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
                                         },
                                     )
                                 }
-                                mangaDetailActionError?.let { message ->
-                                    AlertDialog(
-                                        onDismissRequest = { mangaDetailActionError = null },
-                                        confirmButton = {
-                                            TextButton(onClick = { mangaDetailActionError = null }) {
-                                                Text(strings.dialogOk)
-                                            }
-                                        },
-                                        title = { Text(strings.downloadsStatusError) },
-                                        text = { Text(formatNetworkErrorMessage(message, strings)) },
-                                    )
-                                }
                                 pendingMangaOrganizationAction?.let { pendingAction ->
                                     AlertDialog(
                                         onDismissRequest = { pendingMangaOrganizationAction = null },
@@ -1178,8 +1428,11 @@ fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
                                                                     true
                                                         }
                                                     } else {
-                                                        mangaDetailActionError =
-                                                            "Unable to add this manga to the library"
+                                                        presenterScope.launch {
+                                                            snackbarHostState.showSnackbar(
+                                                                "Unable to add this manga to the library",
+                                                            )
+                                                        }
                                                     }
                                                 },
                                                 modifier = Modifier.testTag("manga-organization-confirm"),
@@ -1271,8 +1524,9 @@ fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
                                                                     }
                                                                     libraryPresenter.refreshDetails()
                                                                 } catch (e: Exception) {
-                                                                    mangaDetailActionError =
-                                                                        e.message ?: "Failed to install extensions"
+                                                                    snackbarHostState.showSnackbar(
+                                                                        e.message ?: "Failed to install extensions",
+                                                                    )
                                                                 } finally {
                                                                     isInstallingMissingBatch = false
                                                                     pendingMissingSources = null
@@ -1300,16 +1554,9 @@ fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
                                         )
                                     }
                                 }
-                                exportNotification?.let { msg ->
-                                    AlertDialog(
-                                        onDismissRequest = { exportNotification = null },
-                                        confirmButton = {
-                                            TextButton(onClick = { exportNotification = null }) {
-                                                Text(strings.dialogOk)
-                                            }
-                                        },
-                                        title = { Text(strings.backupDialogTitle) },
-                                        text = { Text(msg) },
+                                if (showShortcutsHelp) {
+                                    DesktopShortcutsDialog(
+                                        onDismiss = { showShortcutsHelp = false },
                                     )
                                 }
                             }

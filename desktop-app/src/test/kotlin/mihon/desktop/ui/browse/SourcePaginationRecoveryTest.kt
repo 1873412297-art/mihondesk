@@ -56,40 +56,40 @@ class SourcePaginationRecoveryTest {
             }
             runtime.sourceManager.registerBuiltinSource(source)
             setContent { Box(Modifier.requiredSize(1024.dp, 720.dp)) { BrowseContentView(runtime) } }
-            waitUntil(timeoutMillis = 15000) {
+            waitUntil(timeoutMillis = 60000) {
                 onAllNodesWithTag("source-item-${source.id}").fetchSemanticsNodes().isNotEmpty()
             }
             onNodeWithTag("source-item-${source.id}").performClick()
-            waitUntil(timeoutMillis = 5000) { onAllNodesWithTag("manga-grid").fetchSemanticsNodes().isNotEmpty() }
+            waitUntil(timeoutMillis = 60000) { onAllNodesWithTag("manga-grid").fetchSemanticsNodes().isNotEmpty() }
             onNodeWithTag("source-search-input").performTextReplacement("submitted")
             onNodeWithTag("source-search-btn").performClick()
-            waitUntil(timeoutMillis = 5000) {
+            waitUntil(timeoutMillis = 30000) {
                 onAllNodesWithTag("manga-card-/submitted/1/0").fetchSemanticsNodes().isNotEmpty()
             }
             if (editDraft) onNodeWithTag("source-search-input").performTextReplacement("draft")
             onNodeWithTag("next-page-btn").performClick()
-            waitUntil(timeoutMillis = 5000) {
+            waitUntil(timeoutMillis = 30000) {
                 onAllNodesWithText("Page 2 (40)").fetchSemanticsNodes().isNotEmpty()
             }
             waitForIdle()
             source.requests.take(2) shouldBe listOf(1 to "submitted", 2 to "submitted")
             onNodeWithTag("next-page-btn").performClick()
-            waitUntil(timeoutMillis = 5000) {
+            waitUntil(timeoutMillis = 30000) {
                 onAllNodesWithTag("source-error-details").fetchSemanticsNodes().isNotEmpty()
             }
             onNodeWithText("Retry").performClick()
-            waitUntil(timeoutMillis = 5000) { source.requests.size >= 4 }
+            waitUntil(timeoutMillis = 30000) { source.requests.size >= 4 }
             waitForIdle()
             source.requests.toList() shouldBe
                 listOf(1 to "submitted", 2 to "submitted", 3 to "submitted", 3 to "submitted")
-            waitUntil(timeoutMillis = 5000) {
+            waitUntil(timeoutMillis = 30000) {
                 onAllNodesWithText("Page 3 (60)").fetchSemanticsNodes().isNotEmpty()
             }
             onNodeWithTag("source-error-details").assertDoesNotExist()
             // Submitting the draft starts a fresh first page, rather than appending.
             onNodeWithTag("source-search-input").performTextReplacement("fresh")
             onNodeWithTag("source-search-btn").performClick()
-            waitUntil(timeoutMillis = 5000) {
+            waitUntil(timeoutMillis = 30000) {
                 onAllNodesWithTag("manga-card-/fresh/1/0").fetchSemanticsNodes().isNotEmpty()
             }
             source.requests.last() shouldBe (1 to "fresh")

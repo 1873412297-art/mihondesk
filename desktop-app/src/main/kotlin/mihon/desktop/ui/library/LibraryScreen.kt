@@ -39,6 +39,8 @@ import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -61,6 +63,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
@@ -76,8 +79,12 @@ import mihon.desktop.i18n.chapterCountLabel
 import mihon.desktop.i18n.text
 import mihon.desktop.image.CoverFailureRegistry
 import mihon.desktop.library.model.LibraryManga
+import mihon.desktop.ui.common.DesktopTooltipBox
+import mihon.desktop.ui.common.LocalSearchFocusRequester
 import mihon.desktop.ui.common.MangaCover
 import mihon.desktop.ui.common.coverHeaders
+import mihon.desktop.ui.common.onSecondaryClick
+import mihon.desktop.ui.common.trackTextInputFocus
 
 @Composable
 fun LibraryScreen(
@@ -113,6 +120,9 @@ fun LibraryScreen(
     onBatchMarkRead: (Boolean) -> Unit = {},
     onBatchDownload: (Int) -> Unit = {},
     onBatchRemoveFromLibrary: () -> Unit = {},
+    onMangaToggleRead: ((Long, Boolean) -> Unit)? = null,
+    onMangaDownload: ((Long) -> Unit)? = null,
+    onMangaRemoveFromLibrary: ((Long) -> Unit)? = null,
     isUpdatingLibrary: Boolean = false,
     onUpdateLibrary: (() -> Unit)? = null,
     isRepairingCovers: Boolean = false,
@@ -464,26 +474,30 @@ private fun LibraryPane(
                             }
                         },
                     ) {
-                        OutlinedButton(
-                            onClick = onOpenFilterDialog,
-                            modifier = Modifier.testTag("library-filter-sort-button"),
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.FilterList,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp),
-                            )
-                            Spacer(Modifier.width(6.dp))
-                            Text(strings.libraryFilterAndSort)
+                        DesktopTooltipBox(text = strings.libraryFilterAndSort) {
+                            OutlinedButton(
+                                onClick = onOpenFilterDialog,
+                                modifier = Modifier.testTag("library-filter-sort-button"),
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.FilterList,
+                                    contentDescription = strings.libraryFilterAndSort,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                                Spacer(Modifier.width(6.dp))
+                                Text(strings.libraryFilterAndSort)
+                            }
                         }
                     }
 
-                    FilterChip(
-                        selected = state.selectionState.isSelectionMode,
-                        onClick = { onToggleSelectionMode(!state.selectionState.isSelectionMode) },
-                        label = { Text(strings.libraryBatchSelect) },
-                        modifier = Modifier.testTag("library-toggle-selection"),
-                    )
+                    DesktopTooltipBox(text = strings.libraryBatchSelect) {
+                        FilterChip(
+                            selected = state.selectionState.isSelectionMode,
+                            onClick = { onToggleSelectionMode(!state.selectionState.isSelectionMode) },
+                            label = { Text(strings.libraryBatchSelect) },
+                            modifier = Modifier.testTag("library-toggle-selection"),
+                        )
+                    }
                 }
             }
         }
@@ -622,15 +636,22 @@ private fun LibraryPane(
             }
 
             // Search Box
+            val searchFocusRequester = LocalSearchFocusRequester.current
             OutlinedTextField(
                 value = state.query,
                 onValueChange = onQueryChange,
-                modifier = Modifier.fillMaxWidth().testTag("library-search"),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .then(if (searchFocusRequester != null) Modifier.focusRequester(searchFocusRequester) else Modifier)
+                    .trackTextInputFocus()
+                    .testTag("library-search"),
                 label = { Text(strings.librarySearchPlaceholder) },
                 trailingIcon = {
                     if (state.query.isNotEmpty()) {
-                        IconButton(onClick = { onQueryChange("") }) {
-                            Icon(Icons.Rounded.Close, contentDescription = strings.text(UiText.ClearSearch))
+                        DesktopTooltipBox(text = strings.text(UiText.ClearSearch)) {
+                            IconButton(onClick = { onQueryChange("") }) {
+                                Icon(Icons.Rounded.Close, contentDescription = strings.text(UiText.ClearSearch))
+                            }
                         }
                     }
                 },
@@ -645,6 +666,26 @@ private fun LibraryPane(
                 onRetry = onRetry,
                 onClearFilters = onClearFilters,
                 sourceBaseUrlFor = sourceBaseUrlFor,
+                onMangaToggleRead = { id, read ->
+                    onToggleSelectionMode(false)
+                    onToggleMangaSelection(id)
+                    onBatchMarkRead(read)
+                },
+                onMangaDownload = { id ->
+                    onToggleSelectionMode(false)
+                    onToggleMangaSelection(id)
+                    onBatchDownload(1)
+                },
+                onMangaEditCategories = { id ->
+                    onToggleSelectionMode(false)
+                    onToggleMangaSelection(id)
+                    onBatchChangeCategories()
+                },
+                onMangaRemoveFromLibrary = { id ->
+                    onToggleSelectionMode(false)
+                    onToggleMangaSelection(id)
+                    onBatchRemoveFromLibrary()
+                },
                 modifier = Modifier.weight(1f).fillMaxWidth(),
             )
         }
@@ -668,6 +709,69 @@ private fun LibraryPane(
 }
 
 @Composable
+private fun LibraryMangaContextMenu(
+    manga: LibraryManga,
+    expanded: Boolean,
+    onDismissRequest: () -> Unit,
+    onOpenDetails: () -> Unit,
+    onToggleRead: () -> Unit,
+    onDownload: () -> Unit,
+    onEditCategories: () -> Unit,
+    onRemoveFromLibrary: () -> Unit,
+) {
+    if (!expanded) return
+    val strings = LocalStrings.current
+    DropdownMenu(
+        expanded = true,
+        onDismissRequest = onDismissRequest,
+    ) {
+        DropdownMenuItem(
+            text = { Text(strings.text(UiText.ContextOpenDetails)) },
+            onClick = {
+                onDismissRequest()
+                onOpenDetails()
+            },
+        )
+        DropdownMenuItem(
+            text = {
+                Text(
+                    if (manga.unreadCount > 0) {
+                        strings.text(UiText.ContextMarkAsRead)
+                    } else {
+                        strings.text(UiText.ContextMarkAsUnread)
+                    },
+                )
+            },
+            onClick = {
+                onDismissRequest()
+                onToggleRead()
+            },
+        )
+        DropdownMenuItem(
+            text = { Text(strings.text(UiText.ContextDownload)) },
+            onClick = {
+                onDismissRequest()
+                onDownload()
+            },
+        )
+        DropdownMenuItem(
+            text = { Text(strings.text(UiText.ContextEditCategories)) },
+            onClick = {
+                onDismissRequest()
+                onEditCategories()
+            },
+        )
+        DropdownMenuItem(
+            text = { Text(strings.text(UiText.ContextRemoveFromLibrary)) },
+            onClick = {
+                onDismissRequest()
+                onRemoveFromLibrary()
+            },
+        )
+    }
+}
+
+@Composable
 private fun LibraryContent(
     state: LibraryUiState,
     onMangaSelected: (Long) -> Unit,
@@ -675,6 +779,10 @@ private fun LibraryContent(
     onRetry: () -> Unit,
     onClearFilters: () -> Unit,
     sourceBaseUrlFor: (Long) -> String? = { null },
+    onMangaToggleRead: (Long, Boolean) -> Unit = { _, _ -> },
+    onMangaDownload: (Long) -> Unit = {},
+    onMangaEditCategories: (Long) -> Unit = {},
+    onMangaRemoveFromLibrary: (Long) -> Unit = {},
     modifier: Modifier,
 ) {
     when {
@@ -701,19 +809,32 @@ private fun LibraryContent(
                         verticalArrangement = Arrangement.spacedBy(18.dp),
                     ) {
                         items(state.items, key = LibraryManga::id) { manga ->
-                            ComfortableMangaCard(
-                                manga = manga,
-                                isSelectionMode = state.selectionState.isSelectionMode,
-                                isSelected = state.selectionState.selectedMangaIds.contains(manga.id),
-                                sourceBaseUrl = sourceBaseUrlFor(manga.sourceId),
-                                onClick = {
-                                    if (state.selectionState.isSelectionMode) {
-                                        onToggleMangaSelection(manga.id)
-                                    } else {
-                                        onMangaSelected(manga.id)
-                                    }
-                                },
-                            )
+                            var showContextMenu by remember { mutableStateOf(false) }
+                            Box(modifier = Modifier.onSecondaryClick { showContextMenu = true }) {
+                                ComfortableMangaCard(
+                                    manga = manga,
+                                    isSelectionMode = state.selectionState.isSelectionMode,
+                                    isSelected = state.selectionState.selectedMangaIds.contains(manga.id),
+                                    sourceBaseUrl = sourceBaseUrlFor(manga.sourceId),
+                                    onClick = {
+                                        if (state.selectionState.isSelectionMode) {
+                                            onToggleMangaSelection(manga.id)
+                                        } else {
+                                            onMangaSelected(manga.id)
+                                        }
+                                    },
+                                )
+                                LibraryMangaContextMenu(
+                                    manga = manga,
+                                    expanded = showContextMenu,
+                                    onDismissRequest = { showContextMenu = false },
+                                    onOpenDetails = { onMangaSelected(manga.id) },
+                                    onToggleRead = { onMangaToggleRead(manga.id, manga.unreadCount > 0) },
+                                    onDownload = { onMangaDownload(manga.id) },
+                                    onEditCategories = { onMangaEditCategories(manga.id) },
+                                    onRemoveFromLibrary = { onMangaRemoveFromLibrary(manga.id) },
+                                )
+                            }
                         }
                     }
                 }
@@ -733,19 +854,32 @@ private fun LibraryContent(
                         verticalArrangement = Arrangement.spacedBy(spacing),
                     ) {
                         items(state.items, key = LibraryManga::id) { manga ->
-                            CompactMangaCard(
-                                manga = manga,
-                                isSelectionMode = state.selectionState.isSelectionMode,
-                                isSelected = state.selectionState.selectedMangaIds.contains(manga.id),
-                                sourceBaseUrl = sourceBaseUrlFor(manga.sourceId),
-                                onClick = {
-                                    if (state.selectionState.isSelectionMode) {
-                                        onToggleMangaSelection(manga.id)
-                                    } else {
-                                        onMangaSelected(manga.id)
-                                    }
-                                },
-                            )
+                            var showContextMenu by remember { mutableStateOf(false) }
+                            Box(modifier = Modifier.onSecondaryClick { showContextMenu = true }) {
+                                CompactMangaCard(
+                                    manga = manga,
+                                    isSelectionMode = state.selectionState.isSelectionMode,
+                                    isSelected = state.selectionState.selectedMangaIds.contains(manga.id),
+                                    sourceBaseUrl = sourceBaseUrlFor(manga.sourceId),
+                                    onClick = {
+                                        if (state.selectionState.isSelectionMode) {
+                                            onToggleMangaSelection(manga.id)
+                                        } else {
+                                            onMangaSelected(manga.id)
+                                        }
+                                    },
+                                )
+                                LibraryMangaContextMenu(
+                                    manga = manga,
+                                    expanded = showContextMenu,
+                                    onDismissRequest = { showContextMenu = false },
+                                    onOpenDetails = { onMangaSelected(manga.id) },
+                                    onToggleRead = { onMangaToggleRead(manga.id, manga.unreadCount > 0) },
+                                    onDownload = { onMangaDownload(manga.id) },
+                                    onEditCategories = { onMangaEditCategories(manga.id) },
+                                    onRemoveFromLibrary = { onMangaRemoveFromLibrary(manga.id) },
+                                )
+                            }
                         }
                     }
                 }
@@ -765,19 +899,32 @@ private fun LibraryContent(
                         verticalArrangement = Arrangement.spacedBy(spacing),
                     ) {
                         items(state.items, key = LibraryManga::id) { manga ->
-                            CoverOnlyMangaCard(
-                                manga = manga,
-                                isSelectionMode = state.selectionState.isSelectionMode,
-                                isSelected = state.selectionState.selectedMangaIds.contains(manga.id),
-                                sourceBaseUrl = sourceBaseUrlFor(manga.sourceId),
-                                onClick = {
-                                    if (state.selectionState.isSelectionMode) {
-                                        onToggleMangaSelection(manga.id)
-                                    } else {
-                                        onMangaSelected(manga.id)
-                                    }
-                                },
-                            )
+                            var showContextMenu by remember { mutableStateOf(false) }
+                            Box(modifier = Modifier.onSecondaryClick { showContextMenu = true }) {
+                                CoverOnlyMangaCard(
+                                    manga = manga,
+                                    isSelectionMode = state.selectionState.isSelectionMode,
+                                    isSelected = state.selectionState.selectedMangaIds.contains(manga.id),
+                                    sourceBaseUrl = sourceBaseUrlFor(manga.sourceId),
+                                    onClick = {
+                                        if (state.selectionState.isSelectionMode) {
+                                            onToggleMangaSelection(manga.id)
+                                        } else {
+                                            onMangaSelected(manga.id)
+                                        }
+                                    },
+                                )
+                                LibraryMangaContextMenu(
+                                    manga = manga,
+                                    expanded = showContextMenu,
+                                    onDismissRequest = { showContextMenu = false },
+                                    onOpenDetails = { onMangaSelected(manga.id) },
+                                    onToggleRead = { onMangaToggleRead(manga.id, manga.unreadCount > 0) },
+                                    onDownload = { onMangaDownload(manga.id) },
+                                    onEditCategories = { onMangaEditCategories(manga.id) },
+                                    onRemoveFromLibrary = { onMangaRemoveFromLibrary(manga.id) },
+                                )
+                            }
                         }
                     }
                 }
@@ -788,19 +935,32 @@ private fun LibraryContent(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         items(state.items, key = LibraryManga::id) { manga ->
-                            ListMangaItem(
-                                manga = manga,
-                                isSelectionMode = state.selectionState.isSelectionMode,
-                                isSelected = state.selectionState.selectedMangaIds.contains(manga.id),
-                                sourceBaseUrl = sourceBaseUrlFor(manga.sourceId),
-                                onClick = {
-                                    if (state.selectionState.isSelectionMode) {
-                                        onToggleMangaSelection(manga.id)
-                                    } else {
-                                        onMangaSelected(manga.id)
-                                    }
-                                },
-                            )
+                            var showContextMenu by remember { mutableStateOf(false) }
+                            Box(modifier = Modifier.onSecondaryClick { showContextMenu = true }) {
+                                ListMangaItem(
+                                    manga = manga,
+                                    isSelectionMode = state.selectionState.isSelectionMode,
+                                    isSelected = state.selectionState.selectedMangaIds.contains(manga.id),
+                                    sourceBaseUrl = sourceBaseUrlFor(manga.sourceId),
+                                    onClick = {
+                                        if (state.selectionState.isSelectionMode) {
+                                            onToggleMangaSelection(manga.id)
+                                        } else {
+                                            onMangaSelected(manga.id)
+                                        }
+                                    },
+                                )
+                                LibraryMangaContextMenu(
+                                    manga = manga,
+                                    expanded = showContextMenu,
+                                    onDismissRequest = { showContextMenu = false },
+                                    onOpenDetails = { onMangaSelected(manga.id) },
+                                    onToggleRead = { onMangaToggleRead(manga.id, manga.unreadCount > 0) },
+                                    onDownload = { onMangaDownload(manga.id) },
+                                    onEditCategories = { onMangaEditCategories(manga.id) },
+                                    onRemoveFromLibrary = { onMangaRemoveFromLibrary(manga.id) },
+                                )
+                            }
                         }
                     }
                 }

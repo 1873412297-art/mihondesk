@@ -26,6 +26,8 @@ import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -37,10 +39,12 @@ import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -59,6 +63,9 @@ import mihon.desktop.i18n.UiText
 import mihon.desktop.i18n.text
 import mihon.desktop.i18n.trustStatusLabel
 import mihon.desktop.library.model.LibraryManga
+import mihon.desktop.navigation.DesktopBackHandler
+import mihon.desktop.ui.common.DesktopTooltipBox
+import mihon.desktop.ui.common.onSecondaryClick
 import mihon.extension.model.SourceDescriptor
 import mihon.extension.source.model.SManga
 import java.io.File
@@ -71,6 +78,7 @@ enum class BrowseTab {
 
 enum class ExtensionInstallPhase { Downloading, Installing, Cancelling }
 
+@Immutable
 data class BrowseUiState(
     val selectedTab: BrowseTab = BrowseTab.Sources,
     val installedExtensions: List<InstalledExtension> = emptyList(),
@@ -163,6 +171,10 @@ fun BrowseScreen(
     onRevokePackage: ((String) -> Unit)? = null,
 ) {
     if (state.isGlobalSearchOpen) {
+        DesktopBackHandler {
+            onCloseGlobalSearch()
+            true
+        }
         GlobalSearchScreen(
             query = state.globalSearchQuery,
             onQueryChange = onGlobalSearchQueryChange,
@@ -610,14 +622,23 @@ private fun SourcesListView(
     onExtensionSelected: (InstalledExtension) -> Unit = {},
 ) {
     val strings = LocalStrings.current
-    val filteredSources = sources.filter { source ->
-        searchQuery.isBlank() ||
-            source.name.contains(searchQuery, ignoreCase = true) ||
-            source.lang.contains(searchQuery, ignoreCase = true)
+    val filteredSources = remember(sources, searchQuery) {
+        sources.filter { source ->
+            searchQuery.isBlank() ||
+                source.name.contains(searchQuery, ignoreCase = true) ||
+                source.lang.contains(searchQuery, ignoreCase = true)
+        }
     }
 
-    val pinnedSources = filteredSources.filter { pinnedIds.contains(it.id) }
-    val otherSources = filteredSources.filterNot { pinnedIds.contains(it.id) }
+    val pinnedSources = remember(filteredSources, pinnedIds) {
+        filteredSources.filter { pinnedIds.contains(it.id) }
+    }
+    val otherSources = remember(filteredSources, pinnedIds) {
+        filteredSources.filterNot { pinnedIds.contains(it.id) }
+    }
+    val grouped = remember(otherSources) {
+        otherSources.groupBy { it.lang.uppercase() }
+    }
 
     if (filteredSources.isEmpty()) {
         Box(modifier = Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
@@ -654,7 +675,6 @@ private fun SourcesListView(
             }
 
             // All/Other Sources Grouped by Lang
-            val grouped = otherSources.groupBy { it.lang.uppercase() }
             grouped.forEach { (lang, langSources) ->
                 item {
                     Text(
@@ -694,12 +714,34 @@ private fun SourceListItem(
         installedExtensions.find { ext -> ext.manifest.sources.any { it.id == source.id } }
     }
 
+    var showContextMenu by remember { mutableStateOf(false) }
+
+    val currentOnSourceSelected by rememberUpdatedState(onSourceSelected)
+    val onPopularClick = remember(source.id) {
+        { currentOnSourceSelected(source, SourceListingMode.Popular) }
+    }
+    val onLatestClick = remember(source.id) {
+        { currentOnSourceSelected(source, SourceListingMode.Latest) }
+    }
+    val currentOnTogglePin by rememberUpdatedState(onTogglePin)
+    val onPinClick = remember(source.id) {
+        { currentOnTogglePin(source.id) }
+    }
+    val currentOnExtensionSelected by rememberUpdatedState(onExtensionSelected)
+    val onExtClick = remember(associatedExtension) {
+        {
+            val ext = associatedExtension
+            if (ext != null) currentOnExtensionSelected(ext)
+        }
+    }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onSourceSelected(source, SourceListingMode.Popular) }
-            .padding(vertical = 12.dp, horizontal = 8.dp)
-            .testTag("source-item-${source.id}"),
+            .testTag("source-item-${source.id}")
+            .clickable(onClick = onPopularClick)
+            .onSecondaryClick { showContextMenu = true }
+            .padding(vertical = 12.dp, horizontal = 8.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -731,36 +773,78 @@ private fun SourceListItem(
         }
 
         Row(verticalAlignment = Alignment.CenterVertically) {
-            if (associatedExtension != null) {
-                IconButton(
-                    onClick = { onExtensionSelected(associatedExtension) },
-                    modifier = Modifier
-                        .padding(end = 4.dp)
-                        .testTag("source-ext-btn-${source.id}"),
+            if (showContextMenu) {
+                DropdownMenu(
+                    expanded = true,
+                    onDismissRequest = { showContextMenu = false },
                 ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Settings,
-                        contentDescription = strings.extensionInfo,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(20.dp),
+                    DropdownMenuItem(
+                        text = { Text(strings.browseSourceBrowse) },
+                        onClick = {
+                            showContextMenu = false
+                            onPopularClick()
+                        },
                     )
+                    if (source.supportsLatest) {
+                        DropdownMenuItem(
+                            text = { Text(strings.browseSourceLatest) },
+                            onClick = {
+                                showContextMenu = false
+                                onLatestClick()
+                            },
+                        )
+                    }
+                    DropdownMenuItem(
+                        text = { Text(if (isPinned) strings.browseUnpin else strings.browsePin) },
+                        onClick = {
+                            showContextMenu = false
+                            onPinClick()
+                        },
+                    )
+                    if (associatedExtension != null) {
+                        DropdownMenuItem(
+                            text = { Text(strings.text(UiText.ContextExtensionSettings)) },
+                            onClick = {
+                                showContextMenu = false
+                                onExtClick()
+                            },
+                        )
+                    }
+                }
+            }
+
+            if (associatedExtension != null) {
+                DesktopTooltipBox(text = strings.extensionInfo) {
+                    IconButton(
+                        onClick = onExtClick,
+                        modifier = Modifier
+                            .padding(end = 4.dp)
+                            .testTag("source-ext-btn-${source.id}"),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Settings,
+                            contentDescription = strings.extensionInfo,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
                 }
             }
             OutlinedButton(
-                onClick = { onSourceSelected(source, SourceListingMode.Latest) },
+                onClick = onLatestClick,
                 enabled = source.supportsLatest,
                 modifier = Modifier.padding(end = 6.dp),
             ) {
                 Text(strings.browseSourceLatest)
             }
             Button(
-                onClick = { onSourceSelected(source, SourceListingMode.Popular) },
+                onClick = onPopularClick,
                 modifier = Modifier.padding(end = 6.dp),
             ) {
                 Text(strings.browseSourceBrowse)
             }
             TextButton(
-                onClick = { onTogglePin(source.id) },
+                onClick = onPinClick,
                 modifier = Modifier.testTag("pin-btn-${source.id}"),
             ) {
                 Text(if (isPinned) strings.browseUnpin else strings.browsePin)

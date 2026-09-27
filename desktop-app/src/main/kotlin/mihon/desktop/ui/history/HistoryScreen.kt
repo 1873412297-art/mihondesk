@@ -26,6 +26,8 @@ import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -42,6 +44,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -51,7 +54,12 @@ import mihon.desktop.i18n.LocalStrings
 import mihon.desktop.i18n.UiText
 import mihon.desktop.i18n.text
 import mihon.desktop.library.model.HistoryWithDetails
+import mihon.desktop.ui.common.DesktopTooltipBox
+import mihon.desktop.ui.common.LocalSearchFocusRequester
 import mihon.desktop.ui.common.MangaCover
+import mihon.desktop.ui.common.onSecondaryClick
+import mihon.desktop.ui.common.searchFocusRequester
+import mihon.desktop.ui.common.trackTextInputFocus
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -111,10 +119,15 @@ fun HistoryScreen(
         }
 
         // Search Bar
+        val searchFocusRequester = LocalSearchFocusRequester.current
         OutlinedTextField(
             value = query,
             onValueChange = onQueryChange,
-            modifier = Modifier.fillMaxWidth().testTag("history-search"),
+            modifier = Modifier
+                .fillMaxWidth()
+                .searchFocusRequester(searchFocusRequester)
+                .trackTextInputFocus()
+                .testTag("history-search"),
             label = { Text(strings.historySearchPlaceholder) },
             leadingIcon = {
                 Icon(
@@ -126,13 +139,16 @@ fun HistoryScreen(
             singleLine = true,
             trailingIcon = {
                 if (query.isNotEmpty()) {
-                    androidx.compose.material3.IconButton(onClick = {
-                        onQueryChange("")
-                    }, modifier = Modifier.testTag("history-clear-search")) {
-                        Icon(
-                            Icons.Rounded.Close,
-                            contentDescription = strings.text(mihon.desktop.i18n.UiText.ClearSearch),
-                        )
+                    DesktopTooltipBox(tooltip = strings.text(UiText.ClearSearch)) {
+                        androidx.compose.material3.IconButton(
+                            onClick = { onQueryChange("") },
+                            modifier = Modifier.testTag("history-clear-search"),
+                        ) {
+                            Icon(
+                                Icons.Rounded.Close,
+                                contentDescription = strings.text(UiText.ClearSearch),
+                            )
+                        }
                     }
                 }
             },
@@ -234,82 +250,128 @@ private fun HistoryItemRow(
     modifier: Modifier = Modifier,
 ) {
     val strings = LocalStrings.current
+    var showContextMenu by remember { mutableStateOf(false) }
     val timeStr = remember(item.lastRead) {
         Instant.ofEpochMilli(item.lastRead).atZone(ZoneId.systemDefault()).format(timeFormatter)
     }
 
-    Surface(
+    Box(
         modifier = modifier
             .fillMaxWidth()
-            .testTag("history-item-${item.chapterId}")
-            .clip(RoundedCornerShape(8.dp)),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+            .clip(RoundedCornerShape(8.dp))
+            .onSecondaryClick { showContextMenu = true },
     ) {
-        Row(
-            modifier = Modifier.padding(12.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("history-item-${item.chapterId}"),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
         ) {
-            MangaCover(
-                thumbnailUrl = item.mangaThumbnailUrl,
-                mangaId = item.mangaId,
-                modifier = Modifier
-                    .size(width = 48.dp, height = 68.dp)
-                    .clip(RoundedCornerShape(6.dp)),
-            )
+            Row(
+                modifier = Modifier.padding(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                MangaCover(
+                    thumbnailUrl = item.mangaThumbnailUrl,
+                    mangaId = item.mangaId,
+                    modifier = Modifier
+                        .size(width = 48.dp, height = 68.dp)
+                        .clip(RoundedCornerShape(6.dp)),
+                )
 
-            // Details
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = item.mangaTitle,
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text = "${item.chapterName} • Read at $timeStr",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                if (item.readDuration > 0) {
-                    val durationMin = (item.readDuration / 60000).coerceAtLeast(1)
+                // Details
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = strings.text(UiText.ReadingDuration, durationMin),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.secondary,
+                        text = item.mangaTitle,
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
+                    Text(
+                        text = "${item.chapterName} • Read at $timeStr",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    if (item.readDuration > 0) {
+                        val durationMin = (item.readDuration / 60000).coerceAtLeast(1)
+                        Text(
+                            text = strings.text(UiText.ReadingDuration, durationMin),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.secondary,
+                        )
+                    }
+                }
+
+                // Actions
+                DesktopTooltipBox(tooltip = strings.historyResumeButton) {
+                    FilledTonalButton(
+                        onClick = onRead,
+                        modifier = Modifier.testTag("history-resume-${item.chapterId}"),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.PlayArrow,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(strings.historyResumeButton)
+                    }
+                }
+
+                DesktopTooltipBox(tooltip = strings.historyDeleteButton) {
+                    OutlinedButton(
+                        onClick = onDelete,
+                        modifier = Modifier.testTag("history-delete-${item.chapterId}"),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.DeleteOutline,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(strings.historyDeleteButton)
+                    }
                 }
             }
+        }
 
-            // Actions
-            val strings = mihon.desktop.i18n.LocalStrings.current
-            FilledTonalButton(
-                onClick = onRead,
-                modifier = Modifier.testTag("history-resume-${item.chapterId}"),
+        if (showContextMenu) {
+            DropdownMenu(
+                expanded = true,
+                onDismissRequest = { showContextMenu = false },
             ) {
-                Icon(
-                    imageVector = Icons.Rounded.PlayArrow,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp),
+                DropdownMenuItem(
+                    text = { Text(strings.historyResumeButton) },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Rounded.PlayArrow,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                        )
+                    },
+                    onClick = {
+                        showContextMenu = false
+                        onRead()
+                    },
                 )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(strings.historyResumeButton)
-            }
-
-            OutlinedButton(
-                onClick = onDelete,
-                modifier = Modifier.testTag("history-delete-${item.chapterId}"),
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.DeleteOutline,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp),
+                DropdownMenuItem(
+                    text = { Text(strings.historyDeleteButton) },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Rounded.DeleteOutline,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                        )
+                    },
+                    onClick = {
+                        showContextMenu = false
+                        onDelete()
+                    },
                 )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(strings.historyDeleteButton)
             }
         }
     }

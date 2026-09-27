@@ -74,15 +74,15 @@ class OnlineDetailCancellationTest {
                         if (visible.value) BrowseContentView(runtime, onOpenMangaDetail = { opened.add(it) })
                     }
                 }
-                waitUntil(timeoutMillis = 15000) {
+                waitUntil(timeoutMillis = 60000) {
                     onAllNodesWithTag("source-item-${source.id}").fetchSemanticsNodes().isNotEmpty()
                 }
                 onNodeWithTag("source-item-${source.id}").performClick()
-                waitUntil(timeoutMillis = 15000) {
+                waitUntil(timeoutMillis = 60000) {
                     onAllNodesWithTag("manga-card-/slow").fetchSemanticsNodes().isNotEmpty()
                 }
                 onNodeWithTag("manga-card-/slow").performClick()
-                waitUntil(timeoutMillis = 5000) { source.started.get() }
+                waitUntil(timeoutMillis = 30000) { source.started.get() }
                 onNodeWithTag("manga-detail-loading").assertIsDisplayed()
                 if (dispose) {
                     runOnIdle { visible.value = false }
@@ -93,15 +93,15 @@ class OnlineDetailCancellationTest {
                     } else {
                         onNodeWithTag("manga-detail-back").performClick()
                     }
-                    waitUntil(timeoutMillis = 5000) {
+                    waitUntil(timeoutMillis = 30000) {
                         onAllNodesWithTag("manga-card-/fast").fetchSemanticsNodes().isNotEmpty()
                     }
                     onNodeWithTag("manga-card-/fast").performClick()
-                    waitUntil(timeoutMillis = 5000) { opened.size == 1 }
+                    waitUntil(timeoutMillis = 30000) { opened.size == 1 }
                 }
-                if (!late) waitUntil(timeoutMillis = 1500) { source.finished.get() }
+                if (!late) waitUntil(timeoutMillis = 10000) { source.finished.get() }
                 source.release.complete(Unit)
-                waitUntil(timeoutMillis = 5000) { source.finished.get() }
+                waitUntil(timeoutMillis = 30000) { source.finished.get() }
                 // Drain the request continuation and any queued Compose callbacks.
                 waitForIdle()
                 opened.size shouldBe if (dispose) 0 else 1

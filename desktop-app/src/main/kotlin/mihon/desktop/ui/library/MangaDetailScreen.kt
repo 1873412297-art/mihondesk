@@ -88,9 +88,12 @@ import mihon.desktop.i18n.LocalStrings
 import mihon.desktop.i18n.UiText
 import mihon.desktop.i18n.text
 import mihon.desktop.library.model.LibraryChapter
+import mihon.desktop.ui.common.DesktopTooltipBox
 import mihon.desktop.ui.common.DownloadIndicator
 import mihon.desktop.ui.common.MangaBackdropBanner
 import mihon.desktop.ui.common.formatNetworkErrorMessage
+import mihon.desktop.ui.common.onSecondaryClick
+import mihon.desktop.ui.common.trackTextInputFocus
 
 @Composable
 fun MangaDetailScreen(
@@ -580,15 +583,17 @@ fun MangaDetailScreen(
                                                 Column(modifier = Modifier.weight(1f)) {
                                                     MetadataLine(strings.mangaDetailNotes, manga.notes)
                                                 }
-                                                IconButton(
-                                                    onClick = { isNotesDialogOpen = true },
-                                                    modifier = Modifier.testTag("manga-detail-edit-notes-btn"),
-                                                ) {
-                                                    Icon(
-                                                        imageVector = Icons.Rounded.EditNote,
-                                                        contentDescription = strings.mangaNotesEdit,
-                                                        tint = MaterialTheme.colorScheme.primary,
-                                                    )
+                                                DesktopTooltipBox(text = strings.mangaNotesEdit) {
+                                                    IconButton(
+                                                        onClick = { isNotesDialogOpen = true },
+                                                        modifier = Modifier.testTag("manga-detail-edit-notes-btn"),
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = Icons.Rounded.EditNote,
+                                                            contentDescription = strings.mangaNotesEdit,
+                                                            tint = MaterialTheme.colorScheme.primary,
+                                                        )
+                                                    }
                                                 }
                                             }
                                         } else {
@@ -628,15 +633,19 @@ fun MangaDetailScreen(
                                         ) {
                                             var downloadMenuExpanded by remember { mutableStateOf(false) }
                                             Box {
-                                                IconButton(
-                                                    onClick = { downloadMenuExpanded = true },
-                                                    modifier = Modifier.testTag("manga-detail-download-menu-button"),
-                                                ) {
-                                                    Icon(
-                                                        imageVector = Icons.Rounded.Download,
-                                                        contentDescription = strings.downloadChapter,
-                                                        tint = MaterialTheme.colorScheme.primary,
-                                                    )
+                                                DesktopTooltipBox(text = strings.downloadChapter) {
+                                                    IconButton(
+                                                        onClick = { downloadMenuExpanded = true },
+                                                        modifier = Modifier.testTag(
+                                                            "manga-detail-download-menu-button",
+                                                        ),
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = Icons.Rounded.Download,
+                                                            contentDescription = strings.downloadChapter,
+                                                            tint = MaterialTheme.colorScheme.primary,
+                                                        )
+                                                    }
                                                 }
                                                 DropdownMenu(
                                                     expanded = downloadMenuExpanded,
@@ -748,50 +757,58 @@ fun MangaDetailScreen(
                                                     .testTag("manga-detail-chapter-settings-button")
                                                     .clickable(onClick = onOpenChapterSettings),
                                             ) {
+                                                DesktopTooltipBox(text = strings.text(UiText.ChapterSettings)) {
+                                                    IconButton(
+                                                        onClick = onOpenChapterSettings,
+                                                        modifier = Modifier.testTag("chapter-settings-button"),
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = Icons.Rounded.Settings,
+                                                            contentDescription = strings.text(UiText.ChapterSettings),
+                                                            tint = MaterialTheme.colorScheme.primary,
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                            DesktopTooltipBox(text = strings.text(UiText.SearchChapters)) {
                                                 IconButton(
-                                                    onClick = onOpenChapterSettings,
-                                                    modifier = Modifier.testTag("chapter-settings-button"),
+                                                    onClick = {
+                                                        isSearchingChapters = !isSearchingChapters
+                                                        if (!isSearchingChapters) chapterSearchQuery = ""
+                                                    },
+                                                    modifier = Modifier.testTag("chapter-search-toggle-button"),
                                                 ) {
                                                     Icon(
-                                                        imageVector = Icons.Rounded.Settings,
-                                                        contentDescription = strings.text(UiText.ChapterSettings),
-                                                        tint = MaterialTheme.colorScheme.primary,
+                                                        imageVector = Icons.Rounded.Search,
+                                                        contentDescription = strings.text(UiText.SearchChapters),
+                                                        tint = if (isSearchingChapters ||
+                                                            chapterSearchQuery.isNotEmpty()
+                                                        ) {
+                                                            MaterialTheme.colorScheme.primary
+                                                        } else {
+                                                            MaterialTheme.colorScheme.onSurfaceVariant
+                                                        },
                                                     )
                                                 }
                                             }
-                                            IconButton(
-                                                onClick = {
-                                                    isSearchingChapters = !isSearchingChapters
-                                                    if (!isSearchingChapters) chapterSearchQuery = ""
-                                                },
-                                                modifier = Modifier.testTag("chapter-search-toggle-button"),
-                                            ) {
-                                                Icon(
-                                                    imageVector = Icons.Rounded.Search,
-                                                    contentDescription = strings.text(UiText.SearchChapters),
-                                                    tint = if (isSearchingChapters || chapterSearchQuery.isNotEmpty()) {
-                                                        MaterialTheme.colorScheme.primary
-                                                    } else {
-                                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                            DesktopTooltipBox(text = strings.chapterBatchSelect) {
+                                                IconButton(
+                                                    onClick = {
+                                                        isSelectionMode = !isSelectionMode
+                                                        if (!isSelectionMode) selectedChapterIds = emptySet()
                                                     },
-                                                )
-                                            }
-                                            IconButton(
-                                                onClick = {
-                                                    isSelectionMode = !isSelectionMode
-                                                    if (!isSelectionMode) selectedChapterIds = emptySet()
-                                                },
-                                                modifier = Modifier.testTag("chapter-selection-toggle-button"),
-                                            ) {
-                                                Icon(
-                                                    imageVector = Icons.AutoMirrored.Rounded.PlaylistAddCheck,
-                                                    contentDescription = strings.chapterBatchSelect,
-                                                    tint = if (isSelectionMode || selectedChapterIds.isNotEmpty()) {
-                                                        MaterialTheme.colorScheme.primary
-                                                    } else {
-                                                        MaterialTheme.colorScheme.onSurfaceVariant
-                                                    },
-                                                )
+                                                    modifier = Modifier.testTag("chapter-selection-toggle-button"),
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.AutoMirrored.Rounded.PlaylistAddCheck,
+                                                        contentDescription = strings.chapterBatchSelect,
+                                                        tint = if (isSelectionMode || selectedChapterIds.isNotEmpty()) {
+                                                            MaterialTheme.colorScheme.primary
+                                                        } else {
+                                                            MaterialTheme.colorScheme.onSurfaceVariant
+                                                        },
+                                                    )
+                                                }
                                             }
                                         }
                                     }
@@ -803,6 +820,7 @@ fun MangaDetailScreen(
                                             modifier = Modifier
                                                 .fillMaxWidth()
                                                 .padding(bottom = 8.dp)
+                                                .trackTextInputFocus()
                                                 .testTag("chapter-search-text-field"),
                                             placeholder = {
                                                 Text(
@@ -819,12 +837,14 @@ fun MangaDetailScreen(
                                             },
                                             trailingIcon = {
                                                 if (chapterSearchQuery.isNotEmpty()) {
-                                                    IconButton(onClick = { chapterSearchQuery = "" }) {
-                                                        Icon(
-                                                            imageVector = Icons.Rounded.Close,
-                                                            contentDescription = strings.text(UiText.ClearSearch),
-                                                            modifier = Modifier.size(18.dp),
-                                                        )
+                                                    DesktopTooltipBox(text = strings.text(UiText.ClearSearch)) {
+                                                        IconButton(onClick = { chapterSearchQuery = "" }) {
+                                                            Icon(
+                                                                imageVector = Icons.Rounded.Close,
+                                                                contentDescription = strings.text(UiText.ClearSearch),
+                                                                modifier = Modifier.size(18.dp),
+                                                            )
+                                                        }
                                                     }
                                                 }
                                             },
@@ -1245,6 +1265,7 @@ private fun ChapterRow(
             .padding(horizontal = 24.dp)
             .testTag("chapter-row")
             .clip(MaterialTheme.shapes.medium)
+            .onSecondaryClick { menuExpanded = true }
             .clickable {
                 if (isSelectionMode) {
                     onToggleSelection()
@@ -1299,64 +1320,86 @@ private fun ChapterRow(
                 )
             }
 
-            IconButton(
-                onClick = onToggleBookmark,
-                modifier = Modifier.testTag("chapter-bookmark-button"),
-            ) {
-                val color = if (chapter.bookmark) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
+            DesktopTooltipBox(text = if (chapter.bookmark) strings.removeBookmark else strings.bookmarkChapter) {
+                IconButton(
+                    onClick = onToggleBookmark,
+                    modifier = Modifier.testTag("chapter-bookmark-button"),
+                ) {
+                    val color = if (chapter.bookmark) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    }
+                    Icon(
+                        imageVector = if (chapter.bookmark) Icons.Rounded.Bookmark else Icons.Rounded.BookmarkBorder,
+                        contentDescription = if (chapter.bookmark) strings.removeBookmark else strings.bookmarkChapter,
+                        tint = color,
+                    )
                 }
-                Icon(
-                    imageVector = if (chapter.bookmark) Icons.Rounded.Bookmark else Icons.Rounded.BookmarkBorder,
-                    contentDescription = null,
-                    tint = color,
-                )
             }
 
-            IconButton(
-                onClick = {
-                    if (isDownloaded) onDeleteDownload() else onDownloadChapter()
-                },
-                modifier = Modifier.testTag("chapter-download-button"),
-            ) {
-                DownloadIndicator(
-                    status = download?.status ?: if (isDownloaded) DownloadStatus.COMPLETED else null,
-                    progress = download?.progress ?: if (isDownloaded) 1f else 0f,
-                    isRunning = downloadsRunning,
-                    modifier = Modifier.testTag("chapter-download-indicator-${chapter.id}"),
-                )
+            DesktopTooltipBox(text = if (isDownloaded) strings.deleteDownload else strings.downloadChapter) {
+                IconButton(
+                    onClick = {
+                        if (isDownloaded) onDeleteDownload() else onDownloadChapter()
+                    },
+                    modifier = Modifier.testTag("chapter-download-button"),
+                ) {
+                    DownloadIndicator(
+                        status = download?.status ?: if (isDownloaded) DownloadStatus.COMPLETED else null,
+                        progress = download?.progress ?: if (isDownloaded) 1f else 0f,
+                        isRunning = downloadsRunning,
+                        modifier = Modifier.testTag("chapter-download-indicator-${chapter.id}"),
+                    )
+                }
             }
 
             Box {
-                IconButton(
-                    onClick = { menuExpanded = true },
-                    modifier = Modifier.testTag("chapter-more-button"),
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.MoreVert,
-                        contentDescription = null,
-                    )
+                DesktopTooltipBox(text = strings.text(UiText.MoreOptions)) {
+                    IconButton(
+                        onClick = { menuExpanded = true },
+                        modifier = Modifier.testTag("chapter-more-button"),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.MoreVert,
+                            contentDescription = strings.text(UiText.MoreOptions),
+                        )
+                    }
                 }
-                DropdownMenu(
-                    expanded = menuExpanded,
-                    onDismissRequest = { menuExpanded = false },
-                ) {
-                    DropdownMenuItem(
-                        text = { Text(if (chapter.read) strings.markAsUnread else strings.markAsRead) },
-                        onClick = {
-                            onToggleRead()
-                            menuExpanded = false
-                        },
-                    )
-                    DropdownMenuItem(
-                        text = { Text(strings.markPreviousAsRead) },
-                        onClick = {
-                            onMarkPreviousRead()
-                            menuExpanded = false
-                        },
-                    )
+                if (menuExpanded) {
+                    DropdownMenu(
+                        expanded = true,
+                        onDismissRequest = { menuExpanded = false },
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text(if (chapter.read) strings.markAsUnread else strings.markAsRead) },
+                            onClick = {
+                                onToggleRead()
+                                menuExpanded = false
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text(strings.markPreviousAsRead) },
+                            onClick = {
+                                onMarkPreviousRead()
+                                menuExpanded = false
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text(if (chapter.bookmark) strings.removeBookmark else strings.bookmarkChapter) },
+                            onClick = {
+                                onToggleBookmark()
+                                menuExpanded = false
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text(if (isDownloaded) strings.deleteDownload else strings.downloadChapter) },
+                            onClick = {
+                                if (isDownloaded) onDeleteDownload() else onDownloadChapter()
+                                menuExpanded = false
+                            },
+                        )
+                    }
                 }
             }
 

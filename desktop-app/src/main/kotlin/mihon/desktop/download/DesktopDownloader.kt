@@ -513,7 +513,7 @@ class DesktopDownloader(
     }
 
     @Synchronized
-    fun cancel(chapterId: Long) {
+    fun cancel(chapterId: Long): DesktopDownload? {
         val job = activeDownloadJobs.remove(chapterId)
         val previousCleanup = pendingCleanupJobs[chapterId]
         val cancelled = _queueState.value.find { it.chapterId == chapterId }
@@ -542,6 +542,7 @@ class DesktopDownloader(
         } finally {
             cleanup?.start()
         }
+        return cancelled
     }
 
     @Synchronized
@@ -583,8 +584,20 @@ class DesktopDownloader(
     }
 
     @Synchronized
-    fun clearCompleted() {
+    fun clearCompleted(): List<DesktopDownload> {
+        val completed = _queueState.value.filter { it.status == DownloadStatus.COMPLETED }
         _queueState.update { list -> list.filterNot { it.status == DownloadStatus.COMPLETED } }
+        persistQueue()
+        return completed
+    }
+
+    @Synchronized
+    fun restoreDownloads(items: List<DesktopDownload>) {
+        if (items.isEmpty()) return
+        _queueState.update { list ->
+            val existingIds = list.map { it.chapterId }.toSet()
+            list + items.filterNot { it.chapterId in existingIds }
+        }
         persistQueue()
     }
 
@@ -615,6 +628,11 @@ class DesktopDownloader(
                                 throw error
                             } catch (error: Exception) {
                                 val errorMessage = error.message ?: "Unknown download error"
+                                mihon.desktop.logging.DesktopLogger.error(
+                                    "Downloader",
+                                    "Download failed for chapter ${next.chapterName} (${next.chapterId}): $errorMessage",
+                                    error,
+                                )
                                 val failed = updateDownload(next.chapterId) {
                                     it.copy(
                                         status = DownloadStatus.ERROR,
@@ -666,9 +684,15 @@ class DesktopDownloader(
         }
     }
 
-    private suspend fun processDownload(download: DesktopDownload) {
+    internal suspend fun processDownload(download: DesktopDownload) {
         // Fetch page list if not already populated
-        val currentDownload = _queueState.value.first { it.chapterId == download.chapterId }
+        val currentDownload = _queueState.value.firstOrNull { it.chapterId == download.chapterId } ?: run {
+            mihon.desktop.logging.DesktopLogger.warn(
+                "Downloader",
+                "Download for chapter ${download.chapterId} was cancelled before processing",
+            )
+            return
+        }
         val pages = if (currentDownload.pages.isEmpty()) {
             val fetchedPages = fetchPages(currentDownload.sourceId, currentDownload.chapterUrl)
             val downloadPages = fetchedPages.distinctBy { it.index }.mapIndexed { index, page ->

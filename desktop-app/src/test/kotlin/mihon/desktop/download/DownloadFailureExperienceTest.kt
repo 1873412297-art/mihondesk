@@ -91,6 +91,7 @@ class DownloadFailureExperienceTest {
         DesktopNetworkHelper().use { network ->
             val downloader = DesktopDownloader(store, disk, network, scope = backgroundScope)
             try {
+                downloader.awaitStartupRecovery()
                 downloader.pause()
                 val before = downloader.queueState.value
                 before[2].status shouldBe DownloadStatus.PAUSED

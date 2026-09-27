@@ -27,6 +27,8 @@ import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -41,10 +43,12 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -54,13 +58,18 @@ import mihon.desktop.download.classifyDownloadFailure
 import mihon.desktop.i18n.LocalStrings
 import mihon.desktop.i18n.UiText
 import mihon.desktop.i18n.text
+import mihon.desktop.ui.common.DesktopTooltipBox
 import mihon.desktop.ui.common.DownloadIndicator
 import mihon.desktop.ui.common.ErrorDetails
 import mihon.desktop.ui.common.FailureExplanation
+import mihon.desktop.ui.common.LocalSearchFocusRequester
 import mihon.desktop.ui.common.animatedDownloadProgress
 import mihon.desktop.ui.common.downloadIsIndeterminate
 import mihon.desktop.ui.common.downloadStatusLabel
 import mihon.desktop.ui.common.normalizedDownloadProgress
+import mihon.desktop.ui.common.onSecondaryClick
+import mihon.desktop.ui.common.searchFocusRequester
+import mihon.desktop.ui.common.trackTextInputFocus
 
 const val DOWNLOADS_SCREEN_TEST_TAG = "downloads_screen"
 const val DOWNLOADS_PAUSE_ALL_BUTTON_TEST_TAG = "downloads_pause_all"
@@ -135,59 +144,67 @@ fun DownloadsScreen(
 
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (isRunning) {
-                        OutlinedButton(
-                            onClick = onPauseAll,
-                            modifier = Modifier.testTag(DOWNLOADS_PAUSE_ALL_BUTTON_TEST_TAG),
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.Pause,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp),
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(strings.downloadsPauseAll)
+                        DesktopTooltipBox(tooltip = strings.downloadsPauseAll) {
+                            OutlinedButton(
+                                onClick = onPauseAll,
+                                modifier = Modifier.testTag(DOWNLOADS_PAUSE_ALL_BUTTON_TEST_TAG),
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Pause,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(strings.downloadsPauseAll)
+                            }
                         }
                     } else {
-                        Button(
-                            onClick = onResumeAll,
-                            modifier = Modifier.testTag(DOWNLOADS_RESUME_ALL_BUTTON_TEST_TAG),
-                            enabled = queue.any {
-                                it.status == DownloadStatus.PAUSED || it.status == DownloadStatus.QUEUED
-                            },
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.PlayArrow,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp),
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(strings.downloadsResumeAll)
+                        DesktopTooltipBox(tooltip = strings.downloadsResumeAll) {
+                            Button(
+                                onClick = onResumeAll,
+                                modifier = Modifier.testTag(DOWNLOADS_RESUME_ALL_BUTTON_TEST_TAG),
+                                enabled = queue.any {
+                                    it.status == DownloadStatus.PAUSED || it.status == DownloadStatus.QUEUED
+                                },
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.PlayArrow,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(strings.downloadsResumeAll)
+                            }
                         }
                     }
 
                     if (failedCount > 0) {
-                        OutlinedButton(
-                            onClick = onRetryAllFailed,
-                            modifier = Modifier.testTag("downloads-retry-failed"),
-                        ) {
-                            Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text(strings.text(UiText.RetryAllFailed, failedCount))
+                        DesktopTooltipBox(tooltip = strings.text(UiText.RetryAllFailed, failedCount)) {
+                            OutlinedButton(
+                                onClick = onRetryAllFailed,
+                                modifier = Modifier.testTag("downloads-retry-failed"),
+                            ) {
+                                Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text(strings.text(UiText.RetryAllFailed, failedCount))
+                            }
                         }
                     }
 
-                    TextButton(
-                        onClick = onClearCompleted,
-                        modifier = Modifier.testTag(DOWNLOADS_CLEAR_COMPLETED_BUTTON_TEST_TAG),
-                        enabled = queue.any { it.status == DownloadStatus.COMPLETED },
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.DeleteSweep,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp),
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(strings.downloadsClearCompleted)
+                    DesktopTooltipBox(tooltip = strings.downloadsClearCompleted) {
+                        TextButton(
+                            onClick = onClearCompleted,
+                            modifier = Modifier.testTag(DOWNLOADS_CLEAR_COMPLETED_BUTTON_TEST_TAG),
+                            enabled = queue.any { it.status == DownloadStatus.COMPLETED },
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.DeleteSweep,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(strings.downloadsClearCompleted)
+                        }
                     }
                 }
             }
@@ -195,6 +212,7 @@ fun DownloadsScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             if (queue.isNotEmpty()) {
+                val searchFocusRequester = LocalSearchFocusRequester.current
                 OutlinedTextField(
                     value = query,
                     onValueChange = { query = it },
@@ -202,13 +220,19 @@ fun DownloadsScreen(
                     leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
                     trailingIcon = {
                         if (query.isNotEmpty()) {
-                            IconButton(onClick = { query = "" }) {
-                                Icon(Icons.Rounded.Close, contentDescription = strings.text(UiText.ClearSearch))
+                            DesktopTooltipBox(tooltip = strings.text(UiText.ClearSearch)) {
+                                IconButton(onClick = { query = "" }) {
+                                    Icon(Icons.Rounded.Close, contentDescription = strings.text(UiText.ClearSearch))
+                                }
                             }
                         }
                     },
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth().testTag("downloads-search"),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .searchFocusRequester(searchFocusRequester)
+                        .trackTextInputFocus()
+                        .testTag("downloads-search"),
                 )
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilterChip(
@@ -312,170 +336,240 @@ private fun DownloadCard(
     onRead: () -> Unit,
 ) {
     val strings = LocalStrings.current
-    Card(
+    var showContextMenu by remember { mutableStateOf(false) }
+
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .testTag(DOWNLOAD_ITEM_TEST_TAG_PREFIX + download.chapterId),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+            .onSecondaryClick { showContextMenu = true },
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = download.mangaTitle,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag(DOWNLOAD_ITEM_TEST_TAG_PREFIX + download.chapterId),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Top,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = download.mangaTitle,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Text(
+                            text = download.chapterName,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        DownloadIndicator(
+                            status = download.status,
+                            progress = download.progress,
+                            isRunning = isRunning,
+                            modifier = Modifier.testTag("download-status-indicator-${download.chapterId}"),
+                        )
+                        StatusBadge(download.status, isRunning)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                val animatedProgress = animatedDownloadProgress(download.status, download.progress, isRunning)
+                val progressModifier = Modifier.fillMaxWidth().height(
+                    6.dp,
+                ).testTag("download-progress-${download.chapterId}")
+                if (downloadIsIndeterminate(
+                        download.status,
+                        normalizedDownloadProgress(download.status, download.progress),
+                        isRunning,
                     )
-                    Text(
-                        text = download.chapterName,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                ) {
+                    LinearProgressIndicator(modifier = progressModifier)
+                } else {
+                    LinearProgressIndicator(
+                        progress = { animatedProgress },
+                        modifier = progressModifier,
+                        color = if (download.status ==
+                            DownloadStatus.ERROR
+                        ) {
+                            MaterialTheme.colorScheme.error
+                        } else {
+                            MaterialTheme.colorScheme.primary
+                        },
                     )
+                }
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                if (download.status == DownloadStatus.ERROR) {
+                    FailureExplanation(download.failureReason ?: classifyDownloadFailure(download.error))
+                    ErrorDetails(download.error, "download-error-${download.chapterId}")
                 }
 
                 Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    DownloadIndicator(
-                        status = download.status,
-                        progress = download.progress,
-                        isRunning = isRunning,
-                        modifier = Modifier.testTag("download-status-indicator-${download.chapterId}"),
-                    )
-                    StatusBadge(download.status, isRunning)
-                }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            val animatedProgress = animatedDownloadProgress(download.status, download.progress, isRunning)
-            val progressModifier = Modifier.fillMaxWidth().height(
-                6.dp,
-            ).testTag("download-progress-${download.chapterId}")
-            if (downloadIsIndeterminate(
-                    download.status,
-                    normalizedDownloadProgress(download.status, download.progress),
-                    isRunning,
-                )
-            ) {
-                LinearProgressIndicator(modifier = progressModifier)
-            } else {
-                LinearProgressIndicator(
-                    progress = { animatedProgress },
-                    modifier = progressModifier,
-                    color = if (download.status ==
-                        DownloadStatus.ERROR
-                    ) {
-                        MaterialTheme.colorScheme.error
-                    } else {
-                        MaterialTheme.colorScheme.primary
-                    },
-                )
-            }
-
-            Spacer(modifier = Modifier.height(6.dp))
-
-            if (download.status == DownloadStatus.ERROR) {
-                FailureExplanation(download.failureReason ?: classifyDownloadFailure(download.error))
-                ErrorDetails(download.error, "download-error-${download.chapterId}")
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                val statusDetail = when (download.status) {
-                    DownloadStatus.DOWNLOADING, DownloadStatus.QUEUED, DownloadStatus.PAUSED -> {
-                        if (download.totalPages > 0) {
+                    val statusDetail = when (download.status) {
+                        DownloadStatus.DOWNLOADING, DownloadStatus.QUEUED, DownloadStatus.PAUSED -> {
+                            if (download.totalPages > 0) {
+                                strings.text(
+                                    UiText.DownloadProgress,
+                                    download.downloadedImages,
+                                    download.totalPages,
+                                    (
+                                        download.progress *
+                                            100
+                                        ).toInt(),
+                                )
+                            } else {
+                                strings.text(UiText.PreparingDownload)
+                            }
+                        }
+                        DownloadStatus.COMPLETED -> strings.text(UiText.DownloadedPages, download.downloadedImages)
+                        DownloadStatus.ERROR -> if (download.totalPages > 0) {
                             strings.text(
                                 UiText.DownloadProgress,
                                 download.downloadedImages,
                                 download.totalPages,
-                                (
-                                    download.progress *
-                                        100
-                                    ).toInt(),
+                                (normalizedDownloadProgress(download.status, download.progress) * 100).toInt(),
                             )
                         } else {
-                            strings.text(UiText.PreparingDownload)
+                            ""
                         }
                     }
-                    DownloadStatus.COMPLETED -> strings.text(UiText.DownloadedPages, download.downloadedImages)
-                    DownloadStatus.ERROR -> if (download.totalPages > 0) {
-                        strings.text(
-                            UiText.DownloadProgress,
-                            download.downloadedImages,
-                            download.totalPages,
-                            (normalizedDownloadProgress(download.status, download.progress) * 100).toInt(),
-                        )
-                    } else {
-                        ""
+
+                    Text(
+                        text = statusDetail,
+                        modifier = Modifier.weight(1f).padding(end = 8.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (download.status ==
+                            DownloadStatus.ERROR
+                        ) {
+                            MaterialTheme.colorScheme.error
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                    )
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (download.status == DownloadStatus.COMPLETED) {
+                            DesktopTooltipBox(tooltip = strings.downloadsRead) {
+                                FilledTonalButton(
+                                    onClick = onRead,
+                                    modifier = Modifier.testTag(
+                                        DOWNLOAD_READ_BUTTON_TEST_TAG_PREFIX + download.chapterId,
+                                    ),
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.PlayArrow,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp),
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(strings.downloadsRead)
+                                }
+                            }
+                        }
+                        if (download.status == DownloadStatus.ERROR) {
+                            DesktopTooltipBox(tooltip = strings.downloadsRetry) {
+                                TextButton(
+                                    onClick = onRetry,
+                                    modifier = Modifier.testTag("download-retry-${download.chapterId}"),
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Refresh,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp),
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(strings.downloadsRetry)
+                                }
+                            }
+                        }
+                        if (download.status != DownloadStatus.COMPLETED) {
+                            DesktopTooltipBox(tooltip = strings.downloadsCancel) {
+                                TextButton(
+                                    onClick = onCancel,
+                                    modifier = Modifier.testTag("download-cancel-${download.chapterId}"),
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Close,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp),
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(strings.downloadsCancel)
+                                }
+                            }
+                        }
                     }
                 }
+            }
+        }
 
-                Text(
-                    text = statusDetail,
-                    modifier = Modifier.weight(1f).padding(end = 8.dp),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = if (download.status ==
-                        DownloadStatus.ERROR
-                    ) {
-                        MaterialTheme.colorScheme.error
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                )
-
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (download.status == DownloadStatus.COMPLETED) {
-                        FilledTonalButton(
-                            onClick = onRead,
-                            modifier = Modifier.testTag(DOWNLOAD_READ_BUTTON_TEST_TAG_PREFIX + download.chapterId),
-                        ) {
+        if (showContextMenu) {
+            DropdownMenu(
+                expanded = true,
+                onDismissRequest = { showContextMenu = false },
+            ) {
+                if (download.status == DownloadStatus.COMPLETED) {
+                    DropdownMenuItem(
+                        text = { Text(strings.downloadsRead) },
+                        leadingIcon = {
                             Icon(
                                 imageVector = Icons.Rounded.PlayArrow,
                                 contentDescription = null,
                                 modifier = Modifier.size(18.dp),
                             )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(strings.downloadsRead)
-                        }
-                    }
-                    if (download.status == DownloadStatus.ERROR) {
-                        TextButton(
-                            onClick = onRetry,
-                            modifier = Modifier.testTag("download-retry-${download.chapterId}"),
-                        ) {
+                        },
+                        onClick = {
+                            showContextMenu = false
+                            onRead()
+                        },
+                    )
+                }
+                if (download.status == DownloadStatus.ERROR) {
+                    DropdownMenuItem(
+                        text = { Text(strings.downloadsRetry) },
+                        leadingIcon = {
                             Icon(
                                 imageVector = Icons.Rounded.Refresh,
                                 contentDescription = null,
-                                modifier = Modifier.size(16.dp),
+                                modifier = Modifier.size(18.dp),
                             )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(strings.downloadsRetry)
-                        }
-                    }
-                    if (download.status != DownloadStatus.COMPLETED) {
-                        TextButton(
-                            onClick = onCancel,
-                            modifier = Modifier.testTag("download-cancel-${download.chapterId}"),
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.Close,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp),
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(strings.downloadsCancel)
-                        }
-                    }
+                        },
+                        onClick = {
+                            showContextMenu = false
+                            onRetry()
+                        },
+                    )
                 }
+                DropdownMenuItem(
+                    text = { Text(strings.downloadsCancel) },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Rounded.Close,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                        )
+                    },
+                    onClick = {
+                        showContextMenu = false
+                        onCancel()
+                    },
+                )
             }
         }
     }

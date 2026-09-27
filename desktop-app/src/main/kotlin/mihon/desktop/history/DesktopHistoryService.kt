@@ -60,6 +60,18 @@ class DesktopHistoryService(
         }
     }
 
+    fun restoreItem(item: HistoryWithDetails) {
+        scope.launch(Dispatchers.IO) {
+            mutationPort.upsertHistory(
+                mihon.desktop.library.model.HistoryRecord(
+                    chapterId = item.chapterId,
+                    lastRead = item.lastRead,
+                    readDuration = item.readDuration,
+                ),
+            )
+        }
+    }
+
     fun clearAll() {
         scope.launch(Dispatchers.IO) {
             mutationPort.clearAllHistory()

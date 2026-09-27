@@ -1135,8 +1135,10 @@ class LibraryPresenter(
         clearSelection()
     }
 
-    fun batchRemoveFromLibrary() {
+    fun batchRemoveFromLibrary(onRemoved: ((Set<Long>) -> Unit)? = null) {
         val selected = selectionStateFlow.value.selectedMangaIds
+        if (selected.isEmpty()) return
+        val copy = selected.toSet()
         runLibraryBatch(selected) { ids, progress ->
             val selectedManga = repository.librarySnapshot(null).filter { it.id in ids }
             selectedManga.forEachIndexed { index, manga ->
@@ -1145,6 +1147,69 @@ class LibraryPresenter(
                     updateManga(record.copy(favorite = false))
                 }
                 progress(index + 1)
+            }
+        }
+        onRemoved?.invoke(copy)
+    }
+
+    fun removeMangaFromLibrary(mangaId: Long, onRemoved: (() -> Unit)? = null) {
+        runLibraryBatch(setOf(mangaId)) { ids, progress ->
+            val manga = repository.librarySnapshot(null).firstOrNull { it.id in ids }
+            if (manga != null) {
+                val record = findManga(manga.sourceId, manga.url)
+                if (record != null) {
+                    updateManga(record.copy(favorite = false))
+                }
+            }
+            progress(1)
+        }
+        onRemoved?.invoke()
+    }
+
+    fun restoreLibraryManga(mangaIds: Set<Long>) {
+        if (mangaIds.isEmpty()) return
+        runLibraryBatch(mangaIds) { ids, progress ->
+            val all = repository.allMangaSnapshot()
+            ids.forEachIndexed { index, mangaId ->
+                val record = all.firstOrNull { it.id == mangaId }
+                if (record != null) {
+                    val now = System.currentTimeMillis()
+                    updateManga(
+                        record.copy(
+                            favorite = true,
+                            dateAdded = record.dateAdded.takeIf { it > 0L } ?: now,
+                            lastModifiedAt = now,
+                            favoriteModifiedAt = now,
+                        ),
+                    )
+                }
+                progress(index + 1)
+            }
+        }
+    }
+
+    fun toggleMangaRead(mangaId: Long, read: Boolean) {
+        runLibraryBatch(setOf(mangaId)) { _, progress ->
+            val chapters = repository.chapterSnapshot(mangaId)
+            for (ch in chapters) {
+                val record = findChapter(mangaId, ch.url)
+                if (record != null) {
+                    updateChapter(record.copy(read = read))
+                }
+            }
+            progress(1)
+        }
+    }
+
+    fun downloadMangaChapters(mangaId: Long, amount: Int = 1) {
+        val dl = downloader ?: return
+        presenterScope.launch(Dispatchers.IO) {
+            val allManga = repository.librarySnapshot(null).associateBy { it.id }
+            val manga = allManga[mangaId] ?: return@launch
+            val chapters = repository.chapterSnapshot(mangaId).filter { !it.read }
+            val target = if (amount <= 0) chapters else chapters.take(amount)
+            if (target.isNotEmpty()) {
+                dl.enqueue(manga, target)
             }
         }
     }

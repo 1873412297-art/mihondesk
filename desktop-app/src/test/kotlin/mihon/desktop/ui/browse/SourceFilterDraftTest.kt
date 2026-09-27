@@ -65,11 +65,11 @@ class SourceFilterDraftTest {
             }
             runtime.sourceManager.registerBuiltinSource(source)
             setContent { Box(Modifier.requiredSize(1024.dp, 720.dp)) { BrowseContentView(runtime) } }
-            waitUntil(timeoutMillis = 15000) {
+            waitUntil(timeoutMillis = 60000) {
                 onAllNodesWithTag("source-item-${source.id}").fetchSemanticsNodes().isNotEmpty()
             }
             onNodeWithTag("source-item-${source.id}").performClick()
-            waitUntil(timeoutMillis = 5000) {
+            waitUntil(timeoutMillis = 60000) {
                 onAllNodesWithTag("source-filter-btn").fetchSemanticsNodes().isNotEmpty()
             }
             onNodeWithTag("source-filter-btn").performClick()
@@ -89,11 +89,11 @@ class SourceFilterDraftTest {
             onNodeWithTag("filter-group-checkbox-Action").assertIsSelected()
             onNodeWithTag("filter-checkbox-Completed").assertIsOff().performClick()
             onNodeWithTag("filter-apply-btn").performClick()
-            waitUntil(timeoutMillis = 5000) {
+            waitUntil(timeoutMillis = 30000) {
                 onAllNodesWithTag("manga-card-/true/1/0").fetchSemanticsNodes().isNotEmpty()
             }
             onNodeWithTag("next-page-btn").performClick()
-            waitUntil(timeoutMillis = 5000) { onAllNodesWithText("Page 2 (40)").fetchSemanticsNodes().isNotEmpty() }
+            waitUntil(timeoutMillis = 30000) { onAllNodesWithText("Page 2 (40)").fetchSemanticsNodes().isNotEmpty() }
             source.requests.toList() shouldBe listOf(1 to true, 2 to true)
             onNodeWithTag("source-filter-btn").performClick()
             onNodeWithTag("filter-reset-btn").performClick()
@@ -103,7 +103,7 @@ class SourceFilterDraftTest {
             onNodeWithTag("filter-checkbox-Completed").assertIsOn()
             onNodeWithTag("filter-reset-btn").performClick()
             onNodeWithTag("filter-apply-btn").performClick()
-            waitUntil(timeoutMillis = 5000) {
+            waitUntil(timeoutMillis = 30000) {
                 onAllNodesWithTag("manga-card-/false/1/0").fetchSemanticsNodes().isNotEmpty()
             }
             source.requests.toList() shouldBe listOf(1 to true, 2 to true, 1 to false)

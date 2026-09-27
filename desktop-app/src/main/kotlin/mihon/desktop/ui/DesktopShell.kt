@@ -16,6 +16,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
+import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -33,6 +34,8 @@ import mihon.desktop.i18n.UiText
 import mihon.desktop.i18n.text
 import mihon.desktop.navigation.DesktopDestination
 import mihon.desktop.security.DesktopAppLockController
+import mihon.desktop.ui.common.DesktopTooltipBox
+import mihon.desktop.ui.common.LocalSnackbarHostState
 import mihon.desktop.ui.library.LibraryScreen
 import mihon.desktop.ui.library.LibraryUiState
 import mihon.desktop.ui.library.MangaDetailActions
@@ -41,6 +44,313 @@ import mihon.desktop.ui.library.MangaDetailUiState
 internal const val DESKTOP_MAIN_HEADLINE_TEST_TAG = "desktop-main-headline"
 internal const val DESKTOP_NAVIGATION_RAIL_TEST_TAG = "desktop-navigation-rail"
 const val DESKTOP_LOCK_NOW_BUTTON_TEST_TAG = "desktop-lock-now-button"
+
+@Composable
+fun DesktopShell(
+    state: DesktopShellState,
+    actions: DesktopShellActions,
+) {
+    val strings = LocalStrings.current
+    var isCookieManagerOpen by remember { mutableStateOf(false) }
+    val primary = DesktopDestination.entries.take(5)
+    val secondary = DesktopDestination.entries.drop(5)
+    val snackbarHostState = LocalSnackbarHostState.current
+
+    Surface(modifier = Modifier.fillMaxSize()) {
+        Row {
+            NavigationRail(
+                modifier = Modifier.fillMaxHeight()
+                    .width(80.dp)
+                    .testTag(DESKTOP_NAVIGATION_RAIL_TEST_TAG),
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxHeight(),
+                    verticalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Column {
+                        primary.forEach { destination ->
+                            DestinationItem(
+                                destination = destination,
+                                selected = state.selected,
+                                onDestinationSelected = actions.onDestinationSelected,
+                                alwaysShowLabel = true,
+                            )
+                        }
+                    }
+                    Column {
+                        HorizontalDivider()
+                        secondary.forEach { destination ->
+                            DestinationItem(
+                                destination = destination,
+                                selected = state.selected,
+                                onDestinationSelected = actions.onDestinationSelected,
+                                alwaysShowLabel = false,
+                            )
+                        }
+                        if (actions.onLockNow != null) {
+                            HorizontalDivider()
+                            DesktopTooltipBox(text = strings.text(UiText.LockApp)) {
+                                IconButton(
+                                    onClick = actions.onLockNow,
+                                    modifier = Modifier.testTag(DESKTOP_LOCK_NOW_BUTTON_TEST_TAG),
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Lock,
+                                        contentDescription = strings.text(UiText.LockApp),
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            Column(modifier = Modifier.fillMaxSize().padding(32.dp)) {
+                if (state.libraryBatchState.running || state.libraryBatchState.error != null) {
+                    Surface(
+                        color = if (state.libraryBatchState.error != null) {
+                            androidx.compose.material3.MaterialTheme.colorScheme.errorContainer
+                        } else {
+                            androidx.compose.material3.MaterialTheme.colorScheme.secondaryContainer
+                        },
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp).testTag("library-batch-progress"),
+                    ) {
+                        Text(
+                            state.libraryBatchState.error ?: mihon.desktop.i18n.recoveryText(
+                                strings.text(
+                                    UiText.Processing,
+                                    state.libraryBatchState.processed,
+                                    state.libraryBatchState.total,
+                                ),
+                                "正在处理 ${state.libraryBatchState.processed}/${state.libraryBatchState.total}",
+                                "正在處理 ${state.libraryBatchState.processed}/${state.libraryBatchState.total}",
+                            ),
+                            modifier = Modifier.padding(12.dp),
+                        )
+                    }
+                }
+                if (state.trackSyncService != null && state.trackerManager != null) {
+                    mihon.desktop.ui.track.TrackingRecoveryNotice(state.trackSyncService, state.trackerManager)
+                }
+                if (state.incognitoMode) {
+                    Surface(
+                        color = androidx.compose.material3.MaterialTheme.colorScheme.tertiaryContainer,
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp).testTag("incognito-banner"),
+                        shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Text(
+                                text = strings.incognitoBannerText,
+                                style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
+                                color = androidx.compose.material3.MaterialTheme.colorScheme.onTertiaryContainer,
+                                fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
+                            )
+                            androidx.compose.material3.Button(
+                                onClick = actions.onToggleIncognito,
+                                modifier = Modifier.testTag("incognito-disable-button"),
+                            ) {
+                                Text(strings.incognitoDisable)
+                            }
+                        }
+                    }
+                }
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.TopStart,
+                ) {
+                    when (state.selected) {
+                        DesktopDestination.Library -> {
+                            LibraryScreen(
+                                state = state.libraryState,
+                                detailState = state.mangaDetailState,
+                                standaloneDetails = state.standaloneMangaDetails,
+                                onQueryChange = actions.onLibraryQueryChange,
+                                onMangaSelected = actions.onMangaSelected,
+                                onBackFromDetail = actions.onBackFromMangaDetail,
+                                onReadChapter = actions.onReadChapter,
+                                onDetailRetry = actions.onMangaDetailRetry,
+                                onImportBackup = actions.onImportBackup,
+                                onImportLocal = actions.onImportLocal,
+                                onRetry = actions.onLibraryRetry,
+                                onCategorySelected = actions.onCategorySelected,
+                                onManageCategories = actions.onManageCategories,
+                                onEditMangaCategories = actions.onEditMangaCategories,
+                                onOpenTracking = actions.onOpenTracking,
+                                onDisplayModeChange = actions.onDisplayModeChange,
+                                onGridSizeChange = actions.onGridSizeChange,
+                                onOpenFilterDialog = actions.onOpenFilterDialog,
+                                onCloseFilterDialog = actions.onCloseFilterDialog,
+                                onFilterChange = actions.onFilterChange,
+                                onSortChange = actions.onSortChange,
+                                onToggleSelectionMode = actions.onToggleSelectionMode,
+                                onToggleMangaSelection = actions.onToggleMangaSelection,
+                                onSelectAll = actions.onSelectAll,
+                                onDeselectAll = actions.onDeselectAll,
+                                onBatchChangeCategories = actions.onBatchChangeCategories,
+                                onBatchSetCategories = actions.onBatchSetCategories,
+                                onBatchCloseCategoryDialog = actions.onBatchCloseCategoryDialog,
+                                onBatchMarkRead = actions.onBatchMarkRead,
+                                onBatchDownload = actions.onBatchDownload,
+                                onBatchRemoveFromLibrary = actions.onBatchRemoveFromLibrary,
+                                isUpdatingLibrary = state.isUpdatingLibrary,
+                                onUpdateLibrary = actions.onUpdateLibrary,
+                                isRepairingCovers = state.isRepairingCovers,
+                                onRepairBrokenCovers = actions.onRepairBrokenCovers,
+                                onEditInfo = actions.onEditInfo,
+                                onDismissEditInfo = actions.onDismissEditInfo,
+                                onSaveMangaInfo = actions.onSaveMangaInfo,
+                                onResetMangaInfo = actions.onResetMangaInfo,
+                                onChapterFilterChange = actions.onChapterFilterChange,
+                                onChapterSortChange = actions.onChapterSortChange,
+                                onToggleBookmark = actions.onToggleBookmark,
+                                onToggleRead = actions.onToggleRead,
+                                onMarkPreviousRead = actions.onMarkPreviousRead,
+                                onDownloadChapter = actions.onDownloadChapter,
+                                onDeleteDownload = actions.onDeleteDownload,
+                                onDownloadBatch = actions.onDownloadBatch,
+                                onBatchBookmarkChapters = actions.onBatchBookmarkChapters,
+                                onBatchMarkChaptersRead = actions.onBatchMarkChaptersRead,
+                                onBatchDownloadChapters = actions.onBatchDownloadChapters,
+                                onBatchDeleteDownloads = actions.onBatchDeleteDownloads,
+                                onOpenChapterSettings = actions.onOpenChapterSettings,
+                                onDismissChapterSettings = actions.onDismissChapterSettings,
+                                onChapterDisplayModeChange = actions.onChapterDisplayModeChange,
+                                onExcludedScanlatorsChange = actions.onExcludedScanlatorsChange,
+                                onShowMissingChaptersChange = actions.onShowMissingChaptersChange,
+                                onSetChapterSettingsAsDefault = actions.onSetChapterSettingsAsDefault,
+                                onResetChapterSettingsToDefault = actions.onResetChapterSettingsToDefault,
+                                mangaDetailActions = actions.mangaDetailActions,
+                                onToggleMangaLibrary = actions.onToggleMangaLibrary,
+                                onRefreshMangaSource = actions.onRefreshMangaSource,
+                                isMangaLibraryActionRunning = state.isMangaLibraryActionRunning,
+                                isMangaSourceRefreshing = state.isMangaSourceRefreshing,
+                                onDuplicateOpenManga = actions.onDuplicateOpenManga,
+                                onDuplicateMigrate = actions.onDuplicateMigrate,
+                                onDuplicateAddAnyway = actions.onDuplicateAddAnyway,
+                                onDuplicateDismiss = actions.onDuplicateDismiss,
+                                sourceNameFor = state.sourceNameFor,
+                                sourceBaseUrlFor = state.sourceBaseUrlFor,
+                            )
+                        }
+                        DesktopDestination.History -> {
+                            mihon.desktop.ui.history.HistoryScreen(
+                                groups = state.historyGroups,
+                                query = state.historyQuery,
+                                onQueryChange = actions.onHistoryQueryChange,
+                                onReadChapter = actions.onReadChapter,
+                                onDeleteItem = actions.onDeleteHistoryItem,
+                                onClearAll = actions.onClearAllHistory,
+                            )
+                        }
+                        DesktopDestination.Downloads -> {
+                            mihon.desktop.ui.tasks.DownloadsScreen(
+                                queue = state.downloadsQueue,
+                                isRunning = state.isDownloaderRunning,
+                                speedBytesPerSec = state.downloadSpeedBytesPerSec,
+                                onPauseAll = actions.onPauseAllDownloads,
+                                onResumeAll = actions.onResumeAllDownloads,
+                                onClearCompleted = actions.onClearCompletedDownloads,
+                                onCancel = actions.onCancelDownload,
+                                onRetry = actions.onRetryDownload,
+                                onRetryAllFailed = actions.onRetryAllFailedDownloads,
+                                onReadChapter = actions.onReadDownloadedChapter,
+                                recoveryMessage = state.downloadRecoveryMessage,
+                                storageError = state.downloadStorageError,
+                            )
+                        }
+                        DesktopDestination.Updates -> {
+                            if (state.isUpcomingOpen || actions.upcomingContent != null) {
+                                if (actions.upcomingContent != null) {
+                                    actions.upcomingContent.invoke()
+                                } else {
+                                    mihon.desktop.ui.upcoming.UpcomingScreen(
+                                        state = mihon.desktop.ui.upcoming.UpcomingUiState(loading = false),
+                                        onBack = actions.onCloseUpcoming,
+                                    )
+                                }
+                            } else {
+                                mihon.desktop.ui.updates.UpdatesScreen(
+                                    updatedChapters = state.updatedChapters,
+                                    isUpdating = state.isUpdatingLibrary,
+                                    lastResult = state.lastUpdateResult,
+                                    onCheckForUpdates = actions.onCheckForUpdates,
+                                    onReadChapter = actions.onReadChapter,
+                                    onOpenUpcoming = actions.onOpenUpcoming,
+                                    runState = state.updateRunState,
+                                    progress = state.updateProgress,
+                                    sourceNameFor = state.sourceNameFor,
+                                    onCancelUpdate = actions.onCancelLibraryUpdate,
+                                )
+                            }
+                        }
+                        DesktopDestination.Settings -> {
+                            if (state.preferenceStore != null && state.readerSettingsStore != null) {
+                                mihon.desktop.ui.settings.SettingsScreen(
+                                    preferenceStore = state.preferenceStore,
+                                    readerSettingsStore = state.readerSettingsStore,
+                                    diagnosticService = state.diagnosticService,
+                                    trackerManager = state.trackerManager,
+                                    backupScheduler = state.backupScheduler,
+                                    syncScheduler = state.syncScheduler,
+                                    syncServerManager = state.syncServerManager,
+                                    backgroundScheduler = state.backgroundScheduler,
+                                    updateScheduler = state.updateScheduler,
+                                    onOpenCookieManager = { isCookieManagerOpen = true },
+                                    onImportBackup = actions.onImportBackup,
+                                    onExportBackup = actions.onExportBackup,
+                                    onPreferencesChanged = actions.onPreferencesChanged,
+                                    downloadCacheCleaner = state.downloadCacheCleaner,
+                                    downloadsDir = state.downloadsDir,
+                                    diskCacheDir = state.diskCacheDir,
+                                    appLockController = state.appLockController,
+                                )
+                            } else {
+                                Text(
+                                    text = strings.destinationLabel(state.selected),
+                                    modifier = Modifier.testTag(DESKTOP_MAIN_HEADLINE_TEST_TAG),
+                                    style = androidx.compose.material3.MaterialTheme.typography.headlineMedium,
+                                )
+                            }
+                        }
+                        DesktopDestination.Stats -> {
+                            mihon.desktop.ui.stats.StatsScreen(
+                                data = state.statsData,
+                                onRefresh = actions.onRefreshStats,
+                            )
+                        }
+                        DesktopDestination.About -> {
+                            mihon.desktop.ui.settings.AboutScreen(updateContent = actions.appUpdateContent)
+                        }
+                        DesktopDestination.Browse -> {
+                            actions.browseContent?.invoke() ?: Text(
+                                text = strings.destinationLabel(state.selected),
+                                modifier = Modifier.testTag(DESKTOP_MAIN_HEADLINE_TEST_TAG),
+                                style = androidx.compose.material3.MaterialTheme.typography.headlineMedium,
+                            )
+                        }
+                    }
+
+                    if (isCookieManagerOpen && state.cookieStore != null) {
+                        mihon.desktop.ui.network.CookieManagerDialog(
+                            cookieStore = state.cookieStore,
+                            onDismissRequest = { isCookieManagerOpen = false },
+                        )
+                    }
+
+                    if (snackbarHostState != null) {
+                        SnackbarHost(
+                            hostState = snackbarHostState,
+                            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp),
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
 
 @Composable
 fun DesktopShell(
@@ -187,293 +497,220 @@ fun DesktopShell(
     appLockController: DesktopAppLockController? = null,
     onLockNow: (() -> Unit)? = null,
 ) {
-    val strings = mihon.desktop.i18n.LocalStrings.current
-    var isCookieManagerOpen by remember { mutableStateOf(false) }
-    val primary = DesktopDestination.entries.take(5)
-    val secondary = DesktopDestination.entries.drop(5)
-    Surface(modifier = Modifier.fillMaxSize()) {
-        Row {
-            NavigationRail(
-                modifier = Modifier.fillMaxHeight()
-                    .width(80.dp)
-                    .testTag(DESKTOP_NAVIGATION_RAIL_TEST_TAG),
-            ) {
-                Column(
-                    modifier = Modifier.fillMaxHeight(),
-                    verticalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Column {
-                        primary.forEach { destination ->
-                            DestinationItem(
-                                destination = destination,
-                                selected = selected,
-                                onDestinationSelected = onDestinationSelected,
-                                alwaysShowLabel = true,
-                            )
-                        }
-                    }
-                    Column {
-                        HorizontalDivider()
-                        secondary.forEach { destination ->
-                            DestinationItem(
-                                destination = destination,
-                                selected = selected,
-                                onDestinationSelected = onDestinationSelected,
-                                alwaysShowLabel = false,
-                            )
-                        }
-                        if (onLockNow != null) {
-                            HorizontalDivider()
-                            IconButton(
-                                onClick = onLockNow,
-                                modifier = Modifier.testTag(DESKTOP_LOCK_NOW_BUTTON_TEST_TAG),
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Rounded.Lock,
-                                    contentDescription = strings.text(UiText.LockApp),
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-            Column(modifier = Modifier.fillMaxSize().padding(32.dp)) {
-                if (libraryBatchState.running || libraryBatchState.error != null) {
-                    Surface(
-                        color = if (libraryBatchState.error !=
-                            null
-                        ) {
-                            androidx.compose.material3.MaterialTheme.colorScheme.errorContainer
-                        } else {
-                            androidx.compose.material3.MaterialTheme.colorScheme.secondaryContainer
-                        },
-                        modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp).testTag("library-batch-progress"),
-                    ) {
-                        Text(
-                            libraryBatchState.error ?: mihon.desktop.i18n.recoveryText(
-                                strings.text(UiText.Processing, libraryBatchState.processed, libraryBatchState.total),
-                                "正在处理 ${libraryBatchState.processed}/${libraryBatchState.total}",
-                                "正在處理 ${libraryBatchState.processed}/${libraryBatchState.total}",
-                            ),
-                            modifier = Modifier.padding(12.dp),
-                        )
-                    }
-                }
-                if (trackSyncService != null && trackerManager != null) {
-                    mihon.desktop.ui.track.TrackingRecoveryNotice(trackSyncService, trackerManager)
-                }
-                if (incognitoMode) {
-                    Surface(
-                        color = androidx.compose.material3.MaterialTheme.colorScheme.tertiaryContainer,
-                        modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp).testTag("incognito-banner"),
-                        shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                        ) {
-                            Text(
-                                text = strings.incognitoBannerText,
-                                style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
-                                color = androidx.compose.material3.MaterialTheme.colorScheme.onTertiaryContainer,
-                                fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
-                            )
-                            androidx.compose.material3.Button(
-                                onClick = onToggleIncognito,
-                                modifier = Modifier.testTag("incognito-disable-button"),
-                            ) {
-                                Text(strings.incognitoDisable)
-                            }
-                        }
-                    }
-                }
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.TopStart,
-                ) {
-                    when (selected) {
-                        DesktopDestination.Library -> {
-                            LibraryScreen(
-                                state = libraryState,
-                                detailState = mangaDetailState,
-                                standaloneDetails = standaloneMangaDetails,
-                                onQueryChange = onLibraryQueryChange,
-                                onMangaSelected = onMangaSelected,
-                                onBackFromDetail = onBackFromMangaDetail,
-                                onReadChapter = onReadChapter,
-                                onDetailRetry = onMangaDetailRetry,
-                                onImportBackup = onImportBackup,
-                                onImportLocal = onImportLocal,
-                                onRetry = onLibraryRetry,
-                                onCategorySelected = onCategorySelected,
-                                onManageCategories = onManageCategories,
-                                onEditMangaCategories = onEditMangaCategories,
-                                onOpenTracking = onOpenTracking,
-                                onDisplayModeChange = onDisplayModeChange,
-                                onGridSizeChange = onGridSizeChange,
-                                onOpenFilterDialog = onOpenFilterDialog,
-                                onCloseFilterDialog = onCloseFilterDialog,
-                                onFilterChange = onFilterChange,
-                                onSortChange = onSortChange,
-                                onToggleSelectionMode = onToggleSelectionMode,
-                                onToggleMangaSelection = onToggleMangaSelection,
-                                onSelectAll = onSelectAll,
-                                onDeselectAll = onDeselectAll,
-                                onBatchChangeCategories = onBatchChangeCategories,
-                                onBatchSetCategories = onBatchSetCategories,
-                                onBatchCloseCategoryDialog = onBatchCloseCategoryDialog,
-                                onBatchMarkRead = onBatchMarkRead,
-                                onBatchDownload = onBatchDownload,
-                                onBatchRemoveFromLibrary = onBatchRemoveFromLibrary,
-                                isUpdatingLibrary = isUpdatingLibrary,
-                                onUpdateLibrary = onUpdateLibrary,
-                                isRepairingCovers = isRepairingCovers,
-                                onRepairBrokenCovers = onRepairBrokenCovers,
-                                onEditInfo = onEditInfo,
-                                onDismissEditInfo = onDismissEditInfo,
-                                onSaveMangaInfo = onSaveMangaInfo,
-                                onResetMangaInfo = onResetMangaInfo,
-                                onChapterFilterChange = onChapterFilterChange,
-                                onChapterSortChange = onChapterSortChange,
-                                onToggleBookmark = onToggleBookmark,
-                                onToggleRead = onToggleRead,
-                                onMarkPreviousRead = onMarkPreviousRead,
-                                onDownloadChapter = onDownloadChapter,
-                                onDeleteDownload = onDeleteDownload,
-                                onDownloadBatch = onDownloadBatch,
-                                onBatchBookmarkChapters = onBatchBookmarkChapters,
-                                onBatchMarkChaptersRead = onBatchMarkChaptersRead,
-                                onBatchDownloadChapters = onBatchDownloadChapters,
-                                onBatchDeleteDownloads = onBatchDeleteDownloads,
-                                onOpenChapterSettings = onOpenChapterSettings,
-                                onDismissChapterSettings = onDismissChapterSettings,
-                                onChapterDisplayModeChange = onChapterDisplayModeChange,
-                                onExcludedScanlatorsChange = onExcludedScanlatorsChange,
-                                onShowMissingChaptersChange = onShowMissingChaptersChange,
-                                onSetChapterSettingsAsDefault = onSetChapterSettingsAsDefault,
-                                onResetChapterSettingsToDefault = onResetChapterSettingsToDefault,
-                                mangaDetailActions = mangaDetailActions,
-                                onToggleMangaLibrary = onToggleMangaLibrary,
-                                onRefreshMangaSource = onRefreshMangaSource,
-                                isMangaLibraryActionRunning = isMangaLibraryActionRunning,
-                                isMangaSourceRefreshing = isMangaSourceRefreshing,
-                                onDuplicateOpenManga = onDuplicateOpenManga,
-                                onDuplicateMigrate = onDuplicateMigrate,
-                                onDuplicateAddAnyway = onDuplicateAddAnyway,
-                                onDuplicateDismiss = onDuplicateDismiss,
-                                sourceNameFor = sourceNameFor,
-                                sourceBaseUrlFor = sourceBaseUrlFor,
-                            )
-                        }
-                        DesktopDestination.History -> {
-                            mihon.desktop.ui.history.HistoryScreen(
-                                groups = historyGroups,
-                                query = historyQuery,
-                                onQueryChange = onHistoryQueryChange,
-                                onReadChapter = onReadChapter,
-                                onDeleteItem = onDeleteHistoryItem,
-                                onClearAll = onClearAllHistory,
-                            )
-                        }
-                        DesktopDestination.Downloads -> {
-                            mihon.desktop.ui.tasks.DownloadsScreen(
-                                queue = downloadsQueue,
-                                isRunning = isDownloaderRunning,
-                                speedBytesPerSec = downloadSpeedBytesPerSec,
-                                onPauseAll = onPauseAllDownloads,
-                                onResumeAll = onResumeAllDownloads,
-                                onClearCompleted = onClearCompletedDownloads,
-                                onCancel = onCancelDownload,
-                                onRetry = onRetryDownload,
-                                onRetryAllFailed = onRetryAllFailedDownloads,
-                                onReadChapter = onReadDownloadedChapter,
-                                recoveryMessage = downloadRecoveryMessage,
-                                storageError = downloadStorageError,
-                            )
-                        }
-                        DesktopDestination.Updates -> {
-                            if (isUpcomingOpen || upcomingContent != null) {
-                                if (upcomingContent != null) {
-                                    upcomingContent()
-                                } else {
-                                    mihon.desktop.ui.upcoming.UpcomingScreen(
-                                        state = mihon.desktop.ui.upcoming.UpcomingUiState(loading = false),
-                                        onBack = onCloseUpcoming,
-                                    )
-                                }
-                            } else {
-                                mihon.desktop.ui.updates.UpdatesScreen(
-                                    updatedChapters = updatedChapters,
-                                    isUpdating = isUpdatingLibrary,
-                                    lastResult = lastUpdateResult,
-                                    onCheckForUpdates = onCheckForUpdates,
-                                    onReadChapter = onReadChapter,
-                                    onOpenUpcoming = onOpenUpcoming,
-                                    runState = updateRunState,
-                                    progress = updateProgress,
-                                    sourceNameFor = sourceNameFor,
-                                    onCancelUpdate = onCancelLibraryUpdate,
-                                )
-                            }
-                        }
-                        DesktopDestination.Settings -> {
-                            if (preferenceStore != null && readerSettingsStore != null) {
-                                mihon.desktop.ui.settings.SettingsScreen(
-                                    preferenceStore = preferenceStore,
-                                    readerSettingsStore = readerSettingsStore,
-                                    diagnosticService = diagnosticService,
-                                    trackerManager = trackerManager,
-                                    backupScheduler = backupScheduler,
-                                    syncScheduler = syncScheduler,
-                                    syncServerManager = syncServerManager,
-                                    backgroundScheduler = backgroundScheduler,
-                                    updateScheduler = updateScheduler,
-                                    onOpenCookieManager = { isCookieManagerOpen = true },
-                                    onImportBackup = onImportBackup,
-                                    onExportBackup = onExportBackup,
-                                    onPreferencesChanged = onPreferencesChanged,
-                                    downloadCacheCleaner = downloadCacheCleaner,
-                                    downloadsDir = downloadsDir,
-                                    diskCacheDir = diskCacheDir,
-                                    appLockController = appLockController,
-                                )
-                            } else {
-                                Text(
-                                    text = strings.destinationLabel(selected),
-                                    modifier = Modifier.testTag(DESKTOP_MAIN_HEADLINE_TEST_TAG),
-                                    style = androidx.compose.material3.MaterialTheme.typography.headlineMedium,
-                                )
-                            }
-                        }
-                        DesktopDestination.Stats -> {
-                            mihon.desktop.ui.stats.StatsScreen(
-                                data = statsData,
-                                onRefresh = onRefreshStats,
-                            )
-                        }
-                        DesktopDestination.About -> {
-                            mihon.desktop.ui.settings.AboutScreen(updateContent = appUpdateContent)
-                        }
-                        DesktopDestination.Browse -> {
-                            browseContent?.invoke() ?: Text(
-                                text = strings.destinationLabel(selected),
-                                modifier = Modifier.testTag(DESKTOP_MAIN_HEADLINE_TEST_TAG),
-                                style = androidx.compose.material3.MaterialTheme.typography.headlineMedium,
-                            )
-                        }
-                    }
-
-                    if (isCookieManagerOpen && cookieStore != null) {
-                        mihon.desktop.ui.network.CookieManagerDialog(
-                            cookieStore = cookieStore,
-                            onDismissRequest = { isCookieManagerOpen = false },
-                        )
-                    }
-                }
-            }
-        }
+    val state = DesktopShellState(
+        selected = selected,
+        libraryState = libraryState,
+        libraryBatchState = libraryBatchState,
+        mangaDetailState = mangaDetailState,
+        standaloneMangaDetails = standaloneMangaDetails,
+        isMangaLibraryActionRunning = isMangaLibraryActionRunning,
+        isMangaSourceRefreshing = isMangaSourceRefreshing,
+        downloadsQueue = downloadsQueue,
+        isDownloaderRunning = isDownloaderRunning,
+        downloadSpeedBytesPerSec = downloadSpeedBytesPerSec,
+        downloadRecoveryMessage = downloadRecoveryMessage,
+        downloadStorageError = downloadStorageError,
+        updatedChapters = updatedChapters,
+        isUpdatingLibrary = isUpdatingLibrary,
+        isRepairingCovers = isRepairingCovers,
+        lastUpdateResult = lastUpdateResult,
+        updateRunState = updateRunState,
+        updateProgress = updateProgress,
+        isUpcomingOpen = isUpcomingOpen,
+        historyGroups = historyGroups,
+        historyQuery = historyQuery,
+        statsData = statsData,
+        incognitoMode = incognitoMode,
+        preferenceStore = preferenceStore,
+        readerSettingsStore = readerSettingsStore,
+        diagnosticService = diagnosticService,
+        trackerManager = trackerManager,
+        trackSyncService = trackSyncService,
+        backupScheduler = backupScheduler,
+        syncScheduler = syncScheduler,
+        syncServerManager = syncServerManager,
+        backgroundScheduler = backgroundScheduler,
+        updateScheduler = updateScheduler,
+        cookieStore = cookieStore,
+        downloadCacheCleaner = downloadCacheCleaner,
+        downloadsDir = downloadsDir,
+        diskCacheDir = diskCacheDir,
+        appLockController = appLockController,
+        sourceNameFor = sourceNameFor,
+        sourceBaseUrlFor = sourceBaseUrlFor,
+    )
+    val actions = remember(
+        onDestinationSelected,
+        appUpdateContent,
+        upcomingContent,
+        browseContent,
+        onLibraryQueryChange,
+        onMangaSelected,
+        onBackFromMangaDetail,
+        onReadChapter,
+        onMangaDetailRetry,
+        onImportBackup,
+        onImportLocal,
+        onLibraryRetry,
+        onCategorySelected,
+        onManageCategories,
+        onEditMangaCategories,
+        onOpenTracking,
+        onDisplayModeChange,
+        onGridSizeChange,
+        onOpenFilterDialog,
+        onCloseFilterDialog,
+        onFilterChange,
+        onSortChange,
+        onToggleSelectionMode,
+        onToggleMangaSelection,
+        onSelectAll,
+        onDeselectAll,
+        onBatchChangeCategories,
+        onBatchSetCategories,
+        onBatchCloseCategoryDialog,
+        onBatchMarkRead,
+        onBatchDownload,
+        onBatchRemoveFromLibrary,
+        onToggleMangaLibrary,
+        onRefreshMangaSource,
+        onEditInfo,
+        onDismissEditInfo,
+        onSaveMangaInfo,
+        onResetMangaInfo,
+        onChapterFilterChange,
+        onChapterSortChange,
+        onToggleBookmark,
+        onToggleRead,
+        onMarkPreviousRead,
+        onDownloadChapter,
+        onDeleteDownload,
+        onDownloadBatch,
+        onBatchBookmarkChapters,
+        onBatchMarkChaptersRead,
+        onBatchDownloadChapters,
+        onBatchDeleteDownloads,
+        onOpenChapterSettings,
+        onDismissChapterSettings,
+        onChapterDisplayModeChange,
+        onExcludedScanlatorsChange,
+        onShowMissingChaptersChange,
+        onSetChapterSettingsAsDefault,
+        onResetChapterSettingsToDefault,
+        onDuplicateOpenManga,
+        onDuplicateMigrate,
+        onDuplicateAddAnyway,
+        onDuplicateDismiss,
+        mangaDetailActions,
+        onPauseAllDownloads,
+        onResumeAllDownloads,
+        onClearCompletedDownloads,
+        onCancelDownload,
+        onRetryDownload,
+        onRetryAllFailedDownloads,
+        onReadDownloadedChapter,
+        onRepairBrokenCovers,
+        onCheckForUpdates,
+        onCancelLibraryUpdate,
+        onUpdateLibrary,
+        onOpenUpcoming,
+        onCloseUpcoming,
+        onHistoryQueryChange,
+        onDeleteHistoryItem,
+        onClearAllHistory,
+        onRefreshStats,
+        onToggleIncognito,
+        onExportBackup,
+        onPreferencesChanged,
+        onLockNow,
+    ) {
+        DesktopShellActions(
+            onDestinationSelected = onDestinationSelected,
+            appUpdateContent = appUpdateContent,
+            upcomingContent = upcomingContent,
+            browseContent = browseContent,
+            onLibraryQueryChange = onLibraryQueryChange,
+            onMangaSelected = onMangaSelected,
+            onBackFromMangaDetail = onBackFromMangaDetail,
+            onReadChapter = onReadChapter,
+            onMangaDetailRetry = onMangaDetailRetry,
+            onImportBackup = onImportBackup,
+            onImportLocal = onImportLocal,
+            onLibraryRetry = onLibraryRetry,
+            onCategorySelected = onCategorySelected,
+            onManageCategories = onManageCategories,
+            onEditMangaCategories = onEditMangaCategories,
+            onOpenTracking = onOpenTracking,
+            onDisplayModeChange = onDisplayModeChange,
+            onGridSizeChange = onGridSizeChange,
+            onOpenFilterDialog = onOpenFilterDialog,
+            onCloseFilterDialog = onCloseFilterDialog,
+            onFilterChange = onFilterChange,
+            onSortChange = onSortChange,
+            onToggleSelectionMode = onToggleSelectionMode,
+            onToggleMangaSelection = onToggleMangaSelection,
+            onSelectAll = onSelectAll,
+            onDeselectAll = onDeselectAll,
+            onBatchChangeCategories = onBatchChangeCategories,
+            onBatchSetCategories = onBatchSetCategories,
+            onBatchCloseCategoryDialog = onBatchCloseCategoryDialog,
+            onBatchMarkRead = onBatchMarkRead,
+            onBatchDownload = onBatchDownload,
+            onBatchRemoveFromLibrary = onBatchRemoveFromLibrary,
+            onToggleMangaLibrary = onToggleMangaLibrary,
+            onRefreshMangaSource = onRefreshMangaSource,
+            onEditInfo = onEditInfo,
+            onDismissEditInfo = onDismissEditInfo,
+            onSaveMangaInfo = onSaveMangaInfo,
+            onResetMangaInfo = onResetMangaInfo,
+            onChapterFilterChange = onChapterFilterChange,
+            onChapterSortChange = onChapterSortChange,
+            onToggleBookmark = onToggleBookmark,
+            onToggleRead = onToggleRead,
+            onMarkPreviousRead = onMarkPreviousRead,
+            onDownloadChapter = onDownloadChapter,
+            onDeleteDownload = onDeleteDownload,
+            onDownloadBatch = onDownloadBatch,
+            onBatchBookmarkChapters = onBatchBookmarkChapters,
+            onBatchMarkChaptersRead = onBatchMarkChaptersRead,
+            onBatchDownloadChapters = onBatchDownloadChapters,
+            onBatchDeleteDownloads = onBatchDeleteDownloads,
+            onOpenChapterSettings = onOpenChapterSettings,
+            onDismissChapterSettings = onDismissChapterSettings,
+            onChapterDisplayModeChange = onChapterDisplayModeChange,
+            onExcludedScanlatorsChange = onExcludedScanlatorsChange,
+            onShowMissingChaptersChange = onShowMissingChaptersChange,
+            onSetChapterSettingsAsDefault = onSetChapterSettingsAsDefault,
+            onResetChapterSettingsToDefault = onResetChapterSettingsToDefault,
+            onDuplicateOpenManga = onDuplicateOpenManga,
+            onDuplicateMigrate = onDuplicateMigrate,
+            onDuplicateAddAnyway = onDuplicateAddAnyway,
+            onDuplicateDismiss = onDuplicateDismiss,
+            mangaDetailActions = mangaDetailActions,
+            onPauseAllDownloads = onPauseAllDownloads,
+            onResumeAllDownloads = onResumeAllDownloads,
+            onClearCompletedDownloads = onClearCompletedDownloads,
+            onCancelDownload = onCancelDownload,
+            onRetryDownload = onRetryDownload,
+            onRetryAllFailedDownloads = onRetryAllFailedDownloads,
+            onReadDownloadedChapter = onReadDownloadedChapter,
+            onRepairBrokenCovers = onRepairBrokenCovers,
+            onCheckForUpdates = onCheckForUpdates,
+            onCancelLibraryUpdate = onCancelLibraryUpdate,
+            onUpdateLibrary = onUpdateLibrary,
+            onOpenUpcoming = onOpenUpcoming,
+            onCloseUpcoming = onCloseUpcoming,
+            onHistoryQueryChange = onHistoryQueryChange,
+            onDeleteHistoryItem = onDeleteHistoryItem,
+            onClearAllHistory = onClearAllHistory,
+            onRefreshStats = onRefreshStats,
+            onToggleIncognito = onToggleIncognito,
+            onExportBackup = onExportBackup,
+            onPreferencesChanged = onPreferencesChanged,
+            onLockNow = onLockNow,
+        )
     }
+    DesktopShell(state = state, actions = actions)
 }
 
 @Composable
@@ -483,30 +720,32 @@ private fun DestinationItem(
     onDestinationSelected: (DesktopDestination) -> Unit,
     alwaysShowLabel: Boolean = false,
 ) {
-    val strings = mihon.desktop.i18n.LocalStrings.current
-    NavigationRailItem(
-        selected = destination == selected,
-        onClick = { onDestinationSelected(destination) },
-        icon = {
-            Icon(
-                imageVector = destinationIcon(destination),
-                contentDescription = strings.destinationLabel(destination),
-            )
-        },
-        label = {
-            Text(
-                text = strings.destinationLabel(destination),
-                style = androidx.compose.material3.MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                maxLines = 1,
-                softWrap = false,
-            )
-        },
-        alwaysShowLabel = alwaysShowLabel,
-        colors = androidx.compose.material3.NavigationRailItemDefaults.colors(
-            selectedIconColor = androidx.compose.material3.MaterialTheme.colorScheme.primary,
-            selectedTextColor = androidx.compose.material3.MaterialTheme.colorScheme.primary,
-            unselectedIconColor = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant,
-            unselectedTextColor = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant,
-        ),
-    )
+    val strings = LocalStrings.current
+    DesktopTooltipBox(text = strings.destinationLabel(destination)) {
+        NavigationRailItem(
+            selected = destination == selected,
+            onClick = { onDestinationSelected(destination) },
+            icon = {
+                Icon(
+                    imageVector = destinationIcon(destination),
+                    contentDescription = strings.destinationLabel(destination),
+                )
+            },
+            label = {
+                Text(
+                    text = strings.destinationLabel(destination),
+                    style = androidx.compose.material3.MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                    maxLines = 1,
+                    softWrap = false,
+                )
+            },
+            alwaysShowLabel = alwaysShowLabel,
+            colors = androidx.compose.material3.NavigationRailItemDefaults.colors(
+                selectedIconColor = androidx.compose.material3.MaterialTheme.colorScheme.primary,
+                selectedTextColor = androidx.compose.material3.MaterialTheme.colorScheme.primary,
+                unselectedIconColor = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant,
+                unselectedTextColor = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant,
+            ),
+        )
+    }
 }

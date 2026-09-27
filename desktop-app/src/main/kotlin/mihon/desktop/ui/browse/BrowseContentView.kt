@@ -75,6 +75,27 @@ fun BrowseContentView(
     val scope = rememberCoroutineScope()
     var navState by remember { mutableStateOf<BrowseNavigationState>(BrowseNavigationState.Home) }
 
+    mihon.desktop.navigation.DesktopBackHandler(enabled = navState != BrowseNavigationState.Home) {
+        when (val current = navState) {
+            is BrowseNavigationState.SourcePreferences -> {
+                navState = if (current.returnToExtensionPkg != null) {
+                    BrowseNavigationState.ExtensionDetails(current.returnToExtensionPkg)
+                } else {
+                    BrowseNavigationState.Home
+                }
+                true
+            }
+            is BrowseNavigationState.ExtensionDetails,
+            is BrowseNavigationState.MangaDetail,
+            is BrowseNavigationState.SourceView,
+            -> {
+                navState = BrowseNavigationState.Home
+                true
+            }
+            BrowseNavigationState.Home -> false
+        }
+    }
+
     val presenter = remember(runtime) {
         BrowsePresenter(
             sourceManager = runtime.sourceManager,
