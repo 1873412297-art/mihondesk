@@ -20,6 +20,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DeleteSweep
 import androidx.compose.material.icons.rounded.DownloadDone
+import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
@@ -90,6 +92,10 @@ fun DownloadsScreen(
     onCancel: (chapterId: Long) -> Unit,
     onRetry: (chapterId: Long) -> Unit,
     onReadChapter: (mangaId: Long, chapterId: Long) -> Unit,
+    onPause: (chapterId: Long) -> Unit = {},
+    onResume: (chapterId: Long) -> Unit = {},
+    onMoveUp: (chapterId: Long) -> Unit = {},
+    onMoveDown: (chapterId: Long) -> Unit = {},
     modifier: Modifier = Modifier,
     recoveryMessage: String? = null,
     storageError: String? = null,
@@ -308,14 +314,24 @@ fun DownloadsScreen(
                     }) { Text(strings.text(UiText.ClearFilters)) }
                 }
             } else {
+                val indexMap = remember(queue) { queue.withIndex().associate { it.value.chapterId to it.index } }
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     items(visible, key = { it.chapterId }) { item ->
+                        val queueIndex = indexMap[item.chapterId] ?: -1
+                        val canMoveUp = queueIndex > 0
+                        val canMoveDown = queueIndex in 0 until queue.lastIndex
                         DownloadCard(
                             download = item,
                             isRunning = isRunning,
+                            canMoveUp = canMoveUp,
+                            canMoveDown = canMoveDown,
+                            onPause = { onPause(item.chapterId) },
+                            onResume = { onResume(item.chapterId) },
+                            onMoveUp = { onMoveUp(item.chapterId) },
+                            onMoveDown = { onMoveDown(item.chapterId) },
                             onCancel = { onCancel(item.chapterId) },
                             onRetry = { onRetry(item.chapterId) },
                             onRead = { onReadChapter(item.mangaId, item.chapterId) },
@@ -331,6 +347,12 @@ fun DownloadsScreen(
 private fun DownloadCard(
     download: DesktopDownload,
     isRunning: Boolean,
+    canMoveUp: Boolean,
+    canMoveDown: Boolean,
+    onPause: () -> Unit,
+    onResume: () -> Unit,
+    onMoveUp: () -> Unit,
+    onMoveDown: () -> Unit,
     onCancel: () -> Unit,
     onRetry: () -> Unit,
     onRead: () -> Unit,
@@ -370,8 +392,39 @@ private fun DownloadCard(
 
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
+                        DesktopTooltipBox(tooltip = strings.text(UiText.DownloadMoveUp)) {
+                            IconButton(
+                                onClick = onMoveUp,
+                                enabled = canMoveUp,
+                                modifier = Modifier
+                                    .size(28.dp)
+                                    .testTag("download-move-up-${download.chapterId}"),
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.KeyboardArrowUp,
+                                    contentDescription = strings.text(UiText.DownloadMoveUp),
+                                    modifier = Modifier.size(20.dp),
+                                )
+                            }
+                        }
+                        DesktopTooltipBox(tooltip = strings.text(UiText.DownloadMoveDown)) {
+                            IconButton(
+                                onClick = onMoveDown,
+                                enabled = canMoveDown,
+                                modifier = Modifier
+                                    .size(28.dp)
+                                    .testTag("download-move-down-${download.chapterId}"),
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.KeyboardArrowDown,
+                                    contentDescription = strings.text(UiText.DownloadMoveDown),
+                                    modifier = Modifier.size(20.dp),
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.width(4.dp))
                         DownloadIndicator(
                             status = download.status,
                             progress = download.progress,
@@ -482,6 +535,38 @@ private fun DownloadCard(
                                 }
                             }
                         }
+                        if (download.status == DownloadStatus.PAUSED) {
+                            DesktopTooltipBox(tooltip = strings.text(UiText.DownloadResumeItem)) {
+                                TextButton(
+                                    onClick = onResume,
+                                    modifier = Modifier.testTag("download-resume-${download.chapterId}"),
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.PlayArrow,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp),
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(strings.text(UiText.DownloadResumeItem))
+                                }
+                            }
+                        }
+                        if (download.status == DownloadStatus.DOWNLOADING || download.status == DownloadStatus.QUEUED) {
+                            DesktopTooltipBox(tooltip = strings.text(UiText.DownloadPauseItem)) {
+                                TextButton(
+                                    onClick = onPause,
+                                    modifier = Modifier.testTag("download-pause-${download.chapterId}"),
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Pause,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp),
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(strings.text(UiText.DownloadPauseItem))
+                                }
+                            }
+                        }
                         if (download.status == DownloadStatus.ERROR) {
                             DesktopTooltipBox(tooltip = strings.downloadsRetry) {
                                 TextButton(
@@ -537,6 +622,70 @@ private fun DownloadCard(
                         onClick = {
                             showContextMenu = false
                             onRead()
+                        },
+                    )
+                }
+                if (download.status == DownloadStatus.PAUSED) {
+                    DropdownMenuItem(
+                        text = { Text(strings.text(UiText.DownloadResumeItem)) },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Rounded.PlayArrow,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        },
+                        onClick = {
+                            showContextMenu = false
+                            onResume()
+                        },
+                    )
+                }
+                if (download.status == DownloadStatus.DOWNLOADING || download.status == DownloadStatus.QUEUED) {
+                    DropdownMenuItem(
+                        text = { Text(strings.text(UiText.DownloadPauseItem)) },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Rounded.Pause,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        },
+                        onClick = {
+                            showContextMenu = false
+                            onPause()
+                        },
+                    )
+                }
+                if (canMoveUp) {
+                    DropdownMenuItem(
+                        text = { Text(strings.text(UiText.DownloadMoveUp)) },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Rounded.KeyboardArrowUp,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        },
+                        onClick = {
+                            showContextMenu = false
+                            onMoveUp()
+                        },
+                    )
+                }
+                if (canMoveDown) {
+                    DropdownMenuItem(
+                        text = { Text(strings.text(UiText.DownloadMoveDown)) },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Rounded.KeyboardArrowDown,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        },
+                        onClick = {
+                            showContextMenu = false
+                            onMoveDown()
                         },
                     )
                 }

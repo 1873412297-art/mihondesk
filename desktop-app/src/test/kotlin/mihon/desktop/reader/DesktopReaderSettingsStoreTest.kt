@@ -1,6 +1,7 @@
 package mihon.desktop.reader
 
 import io.kotest.matchers.shouldBe
+import mihon.desktop.library.model.MangaReaderSettingsOverride
 import mihon.desktop.preferences.DesktopPreferenceStore
 import mihon.reader.model.ReadingMode
 import mihon.reader.model.ScaleMode
@@ -100,5 +101,54 @@ class DesktopReaderSettingsStoreTest {
         settings.wheelBehavior shouldBe ReaderWheelBehavior.SCROLL
         settings.lastWindowMode shouldBe DesktopReaderSettings().lastWindowMode
         DesktopPreferenceStore(file).load().themeMode.name shouldBe "Dark"
+    }
+
+    @Test
+    fun `withOverride overrides mode and preload pages when provided`() {
+        val base = DesktopReaderSettings(mode = ReadingMode.SINGLE_LTR, preloadPages = 4)
+        val override = MangaReaderSettingsOverride(readingMode = ReadingMode.WEBTOON, preloadPages = 8)
+
+        val result = base.withOverride(override)
+        result.mode shouldBe ReadingMode.WEBTOON
+        result.preloadPages shouldBe 8
+    }
+
+    @Test
+    fun `withOverride preserves base values when override fields are null`() {
+        val base = DesktopReaderSettings(mode = ReadingMode.DUAL_LTR, preloadPages = 6)
+        val override = MangaReaderSettingsOverride(readingMode = null, preloadPages = null)
+
+        val result = base.withOverride(override)
+        result.mode shouldBe ReadingMode.DUAL_LTR
+        result.preloadPages shouldBe 6
+
+        base.withOverride(null) shouldBe base
+    }
+
+    @Test
+    fun `loadEffective applies override with priority over store settings`() {
+        val file = tempDir.resolve("preferences.properties")
+        val store = DesktopReaderSettingsStore(DesktopPreferenceStore(file))
+        store.save(DesktopReaderSettings(mode = ReadingMode.SINGLE_LTR, preloadPages = 3))
+
+        val override = MangaReaderSettingsOverride(readingMode = ReadingMode.VERTICAL, preloadPages = 9)
+        val effective = store.loadEffective(override)
+
+        effective.mode shouldBe ReadingMode.VERTICAL
+        effective.preloadPages shouldBe 9
+        // Global store remains unchanged
+        store.load().mode shouldBe ReadingMode.SINGLE_LTR
+        store.load().preloadPages shouldBe 3
+    }
+
+    @Test
+    fun `loadEffective with null override returns global settings`() {
+        val file = tempDir.resolve("preferences.properties")
+        val store = DesktopReaderSettingsStore(DesktopPreferenceStore(file))
+        store.save(DesktopReaderSettings(mode = ReadingMode.SINGLE_RTL, preloadPages = 5))
+
+        val effective = store.loadEffective(null)
+        effective.mode shouldBe ReadingMode.SINGLE_RTL
+        effective.preloadPages shouldBe 5
     }
 }

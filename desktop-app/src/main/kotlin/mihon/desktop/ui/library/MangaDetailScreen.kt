@@ -22,6 +22,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.ChromeReaderMode
 import androidx.compose.material.icons.automirrored.rounded.Label
 import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.automirrored.rounded.PlaylistAddCheck
@@ -88,6 +89,7 @@ import mihon.desktop.i18n.LocalStrings
 import mihon.desktop.i18n.UiText
 import mihon.desktop.i18n.text
 import mihon.desktop.library.model.LibraryChapter
+import mihon.desktop.library.model.MangaReaderSettingsOverride
 import mihon.desktop.ui.common.DesktopTooltipBox
 import mihon.desktop.ui.common.DownloadIndicator
 import mihon.desktop.ui.common.MangaBackdropBanner
@@ -144,6 +146,10 @@ fun MangaDetailScreen(
     onShowMissingChaptersChange: (Boolean) -> Unit = actions.onShowMissingChaptersChange,
     onSetChapterSettingsAsDefault: (Boolean) -> Unit = actions.onSetChapterSettingsAsDefault,
     onResetChapterSettingsToDefault: () -> Unit = actions.onResetChapterSettingsToDefault,
+    onOpenReadingSettings: () -> Unit = actions.onOpenReadingSettings,
+    onDismissReadingSettings: () -> Unit = actions.onDismissReadingSettings,
+    onSaveReadingSettings: (MangaReaderSettingsOverride) -> Unit = actions.onSaveReadingSettings,
+    onClearReadingSettings: () -> Unit = actions.onClearReadingSettings,
     onCoverLoadFailed: ((Int) -> Unit)? = actions.onCoverLoadFailed,
 ) {
     val strings = LocalStrings.current
@@ -770,6 +776,26 @@ fun MangaDetailScreen(
                                                     }
                                                 }
                                             }
+                                            Box(
+                                                modifier = Modifier
+                                                    .testTag("manga-detail-reading-settings-button")
+                                                    .clickable(onClick = onOpenReadingSettings),
+                                            ) {
+                                                DesktopTooltipBox(text = strings.text(UiText.ReadingSettingsOverride)) {
+                                                    IconButton(
+                                                        onClick = onOpenReadingSettings,
+                                                        modifier = Modifier.testTag("reading-settings-override-button"),
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = Icons.AutoMirrored.Rounded.ChromeReaderMode,
+                                                            contentDescription = strings.text(
+                                                                UiText.ReadingSettingsOverride,
+                                                            ),
+                                                            tint = MaterialTheme.colorScheme.primary,
+                                                        )
+                                                    }
+                                                }
+                                            }
                                             DesktopTooltipBox(text = strings.text(UiText.SearchChapters)) {
                                                 IconButton(
                                                     onClick = {
@@ -1123,6 +1149,14 @@ fun MangaDetailScreen(
                         onExcludedScanlatorsChange = onExcludedScanlatorsChange,
                         onSetAsDefault = onSetChapterSettingsAsDefault,
                         onResetToDefault = onResetChapterSettingsToDefault,
+                    )
+                }
+                if (state.isReadingSettingsDialogOpen) {
+                    ReadingSettingsOverrideDialog(
+                        currentOverride = state.readingSettingsOverride,
+                        onDismissRequest = onDismissReadingSettings,
+                        onSave = onSaveReadingSettings,
+                        onClear = onClearReadingSettings,
                     )
                 }
             }

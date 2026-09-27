@@ -43,5 +43,9 @@ data class MangaDetailActions(
     val onShowMissingChaptersChange: (Boolean) -> Unit = {},
     val onSetChapterSettingsAsDefault: (Boolean) -> Unit = {},
     val onResetChapterSettingsToDefault: () -> Unit = {},
+    val onOpenReadingSettings: () -> Unit = {},
+    val onDismissReadingSettings: () -> Unit = {},
+    val onSaveReadingSettings: (mihon.desktop.library.model.MangaReaderSettingsOverride) -> Unit = {},
+    val onClearReadingSettings: () -> Unit = {},
     val onCoverLoadFailed: ((Int) -> Unit)? = null,
 )

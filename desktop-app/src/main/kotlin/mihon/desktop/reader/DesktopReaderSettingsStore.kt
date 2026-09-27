@@ -1,5 +1,6 @@
 package mihon.desktop.reader
 
+import mihon.desktop.library.model.MangaReaderSettingsOverride
 import mihon.desktop.preferences.DesktopPreferenceStore
 import mihon.reader.model.ReadingMode
 import mihon.reader.model.ScaleMode
@@ -43,6 +44,14 @@ data class DesktopReaderSettings(
     val preloadPages: Int = PrefetchPolicy.AHEAD_PAGES,
 ) {
     fun toCoreSettings(): ReaderSettings = ReaderSettings(mode, coverOffset, scaleMode)
+
+    fun withOverride(override: MangaReaderSettingsOverride?): DesktopReaderSettings {
+        if (override == null || override.isEmpty) return this
+        return copy(
+            mode = override.readingMode ?: mode,
+            preloadPages = override.preloadPages ?: preloadPages,
+        )
+    }
 }
 
 /**
@@ -77,6 +86,9 @@ enum class ReaderWheelBehavior { PAGE_NAVIGATION, SCROLL }
 enum class ReaderWindowMode { NORMAL, FULLSCREEN, BORDERLESS }
 
 class DesktopReaderSettingsStore(private val preferences: DesktopPreferenceStore) {
+
+    fun loadEffective(override: MangaReaderSettingsOverride? = null): DesktopReaderSettings =
+        load().withOverride(override)
 
     fun load(): DesktopReaderSettings {
         val defaults = DesktopReaderSettings()

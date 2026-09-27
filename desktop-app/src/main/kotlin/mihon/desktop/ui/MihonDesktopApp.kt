@@ -56,6 +56,7 @@ import mihon.desktop.extension.builtin.isLocalSource
 import mihon.desktop.i18n.LocalStrings
 import mihon.desktop.i18n.UiText
 import mihon.desktop.i18n.text
+import mihon.desktop.library.model.readerSettingsOverride
 import mihon.desktop.navigation.DesktopBackHandler
 import mihon.desktop.navigation.DesktopDestination
 import mihon.desktop.navigation.DesktopNavigator
@@ -954,6 +955,14 @@ fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
                                         onSetChapterSettingsAsDefault = libraryPresenter::setChapterSettingsAsDefault,
                                         onResetChapterSettingsToDefault =
                                         libraryPresenter::resetChapterSettingsToDefault,
+                                        onOpenReadingSettings = {
+                                            libraryPresenter.setReadingSettingsDialogOpen(true)
+                                        },
+                                        onDismissReadingSettings = {
+                                            libraryPresenter.setReadingSettingsDialogOpen(false)
+                                        },
+                                        onSaveReadingSettings = libraryPresenter::saveReadingSettingsOverride,
+                                        onClearReadingSettings = libraryPresenter::clearReadingSettingsOverride,
                                         onCoverLoadFailed = libraryPresenter::onCoverLoadFailed,
                                     )
                                     DesktopShell(
@@ -1140,6 +1149,10 @@ fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
                                                 }
                                             }
                                         },
+                                        onPauseDownload = { chapterId -> downloader?.pause(chapterId) },
+                                        onResumeDownload = { chapterId -> downloader?.resume(chapterId) },
+                                        onMoveUpDownload = { chapterId -> downloader?.moveUp(chapterId) },
+                                        onMoveDownDownload = { chapterId -> downloader?.moveDown(chapterId) },
                                         onRetryDownload = { downloader?.retry(it) },
                                         onRetryAllFailedDownloads = { downloader?.retryAllFailed() },
                                         onReadDownloadedChapter = { mangaId, chapterId ->
@@ -1650,10 +1663,21 @@ private fun ReaderDestination(
         Text(strings.readerUnavailable)
         return
     }
-    LaunchedEffect(destination) {
+    val effectiveMangaId = mangaId ?: remember(destination.chapterId) {
+        runtime.library.chapterAsset(destination.chapterId)?.mangaId
+    }
+    val mangaReaderSettingsOverride = remember(effectiveMangaId) {
+        effectiveMangaId?.let { id ->
+            runtime.library.mangaSnapshot(id)?.readerSettingsOverride
+        }
+    }
+    LaunchedEffect(destination, mangaReaderSettingsOverride) {
         val isIncognito = runtime.preferences.load().incognitoMode
         val handle = withContext(Dispatchers.Default) {
-            factory.createHandle(isIncognito = isIncognito)
+            factory.createHandle(
+                isIncognito = isIncognito,
+                readerSettingsOverride = mangaReaderSettingsOverride,
+            )
         }
         readerHandle = handle
         withContext(Dispatchers.Default) {
@@ -1677,6 +1701,7 @@ private fun ReaderDestination(
             title = mangaTitle,
             chapterTitle = chapterTitle,
             settingsStore = DesktopReaderSettingsStore(runtime.preferences),
+            readerSettingsOverride = mangaReaderSettingsOverride,
             onBack = onBack,
             onOpenMangaDetails = onOpenMangaDetails,
             onFullscreen = onFullscreen,

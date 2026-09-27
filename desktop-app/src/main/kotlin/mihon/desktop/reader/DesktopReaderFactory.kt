@@ -7,6 +7,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.withContext
 import mihon.desktop.extension.DesktopNetworkHelper
 import mihon.desktop.extension.DesktopSourceManager
+import mihon.desktop.library.model.MangaReaderSettingsOverride
 import mihon.desktop.library.reader.ReaderLibraryPort
 import mihon.desktop.library.reader.ReaderOnlineChapterCatalog
 import mihon.desktop.reader.codec.PackagedCodecPageDecoder
@@ -78,9 +79,17 @@ class DesktopReaderFactory(
     private val sessions = linkedSetOf<TrackedReaderSession>()
     private var acceptingSessions = true
 
-    fun createSession(isIncognito: Boolean = false): ReaderSession = createHandle(isIncognito).session
+    fun createSession(
+        isIncognito: Boolean = false,
+        preloadPages: (() -> Int)? = null,
+        readerSettingsOverride: MangaReaderSettingsOverride? = null,
+    ): ReaderSession = createHandle(isIncognito, preloadPages, readerSettingsOverride).session
 
-    fun createHandle(isIncognito: Boolean = false): DesktopReaderHandle {
+    fun createHandle(
+        isIncognito: Boolean = false,
+        preloadPages: (() -> Int)? = null,
+        readerSettingsOverride: MangaReaderSettingsOverride? = null,
+    ): DesktopReaderHandle {
         val sessionScope = synchronized(lock) {
             check(acceptingSessions) { "reader runtime is shutting down" }
             CoroutineScope(applicationScope.coroutineContext + SupervisorJob(applicationScope.coroutineContext[Job]))
@@ -90,13 +99,14 @@ class DesktopReaderFactory(
         } else {
             library
         }
+        val effectiveSettings = settings.loadEffective(readerSettingsOverride)
         val contentPipeline = DesktopReaderContentPipeline(
             decoder = decoder,
             cache = cache,
             scope = sessionScope,
             sourceFactory = sourceFactory,
             maxFullPagePixels = MAX_DISPLAY_PIXELS,
-            preloadPages = { settings.load().preloadPages },
+            preloadPages = preloadPages ?: { effectiveSettings.preloadPages },
         )
         val animationCoordinator = AnimationCoordinator(
             scope = sessionScope,
@@ -108,7 +118,7 @@ class DesktopReaderFactory(
             sourceFactory = sourceFactory,
             progressSink = effectiveSink,
             generationSource = generationSource,
-            settings = settings.load().toCoreSettings(),
+            settings = effectiveSettings.toCoreSettings(),
             animationCoordinator = animationCoordinator,
             invalidateContent = { pageId ->
                 cache.invalidatePage(pageId)

@@ -70,6 +70,7 @@ import mihon.desktop.i18n.hint
 import mihon.desktop.i18n.text
 import mihon.desktop.i18n.title
 import mihon.desktop.image.LocalCustomCoverManager
+import mihon.desktop.library.model.MangaReaderSettingsOverride
 import mihon.desktop.reader.DesktopReaderSettings
 import mihon.desktop.reader.DesktopReaderSettingsStore
 import mihon.desktop.reader.ReaderBackgroundColor
@@ -132,6 +133,7 @@ fun ReaderScreen(
     onChapterTransitionContinue: ((ReaderChapterTransitionDirection) -> Unit)? = null,
     pageActionHandler: ReaderPageActionHandler? = null,
     mangaId: Long? = null,
+    readerSettingsOverride: MangaReaderSettingsOverride? = null,
     pageUrlResolver: (PageDescriptor) -> String? = { null },
     pageActionTargetProvider: (PageDescriptor, Int) -> ReaderPageActionTarget = { page, index ->
         ReaderPageActionTarget(
@@ -150,8 +152,11 @@ fun ReaderScreen(
     val strings = LocalStrings.current
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
-    var settings by remember(settingsStore) {
-        mutableStateOf(settingsStore?.load() ?: state.toDesktopSettings())
+    var settings by remember(settingsStore, readerSettingsOverride) {
+        mutableStateOf(
+            settingsStore?.loadEffective(readerSettingsOverride)
+                ?: state.toDesktopSettings().withOverride(readerSettingsOverride),
+        )
     }
     var overlayVisibility by remember { mutableStateOf(ReaderOverlayVisibilityState()) }
     var hideGeneration by remember { mutableIntStateOf(0) }

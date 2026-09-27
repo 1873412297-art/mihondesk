@@ -509,6 +509,17 @@ enum class UiText(val english: String, val simplified: String, val traditional: 
     LibraryBadgeDownloaded("Show downloaded badge", "显示已下载角标", "顯示已下載角標"),
     ReaderPreloadPages("Preload pages: {0}", "预载页数：{0}", "預載頁數：{0}"),
     PageNumberOverlay("{0} / {1}", "{0} / {1}", "{0} / {1}"),
+    ReadingSettingsOverride("Reading settings override", "阅读设置覆盖", "閱讀設定覆蓋"),
+    ReadingModeOverrideTitle("Reading mode", "阅读模式", "閱讀模式"),
+    ReadingModeFollowGlobal("Follow default", "跟随默认", "跟隨預設"),
+    PreloadPagesOverrideTitle("Preload pages", "预载页数", "預載頁數"),
+    PreloadPagesFollowGlobal("Follow default", "跟随默认", "跟隨預設"),
+    PreloadPagesCustom("Custom ({0} pages)", "自定义 ({0} 页)", "自訂 ({0} 頁)"),
+    ClearReadingSettingsOverride("Clear override", "清除覆盖", "清除覆蓋"),
+    DownloadPauseItem("Pause", "暂停", "暫停"),
+    DownloadResumeItem("Resume", "继续", "繼續"),
+    DownloadMoveUp("Move up", "上移", "上移"),
+    DownloadMoveDown("Move down", "下移", "下移"),
 }
 
 private val placeholderPattern = Regex("\\{(\\d+)\\}")

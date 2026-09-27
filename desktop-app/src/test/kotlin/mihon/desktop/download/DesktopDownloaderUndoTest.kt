@@ -110,4 +110,62 @@ class DesktopDownloaderUndoTest {
 
         downloader.close()
     }
+
+    @Test
+    fun `cancel on paused download and restoreDownloads preserves PAUSED status`(@TempDir tempDir: Path) = runBlocking {
+        val downloader = DesktopDownloader(
+            store = DownloadStore(tempDir.resolve("paused-undo-queue.json")),
+            diskProvider = DownloadDiskProvider(tempDir.resolve("paused-undo-downloads")),
+            networkHelper = DesktopNetworkHelper(),
+            pageListFetcher = { _, _ -> emptyList() },
+        )
+
+        val manga = createManga(id = 1L)
+        val chapter = createChapter(id = 301L, mangaId = 1L)
+
+        downloader.pause()
+        downloader.enqueue(manga, listOf(chapter))
+        downloader.pause(301L) shouldBe true
+        downloader.queueState.value.first().status shouldBe DownloadStatus.PAUSED
+
+        val cancelled = downloader.cancel(301L)
+        cancelled shouldNotBe null
+        cancelled?.status shouldBe DownloadStatus.PAUSED
+        downloader.queueState.value shouldHaveSize 0
+
+        downloader.restoreDownloads(listOf(cancelled!!))
+        downloader.queueState.value shouldHaveSize 1
+        downloader.queueState.value.first().chapterId shouldBe 301L
+        downloader.queueState.value.first().status shouldBe DownloadStatus.PAUSED
+
+        downloader.close()
+    }
+
+    @Test
+    fun `restoreDownloads maps DOWNLOADING status back to QUEUED`(@TempDir tempDir: Path) {
+        val downloader = DesktopDownloader(
+            store = DownloadStore(tempDir.resolve("active-undo-queue.json")),
+            diskProvider = DownloadDiskProvider(tempDir.resolve("active-undo-downloads")),
+            networkHelper = DesktopNetworkHelper(),
+            pageListFetcher = { _, _ -> emptyList() },
+        )
+
+        val downloadingItem = DesktopDownload(
+            chapterId = 401L,
+            mangaId = 1L,
+            sourceId = 1L,
+            mangaTitle = "Active Manga",
+            chapterName = "Chapter 1",
+            chapterUrl = "/c/1",
+            status = DownloadStatus.DOWNLOADING,
+            progress = 0.4f,
+        )
+
+        downloader.restoreDownloads(listOf(downloadingItem))
+        downloader.queueState.value shouldHaveSize 1
+        downloader.queueState.value.first().chapterId shouldBe 401L
+        downloader.queueState.value.first().status shouldBe DownloadStatus.QUEUED
+
+        downloader.close()
+    }
 }

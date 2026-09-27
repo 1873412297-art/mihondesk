@@ -88,4 +88,106 @@ class DownloadsScreenTest {
         onNodeWithText("Cancel").performClick()
         cancelledId shouldBe 555L
     }
+
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun `per-item pause and resume buttons trigger respective callbacks`() = runComposeUiTest {
+        var pausedId: Long? = null
+        var resumedId: Long? = null
+
+        val queuedDownload = DesktopDownload(
+            chapterId = 101L,
+            mangaId = 1L,
+            sourceId = 1L,
+            mangaTitle = "One Piece",
+            chapterName = "Chapter 1000",
+            chapterUrl = "/ch1000",
+            status = DownloadStatus.QUEUED,
+        )
+        val pausedDownload = DesktopDownload(
+            chapterId = 102L,
+            mangaId = 1L,
+            sourceId = 1L,
+            mangaTitle = "One Piece",
+            chapterName = "Chapter 1001",
+            chapterUrl = "/ch1001",
+            status = DownloadStatus.PAUSED,
+        )
+
+        setContent {
+            Box(modifier = Modifier.requiredSize(800.dp, 600.dp)) {
+                DownloadsScreen(
+                    queue = listOf(queuedDownload, pausedDownload),
+                    isRunning = true,
+                    speedBytesPerSec = 0.0,
+                    onPauseAll = {},
+                    onResumeAll = {},
+                    onClearCompleted = {},
+                    onCancel = {},
+                    onRetry = {},
+                    onReadChapter = { _, _ -> },
+                    onPause = { pausedId = it },
+                    onResume = { resumedId = it },
+                )
+            }
+        }
+
+        onNodeWithTag("download-pause-101").performClick()
+        pausedId shouldBe 101L
+
+        onNodeWithTag("download-resume-102").performClick()
+        resumedId shouldBe 102L
+    }
+
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun `move up and move down buttons trigger respective callbacks`() = runComposeUiTest {
+        var movedUpId: Long? = null
+        var movedDownId: Long? = null
+
+        val item1 = DesktopDownload(
+            chapterId = 201L,
+            mangaId = 1L,
+            sourceId = 1L,
+            mangaTitle = "Naruto",
+            chapterName = "Chapter 1",
+            chapterUrl = "/ch1",
+            status = DownloadStatus.QUEUED,
+        )
+        val item2 = DesktopDownload(
+            chapterId = 202L,
+            mangaId = 1L,
+            sourceId = 1L,
+            mangaTitle = "Naruto",
+            chapterName = "Chapter 2",
+            chapterUrl = "/ch2",
+            status = DownloadStatus.QUEUED,
+        )
+
+        setContent {
+            Box(modifier = Modifier.requiredSize(800.dp, 600.dp)) {
+                DownloadsScreen(
+                    queue = listOf(item1, item2),
+                    isRunning = true,
+                    speedBytesPerSec = 0.0,
+                    onPauseAll = {},
+                    onResumeAll = {},
+                    onClearCompleted = {},
+                    onCancel = {},
+                    onRetry = {},
+                    onReadChapter = { _, _ -> },
+                    onMoveUp = { movedUpId = it },
+                    onMoveDown = { movedDownId = it },
+                )
+            }
+        }
+
+        // item 1 can move down
+        onNodeWithTag("download-move-down-201").performClick()
+        movedDownId shouldBe 201L
+
+        // item 2 can move up
+        onNodeWithTag("download-move-up-202").performClick()
+        movedUpId shouldBe 202L
+    }
 }

@@ -513,6 +513,49 @@ class DesktopDownloader(
     }
 
     @Synchronized
+    fun pause(chapterId: Long): Boolean {
+        val job = activeDownloadJobs.remove(chapterId)
+        job?.cancel()
+        var changed = false
+        _queueState.update { list ->
+            list.map { item ->
+                if (item.chapterId == chapterId &&
+                    (item.status == DownloadStatus.DOWNLOADING || item.status == DownloadStatus.QUEUED)
+                ) {
+                    changed = true
+                    item.copy(status = DownloadStatus.PAUSED)
+                } else {
+                    item
+                }
+            }
+        }
+        if (changed) {
+            persistQueue()
+        }
+        return changed
+    }
+
+    @Synchronized
+    fun resume(chapterId: Long): Boolean {
+        var changed = false
+        _queueState.update { list ->
+            list.map { item ->
+                if (item.chapterId == chapterId && item.status == DownloadStatus.PAUSED) {
+                    changed = true
+                    item.copy(status = DownloadStatus.QUEUED)
+                } else {
+                    item
+                }
+            }
+        }
+        if (changed) {
+            persistQueue()
+            start()
+        }
+        return changed
+    }
+
+    @Synchronized
     fun cancel(chapterId: Long): DesktopDownload? {
         val job = activeDownloadJobs.remove(chapterId)
         val previousCleanup = pendingCleanupJobs[chapterId]
@@ -592,11 +635,53 @@ class DesktopDownloader(
     }
 
     @Synchronized
+    fun moveUp(chapterId: Long): Boolean {
+        val list = _queueState.value.toMutableList()
+        val index = list.indexOfFirst { it.chapterId == chapterId }
+        if (index <= 0) return false
+        val item = list.removeAt(index)
+        list.add(index - 1, item)
+        _queueState.value = list
+        persistQueue()
+        return true
+    }
+
+    @Synchronized
+    fun moveDown(chapterId: Long): Boolean {
+        val list = _queueState.value.toMutableList()
+        val index = list.indexOfFirst { it.chapterId == chapterId }
+        if (index < 0 || index >= list.lastIndex) return false
+        val item = list.removeAt(index)
+        list.add(index + 1, item)
+        _queueState.value = list
+        persistQueue()
+        return true
+    }
+
+    @Synchronized
+    fun reorder(fromIndex: Int, toIndex: Int): Boolean {
+        val list = _queueState.value.toMutableList()
+        if (fromIndex !in list.indices || toIndex !in list.indices || fromIndex == toIndex) return false
+        val item = list.removeAt(fromIndex)
+        list.add(toIndex, item)
+        _queueState.value = list
+        persistQueue()
+        return true
+    }
+
+    @Synchronized
     fun restoreDownloads(items: List<DesktopDownload>) {
         if (items.isEmpty()) return
         _queueState.update { list ->
             val existingIds = list.map { it.chapterId }.toSet()
-            list + items.filterNot { it.chapterId in existingIds }
+            val toAdd = items.filterNot { it.chapterId in existingIds }.map {
+                if (it.status == DownloadStatus.DOWNLOADING) {
+                    it.copy(status = DownloadStatus.QUEUED)
+                } else {
+                    it
+                }
+            }
+            list + toAdd
         }
         persistQueue()
     }

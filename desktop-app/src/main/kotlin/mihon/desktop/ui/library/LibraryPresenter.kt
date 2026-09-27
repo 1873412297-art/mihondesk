@@ -45,7 +45,10 @@ import mihon.desktop.library.model.ChapterRecord
 import mihon.desktop.library.model.LibraryChapter
 import mihon.desktop.library.model.LibraryManga
 import mihon.desktop.library.model.MangaDetails
+import mihon.desktop.library.model.MangaReaderSettings
+import mihon.desktop.library.model.MangaReaderSettingsOverride
 import mihon.desktop.library.model.MangaRecord
+import mihon.desktop.library.model.readerSettingsOverride
 import mihon.desktop.library.reader.ReaderLibraryPort
 import mihon.desktop.library.repository.LibraryMutationPort
 import mihon.desktop.library.repository.LibraryRepository
@@ -100,6 +103,8 @@ data class MangaDetailUiState(
     val availableScanlators: Set<String> = emptySet(),
     val chapterListItems: List<ChapterListItem> = emptyList(),
     val isChapterSettingsDialogOpen: Boolean = false,
+    val isReadingSettingsDialogOpen: Boolean = false,
+    val readingSettingsOverride: MangaReaderSettingsOverride? = null,
     val chapterDownloads: Map<Long, ChapterDownloadProgress> = emptyMap(),
     val downloadsRunning: Boolean = false,
     val missingSource: MissingSourceInfo? = null,
@@ -394,6 +399,20 @@ class LibraryPresenter(
     private val chapterSettingsOverrides = MutableStateFlow(ChapterSettingsOverrides())
     private val isEditInfoDialogOpenState = MutableStateFlow(false)
     private val isChapterSettingsDialogOpenState = MutableStateFlow(false)
+    private val isReadingSettingsDialogOpenState = MutableStateFlow(false)
+
+    private data class DialogStates(
+        val isEditInfoOpen: Boolean,
+        val isChapterSettingsOpen: Boolean,
+        val isReadingSettingsOpen: Boolean,
+    )
+
+    private val dialogStates: Flow<DialogStates> = combine(
+        isEditInfoDialogOpenState,
+        isChapterSettingsDialogOpenState,
+        isReadingSettingsDialogOpenState,
+    ) { edit, chapter, reading -> DialogStates(edit, chapter, reading) }
+
     private val ignoredMissingSourceMangaIds = MutableStateFlow<Set<Long>>(emptySet())
     private val cachedAvailableExtensions = MutableStateFlow<List<ExtensionStoreItem>>(emptyList())
 
@@ -436,18 +455,22 @@ class LibraryPresenter(
     val detailState: StateFlow<MangaDetailUiState> = combine(
         selectedRepositoryState,
         chapterSettingsOverrides,
-        isEditInfoDialogOpenState,
-        isChapterSettingsDialogOpenState,
+        dialogStates,
         missingSourceState,
-    ) { result, overrides, isEditInfoOpen, isChapterSettingsOpen, missingSource ->
+    ) { result, overrides, dialogs, missingSource ->
+        val isEditInfoOpen = dialogs.isEditInfoOpen
+        val isChapterSettingsOpen = dialogs.isChapterSettingsOpen
+        val isReadingSettingsOpen = dialogs.isReadingSettingsOpen
         when (result) {
             SelectedRepositoryState.Loading -> MangaDetailUiState(
                 loading = true,
                 isChapterSettingsDialogOpen = isChapterSettingsOpen,
+                isReadingSettingsDialogOpen = isReadingSettingsOpen,
             )
             is SelectedRepositoryState.Failed -> MangaDetailUiState(
                 errorMessage = result.message,
                 isChapterSettingsDialogOpen = isChapterSettingsOpen,
+                isReadingSettingsDialogOpen = isReadingSettingsOpen,
             )
             is SelectedRepositoryState.Loaded -> {
                 val manga = result.manga
@@ -498,6 +521,8 @@ class LibraryPresenter(
                     chapterListItems = buildChapterListItems(sorted, settings),
                     isEditInfoDialogOpen = isEditInfoOpen,
                     isChapterSettingsDialogOpen = isChapterSettingsOpen,
+                    isReadingSettingsDialogOpen = isReadingSettingsOpen,
+                    readingSettingsOverride = manga?.readerSettingsOverride,
                     downloadedChapterIds = downloadedIds,
                     missingSource = missingSource,
                 )
@@ -622,6 +647,40 @@ class LibraryPresenter(
 
     fun setChapterSettingsDialogOpen(open: Boolean) {
         isChapterSettingsDialogOpenState.value = open
+    }
+
+    fun setReadingSettingsDialogOpen(open: Boolean) {
+        isReadingSettingsDialogOpenState.value = open
+    }
+
+    fun saveReadingSettingsOverride(override: MangaReaderSettingsOverride) {
+        val mangaId = detailMangaId.value ?: return
+        val currentManga = runCatching { repository.mangaSnapshot(mangaId) }.getOrNull()
+            ?: detailState.value.manga?.takeIf { it.id == mangaId }
+            ?: return
+        val updatedViewerFlags = MangaReaderSettings.encodeViewerFlags(currentManga.viewerFlags, override.readingMode)
+        val updatedMemo = MangaReaderSettings.encode(currentManga.memoJson, override)
+        val updatedRecord = currentManga.toMangaRecord().copy(
+            viewerFlags = updatedViewerFlags,
+            memoJson = updatedMemo,
+        )
+        mutationPort?.updateManga(updatedRecord)
+        detailRetryRequest.value = System.currentTimeMillis()
+    }
+
+    fun clearReadingSettingsOverride() {
+        val mangaId = detailMangaId.value ?: return
+        val currentManga = runCatching { repository.mangaSnapshot(mangaId) }.getOrNull()
+            ?: detailState.value.manga?.takeIf { it.id == mangaId }
+            ?: return
+        val updatedViewerFlags = MangaReaderSettings.encodeViewerFlags(currentManga.viewerFlags, null)
+        val updatedMemo = MangaReaderSettings.encode(currentManga.memoJson, null)
+        val updatedRecord = currentManga.toMangaRecord().copy(
+            viewerFlags = updatedViewerFlags,
+            memoJson = updatedMemo,
+        )
+        mutationPort?.updateManga(updatedRecord)
+        detailRetryRequest.value = System.currentTimeMillis()
     }
 
     fun setChapterSettingsAsDefault(applyToExisting: Boolean) {
