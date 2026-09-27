@@ -13,28 +13,38 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import mihon.desktop.i18n.LocalStrings
 import mihon.desktop.library.model.LibraryManga
+import mihon.desktop.ui.browse.migration.BatchMigrationFailureReason
+import mihon.desktop.ui.browse.migration.BatchMigrationState
+import mihon.desktop.ui.browse.migration.MigrationMatcher
 import mihon.desktop.ui.common.MangaCover
 import mihon.desktop.ui.common.coverHeaders
 import mihon.extension.model.SourceDescriptor
@@ -55,10 +65,29 @@ fun MigrateSourceScreen(
     onSelectSource: (SourceWithMangaCount) -> Unit,
     onBackToSourceList: () -> Unit,
     onSearchTargetSource: suspend (sourceId: Long, query: String) -> List<SManga>,
+    onAutoMatchTargetSource: (
+        suspend (
+            sourceId: Long,
+            manga: LibraryManga,
+        ) -> MigrationMatcher.MatchEvaluation
+    )? = null,
     onPerformMigration: (oldManga: LibraryManga, targetSource: SourceDescriptor, targetManga: SManga) -> Unit,
+    batchMigrationState: BatchMigrationState = BatchMigrationState.Idle,
+    onStartBatchMigration: ((targetSource: SourceDescriptor) -> Unit)? = null,
+    onCancelBatchMigration: (() -> Unit)? = null,
+    onDismissBatchReport: (() -> Unit)? = null,
 ) {
     val strings = LocalStrings.current
     var activeMigrateManga by remember { mutableStateOf<LibraryManga?>(null) }
+    var showBatchDialog by remember { mutableStateOf(false) }
+
+    val targetSourcesForSelected = remember(availableTargetSources, selectedSource) {
+        if (selectedSource == null) {
+            emptyList()
+        } else {
+            availableTargetSources.filter { it.id != selectedSource.sourceId }
+        }
+    }
 
     Column(
         modifier = Modifier.fillMaxSize().padding(16.dp).testTag("migrate-source-screen"),
@@ -117,27 +146,97 @@ fun MigrateSourceScreen(
             Row(
                 modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                OutlinedButton(onClick = onBackToSourceList, modifier = Modifier.testTag("migrate-back-btn")) {
-                    Text(strings.migrateBackToSources)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedButton(onClick = onBackToSourceList, modifier = Modifier.testTag("migrate-back-btn")) {
+                        Text(strings.migrateBackToSources)
+                    }
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Column {
+                        Text(
+                            text = selectedSource.sourceName,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Text(
+                            text = strings.migrateSelectMangaHeader,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.outline,
+                        )
+                    }
                 }
-                Spacer(modifier = Modifier.width(16.dp))
-                Column {
-                    Text(
-                        text = selectedSource.sourceName,
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    Text(
-                        text = strings.migrateSelectMangaHeader,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.outline,
-                    )
+
+                // Batch Migration Trigger Button
+                Button(
+                    onClick = { showBatchDialog = true },
+                    enabled = mangasForSelectedSource.isNotEmpty() &&
+                        targetSourcesForSelected.isNotEmpty() &&
+                        batchMigrationState !is BatchMigrationState.Running,
+                    modifier = Modifier.testTag("migrate-all-btn"),
+                ) {
+                    Text(strings.migrateAllButton)
+                }
+            }
+
+            // Running progress card if batch migration is in progress
+            if (batchMigrationState is BatchMigrationState.Running) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp)
+                        .testTag("batch-migration-progress-card"),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    ),
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = strings.migrateBatchProgressCardTitle,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                            )
+                            OutlinedButton(
+                                onClick = { onCancelBatchMigration?.invoke() },
+                                modifier = Modifier.testTag("batch-migration-cancel-btn"),
+                            ) {
+                                Text(strings.migrateBatchCancel)
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = strings.migrateBatchProgress(
+                                current = batchMigrationState.currentIndex + 1,
+                                total = batchMigrationState.totalCount,
+                                title = batchMigrationState.currentManga.title,
+                            ),
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        LinearProgressIndicator(
+                            progress = { batchMigrationState.progress },
+                            modifier = Modifier.fillMaxWidth().testTag("batch-migration-progress-bar"),
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = strings.migrateBatchCounts(
+                                success = batchMigrationState.successCount,
+                                failed = batchMigrationState.failureCount,
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.outline,
+                        )
+                    }
                 }
             }
 
             val selectedBaseUrl = remember(availableTargetSources, selectedSource) {
-                availableTargetSources.find { it.id == selectedSource?.sourceId }?.baseUrl
+                availableTargetSources.find { it.id == selectedSource.sourceId }?.baseUrl
             }
             val migrateCoverHeaders = remember(selectedBaseUrl) {
                 coverHeaders(selectedBaseUrl, null)
@@ -188,13 +287,40 @@ fun MigrateSourceScreen(
         }
     }
 
-    // Migration Dialog
+    // Batch Migration Dialog
+    if (showBatchDialog && selectedSource != null) {
+        BatchMigrateDialog(
+            sourceName = selectedSource.sourceName,
+            mangaCount = mangasForSelectedSource.size,
+            availableTargetSources = targetSourcesForSelected,
+            onDismiss = { showBatchDialog = false },
+            onConfirm = { targetSource ->
+                showBatchDialog = false
+                onStartBatchMigration?.invoke(targetSource)
+            },
+        )
+    }
+
+    // Batch Migration Report Dialog (failure review)
+    if (batchMigrationState is BatchMigrationState.Completed && batchMigrationState.failures.isNotEmpty()) {
+        BatchMigrationReportDialog(
+            report = batchMigrationState,
+            onDismiss = { onDismissBatchReport?.invoke() },
+            onManualMigrate = { failedManga ->
+                activeMigrateManga = failedManga
+                onDismissBatchReport?.invoke()
+            },
+        )
+    }
+
+    // Single Manga Migration Dialog
     activeMigrateManga?.let { mangaToMigrate ->
         MigrateMangaDialog(
             manga = mangaToMigrate,
             availableTargetSources = availableTargetSources.filter { it.id != mangaToMigrate.sourceId },
             onDismiss = { activeMigrateManga = null },
             onSearchTargetSource = onSearchTargetSource,
+            onAutoMatchTargetSource = onAutoMatchTargetSource,
             onConfirmMigration = { targetSource, targetManga ->
                 onPerformMigration(mangaToMigrate, targetSource, targetManga)
                 activeMigrateManga = null
@@ -204,11 +330,180 @@ fun MigrateSourceScreen(
 }
 
 @Composable
+private fun BatchMigrateDialog(
+    sourceName: String,
+    mangaCount: Int,
+    availableTargetSources: List<SourceDescriptor>,
+    onDismiss: () -> Unit,
+    onConfirm: (targetSource: SourceDescriptor) -> Unit,
+) {
+    val strings = LocalStrings.current
+    var selectedTargetSource by remember {
+        mutableStateOf(availableTargetSources.firstOrNull())
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(strings.migrateAllDialogTitle) },
+        text = {
+            Column(modifier = Modifier.fillMaxWidth().testTag("batch-migrate-dialog")) {
+                Text(
+                    text = strings.migrateAllDialogSubtitle(mangaCount, sourceName),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Text(
+                    text = strings.migrateTargetSourceLabel,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+
+                if (availableTargetSources.isEmpty()) {
+                    Text(strings.migrateNoOtherSources, color = MaterialTheme.colorScheme.error)
+                } else {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        availableTargetSources.forEach { source ->
+                            OutlinedButton(
+                                onClick = { selectedTargetSource = source },
+                                enabled = selectedTargetSource?.id != source.id,
+                                modifier = Modifier.testTag("batch-target-source-${source.id}"),
+                            ) {
+                                Text(source.name)
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val target = selectedTargetSource ?: return@Button
+                    onConfirm(target)
+                },
+                enabled = selectedTargetSource != null,
+                modifier = Modifier.testTag("confirm-batch-migration-btn"),
+            ) {
+                Text(strings.migrateConfirm)
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = onDismiss,
+                modifier = Modifier.testTag("cancel-batch-migration-btn"),
+            ) {
+                Text(strings.dialogCancel)
+            }
+        },
+    )
+}
+
+@Composable
+private fun BatchMigrationReportDialog(
+    report: BatchMigrationState.Completed,
+    onDismiss: () -> Unit,
+    onManualMigrate: (LibraryManga) -> Unit,
+) {
+    val strings = LocalStrings.current
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(strings.migrateBatchReportTitle) },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(360.dp)
+                    .testTag("batch-migration-report-dialog"),
+            ) {
+                val summaryText = buildString {
+                    append(strings.migrateBatchReportSummary(report.successCount, report.failures.size))
+                    if (report.wasCancelled) {
+                        append(" ")
+                        append(strings.migrateBatchCancelled(report.successCount, report.totalCount))
+                    }
+                }
+                Text(text = summaryText, style = MaterialTheme.typography.bodyMedium)
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Text(
+                    text = strings.migrateBatchFailuresListHeader,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+
+                LazyColumn(modifier = Modifier.fillMaxSize()) {
+                    items(report.failures) { failure ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp)
+                                .testTag("batch-report-failure-item-${failure.manga.id}"),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                                Text(
+                                    text = failure.manga.title,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                                val reasonLabel = when (failure.reason) {
+                                    BatchMigrationFailureReason.NoMatchFound ->
+                                        strings.migrateFailureNoMatch
+                                    BatchMigrationFailureReason.AmbiguousMatches ->
+                                        strings.migrateFailureAmbiguous
+                                    BatchMigrationFailureReason.MigrationError ->
+                                        strings.migrateFailureError(failure.detailMessage ?: "Unknown error")
+                                }
+                                Text(
+                                    text = reasonLabel,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.error,
+                                )
+                            }
+                            OutlinedButton(
+                                onClick = { onManualMigrate(failure.manga) },
+                                modifier = Modifier.testTag("batch-report-manual-migrate-${failure.manga.id}"),
+                            ) {
+                                Text(strings.migrateManualMigrate)
+                            }
+                        }
+                        HorizontalDivider()
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onDismiss,
+                modifier = Modifier.testTag("close-batch-report-btn"),
+            ) {
+                Text(strings.dialogClose)
+            }
+        },
+    )
+}
+
+@Composable
 private fun MigrateMangaDialog(
     manga: LibraryManga,
     availableTargetSources: List<SourceDescriptor>,
     onDismiss: () -> Unit,
     onSearchTargetSource: suspend (sourceId: Long, query: String) -> List<SManga>,
+    onAutoMatchTargetSource: (
+        suspend (
+            sourceId: Long,
+            manga: LibraryManga,
+        ) -> MigrationMatcher.MatchEvaluation
+    )? = null,
     onConfirmMigration: (targetSource: SourceDescriptor, targetManga: SManga) -> Unit,
 ) {
     val strings = LocalStrings.current
@@ -218,14 +513,53 @@ private fun MigrateMangaDialog(
     var query by remember { mutableStateOf(manga.title) }
     var isSearching by remember { mutableStateOf(false) }
     var searchResults by remember { mutableStateOf<List<SManga>>(emptyList()) }
+    var evaluation by remember { mutableStateOf<MigrationMatcher.MatchEvaluation?>(null) }
     var selectedCandidate by remember { mutableStateOf<SManga?>(null) }
-    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val scope = rememberCoroutineScope()
+    var searchJob by remember { mutableStateOf<Job?>(null) }
+
+    fun triggerSearch(targetId: Long, searchTitle: String, isAutoMatch: Boolean) {
+        searchJob?.cancel()
+        isSearching = true
+        selectedCandidate = null
+        searchJob = scope.launch {
+            try {
+                if (isAutoMatch && onAutoMatchTargetSource != null) {
+                    val eval = onAutoMatchTargetSource(targetId, manga)
+                    evaluation = eval
+                    searchResults = eval.candidates.map { it.manga }
+                    if (eval.isUniqueHighConfidence) {
+                        selectedCandidate = eval.bestMatch?.manga
+                    }
+                } else {
+                    val results = onSearchTargetSource(targetId, searchTitle)
+                    searchResults = results
+                    val eval = MigrationMatcher.evaluateCandidates(manga.title, results)
+                    evaluation = eval
+                    if (eval.isUniqueHighConfidence) {
+                        selectedCandidate = eval.bestMatch?.manga
+                    }
+                }
+            } catch (_: Exception) {
+                searchResults = emptyList()
+                evaluation = null
+            } finally {
+                isSearching = false
+            }
+        }
+    }
+
+    // Auto-match when target source changes
+    LaunchedEffect(selectedTargetSource) {
+        val target = selectedTargetSource ?: return@LaunchedEffect
+        triggerSearch(target.id, query, isAutoMatch = true)
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(strings.migrateDialogTitle(manga.title)) },
         text = {
-            Column(modifier = Modifier.fillMaxWidth().height(420.dp)) {
+            Column(modifier = Modifier.fillMaxWidth().height(440.dp).testTag("migrate-manga-dialog")) {
                 Text(
                     text = strings.migrateDialogSubtitle,
                     style = MaterialTheme.typography.bodySmall,
@@ -259,7 +593,7 @@ private fun MigrateMangaDialog(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // Search query and trigger
+                // Search query, trigger and auto-match
                 Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     OutlinedTextField(
                         value = query,
@@ -272,22 +606,24 @@ private fun MigrateMangaDialog(
                     Button(
                         onClick = {
                             val target = selectedTargetSource ?: return@Button
-                            isSearching = true
-                            selectedCandidate = null
-                            scope.launch {
-                                try {
-                                    searchResults = onSearchTargetSource(target.id, query)
-                                } catch (_: Exception) {
-                                    searchResults = emptyList()
-                                } finally {
-                                    isSearching = false
-                                }
-                            }
+                            triggerSearch(target.id, query, isAutoMatch = false)
                         },
                         enabled = !isSearching && selectedTargetSource != null,
                         modifier = Modifier.testTag("migrate-search-submit"),
                     ) {
                         Text(strings.browseSearchButton)
+                    }
+                    Spacer(modifier = Modifier.width(4.dp))
+                    OutlinedButton(
+                        onClick = {
+                            val target = selectedTargetSource ?: return@OutlinedButton
+                            query = manga.title
+                            triggerSearch(target.id, manga.title, isAutoMatch = true)
+                        },
+                        enabled = !isSearching && selectedTargetSource != null,
+                        modifier = Modifier.testTag("migrate-auto-match-btn"),
+                    ) {
+                        Text(strings.migrateAutoMatchButton)
                     }
                 }
 
@@ -299,13 +635,16 @@ private fun MigrateMangaDialog(
                     }
                 } else {
                     LazyColumn(modifier = Modifier.fillMaxSize()) {
-                        items(searchResults) { candidate ->
+                        itemsIndexed(searchResults) { index, candidate ->
                             val isSelected = selectedCandidate?.url == candidate.url
+                            val scoredCandidate = evaluation?.candidates?.find { it.manga.url == candidate.url }
+
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clickable { selectedCandidate = candidate }
-                                    .padding(8.dp),
+                                    .padding(8.dp)
+                                    .testTag("migrate-candidate-item-$index"),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.SpaceBetween,
                             ) {
@@ -317,14 +656,37 @@ private fun MigrateMangaDialog(
                                         headers = coverHeaders(selectedTargetSource?.baseUrl, candidate.thumbnailUrl),
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = candidate.title,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                    )
+                                    Column {
+                                        Text(
+                                            text = candidate.title,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                        )
+                                        if (scoredCandidate != null) {
+                                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                                if (scoredCandidate.isExactMatch) {
+                                                    Text(
+                                                        text = strings.migrateExactMatchBadge,
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = MaterialTheme.colorScheme.primary,
+                                                    )
+                                                } else if (scoredCandidate.isHighConfidence) {
+                                                    Text(
+                                                        text = strings.migrateHighConfidenceBadge,
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = MaterialTheme.colorScheme.secondary,
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                                 if (isSelected) {
-                                    Text(strings.migrateSelectedBadge, color = MaterialTheme.colorScheme.primary)
+                                    Text(
+                                        text = strings.migrateSelectedBadge,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        fontWeight = FontWeight.Bold,
+                                    )
                                 }
                             }
                             HorizontalDivider()

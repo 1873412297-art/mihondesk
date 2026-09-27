@@ -103,6 +103,8 @@ data class BrowseUiState(
     val sourcesWithMangaCounts: List<SourceWithMangaCount> = emptyList(),
     val selectedMigrationSource: SourceWithMangaCount? = null,
     val mangasForSelectedMigrationSource: List<LibraryManga> = emptyList(),
+    val batchMigrationState: mihon.desktop.ui.browse.migration.BatchMigrationState =
+        mihon.desktop.ui.browse.migration.BatchMigrationState.Idle,
     // Global search
     val isGlobalSearchOpen: Boolean = false,
     val globalSearchQuery: String = "",
@@ -158,6 +160,15 @@ fun BrowseScreen(
         targetSource: SourceDescriptor,
         targetManga: SManga,
     ) -> Unit = { _, _, _ -> },
+    onAutoMatchTargetSource: (
+        suspend (
+            sourceId: Long,
+            manga: LibraryManga,
+        ) -> mihon.desktop.ui.browse.migration.MigrationMatcher.MatchEvaluation
+    )? = null,
+    onStartBatchMigration: ((targetSource: SourceDescriptor) -> Unit)? = null,
+    onCancelBatchMigration: (() -> Unit)? = null,
+    onDismissBatchReport: (() -> Unit)? = null,
     // Extension trust state/actions
     extensionTrustStatuses: Map<String, ExtensionTrustStatus>? = null,
     trustStatuses: Map<String, ExtensionTrustStatus>? = extensionTrustStatuses,
@@ -408,7 +419,12 @@ fun BrowseScreen(
                     onSelectSource = { onSelectMigrationSource(it) },
                     onBackToSourceList = { onSelectMigrationSource(null) },
                     onSearchTargetSource = onSearchTargetMigrationSource,
+                    onAutoMatchTargetSource = onAutoMatchTargetSource,
                     onPerformMigration = onPerformMigration,
+                    batchMigrationState = state.batchMigrationState,
+                    onStartBatchMigration = onStartBatchMigration,
+                    onCancelBatchMigration = onCancelBatchMigration,
+                    onDismissBatchReport = onDismissBatchReport,
                 )
             }
         }

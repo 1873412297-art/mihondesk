@@ -674,6 +674,28 @@ interface DesktopStrings {
     val migrateSearchPlaceholder: String
     val migrateSelectedBadge: String
     val migrateConfirm: String
+    val migrateAllButton: String
+    val migrateAllDialogTitle: String
+    fun migrateAllDialogSubtitle(count: Int, sourceName: String): String
+    val migrateAutoMatchButton: String
+    val migrateAutoMatching: String
+    val migrateExactMatchBadge: String
+    val migrateHighConfidenceBadge: String
+    val migrateBatchProgressCardTitle: String
+    fun migrateBatchProgress(current: Int, total: Int, title: String): String
+    fun migrateBatchCounts(success: Int, failed: Int): String
+    val migrateBatchCancel: String
+    val migrateBatchReportTitle: String
+    fun migrateBatchReportSummary(success: Int, failed: Int): String
+    fun migrateBatchAllSuccess(count: Int, targetSource: String): String
+    fun migrateBatchCancelled(success: Int, total: Int): String
+    fun migrateSuccessSnackbar(title: String, targetSource: String): String
+    fun migrateFailedSnackbar(title: String, error: String): String
+    val migrateFailureNoMatch: String
+    val migrateFailureAmbiguous: String
+    fun migrateFailureError(error: String): String
+    val migrateBatchFailuresListHeader: String
+    val migrateManualMigrate: String
     val filterDialogTitle: String
     val filterReset: String
     val filterNoAvailable: String
@@ -1472,6 +1494,36 @@ object EnglishStrings : DesktopStrings {
     override val migrateSearchPlaceholder = "Search title..."
     override val migrateSelectedBadge = "✓ Selected"
     override val migrateConfirm = "Confirm Migration"
+    override val migrateAllButton = "Migrate All"
+    override val migrateAllDialogTitle = "Migrate All Manga"
+    override fun migrateAllDialogSubtitle(count: Int, sourceName: String) =
+        "Automatically match and migrate all $count manga from $sourceName to the target source."
+    override val migrateAutoMatchButton = "Auto Match"
+    override val migrateAutoMatching = "Auto-matching..."
+    override val migrateExactMatchBadge = "Exact match"
+    override val migrateHighConfidenceBadge = "High confidence"
+    override val migrateBatchProgressCardTitle = "Batch Migration in Progress"
+    override fun migrateBatchProgress(current: Int, total: Int, title: String) =
+        "Migrating ($current/$total): $title"
+    override fun migrateBatchCounts(success: Int, failed: Int) =
+        "Success: $success | Failed/Skipped: $failed"
+    override val migrateBatchCancel = "Cancel Migration"
+    override val migrateBatchReportTitle = "Batch Migration Results"
+    override fun migrateBatchReportSummary(success: Int, failed: Int) =
+        "Migration finished: $success succeeded, $failed failed or skipped."
+    override fun migrateBatchAllSuccess(count: Int, targetSource: String) =
+        "Successfully migrated all $count manga to $targetSource."
+    override fun migrateBatchCancelled(success: Int, total: Int) =
+        "Migration cancelled. Successfully migrated $success of $total manga."
+    override fun migrateSuccessSnackbar(title: String, targetSource: String) =
+        "Successfully migrated \"$title\" to $targetSource."
+    override fun migrateFailedSnackbar(title: String, error: String) =
+        "Migration failed for \"$title\": $error"
+    override val migrateFailureNoMatch = "No matching manga found on target source"
+    override val migrateFailureAmbiguous = "Multiple ambiguous matches found; requires manual selection"
+    override fun migrateFailureError(error: String) = "Error: $error"
+    override val migrateBatchFailuresListHeader = "Unmatched / Failed Manga:"
+    override val migrateManualMigrate = "Manual Migrate"
     override val filterDialogTitle = "Source Filters"
     override val filterReset = "Reset"
     override val filterNoAvailable = "No filters available for this source."
@@ -2271,6 +2323,36 @@ object SimplifiedChineseStrings : DesktopStrings {
     override val migrateSearchPlaceholder = "搜索标题..."
     override val migrateSelectedBadge = "✓ 已选择"
     override val migrateConfirm = "确认迁移"
+    override val migrateAllButton = "全部迁移"
+    override val migrateAllDialogTitle = "批量迁移漫画"
+    override fun migrateAllDialogSubtitle(count: Int, sourceName: String) =
+        "在目标图源中自动匹配并迁移来自「$sourceName」的全部 $count 部漫画。"
+    override val migrateAutoMatchButton = "自动匹配"
+    override val migrateAutoMatching = "正在自动匹配..."
+    override val migrateExactMatchBadge = "精确匹配"
+    override val migrateHighConfidenceBadge = "高置信匹配"
+    override val migrateBatchProgressCardTitle = "批量迁移进行中"
+    override fun migrateBatchProgress(current: Int, total: Int, title: String) =
+        "正在迁移 ($current/$total)：$title"
+    override fun migrateBatchCounts(success: Int, failed: Int) =
+        "成功: $success | 失败/跳过: $failed"
+    override val migrateBatchCancel = "取消迁移"
+    override val migrateBatchReportTitle = "批量迁移报告"
+    override fun migrateBatchReportSummary(success: Int, failed: Int) =
+        "批量迁移完成：$success 部成功，$failed 部失败或跳过。"
+    override fun migrateBatchAllSuccess(count: Int, targetSource: String) =
+        "已成功将全部 $count 部漫画迁移至 $targetSource。"
+    override fun migrateBatchCancelled(success: Int, total: Int) =
+        "迁移已取消。已成功迁移 $success / $total 部漫画。"
+    override fun migrateSuccessSnackbar(title: String, targetSource: String) =
+        "已成功将《$title》迁移至 $targetSource。"
+    override fun migrateFailedSnackbar(title: String, error: String) =
+        "《$title》迁移失败：$error"
+    override val migrateFailureNoMatch = "目标图源未找到匹配漫画"
+    override val migrateFailureAmbiguous = "找到多个候选，需手动选择"
+    override fun migrateFailureError(error: String) = "错误：$error"
+    override val migrateBatchFailuresListHeader = "未成功迁移的漫画："
+    override val migrateManualMigrate = "手动迁移"
     override val filterDialogTitle = "图源筛选"
     override val filterReset = "重置"
     override val filterNoAvailable = "该图源没有可用的筛选器。"
@@ -3066,6 +3148,36 @@ object TraditionalChineseStrings : DesktopStrings {
     override val migrateSearchPlaceholder = "搜尋標題..."
     override val migrateSelectedBadge = "✓ 已選取"
     override val migrateConfirm = "確認遷移"
+    override val migrateAllButton = "全部遷移"
+    override val migrateAllDialogTitle = "批量遷移漫畫"
+    override fun migrateAllDialogSubtitle(count: Int, sourceName: String) =
+        "在目標圖源中自動匹配並遷移來自「$sourceName」的全部 $count 部漫畫。"
+    override val migrateAutoMatchButton = "自動匹配"
+    override val migrateAutoMatching = "正在自動匹配..."
+    override val migrateExactMatchBadge = "精確匹配"
+    override val migrateHighConfidenceBadge = "高置信匹配"
+    override val migrateBatchProgressCardTitle = "批量遷移進行中"
+    override fun migrateBatchProgress(current: Int, total: Int, title: String) =
+        "正在遷移 ($current/$total)：$title"
+    override fun migrateBatchCounts(success: Int, failed: Int) =
+        "成功: $success | 失敗/略過: $failed"
+    override val migrateBatchCancel = "取消遷移"
+    override val migrateBatchReportTitle = "批量遷移報告"
+    override fun migrateBatchReportSummary(success: Int, failed: Int) =
+        "批量遷移完成：$success 部成功，$failed 部失敗或略過。"
+    override fun migrateBatchAllSuccess(count: Int, targetSource: String) =
+        "已成功將全部 $count 部漫畫遷移至 $targetSource。"
+    override fun migrateBatchCancelled(success: Int, total: Int) =
+        "遷移已取消。已成功遷移 $success / $total 部漫畫。"
+    override fun migrateSuccessSnackbar(title: String, targetSource: String) =
+        "已成功將《$title》遷移至 $targetSource。"
+    override fun migrateFailedSnackbar(title: String, error: String) =
+        "《$title》遷移失敗：$error"
+    override val migrateFailureNoMatch = "目標圖源未找到匹配漫畫"
+    override val migrateFailureAmbiguous = "找到多個候選，需手動選擇"
+    override fun migrateFailureError(error: String) = "錯誤：$error"
+    override val migrateBatchFailuresListHeader = "未成功遷移的漫畫："
+    override val migrateManualMigrate = "手動遷移"
     override val filterDialogTitle = "圖源篩選"
     override val filterReset = "重設"
     override val filterNoAvailable = "該圖源沒有可用的篩選器。"

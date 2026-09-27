@@ -8,8 +8,11 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
@@ -24,12 +27,16 @@ import mihon.desktop.extension.ExtensionStoreService
 import mihon.desktop.extension.InstalledExtension
 import mihon.desktop.extension.SourcePreferenceDefinition
 import mihon.desktop.extension.SourceState
+import mihon.desktop.i18n.DesktopStrings
 import mihon.desktop.library.db.SqlDelightLibraryRepository
 import mihon.desktop.library.model.ChapterRecord
 import mihon.desktop.library.model.LibraryChapter
 import mihon.desktop.library.model.LibraryManga
 import mihon.desktop.library.model.MangaRecord
 import mihon.desktop.preferences.DesktopPreferenceStore
+import mihon.desktop.ui.browse.migration.BatchMigrationRunner
+import mihon.desktop.ui.browse.migration.BatchMigrationState
+import mihon.desktop.ui.browse.migration.MigrationMatcher
 import mihon.extension.model.SourceDescriptor
 import mihon.extension.source.model.FilterList
 import mihon.extension.source.model.SManga
@@ -43,6 +50,7 @@ class BrowsePresenter(
     private val preferenceStore: DesktopPreferenceStore,
     private val scope: CoroutineScope,
     private val onExtensionUpdatesAvailable: (Int) -> Unit = {},
+    private val stringsProvider: () -> DesktopStrings = { DesktopStrings.resolve(preferenceStore.load().language) },
 ) {
     companion object {
         const val PREF_KEY_PINNED_SOURCES = "browse.pinned_sources"
@@ -51,10 +59,23 @@ class BrowsePresenter(
     private val json = Json { ignoreUnknownKeys = true }
     private val _state = MutableStateFlow(BrowseUiState())
     val state: StateFlow<BrowseUiState> = _state.asStateFlow()
+    private val _snackbarEvents = MutableSharedFlow<String>(extraBufferCapacity = 16)
+    val snackbarEvents: SharedFlow<String> = _snackbarEvents.asSharedFlow()
+
     private var lastNotifiedPendingUpdates = 0
     private var installJob: Job? = null
     private var globalSearchJob: Job? = null
     private val globalSearchGeneration = java.util.concurrent.atomic.AtomicLong()
+    private var batchMigrationJob: Job? = null
+
+    val batchMigrationRunner = BatchMigrationRunner(
+        scope = scope,
+        onSnackbar = { msg -> _snackbarEvents.emit(msg) },
+        stringsProvider = stringsProvider,
+        onStateChanged = { batchState ->
+            _state.update { it.copy(batchMigrationState = batchState) }
+        },
+    )
 
     init {
         // The runtime builds the source manager before the browse presenter, so the built-in local
@@ -283,6 +304,21 @@ class BrowsePresenter(
         }
     }
 
+    suspend fun autoMatchTargetSource(targetSourceId: Long, manga: LibraryManga): MigrationMatcher.MatchEvaluation {
+        return try {
+            var mangas = searchTargetMigrationSource(targetSourceId, manga.title)
+            if (mangas.isEmpty()) {
+                val cleaned = MigrationMatcher.cleanTitle(manga.title)
+                if (cleaned != manga.title && cleaned.isNotBlank()) {
+                    mangas = searchTargetMigrationSource(targetSourceId, cleaned)
+                }
+            }
+            MigrationMatcher.evaluateCandidates(manga.title, mangas)
+        } catch (_: Exception) {
+            MigrationMatcher.MatchEvaluation(emptyList(), null, false)
+        }
+    }
+
     /**
      * Loads the filter list for a source when the source browse screen is opened. Builtin sources
      * resolve immediately; extension sources are loaded through the extension host and decoded from
@@ -299,95 +335,226 @@ class BrowsePresenter(
     ) {
         scope.launch {
             _state.update { it.copy(isLoading = true) }
+            val strings = stringsProvider()
             try {
-                withContext(Dispatchers.IO) {
-                    val detailedTarget = try {
-                        sourceManager.getMangaDetails(targetSource.id, targetManga)
-                    } catch (_: Exception) {
-                        targetManga
-                    }
-
-                    val targetChapters = try {
-                        sourceManager.getChapterList(targetSource.id, detailedTarget)
-                    } catch (_: Exception) {
-                        emptyList()
-                    }
-
-                    val oldChapters = libraryRepository.chapterSnapshot(oldManga.id)
-
-                    libraryRepository.transaction {
-                        val now = System.currentTimeMillis()
-                        // 1. Insert new target manga if not exists
-                        val existing = libraryRepository.findManga(targetSource.id, detailedTarget.url)
-                        val newMangaId = if (existing == null) {
-                            libraryRepository.insertManga(
-                                MangaRecord(
-                                    id = 0L,
-                                    sourceId = targetSource.id,
-                                    url = detailedTarget.url,
-                                    title = detailedTarget.title,
-                                    artist = detailedTarget.artist,
-                                    author = detailedTarget.author,
-                                    description = detailedTarget.description,
-                                    genreJson = json.encodeToString(detailedTarget.genre),
-                                    status = detailedTarget.status.toLong(),
-                                    thumbnailUrl = detailedTarget.thumbnailUrl,
-                                    favorite = true,
-                                    dateAdded = now,
-                                    lastModifiedAt = now,
-                                    favoriteModifiedAt = now,
-                                    initialized = true,
-                                ),
-                            )
-                        } else {
-                            libraryRepository.updateManga(existing.copy(favorite = true, favoriteModifiedAt = now))
-                            existing.id
-                        }
-
-                        // 2. Map old chapter progress to new chapters
-                        val newChapterRecords = targetChapters.mapIndexed { index, sc ->
-                            val match = oldChapters.find { oc ->
-                                (sc.chapterNumber > 0f && oc.chapterNumber == sc.chapterNumber.toDouble()) ||
-                                    oc.name.trim().equals(sc.name.trim(), ignoreCase = true)
-                            }
-
-                            ChapterRecord(
-                                id = 0L,
-                                mangaId = newMangaId,
-                                url = sc.url,
-                                name = sc.name,
-                                scanlator = sc.scanlator,
-                                read = match?.read ?: false,
-                                bookmark = match?.bookmark ?: false,
-                                lastPageRead = match?.lastPageRead ?: 0L,
-                                chapterNumber = sc.chapterNumber.toDouble(),
-                                sourceOrder = index.toLong(),
-                                dateFetch = now,
-                                dateUpload = sc.dateUpload,
-                                lastModifiedAt = now,
-                            )
-                        }
-
-                        for (record in newChapterRecords) {
-                            libraryRepository.insertChapter(record)
-                        }
-
-                        // 3. Mark old manga as unfavorited
-                        val oldRecord = libraryRepository.findManga(oldManga.sourceId, oldManga.url)
-                        if (oldRecord != null) {
-                            libraryRepository.updateManga(oldRecord.copy(favorite = false))
-                        }
-                    }
-                }
-
+                performMigrationInternal(oldManga, targetSource, targetManga)
+                _snackbarEvents.emit(strings.migrateSuccessSnackbar(oldManga.title, targetSource.name))
                 refresh()
                 _state.value.selectedMigrationSource?.let { selectMigrationSource(it) }
+                refreshMigrationCounts()
             } catch (e: Exception) {
+                if (e is CancellationException) throw e
                 _state.update { it.copy(errorMessage = "Migration failed: ${e.message}") }
+                _snackbarEvents.emit(strings.migrateFailedSnackbar(oldManga.title, e.message ?: "Unknown error"))
             } finally {
                 _state.update { it.copy(isLoading = false) }
             }
         }
+    }
+
+    internal suspend fun performMigrationInternal(
+        oldManga: LibraryManga,
+        targetSource: SourceDescriptor,
+        targetManga: SManga,
+    ): Long = withContext(Dispatchers.IO) {
+        val detailedTarget = try {
+            sourceManager.getMangaDetails(targetSource.id, targetManga)
+        } catch (_: Exception) {
+            targetManga
+        }
+
+        val targetChapters = try {
+            sourceManager.getChapterList(targetSource.id, detailedTarget)
+        } catch (_: Exception) {
+            emptyList()
+        }
+
+        val oldChapters = libraryRepository.chapterSnapshot(oldManga.id)
+        val oldDetails = libraryRepository.mangaSnapshot(oldManga.id)
+        val oldRecord = libraryRepository.findManga(oldManga.sourceId, oldManga.url)
+        val oldTrackings = libraryRepository.trackingSnapshot(oldManga.id)
+        val sourceCategoryIds = oldDetails?.categories?.map { it.id }
+            ?: libraryRepository.mangaCategoryLinksSnapshot()[oldManga.id].orEmpty()
+
+        val existingTarget = libraryRepository.findManga(targetSource.id, detailedTarget.url)
+        val existingTargetChapters = if (existingTarget != null) {
+            libraryRepository.chapterSnapshot(existingTarget.id).associateBy { it.url }
+        } else {
+            emptyMap()
+        }
+        val existingTargetCategoryIds = if (existingTarget != null) {
+            libraryRepository.mangaSnapshot(existingTarget.id)?.categories?.map { it.id }?.toSet().orEmpty()
+        } else {
+            emptySet()
+        }
+
+        val now = System.currentTimeMillis()
+
+        libraryRepository.transaction {
+            val newMangaId = if (existingTarget == null) {
+                insertManga(
+                    MangaRecord(
+                        id = 0L,
+                        sourceId = targetSource.id,
+                        url = detailedTarget.url,
+                        title = detailedTarget.title,
+                        artist = detailedTarget.artist,
+                        author = detailedTarget.author,
+                        description = detailedTarget.description,
+                        genreJson = json.encodeToString(detailedTarget.genre),
+                        status = detailedTarget.status.toLong(),
+                        thumbnailUrl = detailedTarget.thumbnailUrl,
+                        favorite = true,
+                        dateAdded = oldDetails?.dateAdded ?: now,
+                        lastModifiedAt = now,
+                        favoriteModifiedAt = now,
+                        initialized = true,
+                        viewerFlags = oldDetails?.viewerFlags ?: 0L,
+                        chapterFlags = oldDetails?.chapterFlags ?: 0L,
+                        memoJson = oldDetails?.memoJson ?: "{}",
+                    ),
+                )
+            } else {
+                val updatedViewerFlags = if (existingTarget.viewerFlags !=
+                    0L
+                ) {
+                    existingTarget.viewerFlags
+                } else {
+                    (oldDetails?.viewerFlags ?: 0L)
+                }
+                val updatedChapterFlags = if (existingTarget.chapterFlags !=
+                    0L
+                ) {
+                    existingTarget.chapterFlags
+                } else {
+                    (oldDetails?.chapterFlags ?: 0L)
+                }
+                val updatedMemoJson = if (existingTarget.memoJson.isNotBlank() &&
+                    existingTarget.memoJson != "{}"
+                ) {
+                    existingTarget.memoJson
+                } else {
+                    (oldDetails?.memoJson ?: "{}")
+                }
+                updateManga(
+                    existingTarget.copy(
+                        favorite = true,
+                        favoriteModifiedAt = now,
+                        lastModifiedAt = now,
+                        viewerFlags = updatedViewerFlags,
+                        chapterFlags = updatedChapterFlags,
+                        memoJson = updatedMemoJson,
+                    ),
+                )
+                existingTarget.id
+            }
+
+            val newChapterRecords = targetChapters.mapIndexed { index, sc ->
+                val match = oldChapters.find { oc ->
+                    (sc.chapterNumber > 0f && oc.chapterNumber == sc.chapterNumber.toDouble()) ||
+                        oc.name.trim().equals(sc.name.trim(), ignoreCase = true)
+                }
+
+                val existingChapter = existingTargetChapters[sc.url]
+                ChapterRecord(
+                    id = existingChapter?.id ?: 0L,
+                    mangaId = newMangaId,
+                    url = sc.url,
+                    name = sc.name,
+                    scanlator = sc.scanlator,
+                    read = (existingChapter?.read == true) || (match?.read == true),
+                    bookmark = (existingChapter?.bookmark == true) || (match?.bookmark == true),
+                    lastPageRead = maxOf(existingChapter?.lastPageRead ?: 0L, match?.lastPageRead ?: 0L),
+                    chapterNumber = sc.chapterNumber.toDouble(),
+                    sourceOrder = index.toLong(),
+                    dateFetch = now,
+                    dateUpload = sc.dateUpload,
+                    lastModifiedAt = now,
+                )
+            }
+
+            for (record in newChapterRecords) {
+                if (record.id == 0L) {
+                    insertChapter(record)
+                } else {
+                    updateChapter(record)
+                }
+            }
+
+            for (categoryId in sourceCategoryIds) {
+                if (categoryId !in existingTargetCategoryIds) {
+                    linkCategory(newMangaId, categoryId)
+                }
+            }
+
+            for (tracking in oldTrackings) {
+                val existingTracking = findTracking(newMangaId, tracking.trackerId)
+                if (existingTracking == null) {
+                    insertTracking(tracking.copy(id = 0L, mangaId = newMangaId))
+                } else {
+                    updateTracking(
+                        existingTracking.copy(
+                            lastChapterRead = maxOf(existingTracking.lastChapterRead, tracking.lastChapterRead),
+                            score = if (existingTracking.score != 0.0) existingTracking.score else tracking.score,
+                            status = if (existingTracking.status != 0L) existingTracking.status else tracking.status,
+                            remoteId = if (existingTracking.remoteId !=
+                                0L
+                            ) {
+                                existingTracking.remoteId
+                            } else {
+                                tracking.remoteId
+                            },
+                        ),
+                    )
+                }
+                deleteTracking(oldManga.id, tracking.trackerId)
+            }
+
+            if (oldRecord != null) {
+                updateManga(
+                    oldRecord.copy(
+                        favorite = false,
+                        lastModifiedAt = now,
+                        favoriteModifiedAt = now,
+                    ),
+                )
+            }
+
+            newMangaId
+        }
+    }
+
+    fun startBatchMigration(targetSource: SourceDescriptor, delayMs: Long = 500L): Job? {
+        val mangas = _state.value.mangasForSelectedMigrationSource
+        if (mangas.isEmpty()) return null
+
+        batchMigrationJob?.cancel()
+        val job = batchMigrationRunner.start(
+            mangas = mangas,
+            targetSource = targetSource,
+            searchFn = { query -> searchTargetMigrationSource(targetSource.id, query) },
+            migrateFn = { oldManga, targetManga ->
+                performMigrationInternal(oldManga, targetSource, targetManga)
+            },
+            delayMs = delayMs,
+            onComplete = {
+                refresh()
+                _state.value.selectedMigrationSource?.let { selectMigrationSource(it) }
+                refreshMigrationCounts()
+            },
+        )
+        batchMigrationJob = job
+        return job
+    }
+
+    fun cancelBatchMigration() {
+        batchMigrationRunner.cancel()
+        batchMigrationJob?.cancel()
+        batchMigrationJob = null
+    }
+
+    fun dismissBatchMigrationReport() {
+        batchMigrationRunner.reset()
     }
 
     fun installExtension(item: ExtensionStoreItem) = installItems(listOf(item))

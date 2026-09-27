@@ -23,6 +23,7 @@ import mihon.desktop.library.model.LibraryChapter
 import mihon.desktop.library.model.LibraryManga
 import mihon.desktop.library.model.MangaDetails
 import mihon.desktop.library.reader.ReaderLibraryPort
+import mihon.desktop.ui.common.LocalSnackbarHostState
 import mihon.desktop.ui.library.ChapterFilterState
 import mihon.desktop.ui.library.ChapterReaderAvailability
 import mihon.desktop.ui.library.ChapterSortMode
@@ -123,6 +124,13 @@ fun BrowseContentView(
         )
     }
 
+    val snackbarHostState = LocalSnackbarHostState.current
+    LaunchedEffect(presenter) {
+        presenter.snackbarEvents.collect { message ->
+            snackbarHostState?.showSnackbar(message)
+        }
+    }
+
     when (val nav = navState) {
         BrowseNavigationState.Home -> {
             BrowseScreen(
@@ -155,7 +163,11 @@ fun BrowseContentView(
                 },
                 onSelectMigrationSource = presenter::selectMigrationSource,
                 onSearchTargetMigrationSource = presenter::searchTargetMigrationSource,
+                onAutoMatchTargetSource = presenter::autoMatchTargetSource,
                 onPerformMigration = presenter::performMigration,
+                onStartBatchMigration = presenter::startBatchMigration,
+                onCancelBatchMigration = presenter::cancelBatchMigration,
+                onDismissBatchReport = presenter::dismissBatchMigrationReport,
             )
         }
         is BrowseNavigationState.SourceView -> {
