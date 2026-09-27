@@ -90,6 +90,7 @@ import mihon.desktop.security.MIN_PIN_LENGTH
 import mihon.desktop.track.DesktopTracker
 import mihon.desktop.track.DesktopTrackerManager
 import mihon.desktop.track.TrackerAuthType
+import mihon.desktop.ui.common.LocalSnackbarHostState
 import mihon.desktop.ui.theme.DesktopAppTheme
 import mihon.desktop.ui.theme.ThemeRegistry
 import mihon.desktop.ui.track.TrackerLoginDialog
@@ -149,6 +150,7 @@ fun SettingsScreen(
     onOpenCookieManager: () -> Unit = {},
     onImportBackup: () -> Unit = {},
     onExportBackup: () -> Unit = {},
+    onOpenOnboarding: () -> Unit = {},
     onPreferencesChanged: ((DesktopPreferences) -> Unit)? = null,
     downloadCacheCleaner: mihon.desktop.download.DownloadCacheCleaner? = null,
     downloadsDir: Path? = null,
@@ -244,7 +246,11 @@ fun SettingsScreen(
                 modifier = Modifier.widthIn(max = 880.dp).fillMaxWidth(),
             ) {
                 when (selectedSection) {
-                    SettingsSection.General -> GeneralSettingsPane(preferenceStore, notifyPreferencesChanged)
+                    SettingsSection.General -> GeneralSettingsPane(
+                        preferenceStore = preferenceStore,
+                        onPreferencesChanged = notifyPreferencesChanged,
+                        onOpenOnboarding = onOpenOnboarding,
+                    )
                     SettingsSection.Security -> SecuritySettingsPane(
                         preferenceStore = preferenceStore,
                         appLockController = securityController,
@@ -292,8 +298,11 @@ fun SettingsScreen(
 private fun GeneralSettingsPane(
     preferenceStore: DesktopPreferenceStore,
     onPreferencesChanged: ((DesktopPreferences) -> Unit)?,
+    onOpenOnboarding: () -> Unit = {},
 ) {
     val strings = LocalStrings.current
+    val scope = rememberCoroutineScope()
+    val snackbarHostState = LocalSnackbarHostState.current
     var preferences by remember { mutableStateOf(preferenceStore.load()) }
 
     Column(
@@ -427,6 +436,118 @@ private fun GeneralSettingsPane(
                     },
                     modifier = Modifier.testTag("run-in-background-switch"),
                 )
+            }
+        }
+
+        // Show NSFW Sources Card
+        Card(
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Row(
+                modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(
+                    modifier = Modifier.weight(1f).padding(end = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Text(
+                        strings.settingsShowNsfw,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        strings.settingsShowNsfwDesc,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                androidx.compose.material3.Switch(
+                    checked = preferences.showNsfwSources,
+                    onCheckedChange = { isChecked ->
+                        val updated = preferenceStore.updatePreferences { it.copy(showNsfwSources = isChecked) }
+                        preferences = updated
+                        onPreferencesChanged?.invoke(updated)
+                    },
+                    modifier = Modifier.testTag("settings-show-nsfw-switch"),
+                )
+            }
+        }
+
+        // Reset Hidden Sources Card
+        Card(
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Row(
+                modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(
+                    modifier = Modifier.weight(1f).padding(end = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Text(
+                        strings.settingsResetHiddenSources,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        strings.settingsResetHiddenSourcesDesc,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                OutlinedButton(
+                    onClick = {
+                        val updated = preferenceStore.updatePreferences { it.copy(hiddenSourceIds = emptySet()) }
+                        preferences = updated
+                        onPreferencesChanged?.invoke(updated)
+                        scope.launch {
+                            snackbarHostState?.showSnackbar(strings.settingsResetHiddenSourcesSuccess)
+                        }
+                    },
+                    modifier = Modifier.testTag("settings-reset-hidden-sources"),
+                ) {
+                    Text(strings.settingsResetHiddenSources)
+                }
+            }
+        }
+
+        // Re-show Onboarding Card
+        Card(
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Row(
+                modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(
+                    modifier = Modifier.weight(1f).padding(end = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Text(
+                        strings.settingsReshowOnboarding,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        strings.settingsReshowOnboardingDesc,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                OutlinedButton(
+                    onClick = onOpenOnboarding,
+                    modifier = Modifier.testTag("settings-reshow-onboarding-btn"),
+                ) {
+                    Text(strings.settingsReshowOnboarding)
+                }
             }
         }
 

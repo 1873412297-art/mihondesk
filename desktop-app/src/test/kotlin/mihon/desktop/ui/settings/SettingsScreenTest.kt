@@ -394,4 +394,38 @@ class SettingsScreenTest {
         prefStore.load().appLockPinSalt shouldBe ""
         prefStore.load().appLockPinIterations shouldBe 0
     }
+
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun `general settings handles nsfw switch, reset hidden sources, and reshow onboarding`(
+        @TempDir tempDir: Path,
+    ) = runComposeUiTest {
+        val prefStore = DesktopPreferenceStore(tempDir.resolve("prefs.properties"))
+        prefStore.updatePreferences {
+            it.copy(
+                showNsfwSources = false,
+                hiddenSourceIds = setOf(101L, 102L),
+            )
+        }
+        var onboardingTriggered = false
+
+        setContent {
+            Box(Modifier.requiredSize(1024.dp, 768.dp)) {
+                SettingsScreen(
+                    preferenceStore = prefStore,
+                    readerSettingsStore = DesktopReaderSettingsStore(prefStore),
+                    onOpenOnboarding = { onboardingTriggered = true },
+                )
+            }
+        }
+
+        onNodeWithTag("settings-show-nsfw-switch").performScrollTo().performClick()
+        prefStore.load().showNsfwSources shouldBe true
+
+        onNodeWithTag("settings-reset-hidden-sources").performScrollTo().performClick()
+        prefStore.load().hiddenSourceIds shouldBe emptySet()
+
+        onNodeWithTag("settings-reshow-onboarding-btn").performScrollTo().performClick()
+        onboardingTriggered shouldBe true
+    }
 }

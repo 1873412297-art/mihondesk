@@ -84,7 +84,7 @@ class DesktopDownloaderQueueInteractionTest {
         val persistedAfterResume = store.restore()
         persistedAfterResume.first { it.chapterId == 101L }.status shouldNotBe DownloadStatus.PAUSED
 
-        downloader.close()
+        downloader.shutdown()
     }
 
     @Test
@@ -128,7 +128,7 @@ class DesktopDownloaderQueueInteractionTest {
         downloader.queueState.value.map { it.chapterId } shouldContainExactly listOf(102L, 103L, 101L)
         store.restore().map { it.chapterId } shouldContainExactly listOf(102L, 103L, 101L)
 
-        downloader.close()
+        downloader.shutdown()
     }
 
     @Test
@@ -155,6 +155,6 @@ class DesktopDownloaderQueueInteractionTest {
         downloader.queueState.value.first { it.chapterId == 101L }.status shouldBe DownloadStatus.PAUSED
         downloader.queueState.value.first { it.chapterId == 102L }.status shouldBe DownloadStatus.QUEUED
 
-        downloader.close()
+        downloader.shutdown()
     }
 }

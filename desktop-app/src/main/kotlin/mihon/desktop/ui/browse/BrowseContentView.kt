@@ -1,5 +1,6 @@
 package mihon.desktop.ui.browse
 
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -19,6 +20,8 @@ import kotlinx.coroutines.withContext
 import mihon.desktop.DesktopRuntime
 import mihon.desktop.extension.SourceState
 import mihon.desktop.extension.builtin.isLocalSource
+import mihon.desktop.i18n.UiText
+import mihon.desktop.i18n.text
 import mihon.desktop.library.model.LibraryChapter
 import mihon.desktop.library.model.LibraryManga
 import mihon.desktop.library.model.MangaDetails
@@ -125,9 +128,26 @@ fun BrowseContentView(
     }
 
     val snackbarHostState = LocalSnackbarHostState.current
+    LaunchedEffect(Unit) {
+        presenter.reloadPreferences()
+    }
     LaunchedEffect(presenter) {
         presenter.snackbarEvents.collect { message ->
-            snackbarHostState?.showSnackbar(message)
+            if (message.startsWith("HIDDEN:")) {
+                val parts = message.split(":", limit = 3)
+                val sourceId = parts.getOrNull(1)?.toLongOrNull()
+                val sourceName = parts.getOrNull(2) ?: ""
+                val strings = mihon.desktop.i18n.DesktopStrings.resolve(runtime.preferences.load().language)
+                val result = snackbarHostState?.showSnackbar(
+                    message = strings.browseSourceHidden(sourceName),
+                    actionLabel = strings.text(UiText.Undo),
+                )
+                if (result == SnackbarResult.ActionPerformed && sourceId != null) {
+                    presenter.unhideSource(sourceId)
+                }
+            } else {
+                snackbarHostState?.showSnackbar(message)
+            }
         }
     }
 
@@ -158,9 +178,13 @@ fun BrowseContentView(
                 onCloseGlobalSearch = presenter::closeGlobalSearch,
                 onGlobalSearchQueryChange = presenter::setGlobalSearchQuery,
                 onPerformGlobalSearch = presenter::performGlobalSearch,
+                onToggleGlobalSearchOnlyPinned = presenter::setGlobalSearchOnlyPinned,
                 onGlobalMangaSelected = { source, manga ->
                     navState = BrowseNavigationState.MangaDetail(source, manga)
                 },
+                onHideSource = presenter::hideSource,
+                onUnhideSource = presenter::unhideSource,
+                onSourceLanguageFilterChange = presenter::setSourceLanguageFilter,
                 onSelectMigrationSource = presenter::selectMigrationSource,
                 onSearchTargetMigrationSource = presenter::searchTargetMigrationSource,
                 onAutoMatchTargetSource = presenter::autoMatchTargetSource,

@@ -19,6 +19,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -68,6 +69,8 @@ fun GlobalSearchScreen(
     onMangaSelected: (SourceDescriptor, SManga) -> Unit,
     onViewSource: (SourceDescriptor) -> Unit,
     hasSources: Boolean = true,
+    onlyPinned: Boolean = false,
+    onToggleOnlyPinned: (Boolean) -> Unit = {},
 ) {
     val strings = LocalStrings.current
 
@@ -79,7 +82,7 @@ fun GlobalSearchScreen(
     ) {
         // Top Search Bar
         Row(
-            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             OutlinedButton(onClick = onBack, modifier = Modifier.testTag("global-search-back-btn")) {
@@ -110,6 +113,19 @@ fun GlobalSearchScreen(
             ) {
                 Text(strings.browseSearchButton)
             }
+        }
+
+        // Filter options row
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            FilterChip(
+                selected = onlyPinned,
+                onClick = { onToggleOnlyPinned(!onlyPinned) },
+                label = { Text(strings.browseGlobalSearchOnlyPinned) },
+                modifier = Modifier.testTag("global-search-only-pinned"),
+            )
         }
 
         if (isSearching) {

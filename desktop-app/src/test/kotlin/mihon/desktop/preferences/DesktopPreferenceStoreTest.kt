@@ -257,4 +257,22 @@ class DesktopPreferenceStoreTest {
         reader.property("theme") shouldBe "Light"
         reader.load().themeMode shouldBe ThemeMode.Light
     }
+
+    @Test
+    fun `phase 2d preferences can be saved and restored`() {
+        val file = tempDir.resolve("preferences-phase2d.properties")
+        val store = DesktopPreferenceStore(file)
+        val expected = DesktopPreferences(
+            onboardingCompleted = true,
+            showNsfwSources = true,
+            hiddenSourceIds = setOf(101L, 202L),
+            globalSearchOnlyPinned = true,
+        )
+        store.save(expected)
+        val loaded = store.load()
+        loaded.onboardingCompleted shouldBe true
+        loaded.showNsfwSources shouldBe true
+        loaded.hiddenSourceIds shouldBe setOf(101L, 202L)
+        loaded.globalSearchOnlyPinned shouldBe true
+    }
 }

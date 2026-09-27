@@ -48,6 +48,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import mihon.desktop.DesktopRuntime
+import mihon.desktop.backup.filterByOptions
 import mihon.desktop.category.DesktopCategory
 import mihon.desktop.category.SYSTEM_ALL_CATEGORY
 import mihon.desktop.extension.MissingSourceInfo
@@ -71,6 +72,8 @@ import mihon.desktop.security.DesktopAppLockGate
 import mihon.desktop.security.UnlockResult
 import mihon.desktop.track.toDesktopTrackRecord
 import mihon.desktop.track.toTrackingRecord
+import mihon.desktop.ui.backup.BackupOptionsDialog
+import mihon.desktop.ui.backup.BackupOptionsMode
 import mihon.desktop.ui.category.EditMangaCategoriesDialog
 import mihon.desktop.ui.category.ManageCategoriesDialog
 import mihon.desktop.ui.common.LocalSearchFocusRequester
@@ -88,6 +91,7 @@ import mihon.desktop.ui.library.LibraryPresenter
 import mihon.desktop.ui.library.MangaDetailActions
 import mihon.desktop.ui.library.chapterDisplayLabel
 import mihon.desktop.ui.library.withDownloadProgress
+import mihon.desktop.ui.onboarding.OnboardingDialog
 import mihon.desktop.ui.reader.DecodedReaderPage
 import mihon.desktop.ui.reader.LibraryChapterBookmarkStore
 import mihon.desktop.ui.reader.ReaderChapterTransitionChapter
@@ -103,11 +107,15 @@ import mihon.desktop.window.WindowPlacement
 import mihon.extension.source.model.SManga
 import java.awt.Frame
 import java.awt.Toolkit
+import java.io.File
 import androidx.compose.ui.window.WindowPlacement as ComposeWindowPlacement
 
 @Composable
 fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
     var preferences by remember { mutableStateOf(runtime.preferences.load()) }
+    var showOnboarding by remember { mutableStateOf(!preferences.onboardingCompleted) }
+    var pendingExportPath by remember { mutableStateOf<java.nio.file.Path?>(null) }
+    var pendingImportPath by remember { mutableStateOf<java.nio.file.Path?>(null) }
     val appLockController = remember(runtime.preferences) {
         DesktopAppLockController(runtime.preferences)
     }
@@ -1064,7 +1072,7 @@ fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
                                             mihon.desktop.ui.library.chooseAndroidBackup(
                                                 strings.libraryImportBackup,
                                             )?.let {
-                                                backupRestore.start(it)
+                                                pendingImportPath = it
                                             }
                                         },
                                         onImportLocal = {
@@ -1316,20 +1324,10 @@ fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
                                                         strings.text(UiText.ExportBackup),
                                                     )
                                                         ?: return@launch
-                                                try {
-                                                    withContext(Dispatchers.IO) {
-                                                        runtime.backupExporter.export(path)
-                                                    }
-                                                    snackbarHostState.showSnackbar(
-                                                        strings.backupExportSuccess(path.toString()),
-                                                    )
-                                                } catch (e: Exception) {
-                                                    snackbarHostState.showSnackbar(
-                                                        strings.backupExportFailed(e.message ?: ""),
-                                                    )
-                                                }
+                                                pendingExportPath = path
                                             }
                                         },
+                                        onOpenOnboarding = { showOnboarding = true },
                                         onPreferencesChanged = { updated ->
                                             preferences = updated
                                             appLockController.refresh()
@@ -1512,6 +1510,95 @@ fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
                                 BackupRestoreDialog(backupRestoreState, {
                                     backupRestore.cancel()
                                 }, backupRestore::dismiss)
+                                pendingExportPath?.let { exportPath ->
+                                    BackupOptionsDialog(
+                                        mode = BackupOptionsMode.Export,
+                                        onConfirm = { options ->
+                                            val target = exportPath
+                                            pendingExportPath = null
+                                            presenterScope.launch {
+                                                try {
+                                                    withContext(Dispatchers.IO) {
+                                                        val backup =
+                                                            runtime.backupExporter.createBackup().filterByOptions(
+                                                                options,
+                                                            )
+                                                        mihon.desktop.library.backup.AndroidBackupCodec()
+                                                            .encode(backup, target)
+                                                    }
+                                                    snackbarHostState.showSnackbar(
+                                                        strings.backupExportSuccess(target.toString()),
+                                                    )
+                                                } catch (e: Exception) {
+                                                    snackbarHostState.showSnackbar(
+                                                        strings.backupExportFailed(e.message ?: ""),
+                                                    )
+                                                }
+                                            }
+                                        },
+                                        onDismiss = { pendingExportPath = null },
+                                    )
+                                }
+                                pendingImportPath?.let { importPath ->
+                                    BackupOptionsDialog(
+                                        mode = BackupOptionsMode.Restore,
+                                        onConfirm = { options ->
+                                            val target = importPath
+                                            pendingImportPath = null
+                                            presenterScope.launch {
+                                                try {
+                                                    val filteredPath = withContext(Dispatchers.IO) {
+                                                        val codec = mihon.desktop.library.backup.AndroidBackupCodec()
+                                                        val original = codec.decode(target)
+                                                        val filtered = original.filterByOptions(options)
+                                                        val tempPath =
+                                                            java.nio.file.Files.createTempFile(
+                                                                "restore-filtered-",
+                                                                ".tachibk",
+                                                            )
+                                                        tempPath.toFile().deleteOnExit()
+                                                        codec.encode(filtered, tempPath)
+                                                        tempPath
+                                                    }
+                                                    backupRestore.start(filteredPath)
+                                                } catch (e: Exception) {
+                                                    snackbarHostState.showSnackbar(
+                                                        e.message ?: "Failed to process backup",
+                                                    )
+                                                }
+                                            }
+                                        },
+                                        onDismiss = { pendingImportPath = null },
+                                    )
+                                }
+                                if (showOnboarding) {
+                                    OnboardingDialog(
+                                        preferences = preferences,
+                                        repositories = runtime.extensionStoreService.getRepositories(),
+                                        onAddRepository = { repo ->
+                                            runtime.extensionStoreService.addRepository(repo)
+                                        },
+                                        onUpdatePreferences = { updated ->
+                                            preferences = runtime.preferences.updatePreferences { updated }
+                                            appLockController.refresh()
+                                        },
+                                        onFinish = {
+                                            showOnboarding = false
+                                            preferences =
+                                                runtime.preferences.updatePreferences {
+                                                    it.copy(onboardingCompleted = true)
+                                                }
+                                        },
+                                        onGoToBrowse = {
+                                            showOnboarding = false
+                                            preferences =
+                                                runtime.preferences.updatePreferences {
+                                                    it.copy(onboardingCompleted = true)
+                                                }
+                                            navigator.navigate(DesktopDestination.Browse)
+                                        },
+                                    )
+                                }
                                 if (backupRestoreState is BackupRestoreState.Idle) {
                                     pendingMissingSources?.let { missingList ->
                                         val installable = missingList.mapNotNull { it.extension }.distinctBy { it.pkg }

@@ -81,16 +81,78 @@ class BrowsePresenter(
         // The runtime builds the source manager before the browse presenter, so the built-in local
         // source is wired to the library repository as soon as the Browse tab is created.
         sourceManager.attachLibraryRepository(libraryRepository)
-        loadPinnedSources()
+        loadPreferences()
         refresh()
     }
 
-    private fun loadPinnedSources() {
+    private fun loadPreferences() {
+        val prefs = preferenceStore.load()
         val stored = preferenceStore.property(PREF_KEY_PINNED_SOURCES) ?: ""
         val ids = stored.split(",")
             .mapNotNull { it.trim().toLongOrNull() }
             .toSet()
-        _state.update { it.copy(pinnedSourceIds = ids) }
+        _state.update {
+            it.copy(
+                pinnedSourceIds = ids,
+                hiddenSourceIds = prefs.hiddenSourceIds,
+                showNsfw = prefs.showNsfwSources,
+                globalSearchOnlyPinned = prefs.globalSearchOnlyPinned,
+            )
+        }
+    }
+
+    fun reloadPreferences() {
+        val prefs = preferenceStore.load()
+        val stored = preferenceStore.property(PREF_KEY_PINNED_SOURCES) ?: ""
+        val ids = stored.split(",")
+            .mapNotNull { it.trim().toLongOrNull() }
+            .toSet()
+        _state.update {
+            it.copy(
+                pinnedSourceIds = ids,
+                hiddenSourceIds = prefs.hiddenSourceIds,
+                showNsfw = prefs.showNsfwSources,
+                globalSearchOnlyPinned = prefs.globalSearchOnlyPinned,
+            )
+        }
+    }
+
+    fun hideSource(sourceId: Long) {
+        val updated = _state.value.hiddenSourceIds + sourceId
+        preferenceStore.updatePreferences { it.copy(hiddenSourceIds = updated) }
+        _state.update { it.copy(hiddenSourceIds = updated) }
+        val sourceName = _state.value.sources.find { it.id == sourceId }?.name ?: "Source"
+        scope.launch {
+            _snackbarEvents.emit("HIDDEN:$sourceId:$sourceName")
+        }
+    }
+
+    fun unhideSource(sourceId: Long) {
+        val updated = _state.value.hiddenSourceIds - sourceId
+        preferenceStore.updatePreferences { it.copy(hiddenSourceIds = updated) }
+        _state.update { it.copy(hiddenSourceIds = updated) }
+    }
+
+    fun resetHiddenSources() {
+        preferenceStore.updatePreferences { it.copy(hiddenSourceIds = emptySet()) }
+        _state.update { it.copy(hiddenSourceIds = emptySet()) }
+    }
+
+    fun setShowNsfw(show: Boolean) {
+        preferenceStore.updatePreferences { it.copy(showNsfwSources = show) }
+        _state.update { it.copy(showNsfw = show) }
+    }
+
+    fun setGlobalSearchOnlyPinned(onlyPinned: Boolean) {
+        preferenceStore.updatePreferences { it.copy(globalSearchOnlyPinned = onlyPinned) }
+        _state.update { it.copy(globalSearchOnlyPinned = onlyPinned) }
+        if (_state.value.isGlobalSearchOpen && _state.value.globalSearchQuery.isNotBlank()) {
+            performGlobalSearch()
+        }
+    }
+
+    fun setSourceLanguageFilter(lang: String?) {
+        _state.update { it.copy(sourceLanguageFilter = lang) }
     }
 
     private fun savePinnedSources(ids: Set<Long>) {
@@ -792,7 +854,21 @@ class BrowsePresenter(
         if (query.isBlank()) return
         val generation = globalSearchGeneration.incrementAndGet()
         globalSearchJob?.cancel()
-        val sources = _state.value.sources
+
+        val showNsfw = _state.value.showNsfw
+        val hiddenIds = _state.value.hiddenSourceIds
+        val onlyPinned = _state.value.globalSearchOnlyPinned
+        val pinnedIds = _state.value.pinnedSourceIds
+        val installed = _state.value.installedExtensions
+        val available = _state.value.availableExtensions
+
+        val sources = _state.value.sources.filter { source ->
+            if (hiddenIds.contains(source.id)) return@filter false
+            if (onlyPinned && !pinnedIds.contains(source.id)) return@filter false
+            if (!showNsfw && isSourceNsfw(source.id, installed, available)) return@filter false
+            true
+        }
+
         _state.update {
             it.copy(
                 isGlobalSearching = sources.isNotEmpty(),

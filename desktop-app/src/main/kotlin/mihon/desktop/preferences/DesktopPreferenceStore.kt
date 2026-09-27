@@ -81,6 +81,10 @@ data class DesktopPreferences(
     val syncServerDeviceName: String = "",
     val syncServerSelectedIp: String = "",
     val runInBackgroundOnClose: Boolean = false,
+    val onboardingCompleted: Boolean = false,
+    val showNsfwSources: Boolean = false,
+    val hiddenSourceIds: Set<Long> = emptySet(),
+    val globalSearchOnlyPinned: Boolean = false,
 )
 
 class DesktopPreferenceStore(private val file: Path) {
@@ -235,6 +239,11 @@ class DesktopPreferenceStore(private val file: Path) {
             syncServerSelectedIp = properties.getProperty("sync.server_selected_ip") ?: "",
             runInBackgroundOnClose = properties.getProperty("background.run_in_background_on_close")
                 ?.toBooleanStrictOrNull() ?: false,
+            onboardingCompleted = properties.getProperty("onboarding.completed")?.toBooleanStrictOrNull() ?: false,
+            showNsfwSources = properties.firstBoolean("browse.show_nsfw", "show_nsfw") ?: false,
+            hiddenSourceIds = properties.firstLongSet("browse.hidden_sources", "hidden_sources"),
+            globalSearchOnlyPinned =
+            properties.firstBoolean("browse.global_search_only_pinned", "global_search_only_pinned") ?: false,
         )
         cachedPreferences = loadedPreferences
         return loadedPreferences
@@ -334,6 +343,10 @@ class DesktopPreferenceStore(private val file: Path) {
         properties.setProperty("sync.server_quick_pair", preferences.syncServerQuickPair.toString())
         properties.setProperty("sync.server_device_name", preferences.syncServerDeviceName)
         properties.setProperty("sync.server_selected_ip", preferences.syncServerSelectedIp)
+        properties.setProperty("onboarding.completed", preferences.onboardingCompleted.toString())
+        properties.setProperty("browse.show_nsfw", preferences.showNsfwSources.toString())
+        properties.setProperty("browse.hidden_sources", preferences.hiddenSourceIds.encodeLongSet())
+        properties.setProperty("browse.global_search_only_pinned", preferences.globalSearchOnlyPinned.toString())
         properties.remove("window.x")
         properties.remove("window.y")
         properties.remove("window.width")

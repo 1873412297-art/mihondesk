@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.FolderOpen
@@ -28,6 +29,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -110,7 +112,26 @@ data class BrowseUiState(
     val globalSearchQuery: String = "",
     val isGlobalSearching: Boolean = false,
     val globalSearchResults: List<GlobalSearchSourceResult> = emptyList(),
+    val globalSearchOnlyPinned: Boolean = false,
+    // Phase 2d: Filtering & Preferences
+    val hiddenSourceIds: Set<Long> = emptySet(),
+    val showNsfw: Boolean = false,
+    val sourceLanguageFilter: String? = null,
 )
+
+fun isSourceNsfw(
+    sourceId: Long,
+    installedExtensions: List<InstalledExtension>,
+    availableExtensions: List<ExtensionStoreItem> = emptyList(),
+): Boolean {
+    if (installedExtensions.any { ext -> ext.manifest.isNsfw && ext.manifest.sources.any { it.id == sourceId } }) {
+        return true
+    }
+    if (availableExtensions.any { item -> item.isNsfw && item.sources.any { it.id == sourceId } }) {
+        return true
+    }
+    return false
+}
 
 fun chooseMextFile(title: String = "Select Extension Package (.mext, .apk, .jar)"): File? {
     val dialog = java.awt.FileDialog(
@@ -151,7 +172,12 @@ fun BrowseScreen(
     onCloseGlobalSearch: () -> Unit = {},
     onGlobalSearchQueryChange: (String) -> Unit = {},
     onPerformGlobalSearch: () -> Unit = {},
+    onToggleGlobalSearchOnlyPinned: (Boolean) -> Unit = {},
     onGlobalMangaSelected: (SourceDescriptor, SManga) -> Unit = { _, _ -> },
+    // Phase 2d: Source hide & language filter handlers
+    onHideSource: (Long) -> Unit = {},
+    onUnhideSource: (Long) -> Unit = {},
+    onSourceLanguageFilterChange: (String?) -> Unit = {},
     // Migration handlers
     onSelectMigrationSource: (SourceWithMangaCount?) -> Unit = {},
     onSearchTargetMigrationSource: suspend (sourceId: Long, query: String) -> List<SManga> = { _, _ -> emptyList() },
@@ -194,6 +220,8 @@ fun BrowseScreen(
             isSearching = state.isGlobalSearching,
             sourceResults = state.globalSearchResults,
             hasSources = state.sources.isNotEmpty(),
+            onlyPinned = state.globalSearchOnlyPinned,
+            onToggleOnlyPinned = onToggleGlobalSearchOnlyPinned,
             onMangaSelected = onGlobalMangaSelected,
             onViewSource = { source ->
                 onCloseGlobalSearch()
@@ -393,10 +421,16 @@ fun BrowseScreen(
                 BrowseTab.Sources -> SourcesListView(
                     sources = state.sources,
                     pinnedIds = state.pinnedSourceIds,
+                    hiddenIds = state.hiddenSourceIds,
                     searchQuery = state.searchQuery,
+                    selectedLanguage = state.sourceLanguageFilter,
                     installedExtensions = state.installedExtensions,
+                    availableExtensions = state.availableExtensions,
+                    showNsfw = state.showNsfw,
                     onSourceSelected = onSourceSelected,
                     onTogglePin = onTogglePinSource,
+                    onHideSource = onHideSource,
+                    onLanguageSelected = onSourceLanguageFilterChange,
                     onExtensionSelected = onExtensionSelected,
                 )
                 BrowseTab.Extensions -> ExtensionsListView(
@@ -631,20 +665,54 @@ fun BrowseScreen(
 private fun SourcesListView(
     sources: List<SourceDescriptor>,
     pinnedIds: Set<Long>,
+    hiddenIds: Set<Long> = emptySet(),
     searchQuery: String,
+    selectedLanguage: String? = null,
     installedExtensions: List<InstalledExtension> = emptyList(),
+    availableExtensions: List<ExtensionStoreItem> = emptyList(),
+    showNsfw: Boolean = false,
     onSourceSelected: (SourceDescriptor, SourceListingMode) -> Unit,
     onTogglePin: (Long) -> Unit,
+    onHideSource: (Long) -> Unit = {},
+    onLanguageSelected: (String?) -> Unit = {},
     onExtensionSelected: (InstalledExtension) -> Unit = {},
 ) {
     val strings = LocalStrings.current
-    val filteredSources = remember(sources, searchQuery) {
-        sources.filter { source ->
-            searchQuery.isBlank() ||
-                source.name.contains(searchQuery, ignoreCase = true) ||
-                source.lang.contains(searchQuery, ignoreCase = true)
-        }
+
+    val availableLanguages = remember(sources, hiddenIds) {
+        sources.filterNot { hiddenIds.contains(it.id) }
+            .map { it.lang.lowercase() }
+            .distinct()
+            .sorted()
     }
+
+    val filteredSources =
+        remember(
+            sources,
+            searchQuery,
+            hiddenIds,
+            selectedLanguage,
+            showNsfw,
+            installedExtensions,
+            availableExtensions,
+        ) {
+            sources.filter { source ->
+                if (hiddenIds.contains(source.id)) return@filter false
+                if (!showNsfw && isSourceNsfw(source.id, installedExtensions, availableExtensions)) return@filter false
+                if (selectedLanguage != null &&
+                    !source.lang.equals(selectedLanguage, ignoreCase = true)
+                ) {
+                    return@filter false
+                }
+                if (searchQuery.isNotBlank() &&
+                    !source.name.contains(searchQuery, ignoreCase = true) &&
+                    !source.lang.contains(searchQuery, ignoreCase = true)
+                ) {
+                    return@filter false
+                }
+                true
+            }
+        }
 
     val pinnedSources = remember(filteredSources, pinnedIds) {
         filteredSources.filter { pinnedIds.contains(it.id) }
@@ -656,60 +724,98 @@ private fun SourcesListView(
         otherSources.groupBy { it.lang.uppercase() }
     }
 
-    if (filteredSources.isEmpty()) {
-        Box(modifier = Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
-            Text(
-                text = strings.browseNoMangaFound,
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.outline,
-            )
-        }
-    } else {
-        LazyColumn(modifier = Modifier.fillMaxSize().testTag("sources-list")) {
-            // Pinned Section
-            if (pinnedSources.isNotEmpty()) {
+    Column(modifier = Modifier.fillMaxSize()) {
+        if (availableLanguages.size > 1) {
+            LazyRow(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp)
+                    .testTag("source-lang-filter"),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 item {
-                    Text(
-                        text = strings.browsePin.replace("☆", "").trim(),
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(vertical = 8.dp),
+                    FilterChip(
+                        selected = selectedLanguage == null,
+                        onClick = { onLanguageSelected(null) },
+                        label = { Text(strings.browseFilterLanguageAll) },
+                        modifier = Modifier.testTag("source-lang-chip-all"),
                     )
                 }
-                items(pinnedSources, key = { "pinned_${it.id}" }) { source ->
-                    SourceListItem(
-                        source = source,
-                        isPinned = true,
-                        installedExtensions = installedExtensions,
-                        onSourceSelected = onSourceSelected,
-                        onTogglePin = onTogglePin,
-                        onExtensionSelected = onExtensionSelected,
+                items(availableLanguages, key = { it }) { lang ->
+                    FilterChip(
+                        selected = selectedLanguage.equals(lang, ignoreCase = true),
+                        onClick = {
+                            if (selectedLanguage.equals(lang, ignoreCase = true)) {
+                                onLanguageSelected(null)
+                            } else {
+                                onLanguageSelected(lang)
+                            }
+                        },
+                        label = { Text(strings.browseSourceLanguage(lang)) },
+                        modifier = Modifier.testTag("source-lang-chip-$lang"),
                     )
-                    HorizontalDivider()
                 }
             }
+        }
 
-            // All/Other Sources Grouped by Lang
-            grouped.forEach { (lang, langSources) ->
-                item {
-                    Text(
-                        text = strings.browseSourceLanguage(lang),
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
-                    )
+        if (filteredSources.isEmpty()) {
+            Box(modifier = Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
+                Text(
+                    text = strings.browseNoMangaFound,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.outline,
+                )
+            }
+        } else {
+            LazyColumn(modifier = Modifier.fillMaxSize().testTag("sources-list")) {
+                // Pinned Section
+                if (pinnedSources.isNotEmpty()) {
+                    item {
+                        Text(
+                            text = strings.browsePin.replace("☆", "").trim(),
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(vertical = 8.dp),
+                        )
+                    }
+                    items(pinnedSources, key = { "pinned_${it.id}" }) { source ->
+                        SourceListItem(
+                            source = source,
+                            isPinned = true,
+                            installedExtensions = installedExtensions,
+                            onSourceSelected = onSourceSelected,
+                            onTogglePin = onTogglePin,
+                            onHide = { onHideSource(source.id) },
+                            onExtensionSelected = onExtensionSelected,
+                        )
+                        HorizontalDivider()
+                    }
                 }
-                items(langSources, key = { it.id }) { source ->
-                    SourceListItem(
-                        source = source,
-                        isPinned = false,
-                        installedExtensions = installedExtensions,
-                        onSourceSelected = onSourceSelected,
-                        onTogglePin = onTogglePin,
-                        onExtensionSelected = onExtensionSelected,
-                    )
-                    HorizontalDivider()
+
+                // All/Other Sources Grouped by Lang
+                grouped.forEach { (lang, langSources) ->
+                    item {
+                        Text(
+                            text = strings.browseSourceLanguage(lang),
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
+                        )
+                    }
+                    items(langSources, key = { it.id }) { source ->
+                        SourceListItem(
+                            source = source,
+                            isPinned = false,
+                            installedExtensions = installedExtensions,
+                            onSourceSelected = onSourceSelected,
+                            onTogglePin = onTogglePin,
+                            onHide = { onHideSource(source.id) },
+                            onExtensionSelected = onExtensionSelected,
+                        )
+                        HorizontalDivider()
+                    }
                 }
             }
         }
@@ -723,6 +829,7 @@ private fun SourceListItem(
     installedExtensions: List<InstalledExtension> = emptyList(),
     onSourceSelected: (SourceDescriptor, SourceListingMode) -> Unit,
     onTogglePin: (Long) -> Unit,
+    onHide: () -> Unit = {},
     onExtensionSelected: (InstalledExtension) -> Unit = {},
 ) {
     val strings = LocalStrings.current
@@ -817,6 +924,14 @@ private fun SourceListItem(
                             onPinClick()
                         },
                     )
+                    DropdownMenuItem(
+                        text = { Text(strings.browseHideSource) },
+                        modifier = Modifier.testTag("source-context-hide-${source.id}"),
+                        onClick = {
+                            showContextMenu = false
+                            onHide()
+                        },
+                    )
                     if (associatedExtension != null) {
                         DropdownMenuItem(
                             text = { Text(strings.text(UiText.ContextExtensionSettings)) },
@@ -883,17 +998,26 @@ private fun ExtensionsListView(
     onRevokeExtension: (InstalledExtension) -> Unit,
 ) {
     val strings = LocalStrings.current
-    val installedPkgMap = state.installedExtensions.associateBy { it.pkg }
-    val filteredAvailable = state.availableExtensions.filter { item ->
-        state.searchQuery.isBlank() ||
-            item.name.contains(state.searchQuery, ignoreCase = true) ||
-            item.pkg.contains(state.searchQuery, ignoreCase = true) ||
-            item.lang.contains(state.searchQuery, ignoreCase = true)
+    val effectivePendingUpdates = remember(pendingUpdates, state.showNsfw) {
+        if (state.showNsfw) pendingUpdates else pendingUpdates.filter { !it.isNsfw }
+    }
+    val effectiveInstalled = remember(state.installedExtensions, state.showNsfw) {
+        if (state.showNsfw) state.installedExtensions else state.installedExtensions.filter { !it.manifest.isNsfw }
+    }
+    val installedPkgMap = effectiveInstalled.associateBy { it.pkg }
+    val filteredAvailable = remember(state.availableExtensions, state.searchQuery, state.showNsfw) {
+        state.availableExtensions.filter { item ->
+            if (!state.showNsfw && item.isNsfw) return@filter false
+            state.searchQuery.isBlank() ||
+                item.name.contains(state.searchQuery, ignoreCase = true) ||
+                item.pkg.contains(state.searchQuery, ignoreCase = true) ||
+                item.lang.contains(state.searchQuery, ignoreCase = true)
+        }
     }
 
     LazyColumn(modifier = Modifier.fillMaxSize().testTag("extensions-list")) {
         // 1. Pending Updates Section
-        if (pendingUpdates.isNotEmpty()) {
+        if (effectivePendingUpdates.isNotEmpty()) {
             item {
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
@@ -901,7 +1025,7 @@ private fun ExtensionsListView(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        text = "${strings.browseUpdate} (${pendingUpdates.size})",
+                        text = "${strings.browseUpdate} (${effectivePendingUpdates.size})",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary,
@@ -915,7 +1039,7 @@ private fun ExtensionsListView(
                     }
                 }
             }
-            items(pendingUpdates, key = { "update_${it.pkg}" }) { item ->
+            items(effectivePendingUpdates, key = { "update_${it.pkg}" }) { item ->
                 val installed = installedPkgMap[item.pkg]
                 ExtensionItemRow(
                     item = item,
@@ -936,16 +1060,16 @@ private fun ExtensionsListView(
         }
 
         // 2. Installed Extensions Section
-        if (state.installedExtensions.isNotEmpty()) {
+        if (effectiveInstalled.isNotEmpty()) {
             item {
                 Text(
-                    text = "${strings.browseInstalledBadge} (${state.installedExtensions.size})",
+                    text = "${strings.browseInstalledBadge} (${effectiveInstalled.size})",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(vertical = 8.dp),
                 )
             }
-            items(state.installedExtensions, key = { "installed_${it.pkg}" }) { installed ->
+            items(effectiveInstalled, key = { "installed_${it.pkg}" }) { installed ->
                 val availableMatch = state.availableExtensions.find { it.pkg == installed.pkg }
                 val item = availableMatch ?: ExtensionStoreItem(
                     pkg = installed.pkg,

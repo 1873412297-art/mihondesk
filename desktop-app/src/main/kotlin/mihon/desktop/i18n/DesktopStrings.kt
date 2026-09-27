@@ -737,6 +737,51 @@ interface DesktopStrings {
     fun importReportCategory(category: String): String
     val mangaDetailBackToLibrary: String
 
+    // Phase 2d: Browse & Search Options
+    val browseGlobalSearchOnlyPinned: String
+    val browseHideSource: String
+    fun browseSourceHidden(name: String): String
+    val settingsResetHiddenSources: String
+    val settingsResetHiddenSourcesDesc: String
+    val settingsResetHiddenSourcesSuccess: String
+    val browseFilterLanguageAll: String
+    val settingsShowNsfw: String
+    val settingsShowNsfwDesc: String
+
+    // Phase 2d: Backup Granularity
+    val backupOptionsTitleExport: String
+    val backupOptionsTitleRestore: String
+    val backupOptionsSubtitle: String
+    val backupOptionChapterState: String
+    val backupOptionCategories: String
+    val backupOptionTracking: String
+    val backupOptionHistory: String
+    val backupOptionReadProgress: String
+    val backupOptionSettings: String
+    val backupOptionsConfirmExport: String
+    val backupOptionsConfirmRestore: String
+
+    // Phase 2d: Onboarding
+    val onboardingWelcomeTitle: String
+    val onboardingWelcomeDesc: String
+    val onboardingStepLanguageAndTheme: String
+    val onboardingStepRepo: String
+    val onboardingStepRepoDesc: String
+    val onboardingStepBackup: String
+    val onboardingStepBackupDesc: String
+    val onboardingRepoUrlPlaceholder: String
+    val onboardingRepoAdd: String
+    val onboardingBackupPathLabel: String
+    val onboardingBackupPathBrowse: String
+    val onboardingBackupIntervalLabel: String
+    val onboardingBtnNext: String
+    val onboardingBtnPrev: String
+    val onboardingBtnSkip: String
+    val onboardingBtnFinish: String
+    val onboardingGoToBrowse: String
+    val settingsReshowOnboarding: String
+    val settingsReshowOnboardingDesc: String
+
     companion object {
         fun resolve(language: AppLanguage, defaultLocale: Locale = Locale.getDefault()): DesktopStrings {
             return when (language) {
@@ -1570,6 +1615,53 @@ object EnglishStrings : DesktopStrings {
     override fun importReportSkipCategories(categories: String) = "Skip categories: $categories"
     override fun importReportCategory(category: String) = "Category: $category"
     override val mangaDetailBackToLibrary = "Back to Library"
+
+    // Phase 2d: Browse & Search Options
+    override val browseGlobalSearchOnlyPinned = "Only pinned sources"
+    override val browseHideSource = "Hide"
+    override fun browseSourceHidden(name: String) = "Hidden: $name"
+    override val settingsResetHiddenSources = "Reset hidden sources"
+    override val settingsResetHiddenSourcesDesc = "Unhide all manually hidden sources"
+    override val settingsResetHiddenSourcesSuccess = "All hidden sources restored"
+    override val browseFilterLanguageAll = "All"
+    override val settingsShowNsfw = "Show NSFW sources and extensions"
+    override val settingsShowNsfwDesc = "Allow viewing and searching adult / 18+ content"
+
+    // Phase 2d: Backup Granularity
+    override val backupOptionsTitleExport = "Export Backup Options"
+    override val backupOptionsTitleRestore = "Restore Backup Options"
+    override val backupOptionsSubtitle = "Select data components to include"
+    override val backupOptionChapterState = "Chapter state (read & bookmark)"
+    override val backupOptionCategories = "Categories"
+    override val backupOptionTracking = "Tracking"
+    override val backupOptionHistory = "History"
+    override val backupOptionReadProgress = "Read progress (page number)"
+    override val backupOptionSettings = "Settings & preferences"
+    override val backupOptionsConfirmExport = "Choose Location & Export"
+    override val backupOptionsConfirmRestore = "Restore"
+
+    // Phase 2d: Onboarding
+    override val onboardingWelcomeTitle = "Welcome to Mihon Desktop"
+    override val onboardingWelcomeDesc = "Let's quickly set up your preferences to get started."
+    override val onboardingStepLanguageAndTheme = "Language & Theme"
+    override val onboardingStepRepo = "Extension Repositories"
+    override val onboardingStepRepoDesc =
+        "Add third-party repositories to discover manga extensions, or skip to view installed sources."
+    override val onboardingStepBackup = "Backup & Storage"
+    override val onboardingStepBackupDesc =
+        "Configure backup location and automated backup frequency to keep your data safe."
+    override val onboardingRepoUrlPlaceholder = "https://example.com/index.min.json"
+    override val onboardingRepoAdd = "Add Repository"
+    override val onboardingBackupPathLabel = "Backup storage directory"
+    override val onboardingBackupPathBrowse = "Browse…"
+    override val onboardingBackupIntervalLabel = "Auto backup interval"
+    override val onboardingBtnNext = "Next"
+    override val onboardingBtnPrev = "Back"
+    override val onboardingBtnSkip = "Skip"
+    override val onboardingBtnFinish = "Get Started"
+    override val onboardingGoToBrowse = "Go to Browse"
+    override val settingsReshowOnboarding = "Show setup guide again"
+    override val settingsReshowOnboardingDesc = "Re-run the welcome setup guide"
 }
 
 object SimplifiedChineseStrings : DesktopStrings {
@@ -2395,6 +2487,51 @@ object SimplifiedChineseStrings : DesktopStrings {
     override fun importReportSkipCategories(categories: String) = "跳过分类：$categories"
     override fun importReportCategory(category: String) = "分类：$category"
     override val mangaDetailBackToLibrary = "返回书架"
+
+    // Phase 2d: Browse & Search Options
+    override val browseGlobalSearchOnlyPinned = "仅固定图源"
+    override val browseHideSource = "隐藏"
+    override fun browseSourceHidden(name: String) = "已隐藏：$name"
+    override val settingsResetHiddenSources = "恢复已隐藏图源"
+    override val settingsResetHiddenSourcesDesc = "取消隐藏所有已手动隐藏的图源"
+    override val settingsResetHiddenSourcesSuccess = "已恢复所有已隐藏图源"
+    override val browseFilterLanguageAll = "全部"
+    override val settingsShowNsfw = "显示 NSFW 图源与扩展"
+    override val settingsShowNsfwDesc = "允许浏览和搜索成人 / 18+ 内容"
+
+    // Phase 2d: Backup Granularity
+    override val backupOptionsTitleExport = "备份导出选项"
+    override val backupOptionsTitleRestore = "备份恢复选项"
+    override val backupOptionsSubtitle = "选择要包含的数据项"
+    override val backupOptionChapterState = "章节状态（已读与书签）"
+    override val backupOptionCategories = "分类"
+    override val backupOptionTracking = "跟踪"
+    override val backupOptionHistory = "历史"
+    override val backupOptionReadProgress = "阅读进度（页码）"
+    override val backupOptionSettings = "设置与偏好"
+    override val backupOptionsConfirmExport = "选择位置并导出"
+    override val backupOptionsConfirmRestore = "恢复"
+
+    // Phase 2d: Onboarding
+    override val onboardingWelcomeTitle = "欢迎使用 Mihon 桌面端"
+    override val onboardingWelcomeDesc = "让我们先完成几项基本设置，开启你的阅读之旅。"
+    override val onboardingStepLanguageAndTheme = "语言与外观"
+    override val onboardingStepRepo = "扩展仓库"
+    override val onboardingStepRepoDesc = "添加第三方仓库以发现漫画扩展，或跳过以直接查看已有图源。"
+    override val onboardingStepBackup = "备份与存储"
+    override val onboardingStepBackupDesc = "配置文件备份位置与自动备份周期，保护你的书架数据安全。"
+    override val onboardingRepoUrlPlaceholder = "https://example.com/index.min.json"
+    override val onboardingRepoAdd = "添加仓库"
+    override val onboardingBackupPathLabel = "备份存储目录"
+    override val onboardingBackupPathBrowse = "浏览…"
+    override val onboardingBackupIntervalLabel = "自动备份周期"
+    override val onboardingBtnNext = "下一步"
+    override val onboardingBtnPrev = "上一步"
+    override val onboardingBtnSkip = "跳过"
+    override val onboardingBtnFinish = "开始使用"
+    override val onboardingGoToBrowse = "前往浏览页"
+    override val settingsReshowOnboarding = "重新显示首次运行引导"
+    override val settingsReshowOnboardingDesc = "重新打开初始设置向导"
 }
 
 object TraditionalChineseStrings : DesktopStrings {
@@ -3220,6 +3357,51 @@ object TraditionalChineseStrings : DesktopStrings {
     override fun importReportSkipCategories(categories: String) = "略過分類：$categories"
     override fun importReportCategory(category: String) = "分類：$category"
     override val mangaDetailBackToLibrary = "返回書架"
+
+    // Phase 2d: Browse & Search Options
+    override val browseGlobalSearchOnlyPinned = "僅置頂圖源"
+    override val browseHideSource = "隱藏"
+    override fun browseSourceHidden(name: String) = "已隱藏：$name"
+    override val settingsResetHiddenSources = "恢復已隱藏圖源"
+    override val settingsResetHiddenSourcesDesc = "取消隱藏所有已手動隱藏的圖源"
+    override val settingsResetHiddenSourcesSuccess = "已恢復所有已隱藏圖源"
+    override val browseFilterLanguageAll = "全部"
+    override val settingsShowNsfw = "顯示 NSFW 圖源與擴充功能"
+    override val settingsShowNsfwDesc = "允許瀏覽和搜尋成人 / 18+ 內容"
+
+    // Phase 2d: Backup Granularity
+    override val backupOptionsTitleExport = "備份匯出選項"
+    override val backupOptionsTitleRestore = "備份還原選項"
+    override val backupOptionsSubtitle = "選擇要包含的資料項"
+    override val backupOptionChapterState = "章節狀態（已讀與書籤）"
+    override val backupOptionCategories = "分類"
+    override val backupOptionTracking = "追蹤"
+    override val backupOptionHistory = "歷史"
+    override val backupOptionReadProgress = "閱讀進度（頁碼）"
+    override val backupOptionSettings = "設定與偏好"
+    override val backupOptionsConfirmExport = "選擇位置並匯出"
+    override val backupOptionsConfirmRestore = "還原"
+
+    // Phase 2d: Onboarding
+    override val onboardingWelcomeTitle = "歡迎使用 Mihon 桌面端"
+    override val onboardingWelcomeDesc = "讓我們先完成幾項基本設定，開啟你的閱讀之旅。"
+    override val onboardingStepLanguageAndTheme = "語言與外觀"
+    override val onboardingStepRepo = "擴充功能儲存庫"
+    override val onboardingStepRepoDesc = "添加第三方儲存庫以探索漫畫擴充，或跳過以直接查看已有圖源。"
+    override val onboardingStepBackup = "備份與儲存"
+    override val onboardingStepBackupDesc = "設定檔案備份位置與自動備份週期，保護你的書架資料安全。"
+    override val onboardingRepoUrlPlaceholder = "https://example.com/index.min.json"
+    override val onboardingRepoAdd = "添加儲存庫"
+    override val onboardingBackupPathLabel = "備份儲存目錄"
+    override val onboardingBackupPathBrowse = "瀏覽…"
+    override val onboardingBackupIntervalLabel = "自動備份週期"
+    override val onboardingBtnNext = "下一步"
+    override val onboardingBtnPrev = "上一步"
+    override val onboardingBtnSkip = "略過"
+    override val onboardingBtnFinish = "開始使用"
+    override val onboardingGoToBrowse = "前往瀏覽頁"
+    override val settingsReshowOnboarding = "重新顯示首次執行引導"
+    override val settingsReshowOnboardingDesc = "重新開啟初始設定精靈"
 }
 
 val LocalStrings = staticCompositionLocalOf<DesktopStrings> { EnglishStrings }

@@ -179,6 +179,7 @@ data class DesktopShellActions(
     val onRefreshStats: () -> Unit = {},
     val onToggleIncognito: () -> Unit = {},
     val onExportBackup: () -> Unit = {},
+    val onOpenOnboarding: () -> Unit = {},
     val onPreferencesChanged: ((DesktopPreferences) -> Unit)? = null,
     val onLockNow: (() -> Unit)? = null,
 )

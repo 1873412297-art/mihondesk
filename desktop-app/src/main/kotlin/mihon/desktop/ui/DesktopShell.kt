@@ -309,6 +309,7 @@ fun DesktopShell(
                                     onOpenCookieManager = { isCookieManagerOpen = true },
                                     onImportBackup = actions.onImportBackup,
                                     onExportBackup = actions.onExportBackup,
+                                    onOpenOnboarding = actions.onOpenOnboarding,
                                     onPreferencesChanged = actions.onPreferencesChanged,
                                     downloadCacheCleaner = state.downloadCacheCleaner,
                                     downloadsDir = state.downloadsDir,
@@ -459,6 +460,7 @@ fun DesktopShell(
     syncServerManager: mihon.desktop.sync.DesktopSyncServerManager? = null,
     backgroundScheduler: mihon.desktop.platform.WindowsBackgroundScheduler? = null,
     onExportBackup: () -> Unit = {},
+    onOpenOnboarding: () -> Unit = {},
     onPreferencesChanged: ((mihon.desktop.preferences.DesktopPreferences) -> Unit)? = null,
     // Phase 14: Stats & Incognito
     statsData: mihon.desktop.stats.DesktopStatsData = mihon.desktop.stats.DesktopStatsData(),
@@ -734,6 +736,7 @@ fun DesktopShell(
             onRefreshStats = onRefreshStats,
             onToggleIncognito = onToggleIncognito,
             onExportBackup = onExportBackup,
+            onOpenOnboarding = onOpenOnboarding,
             onPreferencesChanged = onPreferencesChanged,
             onLockNow = onLockNow,
         )
