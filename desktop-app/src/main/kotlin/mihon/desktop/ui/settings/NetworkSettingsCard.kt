@@ -22,11 +22,12 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import mihon.desktop.extension.DesktopNetworkSettingsStore
 import mihon.desktop.extension.DesktopProxyMode
-import mihon.desktop.i18n.recoveryText
+import mihon.desktop.i18n.LocalStrings
 import mihon.desktop.preferences.DesktopPreferenceStore
 
 @Composable
 fun NetworkSettingsCard(preferences: DesktopPreferenceStore) {
+    val strings = LocalStrings.current
     val store = remember(preferences) { DesktopNetworkSettingsStore(preferences) }
     var policy by remember(store) { mutableStateOf(store.load()) }
     var port by remember { mutableStateOf(policy.proxyPort.toString()) }
@@ -40,15 +41,11 @@ fun NetworkSettingsCard(preferences: DesktopPreferenceStore) {
     ) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(
-                recoveryText("Source and tracker network", "图源与跟踪器网络", "圖源與追蹤器網路"),
+                strings.networkSettingsTitle,
                 style = MaterialTheme.typography.titleMedium,
             )
             Text(
-                recoveryText(
-                    "Changes apply to new requests. Proxy settings also apply to tracker sync (AniList, Bangumi, etc.).",
-                    "保存后对新请求生效。代理设置同时作用于跟踪器（AniList、Bangumi 等）同步流量。",
-                    "儲存後對新請求生效。代理設定同時作用於追蹤器（AniList、Bangumi 等）同步流量。",
-                ),
+                strings.networkSettingsDescription,
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 DesktopProxyMode.entries.forEach { mode ->
@@ -61,8 +58,8 @@ fun NetworkSettingsCard(preferences: DesktopPreferenceStore) {
                         label = {
                             Text(
                                 when (mode) {
-                                    DesktopProxyMode.SYSTEM -> recoveryText("System", "系统代理", "系統代理")
-                                    DesktopProxyMode.DIRECT -> recoveryText("Direct", "直连", "直接連線")
+                                    DesktopProxyMode.SYSTEM -> strings.networkSettingsProxySystem
+                                    DesktopProxyMode.DIRECT -> strings.networkSettingsProxyDirect
                                     DesktopProxyMode.HTTP -> "HTTP"
                                     DesktopProxyMode.SOCKS -> "SOCKS"
                                 },
@@ -78,7 +75,7 @@ fun NetworkSettingsCard(preferences: DesktopPreferenceStore) {
                         policy = policy.copy(proxyHost = it)
                         saved = false
                     },
-                    label = { Text(recoveryText("Proxy hostname", "代理主机", "代理主機")) },
+                    label = { Text(strings.networkSettingsProxyHost) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                 )
@@ -88,7 +85,7 @@ fun NetworkSettingsCard(preferences: DesktopPreferenceStore) {
                         port = it
                         saved = false
                     },
-                    label = { Text(recoveryText("Port", "端口", "連接埠")) },
+                    label = { Text(strings.networkSettingsPort) },
                     singleLine = true,
                 )
             }
@@ -101,7 +98,7 @@ fun NetworkSettingsCard(preferences: DesktopPreferenceStore) {
                     },
                     modifier = Modifier.weight(1f),
                     singleLine = true,
-                    label = { Text(recoveryText("Connect timeout (s)", "连接超时（秒）", "連線逾時（秒）")) },
+                    label = { Text(strings.networkSettingsConnectTimeout) },
                 )
                 OutlinedTextField(
                     value = readTimeout,
@@ -111,7 +108,7 @@ fun NetworkSettingsCard(preferences: DesktopPreferenceStore) {
                     },
                     modifier = Modifier.weight(1f),
                     singleLine = true,
-                    label = { Text(recoveryText("Read timeout (s)", "读取超时（秒）", "讀取逾時（秒）")) },
+                    label = { Text(strings.networkSettingsReadTimeout) },
                 )
             }
             OutlinedTextField(
@@ -125,7 +122,7 @@ fun NetworkSettingsCard(preferences: DesktopPreferenceStore) {
                 modifier = Modifier.fillMaxWidth(),
             )
             error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-            if (saved) Text(recoveryText("Saved", "已保存", "已儲存"))
+            if (saved) Text(strings.networkSettingsSaved)
             Button(onClick = {
                 error = null
                 try {
@@ -140,7 +137,7 @@ fun NetworkSettingsCard(preferences: DesktopPreferenceStore) {
                 } catch (failure: Exception) {
                     error = failure.message
                 }
-            }) { Text(recoveryText("Save network settings", "保存网络设置", "儲存網路設定")) }
+            }) { Text(strings.networkSettingsSave) }
         }
     }
 }

@@ -52,6 +52,7 @@ import androidx.compose.ui.unit.dp
 import mihon.desktop.history.DesktopHistoryGroup
 import mihon.desktop.i18n.LocalStrings
 import mihon.desktop.i18n.UiText
+import mihon.desktop.i18n.locale
 import mihon.desktop.i18n.text
 import mihon.desktop.library.model.HistoryWithDetails
 import mihon.desktop.ui.common.DesktopTooltipBox
@@ -63,6 +64,7 @@ import mihon.desktop.ui.common.trackTextInputFocus
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 
 @Composable
 fun HistoryScreen(
@@ -240,8 +242,6 @@ fun HistoryScreen(
     }
 }
 
-private val timeFormatter = DateTimeFormatter.ofPattern("HH:mm")
-
 @Composable
 private fun HistoryItemRow(
     item: HistoryWithDetails,
@@ -251,7 +251,10 @@ private fun HistoryItemRow(
 ) {
     val strings = LocalStrings.current
     var showContextMenu by remember { mutableStateOf(false) }
-    val timeStr = remember(item.lastRead) {
+    val timeFormatter = remember(strings) {
+        DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT).withLocale(strings.locale)
+    }
+    val timeStr = remember(item.lastRead, timeFormatter) {
         Instant.ofEpochMilli(item.lastRead).atZone(ZoneId.systemDefault()).format(timeFormatter)
     }
 
@@ -290,7 +293,7 @@ private fun HistoryItemRow(
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(
-                        text = "${item.chapterName} • Read at $timeStr",
+                        text = "${item.chapterName} • ${strings.text(UiText.HistoryReadAt, timeStr)}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,

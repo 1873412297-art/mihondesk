@@ -77,7 +77,7 @@ fun UpdatesScreen(
     modifier: Modifier = Modifier,
     runState: mihon.desktop.library.update.LibraryUpdateRunState? = null,
     progress: mihon.desktop.library.update.LibraryUpdateProgress? = null,
-    sourceNameFor: (Long) -> String = { "Source #$it" },
+    sourceNameFor: ((Long) -> String)? = null,
     onCancelUpdate: () -> Unit = {},
     onMarkChapterRead: (mangaId: Long, chapterId: Long) -> Unit = { _, _ -> },
     onDownloadChapter: (mangaId: Long, chapterId: Long) -> Unit = { _, _ -> },
@@ -92,6 +92,10 @@ fun UpdatesScreen(
     val timeFormatter = remember(strings) {
         DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT).withLocale(strings.locale)
     }
+    val dateTimeFormatter = remember(strings) {
+        DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM, FormatStyle.SHORT).withLocale(strings.locale)
+    }
+    val resolveSourceName = sourceNameFor ?: { id -> strings.text(UiText.SourceNumberFallback, id) }
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -114,10 +118,9 @@ fun UpdatesScreen(
                     isUpdating -> strings.updatesChecking
                     lastResult != null -> {
                         if (lastResult.newChaptersFound > 0) {
-                            mihon.desktop.i18n.recoveryText(
-                                "${lastResult.mangaWithNewChapters} manga · ${lastResult.newChaptersFound} new chapters",
-                                "${lastResult.mangaWithNewChapters} 部漫画 · ${lastResult.newChaptersFound} 个新章节",
-                                "${lastResult.mangaWithNewChapters} 部漫畫 · ${lastResult.newChaptersFound} 個新章節",
+                            strings.updatesResultSummary(
+                                lastResult.mangaWithNewChapters,
+                                lastResult.newChaptersFound,
                             )
                         } else {
                             strings.updatesEmptySubtitle
@@ -146,7 +149,7 @@ fun UpdatesScreen(
                         modifier = Modifier.size(18.dp),
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text(mihon.desktop.i18n.recoveryText("Upcoming", "更新日历", "更新日曆"))
+                    Text(strings.updatesUpcomingButton)
                 }
 
                 Button(
@@ -160,7 +163,7 @@ fun UpdatesScreen(
                             strokeWidth = 2.dp,
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text(mihon.desktop.i18n.recoveryText("Cancel update", "取消更新"))
+                        Text(strings.updatesCancelUpdate)
                     } else {
                         Icon(
                             imageVector = Icons.Rounded.Refresh,
@@ -180,7 +183,7 @@ fun UpdatesScreen(
             Text(
                 listOfNotNull(
                     "${progress.currentIndex}/${progress.totalManga}",
-                    progress.currentSourceId?.let(sourceNameFor),
+                    progress.currentSourceId?.let(resolveSourceName),
                     progress.currentMangaTitle,
                 ).joinToString(" · "),
                 modifier = Modifier.padding(bottom = 12.dp).testTag("library-update-progress"),
@@ -191,22 +194,14 @@ fun UpdatesScreen(
             val notice = when (runState.status) {
                 mihon.desktop.library.update.LibraryUpdateStatus.FAILED -> {
                     val retry = runState.retryAfterEpochMillis.takeIf { it > System.currentTimeMillis() }
-                        ?.let { java.text.DateFormat.getDateTimeInstance().format(java.util.Date(it)) }
+                        ?.let { Instant.ofEpochMilli(it).atZone(zone).format(dateTimeFormatter) }
                     listOfNotNull(
-                        mihon.desktop.i18n.recoveryText(
-                            "Library update failed. You can check again.",
-                            "书库更新失败，可点击“立即检查”重试。",
-                            "書架更新失敗，可點擊「立即檢查」重試。",
-                        ),
-                        retry?.let { mihon.desktop.i18n.recoveryText("Retry after $it", "将在 $it 后重试", "將在 $it 後重試") },
+                        strings.updatesFailedNotice,
+                        retry?.let { strings.updatesRetryAfter(it) },
                     ).joinToString("\n")
                 }
                 mihon.desktop.library.update.LibraryUpdateStatus.CANCELLED ->
-                    mihon.desktop.i18n.recoveryText(
-                        "Update cancelled. Finished updates are saved.",
-                        "更新已取消，已完成的结果已保存。",
-                        "更新已取消，已完成的結果已儲存。",
-                    )
+                    strings.updatesCancelledNotice
                 else -> null
             }
             notice?.let {

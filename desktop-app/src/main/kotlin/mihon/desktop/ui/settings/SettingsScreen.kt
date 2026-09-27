@@ -74,7 +74,7 @@ import mihon.desktop.i18n.AppLanguage
 import mihon.desktop.i18n.DesktopStrings
 import mihon.desktop.i18n.LocalStrings
 import mihon.desktop.i18n.UiText
-import mihon.desktop.i18n.recoveryText
+import mihon.desktop.i18n.locale
 import mihon.desktop.i18n.text
 import mihon.desktop.preferences.DesktopPreferenceStore
 import mihon.desktop.preferences.DesktopPreferences
@@ -1841,7 +1841,7 @@ private fun TrackingSettingsPane(trackerManager: DesktopTrackerManager?) {
         if (publicTrackers.isNotEmpty()) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    text = recoveryText("Public services", "公网服务", "公網服務"),
+                    text = strings.settingsTrackingPublicServices,
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -1855,7 +1855,7 @@ private fun TrackingSettingsPane(trackerManager: DesktopTrackerManager?) {
             Spacer(modifier = Modifier.height(4.dp))
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    text = recoveryText("Self-hosted instances", "自托管实例", "自託管實例"),
+                    text = strings.settingsTrackingSelfHosted,
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -2026,11 +2026,19 @@ private fun BackupSettingsPane(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
+                    val timestampFormatter = remember(strings) {
+                        java.time.format.DateTimeFormatter
+                            .ofLocalizedDateTime(
+                                java.time.format.FormatStyle.MEDIUM,
+                                java.time.format.FormatStyle.SHORT,
+                            )
+                            .withLocale(strings.locale)
+                    }
                     val lastBackupStr = if (preferences.lastAutoBackupEpochMillis > 0L) {
                         java.time.LocalDateTime.ofInstant(
                             java.time.Instant.ofEpochMilli(preferences.lastAutoBackupEpochMillis),
                             java.time.ZoneId.systemDefault(),
-                        ).format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
+                        ).format(timestampFormatter)
                     } else {
                         strings.backupNever
                     }
@@ -2446,11 +2454,19 @@ private fun BackupSettingsPane(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
+                    val timestampFormatter = remember(strings) {
+                        java.time.format.DateTimeFormatter
+                            .ofLocalizedDateTime(
+                                java.time.format.FormatStyle.MEDIUM,
+                                java.time.format.FormatStyle.SHORT,
+                            )
+                            .withLocale(strings.locale)
+                    }
                     val lastSyncStr = if (preferences.lastSyncEpochMillis > 0L) {
                         val timeStr = java.time.LocalDateTime.ofInstant(
                             java.time.Instant.ofEpochMilli(preferences.lastSyncEpochMillis),
                             java.time.ZoneId.systemDefault(),
-                        ).format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
+                        ).format(timestampFormatter)
                         val msg = preferences.lastSyncMessage
                         if (msg.isNotBlank()) "$timeStr ($msg)" else timeStr
                     } else {
@@ -2745,9 +2761,17 @@ private fun LibrarySettingsPane(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     val lastUpdateStr = if (preferences.lastLibraryUpdateEpochMillis > 0) {
+                        val timestampFormatter = remember(strings) {
+                            java.time.format.DateTimeFormatter
+                                .ofLocalizedDateTime(
+                                    java.time.format.FormatStyle.MEDIUM,
+                                    java.time.format.FormatStyle.SHORT,
+                                )
+                                .withLocale(strings.locale)
+                        }
                         java.time.Instant.ofEpochMilli(preferences.lastLibraryUpdateEpochMillis)
                             .atZone(java.time.ZoneId.systemDefault())
-                            .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
+                            .format(timestampFormatter)
                     } else {
                         strings.backupNever
                     }
@@ -3023,7 +3047,7 @@ private fun AdvancedSettingsPane(
                     Text(strings.settingsLogFilesCount(s.logFileCount))
                     if (s.snapshotCount > 0) {
                         val sizeKb = (s.snapshotSizeBytes + 1023) / 1024
-                        Text("Migration snapshots: ${s.snapshotCount} ($sizeKb KB)")
+                        Text(strings.text(UiText.MigrationSnapshotsSummary, s.snapshotCount, sizeKb))
                     }
                 }
 

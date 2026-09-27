@@ -87,6 +87,7 @@ import mihon.desktop.download.DownloadStatus
 import mihon.desktop.extension.ExtensionStoreItem
 import mihon.desktop.i18n.LocalStrings
 import mihon.desktop.i18n.UiText
+import mihon.desktop.i18n.locale
 import mihon.desktop.i18n.text
 import mihon.desktop.library.model.LibraryChapter
 import mihon.desktop.library.model.MangaReaderSettingsOverride
@@ -1166,6 +1167,7 @@ fun MangaDetailScreen(
 
 @Composable
 private fun MissingChapterIndicator(count: Int) {
+    val strings = LocalStrings.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -1176,7 +1178,7 @@ private fun MissingChapterIndicator(count: Int) {
     ) {
         HorizontalDivider(modifier = Modifier.weight(1f))
         Text(
-            text = "$count missing ${if (count == 1) "chapter" else "chapters"}",
+            text = strings.mangaDetailMissingChapters(count),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -1223,6 +1225,7 @@ private fun MangaStatusBadge(status: Long, strings: mihon.desktop.i18n.DesktopSt
 
 @Composable
 private fun ExpandableMangaDescription(description: String) {
+    val strings = LocalStrings.current
     val cleanDescription = remember(description) {
         description.replace(Regex("""\*\*([^*]+)\*\*"""), "$1")
     }
@@ -1235,7 +1238,7 @@ private fun ExpandableMangaDescription(description: String) {
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         Text(
-            "Description",
+            strings.mangaDetailDescriptionLabel,
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -1248,7 +1251,7 @@ private fun ExpandableMangaDescription(description: String) {
         )
         if (cleanDescription.length > 120) {
             Text(
-                text = if (expanded) "▲ Show less" else "▼ Show more",
+                text = if (expanded) strings.mangaDetailShowLess else strings.mangaDetailShowMore,
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.primary,
                 fontWeight = FontWeight.SemiBold,
@@ -1292,6 +1295,11 @@ private fun ChapterRow(
 ) {
     val strings = mihon.desktop.i18n.LocalStrings.current
     var menuExpanded by remember { mutableStateOf(false) }
+    val chapterDateFormatter = remember(strings) {
+        java.time.format.DateTimeFormatter
+            .ofLocalizedDate(java.time.format.FormatStyle.MEDIUM)
+            .withLocale(strings.locale)
+    }
     val rowBackground = if (isSelected) {
         MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
     } else {
@@ -1352,7 +1360,7 @@ private fun ChapterRow(
                     )
                 }
                 Text(
-                    chapterProgressLabel(chapter, strings),
+                    chapterProgressLabel(chapter, strings, chapterDateFormatter),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -1528,11 +1536,10 @@ private fun DetailMessage(
     }
 }
 
-private val chapterDateFormatter = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd")
-
 private fun chapterProgressLabel(
     chapter: LibraryChapter,
     strings: mihon.desktop.i18n.DesktopStrings,
+    dateFormatter: java.time.format.DateTimeFormatter,
 ): String = buildList {
     add(if (chapter.read) strings.filterRead else strings.filterUnread)
     if (chapter.bookmark) add(strings.filterBookmarked)
@@ -1540,7 +1547,7 @@ private fun chapterProgressLabel(
         val dateText = try {
             java.time.Instant.ofEpochMilli(chapter.dateUpload)
                 .atZone(java.time.ZoneId.systemDefault())
-                .format(chapterDateFormatter)
+                .format(dateFormatter)
         } catch (_: Exception) {
             null
         }
@@ -1556,7 +1563,7 @@ private fun decodeGenres(raw: String): List<String> = try {
     emptyList()
 }
 
-internal fun chooseCoverImage(title: String = "Choose Cover Image"): java.nio.file.Path? {
+internal fun chooseCoverImage(title: String): java.nio.file.Path? {
     val dialog = java.awt.FileDialog(null as java.awt.Frame?, title, java.awt.FileDialog.LOAD)
     dialog.setFilenameFilter { _, name ->
         val l = name.lowercase()

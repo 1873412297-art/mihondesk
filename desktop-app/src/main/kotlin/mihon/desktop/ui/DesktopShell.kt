@@ -115,14 +115,10 @@ fun DesktopShell(
                         modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp).testTag("library-batch-progress"),
                     ) {
                         Text(
-                            state.libraryBatchState.error ?: mihon.desktop.i18n.recoveryText(
-                                strings.text(
-                                    UiText.Processing,
-                                    state.libraryBatchState.processed,
-                                    state.libraryBatchState.total,
-                                ),
-                                "正在处理 ${state.libraryBatchState.processed}/${state.libraryBatchState.total}",
-                                "正在處理 ${state.libraryBatchState.processed}/${state.libraryBatchState.total}",
+                            state.libraryBatchState.error ?: strings.text(
+                                UiText.Processing,
+                                state.libraryBatchState.processed,
+                                state.libraryBatchState.total,
                             ),
                             modifier = Modifier.padding(12.dp),
                         )

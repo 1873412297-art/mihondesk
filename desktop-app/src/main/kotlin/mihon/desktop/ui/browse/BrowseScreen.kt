@@ -876,7 +876,7 @@ private fun SourceListItem(
                     fontWeight = FontWeight.SemiBold,
                 )
                 val builtinBadge = when (source.id) {
-                    BundledLocalSource.ID -> "[Local]"
+                    BundledLocalSource.ID -> strings.browseLocalBadge
                     else -> null
                 }
                 if (builtinBadge != null) {
@@ -889,7 +889,7 @@ private fun SourceListItem(
                 }
             }
             Text(
-                text = "${strings.browseSourceLanguage(source.lang)} • ID: ${source.id}",
+                text = "${strings.browseSourceLanguage(source.lang)} • ${strings.browseSourceId(source.id.toString())}",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.outline,
             )

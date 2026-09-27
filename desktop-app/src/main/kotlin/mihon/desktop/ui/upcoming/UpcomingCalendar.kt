@@ -69,16 +69,10 @@ fun UpcomingCalendar(
     val strings = LocalStrings.current
     val locale = strings.locale
     val firstDayOfWeek = remember(locale) { WeekFields.of(locale).firstDayOfWeek }
-    val monthTitle = remember(selectedMonth, locale) {
+    val monthTitle = remember(selectedMonth, locale, strings) {
         selectedMonth.format(
             DateTimeFormatter.ofPattern(
-                if (locale.language ==
-                    "zh"
-                ) {
-                    "yyyy年M月"
-                } else {
-                    "MMMM yyyy"
-                },
+                strings.upcomingMonthPattern,
                 locale,
             ),
         )

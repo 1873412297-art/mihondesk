@@ -24,7 +24,9 @@ import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import mihon.desktop.DesktopRuntime
-import mihon.desktop.i18n.recoveryText
+import mihon.desktop.i18n.LocalStrings
+import mihon.desktop.i18n.UiText
+import mihon.desktop.i18n.text
 import mihon.desktop.webview.DesktopWebViewManager
 import mihon.extension.model.SourceDescriptor
 
@@ -34,6 +36,7 @@ fun SourceWebPageDialog(runtime: DesktopRuntime, source: SourceDescriptor, onDis
     var error by remember { mutableStateOf<String?>(null) }
     var saving by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    val strings = LocalStrings.current
     LaunchedEffect(source.id) {
         var owned: DesktopWebViewManager.BrowserSession? = null
         try {
@@ -61,17 +64,15 @@ fun SourceWebPageDialog(runtime: DesktopRuntime, source: SourceDescriptor, onDis
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Text(
-                    recoveryText(
-                        "Complete sign-in or verification in the opened source window, then return here to retry.",
-                        "请在已打开的图源窗口中完成登录或网页验证，然后返回此处重试。",
-                        "請在已開啟的圖源視窗中完成登入或網頁驗證，然後返回此處重試。",
+                    strings.text(
+                        UiText.SourceWebPageInstructions,
                     ),
                 )
                 val current = session
                 if (current == null &&
                     error == null
                 ) {
-                    Text(recoveryText("Opening source page…", "正在打开图源网页…", "正在開啟圖源網頁…"))
+                    Text(strings.text(UiText.SourceWebPageOpening))
                 }
                 current?.let { browser ->
                     val state by browser.state.collectAsState()
@@ -79,10 +80,8 @@ fun SourceWebPageDialog(runtime: DesktopRuntime, source: SourceDescriptor, onDis
                         "closed"
                     ) {
                         Text(
-                            recoveryText(
-                                "The source window was closed. Reopen it if verification is unfinished.",
-                                "图源窗口已关闭。如尚未完成验证，请重新打开。",
-                                "圖源視窗已關閉。如尚未完成驗證，請重新開啟。",
+                            strings.text(
+                                UiText.SourceWebPageClosed,
                             ),
                         )
                     }
@@ -111,8 +110,8 @@ fun SourceWebPageDialog(runtime: DesktopRuntime, source: SourceDescriptor, onDis
                         saving = false
                     }
                 }
-            }) { Text(recoveryText("Done, retry", "完成并重试", "完成並重試")) }
+            }) { Text(strings.text(UiText.SourceWebPageDoneRetry)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(recoveryText("Cancel", "取消")) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(strings.actionCancel) } },
     )
 }

@@ -66,6 +66,7 @@ import mihon.desktop.extension.InstalledExtension
 import mihon.desktop.extension.SourceState
 import mihon.desktop.i18n.LocalStrings
 import mihon.desktop.i18n.UiText
+import mihon.desktop.i18n.locale
 import mihon.desktop.i18n.text
 import mihon.desktop.i18n.trustStatusLabel
 import mihon.extension.model.SourceDescriptor
@@ -76,6 +77,7 @@ import java.net.URI
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 
 /**
  * Desktop pixel-perfect replication of upstream Mihon's Extension Details screen.
@@ -113,7 +115,11 @@ fun ExtensionDetailsScreen(
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
     val icon = remember(extension.iconPath) { loadExtensionIcon(extension.iconPath) }
-    val dateFormatter = remember { DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").withZone(ZoneId.systemDefault()) }
+    val dateFormatter = remember(strings) {
+        DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM, FormatStyle.SHORT)
+            .withLocale(strings.locale)
+            .withZone(ZoneId.systemDefault())
+    }
 
     val activeTrustStore = remember { ExtensionTrustStore.active() }
     val trustRevision = activeTrustStore?.revision?.collectAsState()?.value ?: 0L

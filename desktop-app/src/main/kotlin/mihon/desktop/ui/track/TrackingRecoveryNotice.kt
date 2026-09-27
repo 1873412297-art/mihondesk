@@ -27,7 +27,9 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
-import mihon.desktop.i18n.recoveryText
+import mihon.desktop.i18n.LocalStrings
+import mihon.desktop.i18n.UiText
+import mihon.desktop.i18n.text
 import mihon.desktop.track.ConflictResolutionPolicy
 import mihon.desktop.track.DesktopTracker
 import mihon.desktop.track.DesktopTrackerManager
@@ -43,6 +45,7 @@ fun TrackingRecoveryNotice(service: TrackOnReadSyncService, manager: DesktopTrac
     var actionError by remember { mutableStateOf<String?>(null) }
     var submitting by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    val strings = LocalStrings.current
     if (authentication.isNotEmpty() || conflicts.isNotEmpty()) {
         Surface(
             color = MaterialTheme.colorScheme.secondaryContainer,
@@ -54,15 +57,15 @@ fun TrackingRecoveryNotice(service: TrackOnReadSyncService, manager: DesktopTrac
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(recoveryText("Tracking needs your attention", "跟踪同步需要处理", "追蹤同步需要處理"))
-                TextButton(onClick = { open = true }) { Text(recoveryText("Review", "查看", "檢視")) }
+                Text(strings.text(UiText.TrackingNeedsAttention))
+                TextButton(onClick = { open = true }) { Text(strings.text(UiText.TrackingReview)) }
             }
         }
     }
     if (open) {
         AlertDialog(
             onDismissRequest = { open = false },
-            title = { Text(recoveryText("Resume tracking", "恢复跟踪同步", "恢復追蹤同步")) },
+            title = { Text(strings.text(UiText.TrackingResumeTitle)) },
             text = {
                 LazyColumn(
                     modifier = Modifier.heightIn(max = 440.dp).testTag("tracking-recovery-dialog"),
@@ -73,15 +76,13 @@ fun TrackingRecoveryNotice(service: TrackOnReadSyncService, manager: DesktopTrac
                         Column {
                             Text(tracker?.name ?: "#$id", style = MaterialTheme.typography.titleSmall)
                             Text(
-                                recoveryText(
-                                    "Sign in again to resume pending changes.",
-                                    "重新登录后将继续同步待处理的进度。",
-                                    "重新登入後將繼續同步待處理的進度。",
+                                strings.text(
+                                    UiText.TrackingSignInAgain,
                                 ),
                             )
                             if (tracker != null) {
                                 TextButton(onClick = { loginTracker = tracker }) {
-                                    Text(recoveryText("Sign in", "登录", "登入"))
+                                    Text(strings.text(UiText.TrackingSignIn))
                                 }
                             }
                         }
@@ -93,10 +94,10 @@ fun TrackingRecoveryNotice(service: TrackOnReadSyncService, manager: DesktopTrac
                                 style = MaterialTheme.typography.titleSmall,
                             )
                             Text(
-                                recoveryText(
-                                    "Local: ${conflict.localChapterRead} · Remote: ${conflict.remoteChapterRead}",
-                                    "本地：${conflict.localChapterRead} 话 · 远端：${conflict.remoteChapterRead} 话",
-                                    "本機：${conflict.localChapterRead} 話 · 遠端：${conflict.remoteChapterRead} 話",
+                                strings.text(
+                                    UiText.TrackingConflictSummary,
+                                    conflict.localChapterRead,
+                                    conflict.remoteChapterRead,
                                 ),
                             )
                             Row {
@@ -128,9 +129,9 @@ fun TrackingRecoveryNotice(service: TrackOnReadSyncService, manager: DesktopTrac
                                     ) {
                                         Text(
                                             if (policy == ConflictResolutionPolicy.LOCAL_WINS) {
-                                                recoveryText("Keep local", "保留本地进度", "保留本機進度")
+                                                strings.text(UiText.TrackingKeepLocal)
                                             } else {
-                                                recoveryText("Use remote", "采用远端进度", "採用遠端進度")
+                                                strings.text(UiText.TrackingUseRemote)
                                             },
                                         )
                                     }
@@ -140,11 +141,11 @@ fun TrackingRecoveryNotice(service: TrackOnReadSyncService, manager: DesktopTrac
                     }
                     actionError?.let { message -> item { Text(message, color = MaterialTheme.colorScheme.error) } }
                     if (authentication.isEmpty() && conflicts.isEmpty()) {
-                        item { Text(recoveryText("Tracking can continue.", "跟踪同步可以继续。", "追蹤同步可以繼續。")) }
+                        item { Text(strings.text(UiText.TrackingCanContinue)) }
                     }
                 }
             },
-            confirmButton = { TextButton(onClick = { open = false }) { Text(recoveryText("Close", "关闭", "關閉")) } },
+            confirmButton = { TextButton(onClick = { open = false }) { Text(strings.dialogClose) } },
         )
     }
     loginTracker?.let { tracker ->

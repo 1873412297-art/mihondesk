@@ -520,6 +520,63 @@ enum class UiText(val english: String, val simplified: String, val traditional: 
     DownloadResumeItem("Resume", "继续", "繼續"),
     DownloadMoveUp("Move up", "上移", "上移"),
     DownloadMoveDown("Move down", "下移", "下移"),
+    SourceNumberFallback("Source #{0}", "图源 #{0}", "圖源 #{0}"),
+    SourceWebPageInstructions(
+        "Complete sign-in or verification in the opened source window, then return here to retry.",
+        "请在已打开的图源窗口中完成登录或网页验证，然后返回此处重试。",
+        "請在已開啟的圖源視窗中完成登入或網頁驗證，然後返回此處重試。",
+    ),
+    SourceWebPageOpening("Opening source page…", "正在打开图源网页…", "正在開啟圖源網頁…"),
+    SourceWebPageClosed(
+        "The source window was closed. Reopen it if verification is unfinished.",
+        "图源窗口已关闭。如尚未完成验证，请重新打开。",
+        "圖源視窗已關閉。如尚未完成驗證，請重新開啟。",
+    ),
+    SourceWebPageDoneRetry("Done, retry", "完成并重试", "完成並重試"),
+    NetworkFailureSiteBlocked(
+        "The website has blocked access. Open its website to check. If it is blocked there too, " +
+            "access must be restored by the website; retrying here cannot remove the block.",
+        "网站已封锁访问。可打开网页确认；如果网页也显示封锁，需要网站解除限制，应用重试无法解除。",
+        "網站已封鎖存取。可開啟網頁確認；如果網頁也顯示封鎖，需要網站解除限制，應用程式重試無法解除。",
+    ),
+    NetworkFailureWebVerification(
+        "The website requires verification. Open its website, complete verification, then choose Done, retry.",
+        "网站需要网页验证。请打开网页完成验证，再点击“完成并重试”。",
+        "網站需要網頁驗證。請開啟網頁完成驗證，再點擊「完成並重試」。",
+    ),
+    NetworkFailureAuthRequired(
+        "The website denied access. Open its website to check whether sign-in is required.",
+        "网站拒绝访问。请打开网页检查是否需要登录。",
+        "網站拒絕存取。請開啟網頁檢查是否需要登入。",
+    ),
+    NetworkFailureRateLimited(
+        "The website is limiting requests. Please retry later.",
+        "网站正在限制请求频率，请稍后重试。",
+        "網站正在限制請求頻率，請稍後重試。",
+    ),
+    TrackingNeedsAttention("Tracking needs your attention", "跟踪同步需要处理", "追蹤同步需要處理"),
+    TrackingReview("Review", "查看", "檢視"),
+    TrackingResumeTitle("Resume tracking", "恢复跟踪同步", "恢復追蹤同步"),
+    TrackingSignInAgain(
+        "Sign in again to resume pending changes.",
+        "重新登录后将继续同步待处理的进度。",
+        "重新登入後將繼續同步待處理的進度。",
+    ),
+    TrackingSignIn("Sign in", "登录", "登入"),
+    TrackingConflictSummary(
+        "Local: {0} · Remote: {1}",
+        "本地：{0} 话 · 远端：{1} 话",
+        "本機：{0} 話 · 遠端：{1} 話",
+    ),
+    TrackingKeepLocal("Keep local", "保留本地进度", "保留本機進度"),
+    TrackingUseRemote("Use remote", "采用远端进度", "採用遠端進度"),
+    TrackingCanContinue("Tracking can continue.", "跟踪同步可以继续。", "追蹤同步可以繼續。"),
+    HistoryReadAt("Read at {0}", "阅读于 {0}", "閱讀於 {0}"),
+    MigrationSnapshotsSummary(
+        "Migration snapshots: {0} ({1} KB)",
+        "迁移快照：{0}（{1} KB）",
+        "遷移快照：{0}（{1} KB）",
+    ),
 }
 
 private val placeholderPattern = Regex("\\{(\\d+)\\}")

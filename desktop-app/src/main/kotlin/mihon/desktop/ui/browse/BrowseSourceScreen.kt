@@ -207,7 +207,7 @@ fun BrowseSourceScreen(
             if (onOpenWebPage != null) {
                 Spacer(modifier = Modifier.width(8.dp))
                 OutlinedButton(onClick = onOpenWebPage, modifier = Modifier.testTag("source-open-webpage")) {
-                    Text(mihon.desktop.i18n.recoveryText("Open website", "打开网页", "開啟網頁"))
+                    Text(strings.browseOpenWebsite)
                 }
             }
         }

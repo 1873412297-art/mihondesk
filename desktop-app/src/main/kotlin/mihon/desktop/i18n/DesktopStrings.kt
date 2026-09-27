@@ -121,6 +121,9 @@ interface DesktopStrings {
     val mangaDetailNotes: String
     val mangaDetailResetToSource: String
     val mangaDetailSave: String
+    val mangaDetailShowMore: String
+    val mangaDetailShowLess: String
+    fun mangaDetailMissingChapters(count: Int): String
 
     // Missing Source Banner & Dialog
     fun missingSourceBannerTitle(extName: String, mangaCount: Int): String
@@ -203,6 +206,12 @@ interface DesktopStrings {
     val updatesEmptyTitle: String
     val updatesEmptySubtitle: String
     val updatesReadButton: String
+    val updatesUpcomingButton: String
+    val updatesCancelUpdate: String
+    fun updatesResultSummary(mangaCount: Int, newChapterCount: Int): String
+    val updatesFailedNotice: String
+    fun updatesRetryAfter(time: String): String
+    val updatesCancelledNotice: String
 
     // History
     val historyTitle: String
@@ -251,6 +260,9 @@ interface DesktopStrings {
     val browseGlobalSearch: String
     val browseInstallFromFile: String
     val browseUpdateAll: String
+    val browseOpenWebsite: String
+    val browseLocalBadge: String
+    fun browseSourceId(id: String): String
 
     // Extension Details & Source Preferences
     val extensionInfo: String
@@ -359,6 +371,20 @@ interface DesktopStrings {
     val settingsTrackingTitle: String
     val settingsTrackingDescription: String
     fun settingsConnectedTrackers(count: Int): String
+    val settingsTrackingPublicServices: String
+    val settingsTrackingSelfHosted: String
+
+    // Settings - Network
+    val networkSettingsTitle: String
+    val networkSettingsDescription: String
+    val networkSettingsProxySystem: String
+    val networkSettingsProxyDirect: String
+    val networkSettingsProxyHost: String
+    val networkSettingsPort: String
+    val networkSettingsConnectTimeout: String
+    val networkSettingsReadTimeout: String
+    val networkSettingsSaved: String
+    val networkSettingsSave: String
 
     // Settings - Backup
     val settingsBackupTitle: String
@@ -512,6 +538,9 @@ interface DesktopStrings {
     val libraryAutoDownloadNew: String
     val notificationsDesktopEnabled: String
     val libraryLastUpdate: String
+
+    // Upcoming
+    val upcomingMonthPattern: String
 
     // Web & Cookie Management
     val cookieManagerTitle: String
@@ -895,6 +924,10 @@ object EnglishStrings : DesktopStrings {
     override val mangaDetailNotes = "Personal Notes"
     override val mangaDetailResetToSource = "Reset to Source"
     override val mangaDetailSave = "Save"
+    override val mangaDetailShowMore = "▼ Show more"
+    override val mangaDetailShowLess = "▲ Show less"
+    override fun mangaDetailMissingChapters(count: Int) =
+        if (count == 1) "1 missing chapter" else "$count missing chapters"
 
     // Missing Source Banner & Dialog
     override fun missingSourceBannerTitle(extName: String, mangaCount: Int) =
@@ -980,6 +1013,13 @@ object EnglishStrings : DesktopStrings {
     override val updatesEmptyTitle = "No recent chapter updates"
     override val updatesEmptySubtitle = "Your library is up to date."
     override val updatesReadButton = "Read"
+    override val updatesUpcomingButton = "Upcoming"
+    override val updatesCancelUpdate = "Cancel update"
+    override fun updatesResultSummary(mangaCount: Int, newChapterCount: Int) =
+        "$mangaCount manga · $newChapterCount new chapters"
+    override val updatesFailedNotice = "Library update failed. You can check again."
+    override fun updatesRetryAfter(time: String) = "Retry after $time"
+    override val updatesCancelledNotice = "Update cancelled. Finished updates are saved."
 
     override val historyTitle = "History"
     override val historyHeaderSubtitle = "Resume recently read chapters and track reading activity"
@@ -1026,6 +1066,9 @@ object EnglishStrings : DesktopStrings {
     override val browseGlobalSearch = "Global Search"
     override val browseInstallFromFile = "Install .mext"
     override val browseUpdateAll = "Update All"
+    override val browseOpenWebsite = "Open website"
+    override val browseLocalBadge = "[Local]"
+    override fun browseSourceId(id: String) = "ID: $id"
 
     override val extensionInfo = "Extension info"
     override val extensionOpenRepo = "Open repository"
@@ -1144,6 +1187,20 @@ object EnglishStrings : DesktopStrings {
     override val settingsTrackingDescription =
         "Multi-service sync (AniList, MyAnimeList, Kitsu, Shikimori, Bangumi) with automatic offline queue and conflict resolution."
     override fun settingsConnectedTrackers(count: Int) = "Connected Trackers: $count available"
+    override val settingsTrackingPublicServices = "Public services"
+    override val settingsTrackingSelfHosted = "Self-hosted instances"
+
+    override val networkSettingsTitle = "Source and tracker network"
+    override val networkSettingsDescription =
+        "Changes apply to new requests. Proxy settings also apply to tracker sync (AniList, Bangumi, etc.)."
+    override val networkSettingsProxySystem = "System"
+    override val networkSettingsProxyDirect = "Direct"
+    override val networkSettingsProxyHost = "Proxy hostname"
+    override val networkSettingsPort = "Port"
+    override val networkSettingsConnectTimeout = "Connect timeout (s)"
+    override val networkSettingsReadTimeout = "Read timeout (s)"
+    override val networkSettingsSaved = "Saved"
+    override val networkSettingsSave = "Save network settings"
 
     override val settingsBackupTitle = "Cross-Platform Backup Exchange"
     override val settingsBackupDescription =
@@ -1302,6 +1359,7 @@ object EnglishStrings : DesktopStrings {
     override val libraryAutoDownloadNew = "Automatically download new chapters"
     override val notificationsDesktopEnabled = "Show desktop notifications"
     override val libraryLastUpdate = "Last library update:"
+    override val upcomingMonthPattern = "MMMM yyyy"
 
     // Web & Cookie Management
     override val cookieManagerTitle = "Cookie and site settings"
@@ -1770,6 +1828,9 @@ object SimplifiedChineseStrings : DesktopStrings {
     override val mangaDetailNotes = "个人笔记"
     override val mangaDetailResetToSource = "恢复图源默认"
     override val mangaDetailSave = "保存"
+    override val mangaDetailShowMore = "▼ 显示更多"
+    override val mangaDetailShowLess = "▲ 显示更少"
+    override fun mangaDetailMissingChapters(count: Int) = "缺失 $count 话"
 
     // Missing Source Banner & Dialog
     override fun missingSourceBannerTitle(extName: String, mangaCount: Int) =
@@ -1854,6 +1915,13 @@ object SimplifiedChineseStrings : DesktopStrings {
     override val updatesEmptyTitle = "暂无最近更新"
     override val updatesEmptySubtitle = "书架中的所有漫画均已是最新。"
     override val updatesReadButton = "阅读"
+    override val updatesUpcomingButton = "更新日历"
+    override val updatesCancelUpdate = "取消更新"
+    override fun updatesResultSummary(mangaCount: Int, newChapterCount: Int) =
+        "$mangaCount 部漫画 · $newChapterCount 个新章节"
+    override val updatesFailedNotice = "书库更新失败，可点击“立即检查”重试。"
+    override fun updatesRetryAfter(time: String) = "将在 $time 后重试"
+    override val updatesCancelledNotice = "更新已取消，已完成的结果已保存。"
 
     override val historyTitle = "历史"
     override val historyHeaderSubtitle = "继续阅读最近章节并追踪阅读记录"
@@ -1903,6 +1971,9 @@ object SimplifiedChineseStrings : DesktopStrings {
     override val browseGlobalSearch = "全局搜索"
     override val browseInstallFromFile = "本地安装 (.mext)"
     override val browseUpdateAll = "全部更新"
+    override val browseOpenWebsite = "打开网页"
+    override val browseLocalBadge = "[本地]"
+    override fun browseSourceId(id: String) = "ID：$id"
 
     override val extensionInfo = "扩展信息"
     override val extensionOpenRepo = "打开仓库"
@@ -2019,6 +2090,20 @@ object SimplifiedChineseStrings : DesktopStrings {
     override val settingsTrackingDescription =
         "支持多平台同步 (AniList, MyAnimeList, Kitsu, Shikimori, Bangumi)，提供离线队列与冲突解决。"
     override fun settingsConnectedTrackers(count: Int) = "支持的记录平台: $count 个可用"
+    override val settingsTrackingPublicServices = "公网服务"
+    override val settingsTrackingSelfHosted = "自托管实例"
+
+    override val networkSettingsTitle = "图源与跟踪器网络"
+    override val networkSettingsDescription =
+        "保存后对新请求生效。代理设置同时作用于跟踪器（AniList、Bangumi 等）同步流量。"
+    override val networkSettingsProxySystem = "系统代理"
+    override val networkSettingsProxyDirect = "直连"
+    override val networkSettingsProxyHost = "代理主机"
+    override val networkSettingsPort = "端口"
+    override val networkSettingsConnectTimeout = "连接超时（秒）"
+    override val networkSettingsReadTimeout = "读取超时（秒）"
+    override val networkSettingsSaved = "已保存"
+    override val networkSettingsSave = "保存网络设置"
 
     override val settingsBackupTitle = "跨平台备份交换"
     override val settingsBackupDescription =
@@ -2176,6 +2261,7 @@ object SimplifiedChineseStrings : DesktopStrings {
     override val libraryAutoDownloadNew = "自动下载新更新章节"
     override val notificationsDesktopEnabled = "显示桌面通知"
     override val libraryLastUpdate = "上次书架更新："
+    override val upcomingMonthPattern = "yyyy年M月"
 
     // Web & Cookie Management
     override val cookieManagerTitle = "Cookie 与网站设置"
@@ -2640,6 +2726,9 @@ object TraditionalChineseStrings : DesktopStrings {
     override val mangaDetailNotes = "個人筆記"
     override val mangaDetailResetToSource = "恢復圖源預設"
     override val mangaDetailSave = "儲存"
+    override val mangaDetailShowMore = "▼ 顯示更多"
+    override val mangaDetailShowLess = "▲ 顯示更少"
+    override fun mangaDetailMissingChapters(count: Int) = "缺失 $count 話"
 
     // Missing Source Banner & Dialog
     override fun missingSourceBannerTitle(extName: String, mangaCount: Int) =
@@ -2724,6 +2813,13 @@ object TraditionalChineseStrings : DesktopStrings {
     override val updatesEmptyTitle = "暫無最近更新"
     override val updatesEmptySubtitle = "書架中的所有漫畫皆為最新。"
     override val updatesReadButton = "閱讀"
+    override val updatesUpcomingButton = "更新日曆"
+    override val updatesCancelUpdate = "取消更新"
+    override fun updatesResultSummary(mangaCount: Int, newChapterCount: Int) =
+        "$mangaCount 部漫畫 · $newChapterCount 個新章節"
+    override val updatesFailedNotice = "書架更新失敗，可點擊「立即檢查」重試。"
+    override fun updatesRetryAfter(time: String) = "將在 $time 後重試"
+    override val updatesCancelledNotice = "更新已取消，已完成的結果已儲存。"
 
     override val historyTitle = "歷史"
     override val historyHeaderSubtitle = "繼續閱讀最近章節並追蹤閱讀記錄"
@@ -2773,6 +2869,9 @@ object TraditionalChineseStrings : DesktopStrings {
     override val browseGlobalSearch = "全域搜尋"
     override val browseInstallFromFile = "本機安裝 (.mext)"
     override val browseUpdateAll = "全部更新"
+    override val browseOpenWebsite = "開啟網頁"
+    override val browseLocalBadge = "[本地]"
+    override fun browseSourceId(id: String) = "ID：$id"
 
     override val extensionInfo = "擴充套件資訊"
     override val extensionOpenRepo = "開啟存放庫"
@@ -2889,6 +2988,20 @@ object TraditionalChineseStrings : DesktopStrings {
     override val settingsTrackingDescription =
         "支援多平台同步 (AniList, MyAnimeList, Kitsu, Shikimori, Bangumi)，提供離線佇列與衝突解決。"
     override fun settingsConnectedTrackers(count: Int) = "支援的紀錄平臺: $count 個可用"
+    override val settingsTrackingPublicServices = "公網服務"
+    override val settingsTrackingSelfHosted = "自託管實例"
+
+    override val networkSettingsTitle = "圖源與追蹤器網路"
+    override val networkSettingsDescription =
+        "儲存後對新請求生效。代理設定同時作用於追蹤器（AniList、Bangumi 等）同步流量。"
+    override val networkSettingsProxySystem = "系統代理"
+    override val networkSettingsProxyDirect = "直接連線"
+    override val networkSettingsProxyHost = "代理主機"
+    override val networkSettingsPort = "連接埠"
+    override val networkSettingsConnectTimeout = "連線逾時（秒）"
+    override val networkSettingsReadTimeout = "讀取逾時（秒）"
+    override val networkSettingsSaved = "已儲存"
+    override val networkSettingsSave = "儲存網路設定"
 
     override val settingsBackupTitle = "跨平臺備份交換"
     override val settingsBackupDescription =
@@ -3046,6 +3159,7 @@ object TraditionalChineseStrings : DesktopStrings {
     override val libraryAutoDownloadNew = "自動下載新更新章節"
     override val notificationsDesktopEnabled = "顯示桌面通知"
     override val libraryLastUpdate = "上次書架更新："
+    override val upcomingMonthPattern = "yyyy年M月"
 
     // Web & Cookie Management
     override val cookieManagerTitle = "Cookie 與網站設定"
