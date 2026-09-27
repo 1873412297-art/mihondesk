@@ -141,7 +141,13 @@ open class OnlineChapterSource(
                 } finally {
                     java.nio.file.Files.deleteIfExists(temporary)
                 }
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                mihon.desktop.logging.DesktopLogger.warn(
+                    "OnlineChapterSource",
+                    "Failed to cache online page image to ${cachedFile.path}",
+                    e,
+                )
+            }
             bytes
         }
 

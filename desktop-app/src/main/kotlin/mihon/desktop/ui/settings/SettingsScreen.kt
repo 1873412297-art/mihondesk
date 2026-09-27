@@ -2900,6 +2900,10 @@ private fun AdvancedSettingsPane(
                     Text(strings.settingsOsInfo("${s.osName} ${s.osVersion} (${s.osArch})"))
                     Text(strings.settingsJavaInfo("${s.javaVersion} (${s.javaVendor})"))
                     Text(strings.settingsLogFilesCount(s.logFileCount))
+                    if (s.snapshotCount > 0) {
+                        val sizeKb = (s.snapshotSizeBytes + 1023) / 1024
+                        Text("Migration snapshots: ${s.snapshotCount} ($sizeKb KB)")
+                    }
                 }
 
                 bundleExportPath?.let { path ->

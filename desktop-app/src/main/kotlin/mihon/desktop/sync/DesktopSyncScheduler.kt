@@ -45,8 +45,8 @@ class DesktopSyncScheduler(
                     checkAndRunAutoSync()
                 } catch (cancelled: CancellationException) {
                     throw cancelled
-                } catch (_: Exception) {
-                    // Ignore background scheduler errors and continue
+                } catch (e: Exception) {
+                    mihon.desktop.logging.DesktopLogger.warn("DesktopSyncScheduler", "Auto-sync check failed", e)
                 }
                 delay(60_000L) // check every minute
             }
@@ -124,6 +124,17 @@ class DesktopSyncScheduler(
             }
         }
         lastReport = report
+        if (report.success) {
+            mihon.desktop.logging.DesktopLogger.info(
+                "DesktopSyncScheduler",
+                "Sync succeeded: pulled=${report.pulledChangesetCount}, pushed=${report.pushedChangeset != null}",
+            )
+        } else {
+            mihon.desktop.logging.DesktopLogger.warn(
+                "DesktopSyncScheduler",
+                "Sync failed: ${report.errorMessage}",
+            )
+        }
 
         // Record import report in database
         val now = clock()

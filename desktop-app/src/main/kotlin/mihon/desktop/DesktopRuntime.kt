@@ -269,6 +269,10 @@ object DesktopRuntimeFactory {
         val directories = AppDirectoryResolver(appData, executableDirectory)
             .resolve(mode, explicitRoot)
             .create()
+        if (!mihon.desktop.logging.DesktopLogger.isInitialized()) {
+            mihon.desktop.logging.DesktopLogger.init(directories.logs)
+        }
+        mihon.desktop.logging.DesktopLogger.info("DesktopRuntime", "Initializing desktop runtime for command: $command")
         val library = DesktopLibraryDatabaseFactory.open(directories.database.resolve("library.db"))
         try {
             val backupImporter = AndroidBackupImporter(AndroidBackupCodec(), AndroidBackupValidator(), library)
@@ -321,7 +325,16 @@ object DesktopRuntimeFactory {
                 cookieStore = cookieStore,
                 policyProvider = networkSettings::load,
             )
-            val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            val appExceptionHandler = kotlinx.coroutines.CoroutineExceptionHandler { _, throwable ->
+                if (throwable !is kotlinx.coroutines.CancellationException) {
+                    mihon.desktop.logging.DesktopLogger.error(
+                        "AppScope",
+                        "Uncaught coroutine exception: ${throwable.message}",
+                        throwable,
+                    )
+                }
+            }
+            val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default + appExceptionHandler)
             val browserResources = System.getProperty("compose.application.resources.dir")?.let(Path::of)
                 ?.resolve("browser")
             val webViews = mihon.desktop.webview.DesktopWebViewManager(
@@ -552,6 +565,7 @@ object DesktopRuntimeFactory {
                 sourceManager = sourceManager,
                 onlineMangaSyncService = onlineMangaSyncService,
                 closeReaderServices = {
+                    mihon.desktop.logging.DesktopLogger.info("DesktopRuntime", "Shutting down desktop runtime services")
                     syncServerManager.stop()
                     backupScheduler.stop()
                     syncScheduler.stop()
@@ -564,6 +578,10 @@ object DesktopRuntimeFactory {
                     webViews.close()
                     networkHelper.close()
                     runBlocking { appScope.coroutineContext[kotlinx.coroutines.Job]?.cancelAndJoin() }
+                    mihon.desktop.logging.DesktopLogger.info(
+                        "DesktopRuntime",
+                        "Desktop runtime services shutdown complete",
+                    )
                 },
             )
         } catch (error: Throwable) {

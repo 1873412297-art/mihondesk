@@ -15,9 +15,13 @@ interface CredentialStore {
 }
 
 /** Generic credentials are encrypted by Windows and scoped to the current Windows user. */
-class WindowsCredentialStore : CredentialStore {
+class WindowsCredentialStore internal constructor(
+    private val apiLoader: () -> Credentials,
+) : CredentialStore {
+    constructor() : this({ Native.load("Advapi32", Credentials::class.java) })
+
     @Suppress("ktlint:standard:function-naming") // Names are the Windows ABI entry points.
-    private interface Credentials : StdCallLibrary {
+    internal interface Credentials : StdCallLibrary {
         fun CredReadW(target: WString, type: Int, flags: Int, credential: PointerByReference): Boolean
         fun CredWriteW(credential: Credential, flags: Int): Boolean
         fun CredDeleteW(target: WString, type: Int, flags: Int): Boolean

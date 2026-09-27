@@ -118,6 +118,10 @@ open class WindowsExtensionProcessManager(
             closeInternal()
         }
         state = HostProcessState.STARTING
+        mihon.desktop.logging.DesktopLogger.info(
+            "ExtensionHost",
+            "Starting extension host in ${hostWorkingDirectory.name}",
+        )
         lastExitCode = null
         lastStderr = ""
 
@@ -125,7 +129,7 @@ open class WindowsExtensionProcessManager(
 
         val command = customCommand ?: buildDefaultCommand()
         val stderrLog = File(hostWorkingDirectory, "extension-host-stderr.log")
-        val proc = if (Platform.isWindows()) {
+        val proc = if (Platform.isWindows() && WindowsAppContainerLauncher.isSupported()) {
             // Session cookies and headers remain exclusively in the parent HTTP broker.
             val environment = emptyMap<String, String>()
             val launcher = WindowsAppContainerLauncher(hostWorkingDirectory, memoryLimitBytes)
@@ -140,6 +144,11 @@ open class WindowsExtensionProcessManager(
                 state = HostProcessState.STOPPED
                 throw cancelled
             } catch (error: Throwable) {
+                mihon.desktop.logging.DesktopLogger.error(
+                    "ExtensionHost",
+                    "Isolated extension host launch failed: ${error.message}",
+                    error,
+                )
                 sandboxLauncher = null
                 state = HostProcessState.CRASHED
                 throw IpcException("Isolated extension host launch failed: ${error.message}", error)
@@ -206,6 +215,10 @@ open class WindowsExtensionProcessManager(
             lastExitCode = code
             lastStderr = readStderrTail(stderrLog)
             if (process === proc && (state == HostProcessState.RUNNING || state == HostProcessState.STARTING)) {
+                mihon.desktop.logging.DesktopLogger.error(
+                    "ExtensionHost",
+                    "Extension host process terminated with code $code; stderr: $lastStderr",
+                )
                 state = HostProcessState.CRASHED
                 try {
                     ipc.close()
@@ -219,6 +232,10 @@ open class WindowsExtensionProcessManager(
                 throw IpcException("Unexpected ping response from extension host: $pong")
             }
             state = HostProcessState.RUNNING
+            mihon.desktop.logging.DesktopLogger.info(
+                "ExtensionHost",
+                "Extension host running in ${hostWorkingDirectory.name} (pid=${proc.pid()})",
+            )
             epoch++
         } catch (cancelled: CancellationException) {
             closeInternal()
@@ -231,6 +248,11 @@ open class WindowsExtensionProcessManager(
             lastStderr = readStderrTail(stderrLog)
             state = HostProcessState.CRASHED
             val stderrInfo = if (lastStderr.isNotEmpty()) "\nStderr: $lastStderr" else ""
+            mihon.desktop.logging.DesktopLogger.error(
+                "ExtensionHost",
+                "Failed to establish IPC handshake with extension host: ${e.message}$stderrInfo",
+                e,
+            )
             throw IpcException("Failed to establish IPC handshake with extension host: ${e.message}$stderrInfo", e)
         }
     }

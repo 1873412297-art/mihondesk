@@ -75,13 +75,32 @@ class TrackOnReadSyncService(
     @Synchronized fun start(scope: CoroutineScope) {
         if (worker?.isActive == true) return
         worker = scope.launch {
+            var consecutiveFailures = 0
             while (isActive) {
+                var failed = false
                 try {
                     flushPending()
+                    consecutiveFailures = 0
                 } catch (error: CancellationException) {
                     throw error
-                } catch (_: Exception) { }
-                withTimeoutOrNull(pollMillis.coerceAtLeast(1)) { wakeup.receive() }
+                } catch (e: Exception) {
+                    failed = true
+                    consecutiveFailures++
+                    mihon.desktop.logging.DesktopLogger.warn(
+                        "TrackOnReadSyncService",
+                        "Failed to flush pending track-on-read updates (attempt $consecutiveFailures)",
+                        e,
+                    )
+                }
+                val backoffMillis = if (failed) {
+                    val base = pollMillis.coerceAtLeast(1000L)
+                    val shift = (consecutiveFailures - 1).coerceIn(0, 30)
+                    val exp = (base * (1L shl shift)).coerceAtLeast(base)
+                    minOf(exp, 15 * 60 * 1000L)
+                } else {
+                    pollMillis.coerceAtLeast(1)
+                }
+                withTimeoutOrNull(backoffMillis) { wakeup.receive() }
             }
         }
     }
@@ -127,7 +146,13 @@ class TrackOnReadSyncService(
                         error: CancellationException,
                     ) {
                         throw error
-                    } catch (_: Exception) { }
+                    } catch (e: Exception) {
+                        mihon.desktop.logging.DesktopLogger.warn(
+                            "TrackOnReadSyncService",
+                            "Direct remote tracking update failed for tracker ${track.trackerId}",
+                            e,
+                        )
+                    }
                 }
             }
         }
@@ -183,6 +208,11 @@ class TrackOnReadSyncService(
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
+                mihon.desktop.logging.DesktopLogger.warn(
+                    "TrackOnReadSyncService",
+                    "Failed to flush item for manga ${item.mangaId} to tracker ${item.trackerId}",
+                    error,
+                )
                 val unauthorized = (error as? TrackerHttpException)?.code == 401
                 queue.updateRetry(item, now(), unauthorized)
                 if (unauthorized) authentication.value = authentication.value + item.trackerId

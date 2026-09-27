@@ -57,6 +57,7 @@ class DesktopSyncServerManager(
             val changesetStore = SqliteChangesetStore.open(dbFile)
             store = changesetStore
 
+            mihon.desktop.logging.DesktopLogger.info("DesktopSyncServerManager", "Starting sync server on port $port")
             val srv = SyncServer(
                 host = "0.0.0.0",
                 port = port,
@@ -68,9 +69,15 @@ class DesktopSyncServerManager(
             lastError = null
 
             startAdvertisement(port, deviceName, quickPairEnabled, token)
+            mihon.desktop.logging.DesktopLogger.info("DesktopSyncServerManager", "Sync server running on port $port")
 
             true
         } catch (e: Throwable) {
+            mihon.desktop.logging.DesktopLogger.error(
+                "DesktopSyncServerManager",
+                "Failed to start sync server on port $port",
+                e,
+            )
             stop()
             lastError = e.message ?: "Failed to start sync server"
             false
@@ -132,6 +139,7 @@ class DesktopSyncServerManager(
 
     @Synchronized
     fun stop() {
+        mihon.desktop.logging.DesktopLogger.info("DesktopSyncServerManager", "Stopping sync server")
         stopAdvertisement()
 
         try {

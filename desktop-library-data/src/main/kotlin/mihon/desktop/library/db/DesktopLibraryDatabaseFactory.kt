@@ -200,6 +200,14 @@ private class SingleConnectionSqliteDriver(
     private val listeners = mutableMapOf<String, MutableSet<Query.Listener>>()
     private val connectionLock = ReentrantLock(true)
 
+    init {
+        connection.createStatement().use { stmt ->
+            stmt.execute("PRAGMA journal_mode = WAL;")
+            stmt.execute("PRAGMA synchronous = NORMAL;")
+            stmt.execute("PRAGMA busy_timeout = 5000;")
+        }
+    }
+
     override fun getConnection(): Connection {
         connectionLock.lock()
         return connection
@@ -215,6 +223,9 @@ private class SingleConnectionSqliteDriver(
         parameters: Int,
         binders: (SqlPreparedStatement.() -> Unit)?,
     ): QueryResult<Long> =
+        // Never hop threads here: SQLDelight transactions hold connectionLock on the
+        // calling thread, so dispatching execute() would self-deadlock the driver.
+        // UI-thread responsiveness must come from call sites dispatching, not the driver.
         super.execute(identifier, sql, parameters, binders).also { afterStatement?.invoke(sql) }
 
     override fun Connection.beginTransaction() {

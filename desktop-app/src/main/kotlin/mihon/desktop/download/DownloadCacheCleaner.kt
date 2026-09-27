@@ -115,11 +115,21 @@ class DownloadCacheCleaner(
                                     freed += Files.size(path)
                                 }
                                 Files.deleteIfExists(path)
-                            } catch (_: Exception) {
+                            } catch (e: Exception) {
+                                mihon.desktop.logging.DesktopLogger.warn(
+                                    "DownloadCacheCleaner",
+                                    "Failed to delete cache file $path",
+                                    e,
+                                )
                             }
                         }
                     }
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                mihon.desktop.logging.DesktopLogger.warn(
+                    "DownloadCacheCleaner",
+                    "Failed to clean image cache in $cacheDir",
+                    e,
+                )
             }
             return freed
         }

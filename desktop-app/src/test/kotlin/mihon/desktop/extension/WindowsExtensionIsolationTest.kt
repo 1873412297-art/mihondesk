@@ -145,6 +145,7 @@ class WindowsExtensionIsolationTest {
     @Test
     fun `different extension packages have distinct processes and cannot overwrite sibling data`() = runBlocking {
         assumeTrue(Platform.isWindows())
+        assumeTrue(WindowsAppContainerLauncher.isSupported(), "AppContainer sandbox unavailable in this environment")
         val manager = WindowsExtensionProcessManager(tempDir.resolve("two-hosts").toFile())
         try {
             manager.loadExtension(packageFile("one", IsolationSourceOne::class.java, 901))
@@ -302,6 +303,7 @@ class WindowsExtensionIsolationTest {
     @Test
     fun `real extension host runs with an AppContainer token`() = runBlocking {
         assumeTrue(Platform.isWindows())
+        assumeTrue(WindowsAppContainerLauncher.isSupported(), "AppContainer sandbox unavailable in this environment")
         // CI runners (e.g. windows-2025) can restrict AppContainer sandbox launch; the
         // pipe handshake then fails even though local dev machines work. The launcher
         // wraps the handshake error in IpcException, so walk the cause chain. Treat

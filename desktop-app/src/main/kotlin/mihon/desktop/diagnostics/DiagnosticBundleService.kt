@@ -24,6 +24,9 @@ data class DiagnosticSummary(
     val freeMemoryBytes: Long,
     val databaseIntegrity: List<String>,
     val logFileCount: Int,
+    val snapshotCount: Int = 0,
+    val snapshotSizeBytes: Long = 0L,
+    val snapshotDirectory: String = "",
 )
 
 class DiagnosticBundleService(
@@ -42,6 +45,11 @@ class DiagnosticBundleService(
         } else {
             0
         }
+        val snapshotInfo = runCatching {
+            mihon.desktop.library.db.DatabaseMigrationSnapshot.getSnapshotInfo(
+                directories.database.resolve("library.db"),
+            )
+        }.getOrNull()
 
         return DiagnosticSummary(
             timestamp = DateTimeFormatter.ISO_INSTANT.format(Instant.now()),
@@ -55,6 +63,9 @@ class DiagnosticBundleService(
             freeMemoryBytes = runtime.freeMemory(),
             databaseIntegrity = integrity,
             logFileCount = logFiles,
+            snapshotCount = snapshotInfo?.count ?: 0,
+            snapshotSizeBytes = snapshotInfo?.totalBytes ?: 0L,
+            snapshotDirectory = snapshotInfo?.directory?.toString().orEmpty(),
         )
     }
 
@@ -77,6 +88,9 @@ class DiagnosticBundleService(
                     )
                     appendLine("DB Integrity: ${summary.databaseIntegrity.joinToString(", ")}")
                     appendLine("Log files present: ${summary.logFileCount}")
+                    appendLine(
+                        "Migration Snapshots: ${summary.snapshotCount} (${summary.snapshotSizeBytes} bytes) at ${summary.snapshotDirectory}",
+                    )
                 }
                 zip.write(summaryText.toByteArray(UTF_8))
                 zip.closeEntry()

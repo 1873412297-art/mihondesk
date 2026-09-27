@@ -35,4 +35,8 @@ interface ChangesetStore : Closeable {
     fun getChangesets(sinceCursors: Map<String, Long> = emptyMap(), excludeDeviceId: String = ""): List<ChangesetRecord>
     fun getHeadCursor(excludeDeviceId: String = ""): Long
     fun cleanup(retentionDays: Int = 30, maxChangesets: Int = 5000): Int
+    fun getDeviceOwner(deviceId: String): String? = null
+    fun bindDeviceOwner(deviceId: String, ownerTokenHash: String) {}
+    fun getLastCursor(deviceId: String): Long? = null
+    fun getChangeset(deviceId: String, cursor: Long): ChangesetRecord? = null
 }
