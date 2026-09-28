@@ -23,16 +23,16 @@ AI 辅助开发的开源项目 · 基于 Mihon · Kotlin / Compose Desktop
 
 ## 下载与安装
 
-当前版本：**0.2.21**。面向 **Windows 10 22H2 / Windows 11，x64**，发行包已内置运行环境，无需另装 Java。
+当前版本：**0.2.22**。面向 **Windows 10 22H2 / Windows 11，x64**，发行包已内置运行环境，无需另装 Java。
 
 程序、安装包和快捷方式现已统一命名为 **mihondesk**。安装版继续使用原有数据目录，支持从 MihonW 升级。
 
 | 下载 | 适用方式 |
 | --- | --- |
-| **[EXE 安装包](https://github.com/1873412297-art/mihondesk/releases/download/v0.2.21/mihondesk-0.2.21.exe)** | 推荐使用，下载后按向导安装 |
-| [MSI 安装包](https://github.com/1873412297-art/mihondesk/releases/download/v0.2.21/mihondesk-0.2.21.msi) | 需要 MSI 安装方式时使用 |
-| [便携 ZIP](https://github.com/1873412297-art/mihondesk/releases/download/v0.2.21/mihondesk-0.2.21-windows-x64-portable.zip) | 完整解压到可写目录，运行其中的 `mihondesk.exe` |
-| [SHA-256 校验文件](https://github.com/1873412297-art/mihondesk/releases/download/v0.2.21/SHA256SUMS.txt) | 校验下载文件的完整性 |
+| **[EXE 安装包](https://github.com/1873412297-art/mihondesk/releases/download/v0.2.22/mihondesk-0.2.22.exe)** | 推荐使用，下载后按向导安装 |
+| [MSI 安装包](https://github.com/1873412297-art/mihondesk/releases/download/v0.2.22/mihondesk-0.2.22.msi) | 需要 MSI 安装方式时使用 |
+| [便携 ZIP](https://github.com/1873412297-art/mihondesk/releases/download/v0.2.22/mihondesk-0.2.22-windows-x64-portable.zip) | 完整解压到可写目录，运行其中的 `mihondesk.exe` |
+| [SHA-256 校验文件](https://github.com/1873412297-art/mihondesk/releases/download/v0.2.22/SHA256SUMS.txt) | 校验下载文件的完整性 |
 
 **首次使用**：发行包不预装在线图源或扩展仓库，请自行添加仓库或安装扩展。本地文件阅读无需安装图源。升级会保留已有书架、设置和阅读数据。
 
@@ -56,6 +56,16 @@ AI 辅助开发的开源项目 · 基于 Mihon · Kotlin / Compose Desktop
 2. **阅读本地文件**：使用本地导入入口选择漫画文件或图片目录。
 3. **阅读在线内容**：在浏览页安装扩展包，再选择图源。安装入口支持 `.mext`，也可尝试转换受支持的扩展 `.apk`。
 4. **保留阅读数据**：使用备份功能定期导出。备份不包含已下载的漫画图片。
+
+## 0.2.22 更新
+
+- **交互基建**：全局快捷键（Ctrl+1~8 / Ctrl+F / F5 / ?）、真后退栈（任意子页面 Esc 后退）、Snackbar + 删除撤销、书架/章节/图源/历史/下载全面右键菜单与 Tooltip、动态窗口标题；
+- **功能对齐 Mihon**：迁移自动匹配 + 批量迁移（分类与跟踪一并搬运）、每漫画阅读模式/预载覆盖、下载单项暂停与排序、更新流日期分组、书架角标选项、备份六类内容可选、首次运行引导；
+- **健壮性**：同步服务器请求上限与设备绑定、运行日志与崩溃兜底、数据库 WAL、迁移快照自动修剪；
+- **i18n**：内联文案清零，日期时间跟随界面语言；
+- 注意：新增「显示 NSFW 图源」开关**默认关闭**，升级后 NSFW 图源默认隐藏，可在 设置 → 浏览 打开。
+
+详见[本版发布说明](https://github.com/1873412297-art/mihondesk/releases/tag/v0.2.22)和[更新日志](CHANGELOG.md)。
 
 ## 0.2.21 更新
 

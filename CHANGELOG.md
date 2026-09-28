@@ -2,6 +2,14 @@
 
 这里记录 mihondesk Windows 版的更新。安装包与完整发布说明见 [GitHub Releases](https://github.com/1873412297-art/mihondesk/releases)。继承自 Android 上游的历史日志保留在 [Mihon 更新日志](docs/upstream/MIHON_CHANGELOG.md)。
 
+## [0.2.22](https://github.com/1873412297-art/mihondesk/releases/tag/v0.2.22)
+
+- **交互基建**：全局快捷键层、真后退栈、Snackbar + Undo、右键菜单与 Tooltip 全覆盖、动态窗口标题；
+- **功能对齐**：迁移自动匹配/批量/分类跟踪搬运、每漫画阅读设置覆盖、下载队列暂停与排序、更新流分组与行操作、书架展示选项、阅读器预载与页码提示、图源过滤/隐藏/NSFW 开关、备份粒度选项、Onboarding；
+- **健壮性**：同步服务器安全加固（请求上限、设备绑定、游标单调）、运行日志与全局崩溃兜底、DB WAL、快照修剪；
+- **i18n**：`recoveryText` 内联清零、硬编码英文清零、日期时间本地化；
+- 注意：NSFW 图源开关默认关闭，老用户升级后需在 设置 → 浏览 打开。
+
 ## [0.2.21](https://github.com/1873412297-art/mihondesk/releases/tag/v0.2.21)
 
 - **图源修复**：扩展不支持「热门/最新」时显示引导空态而非裸异常（J-Novel）；修复 vomic 裸 NullPointerException（宿主注入 `http.agent`）；哔哩漫画等防盗链图源封面恢复显示（封面请求附带 Referer，403 纳入失败登记）；扩展包文件丢失时启动自动清理脏记录并提示重新安装。
