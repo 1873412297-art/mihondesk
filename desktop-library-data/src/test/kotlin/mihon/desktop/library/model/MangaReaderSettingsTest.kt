@@ -76,4 +76,25 @@ class MangaReaderSettingsTest {
         parsed.preloadPages shouldBe null
         parsed.isEmpty shouldBe false
     }
+
+    @Test
+    fun `encode preserves valid non-object memoJson unchanged`() {
+        // Regression: a valid non-object memo (array/primitive) used to be silently replaced
+        // with "{}" because the cast to JsonObject failed and fell back to an empty root.
+        val arrayMemo = """["a","b"]"""
+        MangaReaderSettings.encode(arrayMemo, MangaReaderSettingsOverride(ReadingMode.WEBTOON)) shouldBe arrayMemo
+        MangaReaderSettings.encode(arrayMemo, null) shouldBe arrayMemo
+
+        val primitiveMemo = """42"""
+        MangaReaderSettings.encode(primitiveMemo, null) shouldBe primitiveMemo
+
+        val stringMemo = """"hello""""
+        MangaReaderSettings.encode(stringMemo, MangaReaderSettingsOverride()) shouldBe stringMemo
+    }
+
+    @Test
+    fun `encode still treats invalid memoJson as an empty object`() {
+        val encoded = MangaReaderSettings.encode("not json", MangaReaderSettingsOverride(ReadingMode.WEBTOON))
+        encoded.contains("readerSettings") shouldBe true
+    }
 }

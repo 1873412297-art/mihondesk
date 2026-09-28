@@ -40,7 +40,9 @@ class BatchMigrationRunner(
         delayMs: Long = 500L,
         onComplete: (() -> Unit)? = null,
     ): Job {
-        currentJob?.cancel()
+        // Re-entry guard: starting while a batch is still running would interleave state updates
+        // from two coroutines; return the active job instead.
+        currentJob?.let { active -> if (active.isActive) return active }
         val job = scope.launch {
             try {
                 runBatchMigration(

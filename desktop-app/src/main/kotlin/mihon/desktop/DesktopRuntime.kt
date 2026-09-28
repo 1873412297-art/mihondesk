@@ -61,6 +61,7 @@ class DesktopRuntime(
     val desktopNotificationService: mihon.desktop.platform.DesktopNotificationService? = null,
     val libraryUpdateService: mihon.desktop.library.update.LibraryUpdateService? = null,
     val libraryUpdateScheduler: mihon.desktop.library.update.LibraryUpdateScheduler? = null,
+    val extensionUpdateChecker: mihon.desktop.extension.ExtensionUpdateChecker? = null,
     val backgroundScheduler: mihon.desktop.platform.WindowsBackgroundScheduler? = null,
     val webViews: mihon.desktop.webview.DesktopWebViewManager? = null,
     val customCoverManager: mihon.desktop.image.CustomCoverManager =
@@ -486,8 +487,15 @@ object DesktopRuntimeFactory {
                 recoveryFile = directories.root.resolve("library-update-state.properties"),
                 startAutomatically = command == DesktopCommand.LaunchUi,
             )
+            val extensionUpdateChecker = mihon.desktop.extension.ExtensionUpdateChecker(
+                installer = extensionInstaller,
+                storeService = extensionStoreService,
+                onUpdatesAvailable = { count -> notificationService.notifyExtensionUpdatePending(count) },
+                scope = appScope,
+            )
             if (command == DesktopCommand.LaunchUi) {
                 backupScheduler.start()
+                extensionUpdateChecker.start()
                 val currentPrefs = preferences.load()
                 if (currentPrefs.syncServerEnabled) {
                     var token = currentPrefs.syncServerToken
@@ -557,6 +565,7 @@ object DesktopRuntimeFactory {
                 desktopNotificationService = desktopNotificationService,
                 libraryUpdateService = libraryUpdateService,
                 libraryUpdateScheduler = libraryUpdateScheduler,
+                extensionUpdateChecker = extensionUpdateChecker,
                 backgroundScheduler = backgroundScheduler,
                 webViews = webViews,
                 extensionInstaller = extensionInstaller,
@@ -569,6 +578,7 @@ object DesktopRuntimeFactory {
                     syncServerManager.stop()
                     backupScheduler.stop()
                     syncScheduler.stop()
+                    extensionUpdateChecker.stop()
                     libraryUpdateScheduler.stop()
                     trackSyncService.close()
                     runBlocking { downloader.shutdown() }

@@ -34,6 +34,7 @@ import androidx.compose.material.icons.rounded.CollectionsBookmark
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.FilterList
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
@@ -173,6 +174,8 @@ fun LibraryScreen(
     onDuplicateMigrate: (Long) -> Unit = {},
     onDuplicateAddAnyway: () -> Unit = {},
     onDuplicateDismiss: () -> Unit = {},
+    onOpenChapterInWebView: ((Long) -> Unit)? = null,
+    onOpenRandomManga: () -> Unit = {},
     sourceNameFor: (Long) -> String = { "Source #$it" },
     sourceBaseUrlFor: (Long) -> String? = { null },
 ) {
@@ -241,6 +244,7 @@ fun LibraryScreen(
                     onBatchMarkRead = onBatchMarkRead,
                     onBatchDownload = onBatchDownload,
                     onBatchRemoveFromLibrary = onBatchRemoveFromLibrary,
+                    onOpenRandomManga = onOpenRandomManga,
                     sourceBaseUrlFor = sourceBaseUrlFor,
                     modifier = Modifier.weight(0.55f).fillMaxHeight().testTag("library-grid-pane"),
                 )
@@ -255,6 +259,7 @@ fun LibraryScreen(
                     onRefreshSource = onRefreshMangaSource,
                     isLibraryActionRunning = isMangaLibraryActionRunning,
                     isRefreshingSource = isMangaSourceRefreshing,
+                    onOpenChapterInWebView = onOpenChapterInWebView,
                     showBack = false,
                     modifier = Modifier.weight(0.45f).fillMaxHeight(),
                 )
@@ -270,6 +275,7 @@ fun LibraryScreen(
                 onRefreshSource = onRefreshMangaSource,
                 isLibraryActionRunning = isMangaLibraryActionRunning,
                 isRefreshingSource = isMangaSourceRefreshing,
+                onOpenChapterInWebView = onOpenChapterInWebView,
                 showBack = true,
                 modifier = Modifier.fillMaxSize(),
             )
@@ -305,6 +311,7 @@ fun LibraryScreen(
                 onBatchMarkRead = onBatchMarkRead,
                 onBatchDownload = onBatchDownload,
                 onBatchRemoveFromLibrary = onBatchRemoveFromLibrary,
+                onOpenRandomManga = onOpenRandomManga,
                 sourceBaseUrlFor = sourceBaseUrlFor,
                 modifier = Modifier.fillMaxSize().testTag("library-grid-pane"),
             )
@@ -371,6 +378,7 @@ private fun LibraryPane(
     onUpdateLibrary: (() -> Unit)? = null,
     isRepairingCovers: Boolean = false,
     onRepairBrokenCovers: (() -> Unit)? = null,
+    onOpenRandomManga: () -> Unit = {},
     sourceBaseUrlFor: (Long) -> String? = { null },
     modifier: Modifier,
 ) {
@@ -501,6 +509,19 @@ private fun LibraryPane(
                             label = { Text(strings.libraryBatchSelect) },
                             modifier = Modifier.testTag("library-toggle-selection"),
                         )
+                    }
+
+                    DesktopTooltipBox(text = strings.libraryOpenRandom) {
+                        IconButton(
+                            onClick = onOpenRandomManga,
+                            enabled = state.items.isNotEmpty(),
+                            modifier = Modifier.testTag("library-open-random"),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Shuffle,
+                                contentDescription = strings.libraryOpenRandom,
+                            )
+                        }
                     }
                 }
             }

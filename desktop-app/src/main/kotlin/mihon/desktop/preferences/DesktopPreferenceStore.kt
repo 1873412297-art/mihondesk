@@ -63,6 +63,7 @@ data class DesktopPreferences(
     val libraryUpdateSkipStarted: Boolean = false,
     val libraryUpdateCategories: Set<Long> = emptySet(),
     val libraryUpdateCategoriesExclude: Set<Long> = emptySet(),
+    val libraryUpdateOnlyOnAcPower: Boolean = false,
     val autoDownloadNewChapters: Boolean = false,
     val desktopNotificationsEnabled: Boolean = true,
     val desktopNotificationsHideContent: Boolean = false,
@@ -216,6 +217,8 @@ class DesktopPreferenceStore(private val file: Path) {
                 "library.update_categories_exclude",
                 "library_update_categories_exclude",
             ),
+            libraryUpdateOnlyOnAcPower = properties.getProperty("library.update_only_on_ac_power")
+                ?.toBooleanStrictOrNull() ?: false,
             autoDownloadNewChapters = properties.getProperty("library.auto_download_new")
                 ?.toBooleanStrictOrNull() ?: false,
             desktopNotificationsEnabled = properties.getProperty("notifications.desktop_enabled")
@@ -315,6 +318,10 @@ class DesktopPreferenceStore(private val file: Path) {
         properties.setProperty(
             "library.update_categories_exclude",
             preferences.libraryUpdateCategoriesExclude.encodeLongSet(),
+        )
+        properties.setProperty(
+            "library.update_only_on_ac_power",
+            preferences.libraryUpdateOnlyOnAcPower.toString(),
         )
         properties.setProperty(
             "library.auto_download_new",

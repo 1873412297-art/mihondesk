@@ -12,6 +12,7 @@ import io.ktor.http.HttpStatusCode
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.protobuf.ProtoBuf
 import mihon.sync.core.model.Changeset
+import mihon.sync.transport.api.SyncCursorConflictException
 import mihon.sync.transport.api.SyncTransport
 import java.io.Closeable
 import java.util.Base64
@@ -39,11 +40,16 @@ class HttpTransport(
                 HttpStatusCode.BadRequest -> throw SyncProtocolException(
                     "Bad request when pushing changeset (400): ${response.bodyAsText()}",
                 )
+                HttpStatusCode.Conflict -> throw SyncCursorConflictException(
+                    "Cursor conflict when pushing changeset (409): ${response.bodyAsText()}",
+                )
                 else -> throw SyncProtocolException(
                     "Unexpected server response (${response.status.value}): ${response.bodyAsText()}",
                 )
             }
         } catch (e: SyncHttpException) {
+            throw e
+        } catch (e: SyncCursorConflictException) {
             throw e
         } catch (e: Throwable) {
             throw SyncNetworkException("Network error while pushing changeset to $baseUrl", e)

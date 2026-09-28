@@ -236,4 +236,42 @@ class HttpSyncIntegrationTest {
             repoB.chapters["/manga1"]?.get("/ch1")?.lastPageRead,
         )
     }
+
+    @Test
+    fun `engine recovers from 409 cursor gap after crash between nextCursor and push`() = runBlocking {
+        val serverUrl = "http://127.0.0.1:$serverPort"
+        val repo = TestLocalRepository()
+        val state = InMemorySyncStateStore("desktop-dev")
+        val transport = HttpTransport(serverUrl, token)
+        var now = 10_000L
+        val engine = SyncEngine(repo, transport, state, clock = { now })
+
+        // First sync succeeds; the server now holds cursor 1 for this device.
+        repo.mangas["/m1"] = AndroidBackupManga(source = 1L, url = "/m1", lastModifiedAt = 10_000L)
+        repo.locallyModified.add("/m1")
+        val report1 = engine.syncNow()
+        assertTrue(report1.success)
+        assertEquals(1L, report1.pushedChangeset?.cursor)
+
+        // Simulate the crash window: a cursor is allocated and persisted locally, but the
+        // process dies before the push reaches the server.
+        state.nextCursor()
+
+        // Next sync offers cursor 3 while the server still expects 2 -> 409 gap. The engine
+        // must heal by re-pushing the identical delta under the gap-filling cursor 2.
+        now = 20_000L
+        repo.mangas["/m2"] = AndroidBackupManga(source = 1L, url = "/m2", lastModifiedAt = 20_000L)
+        repo.locallyModified.add("/m2")
+        val report2 = engine.syncNow()
+        assertTrue(report2.success)
+        assertEquals(2L, report2.pushedChangeset?.cursor)
+        assertEquals("/m2", report2.pushedChangeset?.upserts?.mangas?.first()?.url)
+
+        // A further sync is fully healthy again (no conflict loop).
+        val report3 = engine.syncNow()
+        assertTrue(report3.success)
+        assertEquals(null, report3.pushedChangeset)
+
+        transport.close()
+    }
 }

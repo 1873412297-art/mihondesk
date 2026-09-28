@@ -74,6 +74,11 @@ fun DesktopShell(
                                 selected = state.selected,
                                 onDestinationSelected = actions.onDestinationSelected,
                                 alwaysShowLabel = true,
+                                badgeCount = if (destination == DesktopDestination.Updates) {
+                                    state.updatesUnreadCount
+                                } else {
+                                    0
+                                },
                             )
                         }
                     }
@@ -85,6 +90,11 @@ fun DesktopShell(
                                 selected = state.selected,
                                 onDestinationSelected = actions.onDestinationSelected,
                                 alwaysShowLabel = false,
+                                badgeCount = if (destination == DesktopDestination.Updates) {
+                                    state.updatesUnreadCount
+                                } else {
+                                    0
+                                },
                             )
                         }
                         if (actions.onLockNow != null) {
@@ -229,6 +239,8 @@ fun DesktopShell(
                                 onDuplicateMigrate = actions.onDuplicateMigrate,
                                 onDuplicateAddAnyway = actions.onDuplicateAddAnyway,
                                 onDuplicateDismiss = actions.onDuplicateDismiss,
+                                onOpenChapterInWebView = actions.onOpenChapterInWebView,
+                                onOpenRandomManga = actions.onOpenRandomManga,
                                 sourceNameFor = state.sourceNameFor,
                                 sourceBaseUrlFor = state.sourceBaseUrlFor,
                             )
@@ -398,6 +410,7 @@ fun DesktopShell(
     onReadDownloadedChapter: (mangaId: Long, chapterId: Long) -> Unit = { _, chapterId -> onReadChapter(chapterId) },
     // Updates
     updatedChapters: List<mihon.desktop.updates.UpdatedChapterItem> = emptyList(),
+    updatesUnreadCount: Int = 0,
     isUpdatingLibrary: Boolean = false,
     isRepairingCovers: Boolean = false,
     onRepairBrokenCovers: (() -> Unit)? = null,
@@ -503,6 +516,8 @@ fun DesktopShell(
     onDuplicateMigrate: (Long) -> Unit = {},
     onDuplicateAddAnyway: () -> Unit = {},
     onDuplicateDismiss: () -> Unit = {},
+    onOpenChapterInWebView: ((Long) -> Unit)? = null,
+    onOpenRandomManga: () -> Unit = {},
     sourceNameFor: (Long) -> String = { "Source #$it" },
     sourceBaseUrlFor: (Long) -> String? = { null },
     downloadCacheCleaner: mihon.desktop.download.DownloadCacheCleaner? = null,
@@ -525,6 +540,7 @@ fun DesktopShell(
         downloadRecoveryMessage = downloadRecoveryMessage,
         downloadStorageError = downloadStorageError,
         updatedChapters = updatedChapters,
+        updatesUnreadCount = updatesUnreadCount,
         isUpdatingLibrary = isUpdatingLibrary,
         isRepairingCovers = isRepairingCovers,
         lastUpdateResult = lastUpdateResult,
@@ -617,6 +633,8 @@ fun DesktopShell(
         onDuplicateMigrate,
         onDuplicateAddAnyway,
         onDuplicateDismiss,
+        onOpenChapterInWebView,
+        onOpenRandomManga,
         mangaDetailActions,
         onPauseAllDownloads,
         onResumeAllDownloads,
@@ -706,6 +724,8 @@ fun DesktopShell(
             onDuplicateMigrate = onDuplicateMigrate,
             onDuplicateAddAnyway = onDuplicateAddAnyway,
             onDuplicateDismiss = onDuplicateDismiss,
+            onOpenChapterInWebView = onOpenChapterInWebView,
+            onOpenRandomManga = onOpenRandomManga,
             mangaDetailActions = mangaDetailActions,
             onPauseAllDownloads = onPauseAllDownloads,
             onResumeAllDownloads = onResumeAllDownloads,
@@ -746,6 +766,7 @@ private fun DestinationItem(
     selected: DesktopDestination,
     onDestinationSelected: (DesktopDestination) -> Unit,
     alwaysShowLabel: Boolean = false,
+    badgeCount: Int = 0,
 ) {
     val strings = LocalStrings.current
     DesktopTooltipBox(text = strings.destinationLabel(destination)) {
@@ -753,10 +774,30 @@ private fun DestinationItem(
             selected = destination == selected,
             onClick = { onDestinationSelected(destination) },
             icon = {
-                Icon(
-                    imageVector = destinationIcon(destination),
-                    contentDescription = strings.destinationLabel(destination),
-                )
+                if (badgeCount > 0) {
+                    androidx.compose.material3.BadgedBox(
+                        badge = {
+                            androidx.compose.material3.Badge(
+                                modifier = Modifier.testTag("updates-unread-badge"),
+                            ) {
+                                Text(
+                                    badgeCount.toString(),
+                                    style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
+                                )
+                            }
+                        },
+                    ) {
+                        Icon(
+                            imageVector = destinationIcon(destination),
+                            contentDescription = strings.destinationLabel(destination),
+                        )
+                    }
+                } else {
+                    Icon(
+                        imageVector = destinationIcon(destination),
+                        contentDescription = strings.destinationLabel(destination),
+                    )
+                }
             },
             label = {
                 Text(

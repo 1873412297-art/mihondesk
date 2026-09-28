@@ -123,6 +123,10 @@ class DesktopNavigator(
             }
             current = _backStack.last()
             updateCurrentDestination()
+            // Mirrors navigate(DesktopDestination): observers must hear about the pop even
+            // though MangaDetails itself is a transient route, so report the effective
+            // destination now on top of the stack.
+            onDestinationChanged(currentDestination)
             return
         }
         if (current is DesktopDestination.Reader) {

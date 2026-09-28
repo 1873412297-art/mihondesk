@@ -464,6 +464,13 @@ fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
             }
         } ?: emptyList()
     }
+    // Unread-count badge for the Updates rail item.
+    val updatesUnreadCount = remember(updatedChapters) { updatedChapters.count { !it.read } }
+
+    // Chapter "Open in WebView" request state: resolved to a source descriptor + absolute URL.
+    var chapterWebViewRequest by remember {
+        mutableStateOf<Pair<mihon.extension.model.SourceDescriptor, String>?>(null)
+    }
 
     val historyService = runtime.historyService
     val historyState by (
@@ -835,6 +842,7 @@ fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
                                             applyReaderWindowMode(mode)
                                         },
                                         onEscape = ::handleReaderEscape,
+                                        foreground = !windowState.isMinimized,
                                     )
                                 } else {
                                     val upcomingContent: (@Composable () -> Unit)? = if (destination ==
@@ -1125,6 +1133,42 @@ fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
                                         downloadSpeedBytesPerSec = downloadSpeed,
                                         downloadRecoveryMessage = downloadRecovery?.message,
                                         downloadStorageError = downloadStorageError,
+                                        updatesUnreadCount = updatesUnreadCount,
+                                        onOpenRandomManga = {
+                                            val candidates = libraryState.items
+                                            val chosen = candidates.randomOrNull()
+                                            if (chosen != null) {
+                                                libraryPresenter.selectManga(chosen.id)
+                                            } else {
+                                                presenterScope.launch {
+                                                    snackbarHostState.showSnackbar(
+                                                        strings.text(UiText.EmptyLibraryRandom),
+                                                    )
+                                                }
+                                            }
+                                        },
+                                        onOpenChapterInWebView = { chapterId ->
+                                            val manga = mangaDetailState.manga ?: return@DesktopShell
+                                            val chapter =
+                                                mangaDetailState.allChapters.firstOrNull { it.id == chapterId }
+                                                    ?: return@DesktopShell
+                                            val base = sourceBaseUrls[manga.sourceId]
+                                            val url = when {
+                                                chapter.url.startsWith("http") -> chapter.url
+                                                base != null -> base + chapter.url
+                                                else -> null
+                                            }
+                                            val source = runtime.sourceManager.findSourceDescriptor(manga.sourceId)
+                                            if (source == null || url == null) {
+                                                presenterScope.launch {
+                                                    snackbarHostState.showSnackbar(
+                                                        strings.text(UiText.SourceWebPageUnavailable),
+                                                    )
+                                                }
+                                            } else {
+                                                chapterWebViewRequest = source to url
+                                            }
+                                        },
                                         onPauseAllDownloads = { downloader?.pause() },
                                         onResumeAllDownloads = { downloader?.resume() },
                                         onClearCompletedDownloads = {
@@ -1355,6 +1399,15 @@ fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
                                             null
                                         },
                                     )
+                                    chapterWebViewRequest?.let { (webViewSource, webViewUrl) ->
+                                        mihon.desktop.ui.browse.SourceWebPageDialog(
+                                            runtime = runtime,
+                                            source = webViewSource,
+                                            urlOverride = webViewUrl,
+                                            onDismiss = { chapterWebViewRequest = null },
+                                            onRetry = { },
+                                        )
+                                    }
                                     if (destination is DesktopDestination.MangaDetails) {
                                         DesktopBackHandler {
                                             libraryPresenter.selectManga(null)
@@ -1742,6 +1795,7 @@ private fun ReaderDestination(
     currentChapter: ReaderChapterTransitionChapter? = null,
     currentChapterDownloaded: Boolean = false,
     bookmarkStore: ReaderChapterBookmarkStore? = null,
+    foreground: Boolean = true,
 ) {
     val strings = mihon.desktop.i18n.LocalStrings.current
     var readerHandle by remember(destination) { mutableStateOf<mihon.desktop.reader.DesktopReaderHandle?>(null) }
@@ -1807,6 +1861,7 @@ private fun ReaderDestination(
             currentChapter = currentChapter,
             currentChapterDownloaded = currentChapterDownloaded,
             bookmarkStore = bookmarkStore,
+            foreground = foreground,
             pageContent = { page, _, modifier ->
                 DecodedReaderPage(
                     content = activeHandle.content,

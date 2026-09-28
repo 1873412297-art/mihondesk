@@ -52,6 +52,8 @@ interface DesktopStrings {
     val libraryRetry: String
     fun libraryUnreadCount(count: Int): String
     val libraryAllCategory: String
+    val libraryOpenRandom: String
+    val libraryEmptyRandom: String
 
     // Library Display, Filter & Sort
     val libraryDisplayMode: String
@@ -123,6 +125,8 @@ interface DesktopStrings {
     val mangaDetailSave: String
     val mangaDetailShowMore: String
     val mangaDetailShowLess: String
+    val mangaDetailCopyLink: String
+    val mangaDetailLinkCopied: String
     fun mangaDetailMissingChapters(count: Int): String
 
     // Missing Source Banner & Dialog
@@ -182,6 +186,7 @@ interface DesktopStrings {
     val chapterBatchMarkAsUnread: String
     val chapterBatchDownload: String
     val chapterBatchDeleteDownload: String
+    val chapterOpenInWebView: String
     val mangaDetailCoverView: String
     val mangaDetailCoverSave: String
     val mangaDetailCoverSaved: String
@@ -320,6 +325,7 @@ interface DesktopStrings {
     val readerCropBordersWebtoon: String
     val readerWebtoonMaxWidth: String
     val readerWebtoonSidePadding: String
+    val readerKeepScreenOn: String
 
     // Settings
     val settingsTitle: String
@@ -536,6 +542,7 @@ interface DesktopStrings {
     val libraryUpdateSkipCompleted: String
     val libraryUpdateSkipUnread: String
     val libraryAutoDownloadNew: String
+    val libraryUpdateOnlyOnAcPower: String
     val notificationsDesktopEnabled: String
     val libraryLastUpdate: String
 
@@ -854,6 +861,8 @@ object EnglishStrings : DesktopStrings {
     override val libraryRetry = "Retry"
     override fun libraryUnreadCount(count: Int) = "$count unread"
     override val libraryAllCategory = "All"
+    override val libraryOpenRandom = "Open random manga"
+    override val libraryEmptyRandom = "Library is empty"
 
     // Library Display, Filter & Sort
     override val libraryDisplayMode = "Display Mode"
@@ -926,6 +935,8 @@ object EnglishStrings : DesktopStrings {
     override val mangaDetailSave = "Save"
     override val mangaDetailShowMore = "▼ Show more"
     override val mangaDetailShowLess = "▲ Show less"
+    override val mangaDetailCopyLink = "Copy link"
+    override val mangaDetailLinkCopied = "Link copied to clipboard"
     override fun mangaDetailMissingChapters(count: Int) =
         if (count == 1) "1 missing chapter" else "$count missing chapters"
 
@@ -989,6 +1000,7 @@ object EnglishStrings : DesktopStrings {
     override val chapterBatchMarkAsUnread = "Mark as unread"
     override val chapterBatchDownload = "Download"
     override val chapterBatchDeleteDownload = "Delete download"
+    override val chapterOpenInWebView = "Open in WebView"
     override val mangaDetailCoverView = "View cover"
     override val mangaDetailCoverSave = "Save cover"
     override val mangaDetailCoverSaved = "Cover saved successfully"
@@ -1126,6 +1138,7 @@ object EnglishStrings : DesktopStrings {
     override val readerCropBordersWebtoon = "Smart Crop Borders (Webtoon)"
     override val readerWebtoonMaxWidth = "Webtoon Max Width"
     override val readerWebtoonSidePadding = "Webtoon Side Padding"
+    override val readerKeepScreenOn = "Keep screen on while reading"
 
     override val settingsTitle = "Settings"
     override val settingsSectionGeneral = "General"
@@ -1357,6 +1370,7 @@ object EnglishStrings : DesktopStrings {
     override val libraryUpdateSkipCompleted = "Skip completed manga"
     override val libraryUpdateSkipUnread = "Skip manga with unread chapters"
     override val libraryAutoDownloadNew = "Automatically download new chapters"
+    override val libraryUpdateOnlyOnAcPower = "Only update library when on AC power"
     override val notificationsDesktopEnabled = "Show desktop notifications"
     override val libraryLastUpdate = "Last library update:"
     override val upcomingMonthPattern = "MMMM yyyy"
@@ -1759,6 +1773,8 @@ object SimplifiedChineseStrings : DesktopStrings {
     override val libraryRetry = "重试"
     override fun libraryUnreadCount(count: Int) = "$count 未读"
     override val libraryAllCategory = "全部"
+    override val libraryOpenRandom = "随机打开一本漫画"
+    override val libraryEmptyRandom = "书架是空的"
 
     // Library Display, Filter & Sort
     override val libraryDisplayMode = "展示模式"
@@ -1830,6 +1846,8 @@ object SimplifiedChineseStrings : DesktopStrings {
     override val mangaDetailSave = "保存"
     override val mangaDetailShowMore = "▼ 显示更多"
     override val mangaDetailShowLess = "▲ 显示更少"
+    override val mangaDetailCopyLink = "复制链接"
+    override val mangaDetailLinkCopied = "链接已复制到剪贴板"
     override fun mangaDetailMissingChapters(count: Int) = "缺失 $count 话"
 
     // Missing Source Banner & Dialog
@@ -1892,6 +1910,7 @@ object SimplifiedChineseStrings : DesktopStrings {
     override val chapterBatchMarkAsUnread = "标记未读"
     override val chapterBatchDownload = "下载"
     override val chapterBatchDeleteDownload = "删除下载"
+    override val chapterOpenInWebView = "在 WebView 中打开"
     override val mangaDetailCoverView = "查看封面"
     override val mangaDetailCoverSave = "保存封面"
     override val mangaDetailCoverSaved = "封面已成功保存"
@@ -2029,6 +2048,7 @@ object SimplifiedChineseStrings : DesktopStrings {
     override val readerCropBordersWebtoon = "智能裁切白边 (条漫)"
     override val readerWebtoonMaxWidth = "条漫最大宽度限制"
     override val readerWebtoonSidePadding = "条漫侧边距"
+    override val readerKeepScreenOn = "阅读时保持屏幕常亮"
 
     override val settingsTitle = "设置"
     override val settingsSectionGeneral = "常规"
@@ -2259,6 +2279,7 @@ object SimplifiedChineseStrings : DesktopStrings {
     override val libraryUpdateSkipCompleted = "跳过已完结作品"
     override val libraryUpdateSkipUnread = "跳过存在未读章节的作品"
     override val libraryAutoDownloadNew = "自动下载新更新章节"
+    override val libraryUpdateOnlyOnAcPower = "仅在接通电源时更新书架"
     override val notificationsDesktopEnabled = "显示桌面通知"
     override val libraryLastUpdate = "上次书架更新："
     override val upcomingMonthPattern = "yyyy年M月"
@@ -2657,6 +2678,8 @@ object TraditionalChineseStrings : DesktopStrings {
     override val libraryRetry = "重試"
     override fun libraryUnreadCount(count: Int) = "$count 未讀"
     override val libraryAllCategory = "全部"
+    override val libraryOpenRandom = "隨機開啟一本漫畫"
+    override val libraryEmptyRandom = "書架是空的"
 
     // Library Display, Filter & Sort
     override val libraryDisplayMode = "展示模式"
@@ -2728,6 +2751,8 @@ object TraditionalChineseStrings : DesktopStrings {
     override val mangaDetailSave = "儲存"
     override val mangaDetailShowMore = "▼ 顯示更多"
     override val mangaDetailShowLess = "▲ 顯示更少"
+    override val mangaDetailCopyLink = "複製連結"
+    override val mangaDetailLinkCopied = "連結已複製到剪貼簿"
     override fun mangaDetailMissingChapters(count: Int) = "缺失 $count 話"
 
     // Missing Source Banner & Dialog
@@ -2790,6 +2815,7 @@ object TraditionalChineseStrings : DesktopStrings {
     override val chapterBatchMarkAsUnread = "標記為未讀"
     override val chapterBatchDownload = "下載"
     override val chapterBatchDeleteDownload = "刪除下載"
+    override val chapterOpenInWebView = "在 WebView 中開啟"
     override val mangaDetailCoverView = "檢視封面"
     override val mangaDetailCoverSave = "儲存封面"
     override val mangaDetailCoverSaved = "封面已成功儲存"
@@ -2927,6 +2953,7 @@ object TraditionalChineseStrings : DesktopStrings {
     override val readerCropBordersWebtoon = "智慧裁切白邊 (條漫)"
     override val readerWebtoonMaxWidth = "條漫最大寬度限制"
     override val readerWebtoonSidePadding = "條漫側邊距"
+    override val readerKeepScreenOn = "閱讀時保持螢幕常亮"
 
     override val settingsTitle = "設定"
     override val settingsSectionGeneral = "一般"
@@ -3157,6 +3184,7 @@ object TraditionalChineseStrings : DesktopStrings {
     override val libraryUpdateSkipCompleted = "跳過已完結作品"
     override val libraryUpdateSkipUnread = "跳過存在未讀章節的作品"
     override val libraryAutoDownloadNew = "自動下載新更新章節"
+    override val libraryUpdateOnlyOnAcPower = "僅在接通電源時更新書架"
     override val notificationsDesktopEnabled = "顯示桌面通知"
     override val libraryLastUpdate = "上次書架更新："
     override val upcomingMonthPattern = "yyyy年M月"

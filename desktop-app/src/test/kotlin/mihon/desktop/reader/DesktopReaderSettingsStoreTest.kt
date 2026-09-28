@@ -73,6 +73,20 @@ class DesktopReaderSettingsStoreTest {
     }
 
     @Test
+    fun `keep screen on defaults to on and round trips`() {
+        val file = tempDir.resolve("preferences.properties")
+        val store = DesktopReaderSettingsStore(DesktopPreferenceStore(file))
+
+        store.load().keepScreenOn shouldBe true
+
+        store.save(DesktopReaderSettings(keepScreenOn = false))
+        DesktopReaderSettingsStore(DesktopPreferenceStore(file)).load().keepScreenOn shouldBe false
+
+        Files.writeString(file, "reader.v1.keep-screen-on=not-a-boolean")
+        DesktopReaderSettingsStore(DesktopPreferenceStore(file)).load().keepScreenOn shouldBe true
+    }
+
+    @Test
     fun `corrupt and unknown reader values fall back independently`() {
         val file = tempDir.resolve("preferences.properties")
         Files.writeString(

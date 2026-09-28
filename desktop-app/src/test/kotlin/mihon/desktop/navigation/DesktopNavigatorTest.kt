@@ -93,4 +93,24 @@ class DesktopNavigatorTest {
         navigator.current shouldBe DesktopDestination.Library
         unregister()
     }
+
+    @Test
+    fun `navigating to an existing MangaDetails route fires onDestinationChanged`() {
+        val fired = mutableListOf<DesktopDestination>()
+        val navigator = DesktopNavigator(DesktopDestination.Library) { fired += it }
+
+        navigator.navigate(DesktopDestination.MangaDetails(1L))
+        navigator.navigate(DesktopDestination.MangaDetails(2L))
+        fired.clear()
+
+        // Re-navigating to a route already in the back stack pops back to it; observers must
+        // still hear about the pop (previously neither MangaDetails branch fired the callback).
+        navigator.navigate(DesktopDestination.MangaDetails(1L))
+
+        navigator.current shouldBe DesktopDestination.MangaDetails(1L)
+        navigator.canPop shouldBe true
+        // A transient detail route is not itself a persistable destination, so the callback
+        // reports the effective destination now back on top of the stack.
+        fired shouldBe listOf(DesktopDestination.Library)
+    }
 }

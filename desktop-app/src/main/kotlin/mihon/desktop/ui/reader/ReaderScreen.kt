@@ -501,6 +501,19 @@ fun ReaderScreen(
     LaunchedEffect(session, foreground) {
         session.dispatch(ReaderAction.SetForeground(foreground))
     }
+    // Keep the display awake while the reader is open and the window is not minimized
+    // (mirrors Android's keepScreenOn). No-op off Windows; restored on dispose.
+    val screenAwake = remember { mihon.desktop.platform.ScreenAwakeController() }
+    DisposableEffect(screenAwake, settings.keepScreenOn, foreground) {
+        if (settings.keepScreenOn && foreground) {
+            screenAwake.acquireDisplay()
+        }
+        onDispose {
+            if (settings.keepScreenOn && foreground) {
+                screenAwake.releaseDisplay()
+            }
+        }
+    }
     LaunchedEffect(session, state.chapterId) {
         if (state.chapterId != null) {
             session.dispatch(ReaderAction.SetPan(ReaderPan(0f, 0f)))

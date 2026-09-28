@@ -75,8 +75,13 @@ object MangaReaderSettings {
     }
 
     fun encode(memoJson: String, override: MangaReaderSettingsOverride?): String {
-        val root =
-            runCatching { Json.parseToJsonElement(memoJson) as? JsonObject }.getOrNull() ?: JsonObject(emptyMap())
+        val root = when (val parsed = runCatching { Json.parseToJsonElement(memoJson) }.getOrNull()) {
+            null -> JsonObject(emptyMap())
+            is JsonObject -> parsed
+            // Valid JSON but not an object (e.g. an array or primitive): there is no object to
+            // merge the override into, so preserve the original content untouched.
+            else -> return memoJson
+        }
         if (override == null || override.isEmpty) {
             return Json.encodeToString(JsonObject(root - "readerSettings"))
         }

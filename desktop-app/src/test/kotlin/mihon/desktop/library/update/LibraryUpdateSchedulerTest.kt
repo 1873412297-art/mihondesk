@@ -71,4 +71,54 @@ class LibraryUpdateSchedulerTest {
             repo.close()
         }
     }
+
+    @Test
+    fun `auto update is skipped when only-on-AC is enabled and running on battery`() = runBlocking {
+        val dbFile = tempDir.resolve("scheduler-ac-gate-test.db")
+        val repo = DesktopLibraryDatabaseFactory.open(dbFile)
+        val prefFile = tempDir.resolve("prefs-ac-gate.properties")
+        val prefStore = DesktopPreferenceStore(prefFile)
+
+        try {
+            val sourceManager = DesktopSourceManager()
+            val syncService = OnlineMangaSyncService(repo, sourceManager)
+            val updateService = LibraryUpdateService(repo, syncService)
+
+            var simulatedTime = 1_000_000_000L
+            var onAcPower = false
+            val scope = CoroutineScope(SupervisorJob())
+
+            val scheduler = LibraryUpdateScheduler(
+                updateService = updateService,
+                preferenceStore = prefStore,
+                scope = scope,
+                clock = { simulatedTime },
+                isOnAcPower = { onAcPower },
+                startAutomatically = false,
+            )
+
+            prefStore.save(
+                DesktopPreferences(
+                    libraryUpdateIntervalHours = 12,
+                    lastLibraryUpdateEpochMillis = simulatedTime - 24 * 3_600_000L,
+                    libraryUpdateOnlyOnAcPower = true,
+                ),
+            )
+
+            // Battery power: the automatic run must be skipped and must not touch the schedule...
+            val beforeSkip = prefStore.load().lastLibraryUpdateEpochMillis
+            assertNull(scheduler.checkAndRunAutoUpdate())
+            assertEquals(beforeSkip, prefStore.load().lastLibraryUpdateEpochMillis)
+
+            // ...but a manual trigger still runs.
+            assertNotNull(scheduler.triggerUpdateNow())
+
+            // Back on AC: the scheduled run proceeds once the interval elapses again.
+            simulatedTime += 13 * 3_600_000L
+            onAcPower = true
+            assertNotNull(scheduler.checkAndRunAutoUpdate())
+        } finally {
+            repo.close()
+        }
+    }
 }

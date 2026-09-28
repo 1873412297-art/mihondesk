@@ -1,9 +1,12 @@
 package mihon.desktop.download
 
+import io.kotest.matchers.collections.shouldBeIn
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import mihon.desktop.extension.DesktopNetworkHelper
 import mihon.desktop.library.model.LibraryChapter
 import mihon.desktop.library.model.LibraryManga
@@ -71,7 +74,7 @@ class DesktopDownloaderUndoTest {
         downloader.queueState.value shouldHaveSize 1
         downloader.queueState.value.first().chapterId shouldBe 101L
 
-        downloader.close()
+        downloader.shutdown()
     }
 
     @Test
@@ -138,11 +141,11 @@ class DesktopDownloaderUndoTest {
         downloader.queueState.value.first().chapterId shouldBe 301L
         downloader.queueState.value.first().status shouldBe DownloadStatus.PAUSED
 
-        downloader.close()
+        downloader.shutdown()
     }
 
     @Test
-    fun `restoreDownloads maps DOWNLOADING status back to QUEUED`(@TempDir tempDir: Path) {
+    fun `restoreDownloads maps DOWNLOADING status back to QUEUED`(@TempDir tempDir: Path) = runBlocking {
         val downloader = DesktopDownloader(
             store = DownloadStore(tempDir.resolve("active-undo-queue.json")),
             diskProvider = DownloadDiskProvider(tempDir.resolve("active-undo-downloads")),
@@ -164,8 +167,54 @@ class DesktopDownloaderUndoTest {
         downloader.restoreDownloads(listOf(downloadingItem))
         downloader.queueState.value shouldHaveSize 1
         downloader.queueState.value.first().chapterId shouldBe 401L
-        downloader.queueState.value.first().status shouldBe DownloadStatus.QUEUED
+        // The restored queue restarts immediately, so the item may already be claimed again.
+        downloader.queueState.value.first().status shouldBeIn
+            listOf(DownloadStatus.QUEUED, DownloadStatus.DOWNLOADING)
 
-        downloader.close()
+        downloader.shutdown()
+    }
+
+    @Test
+    fun `restoreDownloads restarts a drained queue so restored items get processed`(
+        @TempDir tempDir: Path,
+    ) = runBlocking {
+        val downloader = DesktopDownloader(
+            store = DownloadStore(tempDir.resolve("drained-undo-queue.json")),
+            diskProvider = DownloadDiskProvider(tempDir.resolve("drained-undo-downloads")),
+            networkHelper = DesktopNetworkHelper(),
+            pageListFetcher = { _, _ -> emptyList() },
+        )
+        try {
+            val manga = createManga(id = 1L)
+            val chapter = createChapter(id = 501L, mangaId = 1L)
+
+            // Enqueue without starting: the queue is drained (isRunning == false), which is the
+            // state in which restored items used to sit in QUEUED forever.
+            downloader.enqueue(manga, listOf(chapter), autoStart = false)
+            downloader.queueState.value.single().status shouldBe DownloadStatus.QUEUED
+            downloader.isRunning.value shouldBe false
+
+            val cancelled = downloader.cancel(501L)
+            cancelled shouldNotBe null
+            downloader.queueState.value shouldHaveSize 0
+
+            downloader.restoreDownloads(listOf(cancelled!!))
+            downloader.queueState.value.single().chapterId shouldBe 501L
+            // The restored item may already be claimed by the restarted loop.
+            downloader.queueState.value.single().status shouldBeIn
+                listOf(DownloadStatus.QUEUED, DownloadStatus.DOWNLOADING)
+
+            // Regression: before the fix the restored item stayed QUEUED forever because a drained
+            // queue was never restarted. Now it must be picked up and processed again (the empty
+            // page list makes processing fail fast with ERROR).
+            withTimeout(5_000) {
+                while (downloader.queueState.value.any { it.status == DownloadStatus.QUEUED }) {
+                    delay(50)
+                }
+            }
+            downloader.queueState.value.single().status shouldBe DownloadStatus.ERROR
+        } finally {
+            downloader.shutdown()
+        }
     }
 }

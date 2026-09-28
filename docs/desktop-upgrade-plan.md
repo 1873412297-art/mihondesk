@@ -74,6 +74,50 @@
 - CI 保持绿；每 Phase 独立发版（0.2.22、0.2.23…）；
 - 每个 Phase 结束时回归 `:desktop-app:test :extension-host:test :extension-sdk:test` + spotless。
 
+---
+
+# 第二轮调研追加（2026-09-28，对标上游 + 健壮性复查）
+
+## Phase 5 — 健壮性 round 2 + 高价值小项
+
+| # | 事项 | 证据 | 交付 |
+|---|---|---|---|
+| 5.1 | **Bug：Undo 恢复下载后队列不会重新启动**——`restoreDownloads()` 只入队不 `start()`，队列已排空时恢复项永远卡在 QUEUED | `DesktopDownloader.kt:673-690` | 末尾补 `start()` |
+| 5.2 | **Bug：同步客户端游标 409 空洞后永久失败**——`nextCursor` 先落库再 push，崩溃后下次 push 永远 409 且无自愈 | `HttpTransport.kt:42-44`, `SyncEngine.kt:92-107` | 409 gap 时拉 `/v1/head` 重置本地游标后重试；补崩溃窗口测试 |
+| 5.3 | 阅读器防睡眠（对齐 Android keepScreenOn）：Windows 无人调用 `SetThreadExecutionState`，全屏阅读会中途息屏 | `ReaderPreferences.kt:58`（Android） | 阅读器打开时 ES_DISPLAY_REQUIRED，退出恢复；设置开关 |
+| 5.4 | `MangaReaderSettings.encode()` 对非 object 的合法 memo_json 静默清空 | `desktop-library-data/.../MangaReaderSettings.kt:78-79` | 非 object 时原样保留 |
+| 5.5 | `DesktopNavigator.navigate(MangaDetails)` 命中已存在路由时不触发 `onDestinationChanged` | `DesktopNavigator.kt:117-126` | 补回调 |
+| 5.6 | `BatchMigrationRunner.start()` 无重入守卫 | `BatchMigrationRunner.kt:35-59` | 活动任务存在时直接返回 |
+| 5.7 | 小项打包：书架随机一本（shuffle）、详情页分享/复制链接、章节行「在 WebView 打开」、扩展自动更新检查（启动时一次+每日）、更新 tab 角标计数、书库更新「仅电源供电」门控 | 调研报告 §中低价值 | 逐项小改 |
+
+## Phase 6 — 阅读器深化（中工作量项）
+
+- 6.1 双页跨页拆分（宽图检测/拆分/旋转适配，对齐 `dualPageView` 语义）；
+- 6.2 翻页过渡动画（FLIP/FADE 等子集 + 开关）；
+- 6.3 自定义色彩滤镜滑杆（色相/亮度/对比度）+ 自定义亮度；
+- 6.4 次要偏好：翻页闪屏开关、双击缩放速度/起始、webtoon 缩放开关。
+
+## Phase 7 — 设置与数据管理补全
+
+- 7.1 设置内搜索；7.2 清除数据库（非书库数据清理页）；7.3 存储占用明细；7.4 智能更新「非更新周期」过滤；7.5 下载设置补全（仅未读/分类选择/CBZ/长图拆分）。
+
+## Phase 8 — 上游同步（基线 424bbc53b，落后 44 commits）
+
+> 注意：历史已 squash，`git merge-base` 不可用；`upstream-sync-check.yml` 需改为读取 `docs/upstream/MIHON_CHANGELOG.md` 记录的基线（当前已坏，每周检查在报错而不是报告）。
+
+- 8.1 修 `upstream-sync-check.yml` 基线回退；
+- 8.2 cherry-pick 修复簇：阅读历史重复计数、跟踪条目误标重复、track 恢复保留远端、被排除 scanlator 章节可直接打开、书架搜索跳转修复、stub 图源重写修复、Weblate 翻译；
+- 8.3 cherry-pick 扩展商店批次（含 `093841105` 签名密钥校验——需对照桌面端 `ExtensionStoreService` 审查）；
+- 8.4 DB 重构链整组评估（与本仓库 sync 表冲突，要么整组要么不动，需手工迁移编号调和）；
+- 8.5 Apollo GraphQL tracker 重写：等上游进 tag 再评估。
+
+## Phase 9 — 结构性健壮性（排期靠后）
+
+- 书库 DB 快照读移出 UI 线程（`LibraryPresenter` 等直调 `*Snapshot()` 的位置收敛到 IO）；
+- `claimNextDownload` 持锁落盘解耦；
+- 同步服务器速率限制；
+- extension-host `Main` 未捕获异常处理器。
+
 ## 执行约定（agy 批次）
 
 1. 每批只做一个 Phase 内的子集，最小 diff，不动 Android 端；

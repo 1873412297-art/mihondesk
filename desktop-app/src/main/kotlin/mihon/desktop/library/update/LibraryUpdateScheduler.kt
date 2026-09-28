@@ -24,6 +24,7 @@ class LibraryUpdateScheduler(
     private val clock: () -> Long = System::currentTimeMillis,
     recoveryFile: Path? = null,
     startAutomatically: Boolean = true,
+    private val isOnAcPower: () -> Boolean = mihon.desktop.platform.DesktopPowerStatus::isOnAcPower,
 ) {
     private val _isUpdating = MutableStateFlow(false)
     val isUpdating: StateFlow<Boolean> = _isUpdating.asStateFlow()
@@ -84,6 +85,7 @@ class LibraryUpdateScheduler(
             val fullUpdateDue = now - prefs.lastLibraryUpdateEpochMillis >= intervalMillis
             if (automatic) {
                 if (prefs.libraryUpdateIntervalHours <= 0) return null
+                if (prefs.libraryUpdateOnlyOnAcPower && !isOnAcPower()) return null
                 if (previous.retryAfterEpochMillis > now && (!fullUpdateDue || previous.failedMangaIds.isEmpty())) {
                     return null
                 }

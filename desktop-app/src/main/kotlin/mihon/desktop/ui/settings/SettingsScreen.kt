@@ -1414,6 +1414,22 @@ private fun ReaderSettingsPane(readerSettingsStore: DesktopReaderSettingsStore) 
                         },
                     )
                 }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(strings.readerKeepScreenOn, fontWeight = FontWeight.Bold)
+                    Switch(
+                        checked = settings.keepScreenOn,
+                        onCheckedChange = { checked ->
+                            settings = settings.copy(keepScreenOn = checked)
+                            readerSettingsStore.save(settings)
+                        },
+                        modifier = Modifier.testTag("reader-keep-screen-on"),
+                    )
+                }
             }
         }
     }
@@ -2708,6 +2724,27 @@ private fun LibrarySettingsPane(
                             onPreferencesChanged?.invoke(updated)
                         },
                         modifier = Modifier.testTag("auto-download-new-switch"),
+                    )
+                }
+
+                // Only run scheduled library updates while on AC power (desktops count as AC)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(strings.libraryUpdateOnlyOnAcPower)
+                    Switch(
+                        checked = preferences.libraryUpdateOnlyOnAcPower,
+                        onCheckedChange = { checked ->
+                            val updated = preferenceStore.updatePreferences {
+                                it.copy(libraryUpdateOnlyOnAcPower = checked)
+                            }
+                            preferences = updated
+
+                            onPreferencesChanged?.invoke(updated)
+                        },
+                        modifier = Modifier.testTag("library-update-only-on-ac-power"),
                     )
                 }
 

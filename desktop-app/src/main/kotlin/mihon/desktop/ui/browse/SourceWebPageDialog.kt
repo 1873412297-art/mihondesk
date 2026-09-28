@@ -31,16 +31,22 @@ import mihon.desktop.webview.DesktopWebViewManager
 import mihon.extension.model.SourceDescriptor
 
 @Composable
-fun SourceWebPageDialog(runtime: DesktopRuntime, source: SourceDescriptor, onDismiss: () -> Unit, onRetry: () -> Unit) {
+fun SourceWebPageDialog(
+    runtime: DesktopRuntime,
+    source: SourceDescriptor,
+    urlOverride: String? = null,
+    onDismiss: () -> Unit,
+    onRetry: () -> Unit,
+) {
     var session by remember(source.id) { mutableStateOf<DesktopWebViewManager.BrowserSession?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var saving by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val strings = LocalStrings.current
-    LaunchedEffect(source.id) {
+    LaunchedEffect(source.id, urlOverride) {
         var owned: DesktopWebViewManager.BrowserSession? = null
         try {
-            val url = runtime.sourceManager.sourceWebPage(source.id)
+            val url = urlOverride ?: runtime.sourceManager.sourceWebPage(source.id)
                 ?: error("This source does not provide a web address")
             val owner = runtime.sourceManager.getSourceStates().firstOrNull { it.source.id == source.id }
                 ?.extensionPackage ?: "builtin"

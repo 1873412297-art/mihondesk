@@ -533,6 +533,12 @@ enum class UiText(val english: String, val simplified: String, val traditional: 
         "圖源視窗已關閉。如尚未完成驗證，請重新開啟。",
     ),
     SourceWebPageDoneRetry("Done, retry", "完成并重试", "完成並重試"),
+    SourceWebPageUnavailable(
+        "This chapter has no web address for its source.",
+        "该章节所属的图源没有可用的网页地址。",
+        "該章節所屬的圖源沒有可用的網頁地址。",
+    ),
+    EmptyLibraryRandom("The library is empty.", "书架为空。", "書架為空。"),
     NetworkFailureSiteBlocked(
         "The website has blocked access. Open its website to check. If it is blocked there too, " +
             "access must be restored by the website; retrying here cannot remove the block.",

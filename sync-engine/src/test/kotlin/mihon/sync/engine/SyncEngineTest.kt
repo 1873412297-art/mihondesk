@@ -152,4 +152,123 @@ class SyncEngineTest {
         stateStore.getLastPushCursor() shouldBe 0L
         stateStore.getLastPushWatermark() shouldBe 0L
     }
+
+    private class ScriptedPushTransport(
+        private val onPush: (Changeset) -> Unit,
+    ) : SyncTransport {
+        val pushedChangesets = mutableListOf<Changeset>()
+
+        override suspend fun push(changeset: Changeset) {
+            pushedChangesets.add(changeset)
+            onPush(changeset)
+        }
+
+        override suspend fun pull(sinceCursors: Map<String, Long>, excludeDeviceId: String?): List<Changeset> =
+            emptyList()
+
+        override suspend fun pull(sinceCursor: Long, excludeDeviceId: String?): List<Changeset> = emptyList()
+
+        override suspend fun headCursor(excludeDeviceId: String?): Long = 0L
+    }
+
+    @Test
+    fun `syncNow self-heals crash between nextCursor and push when server is one cursor behind`(): Unit =
+        runBlocking {
+            // Crash window: nextCursor() persisted cursor 5 locally, but the process died before
+            // the push reached the server, so the server still expects cursor 5 while the next
+            // push offers 6 (gap 409).
+            val stateStore = InMemorySyncStateStore(
+                deviceId = "local-dev",
+                lastPushCursor = 4L,
+                currentCursor = 5L,
+            )
+            val repository = FakeLocalRepository()
+            repository.localDelta = EntityDelta(
+                mangas = listOf(AndroidBackupManga(source = 1L, url = "/manga/local", lastModifiedAt = 2000L)),
+            )
+
+            var serverLastCursor = 4L
+            val transport = ScriptedPushTransport { changeset ->
+                when {
+                    changeset.cursor == serverLastCursor -> Unit // identical-payload replay: accepted (204)
+                    changeset.cursor == serverLastCursor + 1 -> serverLastCursor = changeset.cursor
+                    else -> throw mihon.sync.transport.api.SyncCursorConflictException(
+                        "Cursor gap detected: expected ${serverLastCursor + 1}, got ${changeset.cursor}",
+                    )
+                }
+            }
+
+            val engine = SyncEngine(repository, transport, stateStore)
+            val report = engine.syncNow()
+
+            report.success shouldBe true
+            // First attempt (cursor 6) is rejected; recovery retries with the gap-filling cursor 5.
+            transport.pushedChangesets.map { it.cursor } shouldBe listOf(6L, 5L)
+            // The locally persisted changes were not lost in the retry.
+            transport.pushedChangesets.last().upserts.mangas.first().url shouldBe "/manga/local"
+            stateStore.getLastPushCursor() shouldBe 5L
+            stateStore.getLastPushWatermark() shouldBe 2000L
+            report.pushedChangeset?.cursor shouldBe 5L
+        }
+
+    @Test
+    fun `syncNow stays healthy after crash between ack and persisting the push cursor`(): Unit =
+        runBlocking {
+            // Crash window: the push of cursor 5 was acked by the server, but the process died
+            // before setLastPushCursor/setLastPushWatermark persisted. The server already holds
+            // cursor 5 with our earlier payload; the local watermark still points at the same
+            // delta, which must be re-pushed under a fresh cursor without data loss or failure.
+            val stateStore = InMemorySyncStateStore(
+                deviceId = "local-dev",
+                lastPushCursor = 4L,
+                currentCursor = 5L,
+            )
+            val repository = FakeLocalRepository()
+            repository.localDelta = EntityDelta(
+                mangas = listOf(AndroidBackupManga(source = 1L, url = "/manga/local", lastModifiedAt = 2000L)),
+            )
+
+            val storedPayloads = mutableMapOf<Long, String>()
+            var serverLastCursor = 5L
+            storedPayloads[5L] = "/manga/local"
+            val transport = ScriptedPushTransport { changeset ->
+                val key = changeset.upserts.mangas.firstOrNull()?.url
+                when {
+                    changeset.cursor == serverLastCursor && storedPayloads[changeset.cursor] == key -> Unit
+                    changeset.cursor == serverLastCursor + 1 -> {
+                        serverLastCursor = changeset.cursor
+                        storedPayloads[changeset.cursor] = key ?: ""
+                    }
+                    else -> throw mihon.sync.transport.api.SyncCursorConflictException(
+                        "Cursor conflict (current head: $serverLastCursor)",
+                    )
+                }
+            }
+
+            val engine = SyncEngine(repository, transport, stateStore)
+            val report = engine.syncNow()
+
+            report.success shouldBe true
+            stateStore.getLastPushCursor() shouldBe 6L
+            stateStore.getLastPushWatermark() shouldBe 2000L
+            transport.pushedChangesets.last().upserts.mangas.first().url shouldBe "/manga/local"
+        }
+
+    @Test
+    fun `syncNow gives up after a bounded number of unresolved cursor conflicts`(): Unit = runBlocking {
+        val stateStore = InMemorySyncStateStore("local-dev")
+        val repository = FakeLocalRepository()
+        repository.localDelta = EntityDelta(
+            mangas = listOf(AndroidBackupManga(source = 1L, url = "/manga/local", lastModifiedAt = 2000L)),
+        )
+        val transport = ScriptedPushTransport {
+            throw mihon.sync.transport.api.SyncCursorConflictException("unresolvable divergence")
+        }
+
+        val engine = SyncEngine(repository, transport, stateStore)
+        val report = engine.syncNow()
+
+        report.success shouldBe false
+        transport.pushedChangesets.size shouldBe SyncEngine.MAX_PUSH_ATTEMPTS
+    }
 }

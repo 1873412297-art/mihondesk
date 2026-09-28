@@ -29,6 +29,7 @@ import androidx.compose.material.icons.automirrored.rounded.PlaylistAddCheck
 import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.BookmarkBorder
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.EditNote
@@ -81,6 +82,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import mihon.desktop.category.DesktopCategory
 import mihon.desktop.download.DownloadStatus
@@ -152,6 +154,7 @@ fun MangaDetailScreen(
     onSaveReadingSettings: (MangaReaderSettingsOverride) -> Unit = actions.onSaveReadingSettings,
     onClearReadingSettings: () -> Unit = actions.onClearReadingSettings,
     onCoverLoadFailed: ((Int) -> Unit)? = actions.onCoverLoadFailed,
+    onOpenChapterInWebView: ((Long) -> Unit)? = null,
 ) {
     val strings = LocalStrings.current
     Surface(
@@ -177,6 +180,7 @@ fun MangaDetailScreen(
             else -> {
                 val manga = state.manga
                 val strings = mihon.desktop.i18n.LocalStrings.current
+                val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
                 val customCoverManager = mihon.desktop.image.LocalCustomCoverManager.current
                 val imageLoader = mihon.desktop.image.LocalImageLoader.current
                 var coverRefreshKey by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(0) }
@@ -366,6 +370,37 @@ fun MangaDetailScreen(
                                             )
                                             Spacer(Modifier.width(6.dp))
                                             Text(strings.openInBrowser)
+                                        }
+                                    }
+                                    val shareableLink = remember(manga.url, sourceBaseUrl) {
+                                        when {
+                                            manga.url.startsWith("http") -> manga.url
+                                            sourceBaseUrl != null -> sourceBaseUrl + manga.url
+                                            else -> null
+                                        }
+                                    }
+                                    if (shareableLink != null) {
+                                        val clipboardManager =
+                                            androidx.compose.ui.platform.LocalClipboardManager.current
+                                        val snackbarHostState = mihon.desktop.ui.common.LocalSnackbarHostState.current
+                                        OutlinedButton(
+                                            onClick = {
+                                                clipboardManager.setText(
+                                                    androidx.compose.ui.text.AnnotatedString(shareableLink),
+                                                )
+                                                coroutineScope.launch {
+                                                    snackbarHostState?.showSnackbar(strings.mangaDetailLinkCopied)
+                                                }
+                                            },
+                                            modifier = Modifier.testTag("manga-detail-copy-link-button"),
+                                        ) {
+                                            Icon(
+                                                Icons.Rounded.ContentCopy,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(16.dp),
+                                            )
+                                            Spacer(Modifier.width(6.dp))
+                                            Text(strings.mangaDetailCopyLink)
                                         }
                                     }
                                     FilledTonalButton(
@@ -1001,6 +1036,9 @@ fun MangaDetailScreen(
                                         onMarkPreviousRead = { onMarkPreviousRead(item.chapter.id) },
                                         onDownloadChapter = { onDownloadChapter(item.chapter.id) },
                                         onDeleteDownload = { onDeleteDownload(item.chapter.id) },
+                                        onOpenInWebView = onOpenChapterInWebView?.let { handler ->
+                                            { handler(item.chapter.id) }
+                                        },
                                     )
                                     is ChapterListItem.MissingCount -> MissingChapterIndicator(count = item.count)
                                 }
@@ -1292,6 +1330,7 @@ private fun ChapterRow(
     onMarkPreviousRead: () -> Unit,
     onDownloadChapter: () -> Unit,
     onDeleteDownload: () -> Unit,
+    onOpenInWebView: (() -> Unit)? = null,
 ) {
     val strings = mihon.desktop.i18n.LocalStrings.current
     var menuExpanded by remember { mutableStateOf(false) }
@@ -1445,6 +1484,16 @@ private fun ChapterRow(
                                 menuExpanded = false
                             },
                         )
+                        if (onOpenInWebView != null) {
+                            DropdownMenuItem(
+                                text = { Text(strings.chapterOpenInWebView) },
+                                onClick = {
+                                    onOpenInWebView.invoke()
+                                    menuExpanded = false
+                                },
+                                modifier = Modifier.testTag("chapter-open-webview"),
+                            )
+                        }
                     }
                 }
             }

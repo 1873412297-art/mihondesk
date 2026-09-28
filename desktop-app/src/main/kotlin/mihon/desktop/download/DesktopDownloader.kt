@@ -684,6 +684,9 @@ class DesktopDownloader(
             list + toAdd
         }
         persistQueue()
+        // The queue may have already drained (isRunning == false); without this the restored
+        // items would sit in QUEUED forever, unlike resume() which always restarts the loop.
+        start()
     }
 
     private suspend fun runDownloadLoop() = supervisorScope {

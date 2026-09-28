@@ -177,6 +177,67 @@ class BatchMigrationStateMachineTest {
         runner.state.value shouldBe BatchMigrationState.Idle
     }
 
+    @Test
+    fun `start while a batch is running returns the active job instead of interleaving`() = runBlocking {
+        val runner = BatchMigrationRunner(scope, stringsProvider = { EnglishStrings })
+        val migrated = mutableListOf<String>()
+
+        val first = runner.start(
+            mangas = listOf(sampleManga(1L, "One Piece"), sampleManga(2L, "Bleach")),
+            targetSource = targetSource,
+            searchFn = { query ->
+                delay(150)
+                listOf(sManga(query, "/$query"))
+            },
+            migrateFn = { old, _ -> migrated.add(old.title) },
+            delayMs = 0L,
+        )
+
+        val second = runner.start(
+            mangas = listOf(sampleManga(3L, "Naruto")),
+            targetSource = targetSource,
+            searchFn = { query -> listOf(sManga(query, "/$query")) },
+            migrateFn = { old, _ -> migrated.add(old.title) },
+            delayMs = 0L,
+        )
+
+        second shouldBe first
+        first.join()
+
+        // Only the first batch may run; the re-entrant call must not start a second one.
+        migrated shouldBe listOf("One Piece", "Bleach")
+        val completed = runner.state.value as BatchMigrationState.Completed
+        completed.wasCancelled shouldBe false
+        completed.totalCount shouldBe 2
+    }
+
+    @Test
+    fun `start after the previous batch finished launches a new job`() = runBlocking {
+        val runner = BatchMigrationRunner(scope, stringsProvider = { EnglishStrings })
+        val migrated = mutableListOf<String>()
+
+        val first = runner.start(
+            mangas = listOf(sampleManga(1L, "One Piece")),
+            targetSource = targetSource,
+            searchFn = { query -> listOf(sManga(query, "/$query")) },
+            migrateFn = { old, _ -> migrated.add(old.title) },
+            delayMs = 0L,
+        )
+        first.join()
+
+        val second = runner.start(
+            mangas = listOf(sampleManga(2L, "Bleach")),
+            targetSource = targetSource,
+            searchFn = { query -> listOf(sManga(query, "/$query")) },
+            migrateFn = { old, _ -> migrated.add(old.title) },
+            delayMs = 0L,
+        )
+
+        (second === first) shouldBe false
+        second.join()
+        migrated shouldBe listOf("One Piece", "Bleach")
+    }
+
     private fun sampleManga(id: Long, title: String) = LibraryManga(
         id = id,
         sourceId = 100L,

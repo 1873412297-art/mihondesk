@@ -42,6 +42,7 @@ data class DesktopReaderSettings(
     val skipFilteredChapters: Boolean = true,
     val skipDuplicateChapters: Boolean = false,
     val preloadPages: Int = PrefetchPolicy.AHEAD_PAGES,
+    val keepScreenOn: Boolean = true,
 ) {
     fun toCoreSettings(): ReaderSettings = ReaderSettings(mode, coverOffset, scaleMode)
 
@@ -128,6 +129,7 @@ class DesktopReaderSettingsStore(private val preferences: DesktopPreferenceStore
             preloadPages = preferences.property(PRELOAD_PAGES)?.toIntOrNull()
                 ?.coerceIn(DesktopPreloadPolicy.MIN_PRELOAD_PAGES, DesktopPreloadPolicy.MAX_PRELOAD_PAGES)
                 ?: defaults.preloadPages,
+            keepScreenOn = preferences.property(KEEP_SCREEN_ON)?.toBooleanStrictOrNull() ?: defaults.keepScreenOn,
         )
     }
 
@@ -154,6 +156,7 @@ class DesktopReaderSettingsStore(private val preferences: DesktopPreferenceStore
             setProperty(SKIP_FILTERED, settings.skipFilteredChapters.toString())
             setProperty(SKIP_DUPLICATE, settings.skipDuplicateChapters.toString())
             setProperty(PRELOAD_PAGES, settings.preloadPages.toString())
+            setProperty(KEEP_SCREEN_ON, settings.keepScreenOn.toString())
         }
     }
 
@@ -206,5 +209,6 @@ class DesktopReaderSettingsStore(private val preferences: DesktopPreferenceStore
         const val SKIP_FILTERED = "reader.v1.skip-filtered"
         const val SKIP_DUPLICATE = "reader.v1.skip-duplicate"
         const val PRELOAD_PAGES = "reader.v1.preload-pages"
+        const val KEEP_SCREEN_ON = "reader.v1.keep-screen-on"
     }
 }
