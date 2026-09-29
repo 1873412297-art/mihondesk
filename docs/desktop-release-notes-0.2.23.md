@@ -56,13 +56,22 @@
 
 ## 七、发版门禁状态
 
-- [x] 本机单测 + spotless + `verifySqlDelightMigration` 全绿（同一工作树）
-- [ ] **提交并打 tag**：当前工作树共 100+ 文件改动尚未提交，成包前必须先落成提交（构建信息会记录 revision/dirty）
-- [ ] 2A MSI 门禁（`verify-msi-package.ps1` + VM 上 N-1→N 升级与卸载）
-- [ ] 2B 便携交接失败注入
-- [ ] 2C 应用内更新真实通道
-- [ ] 1D 干净 VM 快速回归
-- [ ] `verify-release-assets.ps1 -Tag v0.2.23`
+已在**当版本构建**（`ab71ec5b4`，`dirty=false`）上完成的本地项：
+
+- [x] 提交并记录构建身份：`mihon-build-info.properties` 记录 `version=0.2.23`、`revision=ab71ec5b456604bc30eb895e8f58fe6121dbc22a`、`dirty=false`
+- [x] 仓库级门禁 `spotlessCheck` + `test` + `verifySqlDelightMigration` 全绿（1446 例）
+- [x] 发行包清洁校验 `verify-release-clean.ps1` → PASS（无个人配置、无已装扩展、无用户数据）
+- [x] MSI 结构断言 `verify-msi-package.ps1` → PASS（WiX 升级码、许可、`RemoveFiles` 之前的延迟卸载钩子；**执行未测**）
+- [x] 便携交接失败注入 `scripts/tests/portable-updater.tests.ps1` → **17 项全 PASS**（成功/取消/身份不符/失败退出/回滚/超时/非法提交/校验和拒绝/占用配置拒绝/替换保留旧数据/替换后校验失败回滚/归档不得夹带用户数据/路径穿越拒绝/目录联接拒绝/两处中断恢复）
+- [x] 便携隔离目录验证 `verify-desktop-clean-machine.ps1 -SkipBuild` → `mihondesk 0.2.23 (Windows x64)`、`--help`、隔离 `data` 目录与备份导出全部通过
+
+仍需在你环境完成（**缺一不发**）：
+
+- [ ] **2A**：VM 快照上 N-1→N 升级与卸载两格实测（脚本部分已 PASS，执行部分必须实机）
+- [ ] **2C**：对真实已发布 Release 资产完成 检查→下载→清单/SHA 校验→交接→启动 端到端（断点续传与校验失败路径各一次）——依赖 Release 已存在
+- [ ] **1D**：干净 Windows 10 22H2 / Windows 11 上的安装冒烟（上面的隔离目录检查明确声明**不等同于**干净机器验收）
+- [ ] `verify-release-assets.ps1 -Tag v0.2.23`（需先有 Release）
+- [ ] 推送提交并打 tag，上传 EXE、MSI、便携 ZIP、`SHA256SUMS.txt`、`desktop-version.txt`、`mihon-build-info.properties`，核对远程附件摘要后设为最新正式版
 
 本版跨越 Phase 6–9 与 7.5，差异面明显大于 0.2.22，建议按「新包新身份」原则把 VM 矩阵**全量重跑**，不要沿用 0.2.22 的结论。
 
