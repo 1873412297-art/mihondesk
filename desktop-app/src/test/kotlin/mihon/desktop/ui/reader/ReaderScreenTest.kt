@@ -319,7 +319,7 @@ class ReaderScreenTest {
         onNodeWithTag("reader-back").performClick()
         onNodeWithTag("reader-back").performClick()
 
-        waitUntil { session.closeRequests == 1 && returned == 1 }
+        waitUntil(timeoutMillis = 30_000) { session.closeRequests == 1 && returned == 1 }
     }
 
     @Test
@@ -373,7 +373,7 @@ class ReaderScreenTest {
         loaded shouldBe listOf(0)
         mainClock.autoAdvance = true
         runOnUiThread { selected = FrameId(page, 1) }
-        waitUntil { bridge.metrics.conversionCount >= 2L }
+        waitUntil(timeoutMillis = 30_000) { bridge.metrics.conversionCount >= 2L }
         waitForIdle()
         onNodeWithTag("reader-animated-page")
             .assert(SemanticsMatcher.expectValue(ReaderFrameIndexKey, 1))

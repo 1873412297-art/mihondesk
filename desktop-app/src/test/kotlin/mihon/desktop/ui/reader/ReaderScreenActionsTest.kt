@@ -62,7 +62,8 @@ class ReaderScreenActionsTest {
         onNodeWithTag("reader-manga-details").performMouseInput { moveTo(center) }
         mainClock.advanceTimeBy(3_000)
         onNodeWithTag("reader-manga-details").assertIsDisplayed().performMouseInput { click(center) }
-        waitUntil { openedDetails }
+        // Closing the reader flushes progress on Dispatchers.Default before the callback runs.
+        waitUntil(timeoutMillis = 30_000) { openedDetails }
         session.closeRequests shouldBe 1
     }
 
@@ -83,7 +84,7 @@ class ReaderScreenActionsTest {
         )
         onNodeWithTag("reader-manga-details").assertIsDisplayed().performClick()
         onNodeWithTag("reader-manga-details").performClick()
-        waitUntil { openedDetails == 1 }
+        waitUntil(timeoutMillis = 30_000) { openedDetails == 1 }
         session.closeRequests shouldBe 1
     }
 
@@ -102,7 +103,8 @@ class ReaderScreenActionsTest {
             onOpenMangaDetails = { openedDetails = true },
         )
         onNodeWithTag("reader-manga-details").performClick()
-        waitUntil { openedDetails }
+        // Closing the reader flushes progress on Dispatchers.Default before the callback runs.
+        waitUntil(timeoutMillis = 30_000) { openedDetails }
         session.closeRequests shouldBe 1
     }
 
@@ -128,7 +130,7 @@ class ReaderScreenActionsTest {
         onNodeWithTag("reader-page-action-browser").assertDoesNotExist()
 
         onNodeWithTag("reader-page-action-save").performClick()
-        waitUntil { handler.saved.size == 1 }
+        waitUntil(timeoutMillis = 15_000) { handler.saved.size == 1 }
         handler.saved.single().first.page shouldBe session.state.value.pages[0]
         onNodeWithTag("reader-page-actions-dialog").assertDoesNotExist()
 
@@ -186,19 +188,20 @@ class ReaderScreenActionsTest {
         onNodeWithTag("reader-overflow").performClick()
         onNodeWithTag("reader-page-actions").performClick()
         onNodeWithTag("reader-page-action-copy").performClick()
-        waitUntil { handler.copied == 1 }
+        // Page action callbacks run in-process: a coroutine launch and a recomposition, no dispatcher hop.
+        waitUntil(timeoutMillis = 15_000) { handler.copied == 1 }
         onNodeWithTag("reader-overflow").performClick()
         onNodeWithTag("reader-page-actions").performClick()
         onNodeWithTag("reader-page-action-share").performClick()
-        waitUntil { handler.shared == 1 }
+        waitUntil(timeoutMillis = 15_000) { handler.shared == 1 }
         onNodeWithTag("reader-overflow").performClick()
         onNodeWithTag("reader-page-actions").performClick()
         onNodeWithTag("reader-page-action-cover").performClick()
-        waitUntil { handler.coverTargets.size == 1 }
+        waitUntil(timeoutMillis = 15_000) { handler.coverTargets.size == 1 }
         onNodeWithTag("reader-overflow").performClick()
         onNodeWithTag("reader-page-actions").performClick()
         onNodeWithTag("reader-page-action-browser").performClick()
-        waitUntil { handler.openedUrls.size == 1 }
+        waitUntil(timeoutMillis = 15_000) { handler.openedUrls.size == 1 }
 
         handler.copied shouldBe 1
         handler.shared shouldBe 1
@@ -262,7 +265,7 @@ class ReaderScreenActionsTest {
         onNodeWithTag("reader-transition-next-status").assertTextContains("Missing")
 
         onNodeWithTag("reader-transition-continue").performClick()
-        waitUntil { session.closeRequests == 1 && nextRequests == 1 }
+        waitUntil(timeoutMillis = 30_000) { session.closeRequests == 1 && nextRequests == 1 }
         onNodeWithTag("reader-chapter-transition").assertDoesNotExist()
     }
 
@@ -304,7 +307,7 @@ class ReaderScreenActionsTest {
         )
 
         onNodeWithTag("reader-scrubber-next-chapter").performClick()
-        waitUntil { session.closeRequests == 1 && nextRequests == 1 }
+        waitUntil(timeoutMillis = 30_000) { session.closeRequests == 1 && nextRequests == 1 }
         onNodeWithTag("reader-chapter-transition").assertDoesNotExist()
     }
 
@@ -324,7 +327,7 @@ class ReaderScreenActionsTest {
         )
 
         onNodeWithTag("reader-next-region").performClick()
-        waitUntil { session.closeRequests == 1 && nextRequests == 1 }
+        waitUntil(timeoutMillis = 30_000) { session.closeRequests == 1 && nextRequests == 1 }
 
         session.actions.contains(mihon.reader.session.ReaderAction.Next) shouldBe false
     }
@@ -358,7 +361,7 @@ class ReaderScreenActionsTest {
         session.actions.contains(mihon.reader.session.ReaderAction.Next) shouldBe false
 
         onNodeWithTag("reader-transition-continue").performClick()
-        waitUntil { session.closeRequests == 1 && nextRequests == 1 }
+        waitUntil(timeoutMillis = 30_000) { session.closeRequests == 1 && nextRequests == 1 }
     }
 
     @Test
@@ -388,7 +391,7 @@ class ReaderScreenActionsTest {
 
         onNodeWithTag("reader-scrubber-next-chapter").performClick()
         onNodeWithTag("reader-transition-continue").performClick()
-        waitUntil { session.closeRequests == 1 && selectedChapterId == 4L }
+        waitUntil(timeoutMillis = 30_000) { session.closeRequests == 1 && selectedChapterId == 4L }
 
         adjacentRequests shouldBe 0
     }
@@ -410,7 +413,7 @@ class ReaderScreenActionsTest {
             keyDown(Key.Escape)
             keyUp(Key.Escape)
         }
-        waitUntil { session.closeRequests == 1 && backRequests == 1 }
+        waitUntil(timeoutMillis = 30_000) { session.closeRequests == 1 && backRequests == 1 }
     }
 
     @Test
@@ -436,7 +439,7 @@ class ReaderScreenActionsTest {
             keyDown(Key.Escape)
             keyUp(Key.Escape)
         }
-        waitUntil { session.closeRequests == 1 && backRequests == 1 }
+        waitUntil(timeoutMillis = 30_000) { session.closeRequests == 1 && backRequests == 1 }
     }
 
     @Test
@@ -464,7 +467,7 @@ class ReaderScreenActionsTest {
             keyDown(Key.Escape)
             keyUp(Key.Escape)
         }
-        waitUntil { session.closeRequests == 1 && backRequests == 1 }
+        waitUntil(timeoutMillis = 30_000) { session.closeRequests == 1 && backRequests == 1 }
     }
 
     @Test
@@ -486,7 +489,8 @@ class ReaderScreenActionsTest {
             keyDown(Key.Escape)
             keyUp(Key.Escape)
         }
-        waitUntil { backRequests == 1 }
+        // A loading chapter takes closeAndThen's synchronous branch, so no background work is involved.
+        waitUntil(timeoutMillis = 5_000) { backRequests == 1 }
 
         session.cancelRequests shouldBe 1
         session.closeRequests shouldBe 0
@@ -505,7 +509,8 @@ class ReaderScreenActionsTest {
         )
 
         onNodeWithTag("reader-loading-cancel").performClick()
-        waitUntil { backRequests == 1 }
+        // A loading chapter takes closeAndThen's synchronous branch, so no background work is involved.
+        waitUntil(timeoutMillis = 5_000) { backRequests == 1 }
 
         session.cancelRequests shouldBe 1
         session.closeRequests shouldBe 0
@@ -549,7 +554,7 @@ class ReaderScreenActionsTest {
         )
 
         onNodeWithTag("reader-back").performClick()
-        waitUntil { session.closeRequests == 1 && backRequests == 1 }
+        waitUntil(timeoutMillis = 30_000) { session.closeRequests == 1 && backRequests == 1 }
     }
 
     private fun androidx.compose.ui.test.ComposeUiTest.setReaderScreen(

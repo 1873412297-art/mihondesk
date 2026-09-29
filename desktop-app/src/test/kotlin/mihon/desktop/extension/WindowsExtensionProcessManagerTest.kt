@@ -1,5 +1,6 @@
 package mihon.desktop.extension
 
+import com.sun.jna.Platform
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.async
@@ -18,6 +19,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.io.File
 import java.nio.file.Path
+import java.util.concurrent.atomic.AtomicInteger
 
 class WindowsExtensionProcessManagerTest {
 
@@ -273,4 +275,50 @@ class WindowsExtensionProcessManagerTest {
             }
         }
     }
+
+    @Test
+    fun `shutdown keeps tearing down the remaining hosts when one fails to close`(@TempDir tempDir: Path) {
+        val workingDirectory = tempDir.resolve("teardown-host").toFile()
+        val hostDirectory = if (Platform.isWindows()) workingDirectory.resolve("sandbox-data") else workingDirectory
+        val brokerLeftover = hostDirectory.resolve("broker-responses/broker-1.bin").apply {
+            parentFile.mkdirs()
+            writeText("stale")
+        }
+        val pageLeftover = hostDirectory.resolve("page-images/page-1.img").apply {
+            parentFile.mkdirs()
+            writeText("stale")
+        }
+        val closings = AtomicInteger()
+        val manager = WindowsExtensionProcessManager(workingDirectory = workingDirectory)
+        val hosts = packageHosts(manager)
+        hosts["failing.one"] = FailingPackageHost(tempDir.resolve("one").toFile(), closings)
+        hosts["failing.two"] = FailingPackageHost(tempDir.resolve("two").toFile(), closings)
+        hosts["healthy"] = object : WindowsExtensionProcessManager(tempDir.resolve("healthy").toFile()) {
+            override fun close() {
+                closings.incrementAndGet()
+            }
+        }
+
+        manager.close()
+
+        closings.get() shouldBe 3
+        brokerLeftover.exists() shouldBe false
+        pageLeftover.exists() shouldBe false
+    }
+
+    private class FailingPackageHost(workingDirectory: File, private val closings: AtomicInteger) :
+        WindowsExtensionProcessManager(workingDirectory = workingDirectory) {
+        override fun close() {
+            closings.incrementAndGet()
+            throw IllegalStateException("Sandbox ACL removal failed")
+        }
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    private fun packageHosts(
+        manager: WindowsExtensionProcessManager,
+    ): MutableMap<String, WindowsExtensionProcessManager> = WindowsExtensionProcessManager::class.java
+        .getDeclaredField("packageHosts")
+        .apply { isAccessible = true }
+        .get(manager) as MutableMap<String, WindowsExtensionProcessManager>
 }

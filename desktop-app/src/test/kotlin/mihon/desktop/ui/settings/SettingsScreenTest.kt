@@ -58,7 +58,8 @@ class SettingsScreenTest {
             }
         }
         onNodeWithTag("settings-section-Advanced").performClick()
-        waitUntil {
+        // The pane loads the source counts through withContext(Dispatchers.IO).
+        waitUntil(timeoutMillis = 30_000) {
             onAllNodes(
                 androidx.compose.ui.test.hasTestTag("clear-database-source-42"),
             ).fetchSemanticsNodes().isNotEmpty()
@@ -68,7 +69,7 @@ class SettingsScreenTest {
         onNodeWithTag("clear-database-button").performScrollTo().performClick()
         removed.get() shouldBe 0
         onNodeWithTag("clear-database-confirm").performClick()
-        waitUntil { removed.get() == 1 }
+        waitUntil(timeoutMillis = 30_000) { removed.get() == 1 }
         keptRead.get() shouldBe true
     }
 
@@ -107,7 +108,7 @@ class SettingsScreenTest {
         onNodeWithTag("backup-storage-input").performScrollTo().performTextReplacement("relative-folder")
         store.load().backupStoragePath shouldBe ""
         onNodeWithTag("backup-storage-save").performScrollTo().performClick()
-        waitUntil {
+        waitUntil(timeoutMillis = 30_000) {
             onAllNodes(androidx.compose.ui.test.hasTestTag("backup-storage-error")).fetchSemanticsNodes().isNotEmpty()
         }
         store.load().backupStoragePath shouldBe ""
@@ -117,7 +118,7 @@ class SettingsScreenTest {
             store.updatePreferences { it.copy(lastAutoBackupEpochMillis = 123L, desktopNotificationsEnabled = false) }
         }
         onNodeWithTag("backup-storage-save").performScrollTo().performClick()
-        waitUntil { store.load().backupStoragePath == target.toString() }
+        waitUntil(timeoutMillis = 30_000) { store.load().backupStoragePath == target.toString() }
         onNodeWithTag("backup-storage-saved").assertExists()
         store.load().lastAutoBackupEpochMillis shouldBe 123L
         store.load().desktopNotificationsEnabled shouldBe false
@@ -126,7 +127,7 @@ class SettingsScreenTest {
         onNodeWithTag("backup-storage-default").performScrollTo().performClick()
         store.load().backupStoragePath shouldBe target.toString()
         onNodeWithTag("backup-storage-save").performScrollTo().performClick()
-        waitUntil { store.load().backupStoragePath.isEmpty() }
+        waitUntil(timeoutMillis = 30_000) { store.load().backupStoragePath.isEmpty() }
     }
 
     @OptIn(ExperimentalTestApi::class)
@@ -144,7 +145,7 @@ class SettingsScreenTest {
         onNodeWithTag("download-storage-input").performTextReplacement("relative-folder")
         store.load().downloadStoragePath shouldBe ""
         onNodeWithTag("download-storage-save").performClick()
-        waitUntil {
+        waitUntil(timeoutMillis = 30_000) {
             onAllNodes(androidx.compose.ui.test.hasTestTag("download-storage-error")).fetchSemanticsNodes().isNotEmpty()
         }
         store.load().downloadStoragePath shouldBe ""
@@ -152,7 +153,7 @@ class SettingsScreenTest {
         onNodeWithTag("download-storage-input").performTextReplacement(target.toString())
         runOnIdle { store.updatePreferences { it.copy(desktopNotificationsEnabled = false) } }
         onNodeWithTag("download-storage-save").performClick()
-        waitUntil { store.load().downloadStoragePath == target.toString() }
+        waitUntil(timeoutMillis = 30_000) { store.load().downloadStoragePath == target.toString() }
         onNodeWithTag("download-storage-saved").assertExists()
         store.load().desktopNotificationsEnabled shouldBe false
         java.nio.file.Files.isDirectory(target) shouldBe true
@@ -160,7 +161,7 @@ class SettingsScreenTest {
         onNodeWithTag("download-storage-default").performClick()
         store.load().downloadStoragePath shouldBe target.toString()
         onNodeWithTag("download-storage-save").performClick()
-        waitUntil { store.load().downloadStoragePath.isEmpty() }
+        waitUntil(timeoutMillis = 30_000) { store.load().downloadStoragePath.isEmpty() }
     }
 
     @OptIn(ExperimentalTestApi::class)

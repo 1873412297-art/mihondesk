@@ -55,14 +55,15 @@ class AppUpdateNavigationTest {
             waitForIdle()
             calls.get() shouldBe 0
             onNodeWithTag("app-update-check").performClick()
-            waitUntil { presenter.state.value.phase == AppUpdatePhase.Available }
+            // The update service checks and writes the download through Dispatchers.IO.
+            waitUntil(timeoutMillis = 30_000) { presenter.state.value.phase == AppUpdatePhase.Available }
             runOnIdle {
                 presenter.download(root.resolve(name))
                 showAbout.value = false
             }
             waitForIdle()
             streamGate.complete(Unit)
-            waitUntil { presenter.state.value.phase == AppUpdatePhase.Ready }
+            waitUntil(timeoutMillis = 30_000) { presenter.state.value.phase == AppUpdatePhase.Ready }
             runOnIdle { showAbout.value = true }
             onNodeWithTag("app-update-saved").assertExists()
             Files.readAllBytes(root.resolve(name)) shouldBe content

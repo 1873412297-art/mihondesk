@@ -589,7 +589,17 @@ open class WindowsExtensionProcessManager(
     }
 
     private fun closeInternal() {
-        packageHosts.values.forEach { it.close() }
+        packageHosts.values.forEach { host ->
+            try {
+                host.close()
+            } catch (error: Throwable) {
+                mihon.desktop.logging.DesktopLogger.warn(
+                    "ExtensionHost",
+                    "Failed to close an isolated extension host during shutdown: ${error.message}",
+                    error,
+                )
+            }
+        }
         packageHosts.clear()
         packageFiles.clear()
         sourceHosts.clear()
@@ -614,7 +624,15 @@ open class WindowsExtensionProcessManager(
             session?.close()
         } catch (_: Exception) {}
         session = null
-        sandboxLauncher?.close()
+        try {
+            sandboxLauncher?.close()
+        } catch (error: Throwable) {
+            mihon.desktop.logging.DesktopLogger.warn(
+                "ExtensionHost",
+                "Failed to release the sandbox launcher during shutdown: ${error.message}",
+                error,
+            )
+        }
         sandboxLauncher = null
         brokerPackages.clear()
         brokerSources.clear()

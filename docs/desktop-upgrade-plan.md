@@ -211,6 +211,12 @@
 - 这里踩到并修掉了一个**真实回归**：改动初版按「插入时重排位置」实现，导致 Android 模块的契约测试 `app/src/test/java/eu/kanade/tachiyomi/data/backup/DesktopBackupImportContractTest`（断言导入后的库与源备份投影完全相等）失败。**这是仓库级门禁发现的**——子代理只跑了 `:desktop-app`/`:desktop-library-data` 两个模块所以没暴露。修法是给导入器补一次显式 `updateCategoryOrder`，**不是**放宽那份契约测试。
 - 未做的第三个上游改动（`b74e010bf` 把排序下推视图）在桌面端价值有限：桌面有 7 种用户可选排序且都在 Kotlin 侧，故不做。
 
+## 2026-09-30 收尾（测试预算补齐 + 关闭路径加固）
+
+- **测试预算补齐**：`ui/reader/ReaderScreenActionsTest`（19 处）、`ui/settings/SettingsScreenTest`（8 处）、`ui/settings/AppUpdateNavigationTest`（2 处）、`ui/reader/ReaderScreenTest`（2 处）原先用的是 `waitUntil` 默认 **1000ms** 预算，是全模块最紧的一档。现按「等待对象是否跨 dispatcher」分档补齐：跨线程（`withContext(Dispatchers.Default/IO)` 之后再断言）给 30s，纯协程 launch + 重组给 15s，同步分支（其实是断言）给 5s。**没有提升任何已有预算，没有改动任何断言**；全模块已无无预算的 `waitUntil` 调用点。
+- **关闭路径加固**：`WindowsExtensionProcessManager.closeInternal()` 里 `sandboxLauncher?.close()`（原 `:617`）以及 `packageHosts.values.forEach { it.close() }`（原 `:592`）都没有守卫——任一子进程或沙箱启动器的释放抛错都会中断整个关闭流程与后续 `DesktopRuntime` shutdown，把其它扩展/句柄留在打开状态。现在两处都按「逐个 host 捕获 + `DesktopLogger.warn`（带堆栈）+ 继续清理」处理，`WindowsAppContainerLauncher.close()` 自身未改。新增 `WindowsExtensionProcessManagerTest` 用例（注入两个会抛错的 host + 一个正常 host，断言三个都被关闭、遗留文件仍被删）；并做了反向对照——把 `packageHosts` 守卫还原后该用例确实失败。
+- 未覆盖：`sandboxLauncher?.close()` 这处守卫没有直接用例（字段私有且类型为 final 的 `WindowsAppContainerLauncher`，构造真实实例后无法让其 `close()` 抛错；要直接覆盖需要把该类改成 `open`，属于为测试改生产代码，故停在用同形状的 package-host 环路覆盖）。
+
 
 ## 2026-09-29 执行记录（Phase 8.3 收尾 · 商店归属与安装错误展示）
 

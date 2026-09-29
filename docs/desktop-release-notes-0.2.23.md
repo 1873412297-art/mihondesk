@@ -58,7 +58,7 @@
 
 已在**当版本构建**（`ab71ec5b4`，`dirty=false`）上完成的本地项：
 
-- [x] 提交并记录构建身份：`mihon-build-info.properties` 记录 `version=0.2.23`、`revision=ab71ec5b456604bc30eb895e8f58fe6121dbc22a`、`dirty=false`
+- [x] 提交并记录构建身份：`mihon-build-info.properties` 记录 `version=0.2.23`、`dirty=false`，且 `revision` 与将要打 tag 的提交一致（本地用 `git log -1` 比对）
 - [x] 仓库级门禁 `spotlessCheck` + `test` + `verifySqlDelightMigration` 全绿（1446 例）
 - [x] 发行包清洁校验 `verify-release-clean.ps1` → PASS（无个人配置、无已装扩展、无用户数据）
 - [x] MSI 结构断言 `verify-msi-package.ps1` → PASS（WiX 升级码、许可、`RemoveFiles` 之前的延迟卸载钩子；**执行未测**）
