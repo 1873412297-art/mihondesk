@@ -72,19 +72,19 @@ class CategoryManagementTest {
         service.createCategory("Action")
         val created = service.awaitCategories { it.size == 1 }.single()
         created.name shouldBe "Action"
-        created.order shouldBe 1L
+        created.order shouldBe 0L
 
         service.createCategory("Drama")
         val afterSecondCreate = service.awaitCategories { it.size == 2 }
         val drama = afterSecondCreate.single { it.name == "Drama" }
-        drama.order shouldBe 2L
+        drama.order shouldBe 1L
 
         service.renameCategory(created.id, "Adventure")
         service.awaitCategories { categories -> categories.any { it.id == created.id && it.name == "Adventure" } }
 
-        service.reorderCategory(created.id, 0L)
+        service.reorderCategory(created.id, 5L)
         service.awaitCategories { categories ->
-            categories.single { it.id == created.id }.order == 0L
+            categories.single { it.id == created.id }.order == 5L
         }
 
         service.deleteCategory(drama.id)
@@ -274,7 +274,9 @@ private class FakeCategoryLibrary : LibraryRepository, LibraryMutationPort {
     override fun upsertCategory(value: CategoryRecord): Long {
         val id = if (value.id != 0L) value.id else nextCategoryId++
         categoryRecords.update { records ->
-            records.filterNot { it.id == id } + value.copy(id = id)
+            // Mirrors the insert: the record's position is ignored and the next free one is used.
+            val sortOrder = records.maxOfOrNull { it.sortOrder }?.plus(1) ?: 0L
+            records.filterNot { it.id == id } + value.copy(id = id, sortOrder = sortOrder)
         }
         return id
     }

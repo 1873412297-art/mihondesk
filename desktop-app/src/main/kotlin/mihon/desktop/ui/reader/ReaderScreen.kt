@@ -2,6 +2,7 @@ package mihon.desktop.ui.reader
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -172,9 +173,19 @@ fun ReaderScreen(
     // Intrinsic sizes observed by DecodedReaderPage plus any sizes supplied directly by callers/tests.
     val decodedPageSizes = remember(session) { mutableStateMapOf<PageId, PageSize>() }
     val pageSizeSink = remember(session, decodedPageSizes) {
-        ReaderPageSizeSink { pageId, size -> decodedPageSizes[pageId] = size }
+        ReaderPageSizeSink { pageId, size ->
+            if (decodedPageSizes[pageId] != size) {
+                decodedPageSizes[pageId] = size
+                session.dispatch(ReaderAction.SetPageIntrinsicSize(pageId, size.width, size.height))
+            }
+        }
     }
     val effectivePageSizes: Map<PageId, PageSize> = knownPageSizes + decodedPageSizes
+    LaunchedEffect(state.chapterId, knownPageSizes) {
+        knownPageSizes.forEach { (pageId, size) ->
+            session.dispatch(ReaderAction.SetPageIntrinsicSize(pageId, size.width, size.height))
+        }
+    }
     val sizeChapterId = remember(session) { mutableStateOf<Long?>(null) }
     val imageStore = remember(session, pageImageStore) { pageImageStore ?: ReaderPageImageStore() }
     val customCoverManager = LocalCustomCoverManager.current
@@ -397,11 +408,16 @@ fun ReaderScreen(
 
     fun applyZoom(command: ReaderInputCommand.ZoomBy, viewport: ReaderViewport?) {
         val current = session.state.value
-        val targetZoom = if (command.factor == 0f) {
+        val rawZoom = if (command.factor == 0f) {
             ReaderGesturePolicy.FIT_ZOOM
         } else {
             ReaderLayout.clampZoom(current.zoom * command.factor)
         }
+        val targetZoom = ReaderGesturePolicy.clampWebtoonZoom(
+            mode = current.mode,
+            zoom = rawZoom,
+            preventDownsizing = settings.webtoonPreventDownsizing,
+        )
         session.dispatch(ReaderAction.SetZoom(targetZoom))
         if (command.factor == 0f) {
             panAccumulator.value = ReaderPan(0f, 0f)
@@ -467,6 +483,9 @@ fun ReaderScreen(
 
     fun handleDoubleTap(viewport: ReaderViewport) {
         val current = session.state.value
+        if (!ReaderGesturePolicy.shouldDoubleTapZoom(current.mode, settings.webtoonDoubleTapZoom)) {
+            return
+        }
         val targetZoom = ReaderGesturePolicy.doubleTapZoom(current.zoom, doubleTapZoom)
         panAccumulator.value = ReaderPan(0f, 0f)
         session.dispatch(ReaderAction.SetZoom(targetZoom))
@@ -586,6 +605,28 @@ fun ReaderScreen(
         pageIndicatorAlpha.animateTo(0f, animationSpec = tween(READER_PAGE_INDICATOR_FADE_MILLIS))
         pageIndicatorIndex = null
     }
+
+    var acknowledgedFlashPage by remember(session) { mutableStateOf(-1 to 0L) }
+    var isPageFlashing by remember(session) { mutableStateOf(false) }
+    LaunchedEffect(state.selectedIndex, state.chapterId, settings.pageFlash, ready) {
+        val chapterId = state.chapterId ?: 0L
+        val index = state.selectedIndex
+        if (!ready || !settings.pageFlash || index < 0) {
+            acknowledgedFlashPage = index to chapterId
+            isPageFlashing = false
+            return@LaunchedEffect
+        }
+        if (acknowledgedFlashPage == -1 to 0L) {
+            acknowledgedFlashPage = index to chapterId
+            return@LaunchedEffect
+        }
+        if (acknowledgedFlashPage == index to chapterId) return@LaunchedEffect
+        acknowledgedFlashPage = index to chapterId
+        isPageFlashing = true
+        delay(100)
+        isPageFlashing = false
+    }
+
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -666,8 +707,18 @@ fun ReaderScreen(
                 hideGeneration++
             },
         ) {
+            val composeColorFilter = remember(
+                settings.colorFilter,
+                settings.customHue,
+                settings.customBrightness,
+                settings.customContrast,
+            ) {
+                settings.toComposeColorFilter()
+            }
             CompositionLocalProvider(
                 LocalReaderColorFilter provides settings.colorFilter,
+                LocalReaderComposeColorFilter provides composeColorFilter,
+                LocalReaderPageTransition provides settings.pageTransition,
                 LocalReaderCropBorders provides currentCrop,
                 LocalReaderForeground provides state.foreground,
                 LocalReaderSelectedPage provides state.pages.getOrNull(state.selectedIndex)?.id,
@@ -694,6 +745,15 @@ fun ReaderScreen(
                 )
             }
         }
+        if (settings.dimmingPercent < 100) {
+            val dimmingAlpha = (100 - settings.dimmingPercent.coerceIn(20, 100)) / 100f
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = dimmingAlpha))
+                    .testTag("reader-dimming-overlay"),
+            )
+        }
         ReaderChrome(
             state = state,
             title = title,
@@ -716,7 +776,14 @@ fun ReaderScreen(
             onMode = { applySettings(settings.copy(mode = it)) },
             onScale = { applySettings(settings.copy(scaleMode = it)) },
             onCoverOffset = { applySettings(settings.copy(coverOffset = it)) },
-            onZoom = { session.dispatch(ReaderAction.SetZoom(ReaderLayout.clampZoom(it))) },
+            onZoom = {
+                val targetZoom = ReaderGesturePolicy.clampWebtoonZoom(
+                    mode = state.mode,
+                    zoom = it,
+                    preventDownsizing = settings.webtoonPreventDownsizing,
+                )
+                session.dispatch(ReaderAction.SetZoom(targetZoom))
+            },
             onRetry = {
                 scope.launch {
                     state.pages.getOrNull(state.selectedIndex)?.id?.let { session.retry(it) } ?: onRetryChapter()
@@ -805,6 +872,14 @@ fun ReaderScreen(
                         .testTag("reader-page-indicator"),
                 )
             }
+        }
+        if (isPageFlashing) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black)
+                    .testTag("reader-page-flash-overlay"),
+            )
         }
     }
     chapterTransition?.let { transition ->

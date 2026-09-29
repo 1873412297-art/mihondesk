@@ -186,6 +186,10 @@ class AndroidBackupImporterTest {
             finishedReadingDate = 1_000,
             trackingUrl = "incoming-url",
         )
+        BackupMergePolicy.mergeRestoredTracking(
+            existingTracking,
+            regressiveTracking.copy(lastChapterRead = 13.0, remoteId = 0),
+        ) shouldBe existingTracking.copy(lastChapterRead = 13.0)
     }
 
     @Test
@@ -204,7 +208,7 @@ class AndroidBackupImporterTest {
                     version = 9,
                 ),
             )
-            val existingCategoryId = repository.upsertCategory(CategoryRecord(name = "Existing", sortOrder = 1))
+            val existingCategoryId = repository.upsertCategory(CategoryRecord(name = "Existing"))
             repository.linkCategory(mangaId, existingCategoryId)
             val chapterId = repository.insertChapter(
                 ChapterRecord(
@@ -253,7 +257,10 @@ class AndroidBackupImporterTest {
                                 version = 4,
                             ),
                         ),
-                        history = listOf(AndroidBackupHistory("/chapter", lastRead = 1_000, readDuration = 90)),
+                        history = listOf(
+                            AndroidBackupHistory("/chapter", lastRead = 1_000, readDuration = 40),
+                            AndroidBackupHistory("/chapter", lastRead = 500, readDuration = 50),
+                        ),
                         tracking = listOf(
                             AndroidBackupTracking(
                                 syncId = 7,
@@ -328,7 +335,7 @@ class AndroidBackupImporterTest {
                 remoteId shouldBe 70
                 title shouldBe "existing tracker title"
                 lastChapterRead shouldBe 12.0
-                totalChapters shouldBe 18
+                totalChapters shouldBe 15
                 score shouldBe 8.0
                 status shouldBe 2
                 trackingUrl shouldBe "existing-tracker-url"
@@ -554,7 +561,7 @@ class AndroidBackupImporterTest {
             val mangaId = repository.insertManga(
                 MangaRecord(sourceId = 1, url = "/m", title = "before", lastModifiedAt = 1),
             )
-            val categoryId = repository.upsertCategory(CategoryRecord(name = "Before", sortOrder = 1, flags = 1))
+            val categoryId = repository.upsertCategory(CategoryRecord(name = "Before", flags = 1))
             repository.linkCategory(mangaId, categoryId)
             val chapterId = repository.insertChapter(ChapterRecord(mangaId = mangaId, url = "/c", name = "before"))
             repository.upsertHistory(HistoryRecord(chapterId, 1, 1))

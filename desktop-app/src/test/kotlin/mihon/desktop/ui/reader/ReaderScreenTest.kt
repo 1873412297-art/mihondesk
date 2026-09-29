@@ -29,6 +29,7 @@ import mihon.desktop.preferences.DesktopPreferenceStore
 import mihon.desktop.reader.DesktopReaderSettings
 import mihon.desktop.reader.DesktopReaderSettingsStore
 import mihon.desktop.reader.ReaderColorFilter
+import mihon.desktop.ui.UI_TEST_TIMEOUT
 import mihon.reader.image.IntRect
 import mihon.reader.image.TileKey
 import mihon.reader.model.FrameId
@@ -56,7 +57,9 @@ class ReaderScreenTest {
     lateinit var tempDir: Path
 
     @Test
-    fun `ready screen exposes complete chrome and saves mode scale cover and zoom immediately`() = runComposeUiTest {
+    fun `ready screen exposes complete chrome and saves mode scale cover and zoom immediately`() = runComposeUiTest(
+        testTimeout = UI_TEST_TIMEOUT,
+    ) {
         val session = FakeReaderSession(ready())
         val store = settingsStore()
         var fullscreen = 0
@@ -102,7 +105,9 @@ class ReaderScreenTest {
     }
 
     @Test
-    fun `settings exposes constrained regions and reset restores fixed defaults before save`() = runComposeUiTest {
+    fun `settings exposes constrained regions and reset restores fixed defaults before save`() = runComposeUiTest(
+        testTimeout = UI_TEST_TIMEOUT,
+    ) {
         val session = FakeReaderSession(ready().copy(mode = ReadingMode.DUAL_LTR, coverOffset = true))
         val store = settingsStore().also {
             it.save(DesktopReaderSettings(mode = ReadingMode.DUAL_LTR, coverOffset = true))
@@ -140,7 +145,9 @@ class ReaderScreenTest {
     }
 
     @Test
-    fun `paged reader reports every page in the visible dual spread`() = runComposeUiTest {
+    fun `paged reader reports every page in the visible dual spread`() = runComposeUiTest(
+        testTimeout = UI_TEST_TIMEOUT,
+    ) {
         val initial = ready().copy(mode = ReadingMode.DUAL_LTR)
         val session = FakeReaderSession(initial)
         setReaderScreen(session, settingsStore(), width = 1000, height = 700)
@@ -153,7 +160,9 @@ class ReaderScreenTest {
     }
 
     @Test
-    fun `continuous reader reports all items intersecting the viewport`() = runComposeUiTest {
+    fun `continuous reader reports all items intersecting the viewport`() = runComposeUiTest(
+        testTimeout = UI_TEST_TIMEOUT,
+    ) {
         val pages = List(6) { index ->
             PageDescriptor(PageId("chapter", "short-$index.png"), 600, 200)
         }
@@ -169,7 +178,9 @@ class ReaderScreenTest {
     }
 
     @Test
-    fun `settings cancel discards the draft without changing session or persistence`() = runComposeUiTest {
+    fun `settings cancel discards the draft without changing session or persistence`() = runComposeUiTest(
+        testTimeout = UI_TEST_TIMEOUT,
+    ) {
         val session = FakeReaderSession(ready())
         val store = settingsStore()
         val before = store.load()
@@ -186,7 +197,9 @@ class ReaderScreenTest {
     }
 
     @Test
-    fun `reading input hides chrome at 2500ms while semantics remain and center reveals it`() = runComposeUiTest {
+    fun `reading input hides chrome at 2500ms while semantics remain and center reveals it`() = runComposeUiTest(
+        testTimeout = UI_TEST_TIMEOUT,
+    ) {
         mainClock.autoAdvance = false
         val session = FakeReaderSession(ready())
         setReaderScreen(session, settingsStore())
@@ -211,7 +224,9 @@ class ReaderScreenTest {
     }
 
     @Test
-    fun `loading and typed failures are visible retryable and redact raw paths`() = runComposeUiTest {
+    fun `loading and typed failures are visible retryable and redact raw paths`() = runComposeUiTest(
+        testTimeout = UI_TEST_TIMEOUT,
+    ) {
         val session = FakeReaderSession(ReaderState(loadState = ReaderLoadState.Loading(1)))
         setReaderScreen(session, settingsStore())
         onNodeWithTag("reader-loading").assertTextContains("Loading", substring = true)
@@ -238,7 +253,9 @@ class ReaderScreenTest {
     }
 
     @Test
-    fun `initial open failure retries the whole chapter when no page is available`() = runComposeUiTest {
+    fun `initial open failure retries the whole chapter when no page is available`() = runComposeUiTest(
+        testTimeout = UI_TEST_TIMEOUT,
+    ) {
         val session = FakeReaderSession(
             ReaderState(
                 loadState = ReaderLoadState.Failed(
@@ -266,7 +283,9 @@ class ReaderScreenTest {
     }
 
     @Test
-    fun `remote TLS failure explains recovery while keeping raw details collapsed`() = runComposeUiTest {
+    fun `remote TLS failure explains recovery while keeping raw details collapsed`() = runComposeUiTest(
+        testTimeout = UI_TEST_TIMEOUT,
+    ) {
         val failure = ReaderFailure.RemoteImage("TLS: Remote host terminated the handshake")
         val session =
             FakeReaderSession(
@@ -282,7 +301,7 @@ class ReaderScreenTest {
     }
 
     @Test
-    fun `cache diagnostic appears only for explicit debug mode`() = runComposeUiTest {
+    fun `cache diagnostic appears only for explicit debug mode`() = runComposeUiTest(testTimeout = UI_TEST_TIMEOUT) {
         setReaderScreen(FakeReaderSession(ready()), settingsStore(), debugEnabled = false)
         onNodeWithTag("reader-cache-diagnostic").assertDoesNotExist()
 
@@ -292,7 +311,7 @@ class ReaderScreenTest {
     }
 
     @Test
-    fun `back flushes an active reader exactly once`() = runComposeUiTest {
+    fun `back flushes an active reader exactly once`() = runComposeUiTest(testTimeout = UI_TEST_TIMEOUT) {
         val session = FakeReaderSession(ready())
         var returned = 0
         setReaderScreen(session, settingsStore(), onBack = { returned++ })
@@ -304,7 +323,9 @@ class ReaderScreenTest {
     }
 
     @Test
-    fun `animated page follows selected core frame pauses offscreen and owns no timer`() = runComposeUiTest {
+    fun `animated page follows selected core frame pauses offscreen and owns no timer`() = runComposeUiTest(
+        testTimeout = UI_TEST_TIMEOUT,
+    ) {
         mainClock.autoAdvance = false
         val page = PageId("chapter", "animated.gif")
         var selected by mutableStateOf(FrameId(page, 0))
@@ -368,6 +389,57 @@ class ReaderScreenTest {
         waitForIdle()
         bridge.metrics.retainedBytes shouldBe 0L
         bridge.close()
+    }
+
+    @Test
+    fun `reader dimming overlay appears when dimming is under 100 percent and is absent at 100`() = runComposeUiTest(
+        testTimeout = UI_TEST_TIMEOUT,
+    ) {
+        val session = FakeReaderSession(ready())
+        val store = settingsStore()
+        store.save(DesktopReaderSettings(dimmingPercent = 60))
+
+        setReaderScreen(session, store)
+        onNodeWithTag("reader-dimming-overlay").assertIsDisplayed()
+
+        store.save(DesktopReaderSettings(dimmingPercent = 100))
+        setReaderScreen(session, store)
+        onNodeWithTag("reader-dimming-overlay").assertDoesNotExist()
+    }
+
+    @Test
+    fun `filter tab sliders allow customizing hue brightness contrast and dimming`() = runComposeUiTest(
+        testTimeout = UI_TEST_TIMEOUT,
+    ) {
+        val session = FakeReaderSession(ready())
+        val store = settingsStore()
+        setReaderScreen(session, store, width = 800, height = 700)
+
+        onNodeWithTag("reader-settings").performClick()
+        onNodeWithTag("reader-settings-tab-filter").performClick()
+
+        onNodeWithTag("reader-setting-filter").assertIsDisplayed()
+        onNodeWithTag("reader-setting-custom-hue").assertIsDisplayed()
+        onNodeWithTag("reader-setting-custom-brightness").assertIsDisplayed()
+        onNodeWithTag("reader-setting-custom-contrast").assertIsDisplayed()
+        onNodeWithTag("reader-setting-dimming").assertIsDisplayed()
+
+        onNodeWithTag("reader-setting-custom-hue")
+            .performSemanticsAction(SemanticsActions.SetProgress) { it(120f) }
+        onNodeWithTag("reader-setting-custom-brightness")
+            .performSemanticsAction(SemanticsActions.SetProgress) { it(25f) }
+        onNodeWithTag("reader-setting-custom-contrast")
+            .performSemanticsAction(SemanticsActions.SetProgress) { it(-15f) }
+        onNodeWithTag("reader-setting-dimming")
+            .performSemanticsAction(SemanticsActions.SetProgress) { it(50f) }
+
+        onNodeWithTag("reader-settings-save").performClick()
+
+        val saved = store.load()
+        saved.customHue shouldBe 120
+        saved.customBrightness shouldBe 25
+        saved.customContrast shouldBe -15
+        saved.dimmingPercent shouldBe 50
     }
 
     private fun androidx.compose.ui.test.ComposeUiTest.setReaderScreen(

@@ -282,7 +282,8 @@ class SqlDelightSyncLocalRepository(
                 val key = cat.name.lowercase(Locale.ROOT)
                 val existingId = databaseCategoryIdByName[key]
                 if (existingId == null) {
-                    queries.insertCategory(cat.name, cat.order, cat.flags)
+                    // A category new to this device takes the next free position here, not the peer's.
+                    queries.insertCategory(cat.name, cat.flags)
                     val newId = queries.selectCategoryByName(cat.name).executeAsOne().id
                     databaseCategoryIdByName[key] = newId
                 }

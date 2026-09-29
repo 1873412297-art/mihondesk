@@ -51,6 +51,7 @@ class DesktopDownloader(
     val onDownloadFailed: ((DesktopDownload, String) -> Unit)? = null,
     val onDownloadProgress: ((DesktopDownload) -> Unit)? = null,
     val sourceParallelism: () -> Int = { 1 },
+    val tallImageSplitter: TallImageSplitter? = null,
 ) : AutoCloseable {
     private val _queueState = MutableStateFlow<List<DesktopDownload>>(emptyList())
     val queueState: StateFlow<List<DesktopDownload>> = _queueState.asStateFlow()
@@ -396,14 +397,14 @@ class DesktopDownloader(
         val effectiveMangaTitle = saved?.mangaTitle ?: mangaTitle
         val effectiveChapterId = saved?.chapterId ?: chapterId
         val effectiveChapterName = saved?.chapterName ?: chapterName
-        val chapterDir = diskProvider.findChapterDir(
+        val chapterEntry = diskProvider.findChapterEntry(
             effectiveSourceId,
             effectiveMangaTitle,
             effectiveChapterName,
             effectiveMangaId,
             effectiveChapterId,
         )
-        val existed = chapterDir != null && Files.exists(chapterDir)
+        val existed = chapterEntry != null && Files.exists(chapterEntry.path)
         if (existed &&
             !diskProvider.deleteChapter(
                 effectiveSourceId,
@@ -734,11 +735,14 @@ class DesktopDownloader(
                         activeDownloadJobs[next.chapterId] = chapterJob
                         next.chapterId to chapterJob
                     } ?: break
-                    chapterJob.start()
                     try {
+                        // Save the claimed state before starting I/O, outside the downloader monitor.
+                        persistQueue()
+                        chapterJob.start()
                         chapterJob.join()
                     } finally {
                         activeDownloadJobs.remove(chapterId, chapterJob)
+                        if (!chapterJob.isCompleted) chapterJob.cancel()
                     }
                 }
             }
@@ -766,7 +770,6 @@ class DesktopDownloader(
             val updated = current.map { item -> if (item.chapterId == next.chapterId) claimed else item }
             if (_queueState.compareAndSet(current, updated)) {
                 lastClaimedSource = next.sourceId
-                persistQueue()
                 return claimed
             }
         }
@@ -818,13 +821,13 @@ class DesktopDownloader(
         // A previous run may have published the images before database registration failed.
         // Only reuse pages the saved queue marked ready, and validate their bytes again.
         val publishedDir =
-            diskProvider.findChapterDir(
+            diskProvider.findChapterEntry(
                 download.sourceId,
                 download.mangaTitle,
                 download.chapterName,
                 download.mangaId,
                 download.chapterId,
-            )
+            )?.path
                 ?: diskProvider.getChapterDir(
                     download.sourceId,
                     download.mangaTitle,
@@ -833,21 +836,21 @@ class DesktopDownloader(
                     download.chapterId,
                 )
         pages.filter { it.status == PageStatus.READY }.forEach { page ->
-            val temporaryPage = diskProvider.getPageFile(tempDir, page.index)
-            val publishedPage = diskProvider.getPageFile(publishedDir, page.index)
-            if (!diskProvider.isValidPage(temporaryPage) && diskProvider.isValidPage(publishedPage)) {
-                Files.copy(publishedPage, temporaryPage, java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+            if (diskProvider.validPageMetadata(tempDir, page.index) != null) return@forEach
+            val publishedFiles = diskProvider.pageFiles(publishedDir, page.index)
+            if (publishedFiles.isEmpty() || publishedFiles.any { !diskProvider.isValidPage(it) }) return@forEach
+            publishedFiles.forEach { published ->
+                Files.copy(
+                    published,
+                    tempDir.resolve(published.fileName.toString()),
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+                )
             }
         }
         val pageSizes = mutableMapOf<Int, Long>()
-        val validPageIndexes = hashSetOf<Int>()
         for (page in pages) {
-            val pageFile = diskProvider.getPageFile(tempDir, page.index)
-            if (diskProvider.isValidPage(pageFile)) {
-                val size = Files.size(pageFile)
-                pageSizes[page.index] = size
-                validPageIndexes.add(page.index)
-            }
+            val stored = diskProvider.validPageMetadata(tempDir, page.index) ?: continue
+            pageSizes[page.index] = stored.sizeBytes
         }
         val totalBytes = AtomicLong(pageSizes.values.sum())
         updateDownload(download.chapterId) { item ->
@@ -898,10 +901,15 @@ class DesktopDownloader(
                                 priority = mihon.extension.ipc.RequestPriority.BACKGROUND,
                             )
                             currentCoroutineContext().ensureActive()
-                            diskProvider.savePage(tempDir, page.index, bytes)
+                            val savedPage = diskProvider.savePage(tempDir, page.index, bytes)
+                            // Splitting is best effort: it never fails the download, and the byte
+                            // totals below follow what is actually on disk afterwards.
+                            val split = tallImageSplitter?.split(savedPage, page.index)
+                            val storedBytes = (split as? TallImageSplitResult.Split)?.totalBytes
+                                ?: bytes.size.toLong()
 
-                            val downloadedBytes = totalBytes.addAndGet(bytes.size.toLong())
-                            val allSessionBytes = sessionBytes.addAndGet(bytes.size.toLong())
+                            val downloadedBytes = totalBytes.addAndGet(storedBytes)
+                            val allSessionBytes = sessionBytes.addAndGet(storedBytes)
                             val elapsedSeconds = (System.currentTimeMillis() - sessionStartedAt) / 1000.0
                             if (elapsedSeconds > 0.1) {
                                 _speedBytesPerSec.value = allSessionBytes / elapsedSeconds
@@ -912,7 +920,7 @@ class DesktopDownloader(
                                 page.index,
                                 PageStatus.READY,
                                 1.0f,
-                                bytesWritten = bytes.size.toLong(),
+                                bytesWritten = storedBytes,
                             )
                             val progress = updateDownload(download.chapterId) {
                                 it.copy(bytesDownloaded = downloadedBytes)

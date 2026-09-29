@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -23,22 +25,27 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ChromeReaderMode
 import androidx.compose.material.icons.rounded.Backup
+import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Code
 import androidx.compose.material.icons.rounded.CollectionsBookmark
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Palette
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.SyncAlt
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -60,6 +67,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -73,6 +85,8 @@ import mihon.desktop.diagnostics.DiagnosticSummary
 import mihon.desktop.i18n.AppLanguage
 import mihon.desktop.i18n.DesktopStrings
 import mihon.desktop.i18n.LocalStrings
+import mihon.desktop.i18n.SimplifiedChineseStrings
+import mihon.desktop.i18n.TraditionalChineseStrings
 import mihon.desktop.i18n.UiText
 import mihon.desktop.i18n.locale
 import mihon.desktop.i18n.text
@@ -90,7 +104,10 @@ import mihon.desktop.security.MIN_PIN_LENGTH
 import mihon.desktop.track.DesktopTracker
 import mihon.desktop.track.DesktopTrackerManager
 import mihon.desktop.track.TrackerAuthType
+import mihon.desktop.ui.common.LocalSearchFocusRequester
 import mihon.desktop.ui.common.LocalSnackbarHostState
+import mihon.desktop.ui.common.searchFocusRequester
+import mihon.desktop.ui.common.trackTextInputFocus
 import mihon.desktop.ui.theme.DesktopAppTheme
 import mihon.desktop.ui.theme.ThemeRegistry
 import mihon.desktop.ui.track.TrackerLoginDialog
@@ -155,6 +172,9 @@ fun SettingsScreen(
     downloadCacheCleaner: mihon.desktop.download.DownloadCacheCleaner? = null,
     downloadsDir: Path? = null,
     diskCacheDir: Path? = null,
+    profileRoot: Path? = null,
+    databaseCleaner: mihon.desktop.library.repository.LibraryDatabaseCleaner? = null,
+    downloadCategories: List<mihon.desktop.category.DesktopCategory> = emptyList(),
     appLockController: DesktopAppLockController? = null,
     backgroundScheduler: mihon.desktop.platform.WindowsBackgroundScheduler? = null,
     modifier: Modifier = Modifier,
@@ -179,11 +199,21 @@ fun SettingsScreen(
         appLockController ?: DesktopAppLockController(preferenceStore)
     }
     var selectedSection by remember { mutableStateOf(SettingsSection.General) }
+    var searchQuery by remember { mutableStateOf("") }
+    val searchableEntries = remember(strings) { buildSearchableSettings(strings) }
+    val matchingResults = remember(searchQuery, searchableEntries) {
+        if (searchQuery.isBlank()) {
+            emptyList()
+        } else {
+            val q = searchQuery.trim().lowercase()
+            searchableEntries.filter { it.matches(q, strings) }
+        }
+    }
 
     Row(modifier = modifier.fillMaxSize().testTag("settings-screen")) {
         // Left side sections navigation
         Surface(
-            modifier = Modifier.width(240.dp).fillMaxHeight(),
+            modifier = Modifier.width(260.dp).fillMaxHeight(),
             color = MaterialTheme.colorScheme.surfaceContainerLow,
         ) {
             Column(modifier = Modifier.padding(16.dp).verticalScroll(rememberScrollState())) {
@@ -191,16 +221,81 @@ fun SettingsScreen(
                     text = strings.settingsTitle,
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(bottom = 16.dp),
+                    modifier = Modifier.padding(bottom = 12.dp),
+                )
+                val searchFocusRequester = LocalSearchFocusRequester.current
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    placeholder = {
+                        Text(
+                            text = strings.settingsSearchPlaceholder,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Rounded.Search,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    },
+                    trailingIcon = {
+                        if (searchQuery.isNotEmpty()) {
+                            IconButton(
+                                onClick = { searchQuery = "" },
+                                modifier = Modifier.testTag("settings-clear-search").size(24.dp),
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Close,
+                                    contentDescription = strings.text(UiText.ClearSearch),
+                                    modifier = Modifier.size(16.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                    },
+                    singleLine = true,
+                    textStyle = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp)
+                        .searchFocusRequester(searchFocusRequester)
+                        .trackTextInputFocus()
+                        .onPreviewKeyEvent { event ->
+                            if (event.key == Key.Escape && event.type == KeyEventType.KeyUp) {
+                                if (searchQuery.isNotEmpty()) {
+                                    searchQuery = ""
+                                    true
+                                } else {
+                                    false
+                                }
+                            } else if (event.key == Key.Enter && event.type == KeyEventType.KeyUp) {
+                                if (matchingResults.isNotEmpty()) {
+                                    selectedSection = matchingResults.first().section
+                                    searchQuery = ""
+                                    true
+                                } else {
+                                    false
+                                }
+                            } else {
+                                false
+                            }
+                        }
+                        .testTag("settings-search"),
                 )
                 SettingsSection.entries.forEach { section ->
-                    val isSelected = section == selectedSection
+                    val isSelected = searchQuery.isBlank() && section == selectedSection
                     Surface(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(vertical = 4.dp)
                             .clip(RoundedCornerShape(8.dp))
-                            .clickable { selectedSection = section }
+                            .clickable {
+                                selectedSection = section
+                                searchQuery = ""
+                            }
                             .testTag("settings-section-${section.name}"),
                         color = if (isSelected) {
                             MaterialTheme.colorScheme.primaryContainer
@@ -245,53 +340,817 @@ fun SettingsScreen(
             Box(
                 modifier = Modifier.widthIn(max = 880.dp).fillMaxWidth(),
             ) {
-                when (selectedSection) {
-                    SettingsSection.General -> GeneralSettingsPane(
-                        preferenceStore = preferenceStore,
-                        onPreferencesChanged = notifyPreferencesChanged,
-                        onOpenOnboarding = onOpenOnboarding,
+                if (searchQuery.isNotBlank()) {
+                    SettingsSearchResultsPane(
+                        query = searchQuery,
+                        results = matchingResults,
+                        strings = strings,
+                        onSelectEntry = { entry ->
+                            selectedSection = entry.section
+                            searchQuery = ""
+                        },
                     )
-                    SettingsSection.Security -> SecuritySettingsPane(
-                        preferenceStore = preferenceStore,
-                        appLockController = securityController,
-                        onPreferencesChanged = notifyPreferencesChanged,
-                    )
-                    SettingsSection.Appearance -> AppearanceSettingsPane(preferenceStore, notifyPreferencesChanged)
-                    SettingsSection.Library -> LibrarySettingsPane(
-                        preferenceStore,
-                        updateScheduler,
-                        notifyPreferencesChanged,
-                    )
-                    SettingsSection.Reader -> ReaderSettingsPane(readerSettingsStore)
-                    SettingsSection.Downloads -> DownloadsSettingsPane(
-                        preferenceStore = preferenceStore,
-                        onPreferencesChanged = notifyPreferencesChanged,
-                        downloadsDir = downloadsDir,
-                    )
-                    SettingsSection.Tracking -> TrackingSettingsPane(trackerManager)
-                    SettingsSection.Backup -> BackupSettingsPane(
-                        preferenceStore = preferenceStore,
-                        backupScheduler = backupScheduler,
-                        syncScheduler = syncScheduler,
-                        syncServerManager = syncServerManager,
-                        onImportBackup = onImportBackup,
-                        onExportBackup = onExportBackup,
-                        onPreferencesChanged = notifyPreferencesChanged,
-                    )
-                    SettingsSection.Advanced -> AdvancedSettingsPane(
-                        preferenceStore = preferenceStore,
-                        backgroundScheduler = backgroundScheduler,
-                        onPreferencesChanged = notifyPreferencesChanged,
-                        diagnosticService = diagnosticService,
-                        onOpenCookieManager = onOpenCookieManager,
-                        downloadCacheCleaner = downloadCacheCleaner,
-                        downloadsDir = downloadsDir,
-                        diskCacheDir = diskCacheDir,
-                    )
+                } else {
+                    when (selectedSection) {
+                        SettingsSection.General -> GeneralSettingsPane(
+                            preferenceStore = preferenceStore,
+                            onPreferencesChanged = notifyPreferencesChanged,
+                            onOpenOnboarding = onOpenOnboarding,
+                        )
+                        SettingsSection.Security -> SecuritySettingsPane(
+                            preferenceStore = preferenceStore,
+                            appLockController = securityController,
+                            onPreferencesChanged = notifyPreferencesChanged,
+                        )
+                        SettingsSection.Appearance -> AppearanceSettingsPane(preferenceStore, notifyPreferencesChanged)
+                        SettingsSection.Library -> LibrarySettingsPane(
+                            preferenceStore,
+                            updateScheduler,
+                            notifyPreferencesChanged,
+                        )
+                        SettingsSection.Reader -> ReaderSettingsPane(readerSettingsStore)
+                        SettingsSection.Downloads -> DownloadsSettingsPane(
+                            preferenceStore = preferenceStore,
+                            onPreferencesChanged = notifyPreferencesChanged,
+                            downloadsDir = downloadsDir,
+                            categories = downloadCategories,
+                        )
+                        SettingsSection.Tracking -> TrackingSettingsPane(trackerManager)
+                        SettingsSection.Backup -> BackupSettingsPane(
+                            preferenceStore = preferenceStore,
+                            backupScheduler = backupScheduler,
+                            syncScheduler = syncScheduler,
+                            syncServerManager = syncServerManager,
+                            onImportBackup = onImportBackup,
+                            onExportBackup = onExportBackup,
+                            onPreferencesChanged = notifyPreferencesChanged,
+                        )
+                        SettingsSection.Advanced -> AdvancedSettingsPane(
+                            preferenceStore = preferenceStore,
+                            backgroundScheduler = backgroundScheduler,
+                            onPreferencesChanged = notifyPreferencesChanged,
+                            diagnosticService = diagnosticService,
+                            onOpenCookieManager = onOpenCookieManager,
+                            downloadCacheCleaner = downloadCacheCleaner,
+                            downloadsDir = downloadsDir,
+                            diskCacheDir = diskCacheDir,
+                            profileRoot = profileRoot,
+                            databaseCleaner = databaseCleaner,
+                        )
+                    }
                 }
             }
         }
     }
+}
+
+@Composable
+private fun SettingsSearchResultsPane(
+    query: String,
+    results: List<SearchableSettingEntry>,
+    strings: DesktopStrings,
+    onSelectEntry: (SearchableSettingEntry) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .testTag("settings-search-pane"),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text(
+                text = strings.settingsSearchResultsCount(results.size),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.testTag("settings-search-results-count"),
+            )
+        }
+
+        if (results.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(32.dp)
+                    .testTag("settings-search-empty"),
+                contentAlignment = Alignment.Center,
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Search,
+                        contentDescription = null,
+                        modifier = Modifier.size(48.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                    )
+                    Text(
+                        text = strings.settingsSearchNoResults,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .testTag("settings-search-results"),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                items(results, key = { it.id }) { entry ->
+                    Card(
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onSelectEntry(entry) }
+                            .testTag("settings-search-result-${entry.id}"),
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    modifier = Modifier.padding(bottom = 4.dp),
+                                ) {
+                                    Icon(
+                                        imageVector = entry.section.icon,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp),
+                                        tint = MaterialTheme.colorScheme.primary,
+                                    )
+                                    Text(
+                                        text = entry.section.localized(strings),
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        fontWeight = FontWeight.Medium,
+                                    )
+                                }
+                                Text(
+                                    text = entry.title,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                )
+                                if (!entry.subtitle.isNullOrBlank()) {
+                                    Text(
+                                        text = entry.subtitle,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(top = 2.dp),
+                                    )
+                                }
+                            }
+                            Icon(
+                                imageVector = Icons.Rounded.ChevronRight,
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private data class SearchableSettingEntry(
+    val id: String,
+    val section: SettingsSection,
+    val title: String,
+    val subtitle: String? = null,
+    val keywords: List<String> = emptyList(),
+) {
+    fun matches(query: String, strings: DesktopStrings): Boolean {
+        val q = query.trim().lowercase()
+        if (q.isEmpty()) return false
+        val localizedSection = section.localized(strings).lowercase()
+        val sectionName = section.name.lowercase()
+        val matchesTitle = title.lowercase().contains(q)
+        val matchesSubtitle = subtitle?.lowercase()?.contains(q) == true
+        val matchesSection = localizedSection.contains(q) || sectionName.contains(q)
+        val matchesKeywords = keywords.any { it.lowercase().contains(q) }
+        return matchesTitle || matchesSubtitle || matchesSection || matchesKeywords
+    }
+}
+
+private fun buildSearchableSettings(strings: DesktopStrings): List<SearchableSettingEntry> {
+    val backgroundTasksTitle = when (strings) {
+        SimplifiedChineseStrings -> "关闭应用后继续更新与备份"
+        TraditionalChineseStrings -> "關閉應用程式後繼續更新與備份"
+        else -> "Run updates and backups while the app is closed"
+    }
+    return listOf(
+        // General
+        SearchableSettingEntry(
+            id = "general-language",
+            section = SettingsSection.General,
+            title = strings.settingsLanguageTitle,
+            subtitle = listOf(
+                strings.settingsLanguageSystem,
+                strings.settingsLanguageSimplifiedChinese,
+                strings.settingsLanguageTraditionalChinese,
+                strings.settingsLanguageEnglish,
+            ).joinToString(),
+            keywords = listOf("language", "locale", "chinese", "english", "语言", "語言", "中文", "英文", "繁体", "简体"),
+        ),
+        SearchableSettingEntry(
+            id = "general-app-info",
+            section = SettingsSection.General,
+            title = strings.settingsAppInfoTitle,
+            subtitle = "mihondesk, version, platform",
+            keywords = listOf("version", "platform", "about", "info", "build", "版本", "平台", "关于", "應用資訊"),
+        ),
+        SearchableSettingEntry(
+            id = "general-incognito",
+            section = SettingsSection.General,
+            title = strings.incognitoTitle,
+            subtitle = strings.incognitoDescription,
+            keywords = listOf("incognito", "private", "history", "pause", "无痕", "私密", "隐私", "隱私", "無痕模式"),
+        ),
+        SearchableSettingEntry(
+            id = "general-run-background",
+            section = SettingsSection.General,
+            title = strings.runInBackgroundTitle,
+            subtitle = strings.runInBackgroundSummary,
+            keywords = listOf("background", "close", "minimize", "tray", "后台", "關閉", "後台", "最小化", "托盘"),
+        ),
+        SearchableSettingEntry(
+            id = "general-nsfw",
+            section = SettingsSection.General,
+            title = strings.settingsShowNsfw,
+            subtitle = strings.settingsShowNsfwDesc,
+            keywords = listOf("nsfw", "18+", "adult", "sources", "filter", "成人", "色情", "限制", "图源", "圖源"),
+        ),
+        SearchableSettingEntry(
+            id = "general-reset-hidden-sources",
+            section = SettingsSection.General,
+            title = strings.settingsResetHiddenSources,
+            subtitle = strings.settingsResetHiddenSourcesDesc,
+            keywords = listOf("hidden", "sources", "reset", "unhide", "隐藏", "重置", "圖源", "隱藏"),
+        ),
+        SearchableSettingEntry(
+            id = "general-onboarding",
+            section = SettingsSection.General,
+            title = strings.settingsReshowOnboarding,
+            subtitle = strings.settingsReshowOnboardingDesc,
+            keywords = listOf("onboarding", "guide", "setup", "wizard", "welcome", "引导", "嚮導", "新手", "重现"),
+        ),
+        SearchableSettingEntry(
+            id = "general-check-updates",
+            section = SettingsSection.General,
+            title = strings.text(UiText.AppUpdateTitle),
+            subtitle = null,
+            keywords = listOf("update", "upgrade", "version", "check", "更新", "檢查更新", "升級"),
+        ),
+
+        // Security
+        SearchableSettingEntry(
+            id = "security-app-lock",
+            section = SettingsSection.Security,
+            title = strings.text(UiText.AppLock),
+            subtitle = strings.text(UiText.LockEnabledHint),
+            keywords = listOf(
+                "app lock",
+                "pin",
+                "password",
+                "security",
+                "protect",
+                "应用锁",
+                "應用鎖",
+                "密碼",
+                "密码",
+                "锁定",
+                "安全",
+            ),
+        ),
+        SearchableSettingEntry(
+            id = "security-lock-on-startup",
+            section = SettingsSection.Security,
+            title = strings.text(UiText.LockOnStartup),
+            subtitle = strings.text(UiText.LockOnStartupHint),
+            keywords = listOf("startup", "boot", "launch", "lock", "启动", "啟動", "锁定"),
+        ),
+        SearchableSettingEntry(
+            id = "security-idle-timeout",
+            section = SettingsSection.Security,
+            title = strings.text(UiText.AutoLock),
+            subtitle = strings.text(UiText.AutoLockHint),
+            keywords = listOf("idle", "timeout", "minutes", "lock", "闲置", "閒置", "超时", "逾時", "自动锁定"),
+        ),
+        SearchableSettingEntry(
+            id = "security-change-pin",
+            section = SettingsSection.Security,
+            title = strings.text(UiText.ChangePin),
+            subtitle = strings.text(UiText.PinHint, MIN_PIN_LENGTH),
+            keywords = listOf("change pin", "modify", "password", "修改", "密码", "PIN"),
+        ),
+        SearchableSettingEntry(
+            id = "security-lock-now",
+            section = SettingsSection.Security,
+            title = strings.text(UiText.LockNow),
+            subtitle = strings.text(UiText.LockNowHint),
+            keywords = listOf("lock now", "manual lock", "立即锁定", "馬上鎖定"),
+        ),
+
+        // Appearance
+        SearchableSettingEntry(
+            id = "appearance-theme-mode",
+            section = SettingsSection.Appearance,
+            title = strings.settingsThemeModeTitle,
+            subtitle = "${strings.settingsThemeSystem}, ${strings.settingsThemeLight}, ${strings.settingsThemeDark}",
+            keywords = listOf(
+                "theme",
+                "mode",
+                "dark",
+                "light",
+                "system",
+                "dark mode",
+                "主题",
+                "模式",
+                "深色",
+                "浅色",
+                "暗色",
+                "夜间",
+                "主題",
+            ),
+        ),
+        SearchableSettingEntry(
+            id = "appearance-amoled",
+            section = SettingsSection.Appearance,
+            title = strings.settingsThemeAmoledTitle,
+            subtitle = strings.settingsThemeAmoledSubtitle,
+            keywords = listOf("amoled", "pure black", "oled", "black", "纯黑", "純黑", "极黑", "省电"),
+        ),
+        SearchableSettingEntry(
+            id = "appearance-color-scheme",
+            section = SettingsSection.Appearance,
+            title = strings.settingsAppThemeTitle,
+            subtitle = null,
+            keywords = listOf("color", "scheme", "palette", "accent", "lavender", "sakura", "色彩", "配色", "主题色", "顏色"),
+        ),
+
+        // Library
+        SearchableSettingEntry(
+            id = "library-update-interval",
+            section = SettingsSection.Library,
+            title = strings.libraryUpdateInterval,
+            subtitle = strings.libraryUpdating,
+            keywords = listOf(
+                "library update",
+                "interval",
+                "schedule",
+                "frequency",
+                "书库更新",
+                "書庫更新",
+                "自动更新",
+                "频率",
+                "週期",
+            ),
+        ),
+        SearchableSettingEntry(
+            id = "library-skip-completed",
+            section = SettingsSection.Library,
+            title = strings.libraryUpdateSkipCompleted,
+            subtitle = null,
+            keywords = listOf("skip", "completed", "finished", "完结", "已完结", "跳过", "略過"),
+        ),
+        SearchableSettingEntry(
+            id = "library-skip-unread",
+            section = SettingsSection.Library,
+            title = strings.libraryUpdateSkipUnread,
+            subtitle = null,
+            keywords = listOf("skip", "unread", "跳过未读", "未讀"),
+        ),
+        SearchableSettingEntry(
+            id = "library-skip-started",
+            section = SettingsSection.Library,
+            title = strings.text(UiText.SkipNotStarted),
+            subtitle = null,
+            keywords = listOf("skip", "started", "not started", "未开始", "未開始"),
+        ),
+        SearchableSettingEntry(
+            id = "library-skip-outside-release-period",
+            section = SettingsSection.Library,
+            title = strings.libraryUpdateSkipOutsideReleasePeriod,
+            keywords = listOf("release period", "update cycle", "smart update", "更新周期", "更新週期"),
+        ),
+        SearchableSettingEntry(
+            id = "library-categories",
+            section = SettingsSection.Library,
+            title = strings.text(UiText.IncludeCategoryIds),
+            subtitle = strings.text(UiText.ExcludeCategoryIds),
+            keywords = listOf("category", "categories", "include", "exclude", "分类", "分類", "包含", "排除"),
+        ),
+        SearchableSettingEntry(
+            id = "library-auto-download",
+            section = SettingsSection.Library,
+            title = strings.libraryAutoDownloadNew,
+            subtitle = null,
+            keywords = listOf("auto download", "new chapters", "自动下载", "自動下載", "新章节", "新章節"),
+        ),
+        SearchableSettingEntry(
+            id = "library-update-only-ac",
+            section = SettingsSection.Library,
+            title = strings.libraryUpdateOnlyOnAcPower,
+            subtitle = null,
+            keywords = listOf("charging", "power", "battery", "ac", "供电", "充电", "电源", "電池"),
+        ),
+        SearchableSettingEntry(
+            id = "library-notifications",
+            section = SettingsSection.Library,
+            title = strings.notificationsDesktopEnabled,
+            subtitle = strings.text(UiText.HideNotificationContent),
+            keywords = listOf("notification", "desktop", "alert", "toast", "spoiler", "通知", "桌面通知", "提醒", "防剧透"),
+        ),
+
+        // Reader
+        SearchableSettingEntry(
+            id = "reader-reading-mode",
+            section = SettingsSection.Reader,
+            title = strings.settingsDefaultReadingMode,
+            subtitle = "${strings.readerModeSingleLtr}, ${strings.readerModeSingleRtl}, ${strings.readerModeWebtoon}",
+            keywords = listOf(
+                "reading mode",
+                "webtoon",
+                "vertical",
+                "horizontal",
+                "ltr",
+                "rtl",
+                "阅读模式",
+                "閱讀模式",
+                "条漫",
+                "條漫",
+                "单页",
+            ),
+        ),
+        SearchableSettingEntry(
+            id = "reader-scale-type",
+            section = SettingsSection.Reader,
+            title = strings.settingsDefaultScaleMode,
+            subtitle = listOf(
+                strings.readerScaleFitWidth,
+                strings.readerScaleFitHeight,
+                strings.readerScaleOriginal,
+            ).joinToString(),
+            keywords = listOf("scale", "fit", "stretch", "original", "缩放", "縮放", "适应宽度", "拉伸"),
+        ),
+        SearchableSettingEntry(
+            id = "reader-color-filter",
+            section = SettingsSection.Reader,
+            title = strings.readerColorFilter,
+            subtitle = listOf(
+                strings.readerFilterInvert,
+                strings.readerFilterGrayscale,
+                strings.readerFilterSepia,
+                strings.readerFilterNight,
+                strings.readerFilterCustom,
+            ).joinToString(),
+            keywords = listOf(
+                "color filter",
+                "filter",
+                "grayscale",
+                "sepia",
+                "night",
+                "custom",
+                "invert",
+                "滤镜",
+                "濾鏡",
+                "反转",
+                "灰阶",
+                "黑白",
+                "夜间",
+            ),
+        ),
+        SearchableSettingEntry(
+            id = "reader-custom-filter",
+            section = SettingsSection.Reader,
+            title = strings.readerFilterCustom,
+            subtitle = listOf(
+                strings.readerCustomHue,
+                strings.readerCustomBrightness,
+                strings.readerCustomContrast,
+                strings.readerDimming,
+            ).joinToString(),
+            keywords = listOf("hue", "brightness", "contrast", "dimming", "色相", "亮度", "对比度", "变暗", "屏幕变暗", "自订", "自定义"),
+        ),
+        SearchableSettingEntry(
+            id = "reader-background-color",
+            section = SettingsSection.Reader,
+            title = strings.readerBackgroundColor,
+            subtitle = listOf(
+                strings.readerBgDarkGray,
+                strings.readerBgBlack,
+                strings.readerBgWhite,
+                strings.readerBgWarmCream,
+            ).joinToString(),
+            keywords = listOf("background", "bg color", "canvas", "black", "white", "背景", "背景色", "纯黑", "暖白", "深灰"),
+        ),
+        SearchableSettingEntry(
+            id = "reader-page-transitions",
+            section = SettingsSection.Reader,
+            title = strings.readerPageTransitions,
+            subtitle = mihon.desktop.reader.ReaderPageTransition.entries.joinToString {
+                strings.readerPageTransitionLabel(it)
+            },
+            keywords = listOf("transition", "animation", "fade", "slide", "flip", "过渡", "過渡", "动画", "淡入淡出", "滑动"),
+        ),
+        SearchableSettingEntry(
+            id = "reader-dual-page-split",
+            section = SettingsSection.Reader,
+            title = strings.readerDualPageSplit,
+            subtitle = strings.readerDualPageRotateToFit,
+            keywords = listOf(
+                "dual page",
+                "split",
+                "wide page",
+                "spread",
+                "rotate",
+                "跨页",
+                "跨頁",
+                "双页",
+                "雙頁",
+                "分割",
+                "拆分",
+                "旋转",
+            ),
+        ),
+        SearchableSettingEntry(
+            id = "reader-double-spread",
+            section = SettingsSection.Reader,
+            title = strings.settingsDoubleSpread,
+            subtitle = null,
+            keywords = listOf("spread", "double spread", "dual", "双页", "雙頁"),
+        ),
+        SearchableSettingEntry(
+            id = "reader-crop-borders",
+            section = SettingsSection.Reader,
+            title = strings.readerCropBorders,
+            subtitle = strings.readerCropBordersWebtoon,
+            keywords = listOf("crop", "borders", "trim", "margins", "white space", "裁剪", "切边", "白边", "裁邊", "留白"),
+        ),
+        SearchableSettingEntry(
+            id = "reader-webtoon-layout",
+            section = SettingsSection.Reader,
+            title = strings.readerWebtoonMaxWidth,
+            subtitle = strings.readerWebtoonSidePadding,
+            keywords = listOf("webtoon width", "max width", "side padding", "margin", "条漫宽度", "條漫寬度", "侧边距", "邊距"),
+        ),
+        SearchableSettingEntry(
+            id = "reader-keep-screen-on",
+            section = SettingsSection.Reader,
+            title = strings.readerKeepScreenOn,
+            subtitle = null,
+            keywords = listOf("keep screen on", "sleep", "awake", "display", "常亮", "屏幕常亮", "螢幕常亮", "睡眠", "熄屏"),
+        ),
+        SearchableSettingEntry(
+            id = "reader-page-flash",
+            section = SettingsSection.Reader,
+            title = strings.readerPageFlash,
+            subtitle = null,
+            keywords = listOf("flash", "e-ink", "page flash", "闪烁", "閃爍", "水墨屏"),
+        ),
+        SearchableSettingEntry(
+            id = "reader-webtoon-zoom",
+            section = SettingsSection.Reader,
+            title = strings.readerWebtoonPreventDownsizing,
+            subtitle = strings.readerWebtoonDoubleTapZoom,
+            keywords = listOf("downsizing", "double tap", "zoom", "webtoon zoom", "双击缩放", "禁用缩小"),
+        ),
+
+        // Downloads
+        SearchableSettingEntry(
+            id = "downloads-location",
+            section = SettingsSection.Downloads,
+            title = strings.settingsDownloadLocation,
+            subtitle = strings.settingsDefaultStorageFolder,
+            keywords = listOf(
+                "download location",
+                "storage path",
+                "folder",
+                "directory",
+                "下载位置",
+                "下載目錄",
+                "保存路径",
+                "存储路径",
+            ),
+        ),
+        SearchableSettingEntry(
+            id = "downloads-parallel",
+            section = SettingsSection.Downloads,
+            title = strings.settingsParallelDownloads,
+            subtitle = strings.text(UiText.ParallelPages),
+            keywords = listOf("parallel", "concurrent", "threads", "simultaneous", "并发", "並發", "同时下载", "多线程"),
+        ),
+        SearchableSettingEntry(
+            id = "downloads-ahead",
+            section = SettingsSection.Downloads,
+            title = strings.settingsDownloadAheadTitle,
+            subtitle = null,
+            keywords = listOf("download ahead", "preload", "buffer", "cache", "预下载", "預先下載", "自动预载"),
+        ),
+        SearchableSettingEntry(
+            id = "downloads-delete-read",
+            section = SettingsSection.Downloads,
+            title = strings.settingsDeleteReadChaptersTitle,
+            subtitle = null,
+            keywords = listOf("delete read", "auto delete", "remove", "clean", "已读删除", "已讀刪除", "自动清理", "阅读后删除"),
+        ),
+        SearchableSettingEntry(
+            id = "downloads-save-as-cbz",
+            section = SettingsSection.Downloads,
+            title = strings.settingsSaveChapterAsCbzTitle,
+            subtitle = strings.settingsSaveChapterAsCbzDesc,
+            keywords = listOf(
+                "cbz",
+                "zip",
+                "archive",
+                "compressed",
+                "folder",
+                "单文件",
+                "壓縮包",
+                "打包",
+                "資料夾",
+            ),
+        ),
+        SearchableSettingEntry(
+            id = "downloads-split-tall-images",
+            section = SettingsSection.Downloads,
+            title = strings.settingsSplitTallImagesTitle,
+            subtitle = strings.settingsSplitTallImagesDesc,
+            keywords = listOf(
+                "split",
+                "tall",
+                "long image",
+                "webtoon",
+                "strip",
+                "长图",
+                "長圖",
+                "拆分",
+                "分割",
+            ),
+        ),
+        SearchableSettingEntry(
+            id = "downloads-auto-download-new",
+            section = SettingsSection.Downloads,
+            title = strings.libraryAutoDownloadNew,
+            subtitle = null,
+            keywords = listOf("auto download", "new chapters", "自动下载新章节", "下載新章節"),
+        ),
+        SearchableSettingEntry(
+            id = "downloads-unread-only",
+            section = SettingsSection.Downloads,
+            title = strings.downloadNewUnreadOnly,
+            keywords = listOf("unread only", "new chapters", "仅未读", "僅未讀"),
+        ),
+        SearchableSettingEntry(
+            id = "downloads-categories",
+            section = SettingsSection.Downloads,
+            title = strings.downloadNewCategories,
+            keywords = listOf("download categories", "include", "exclude", "分类选择", "分類選擇"),
+        ),
+
+        // Tracking
+        SearchableSettingEntry(
+            id = "tracking-services",
+            section = SettingsSection.Tracking,
+            title = strings.settingsTrackingTitle,
+            subtitle = strings.settingsTrackingDescription,
+            keywords = listOf(
+                "tracking",
+                "tracker",
+                "anilist",
+                "mal",
+                "myanimelist",
+                "bangumi",
+                "kitsu",
+                "shikimori",
+                "mangaupdates",
+                "sync progress",
+                "跟踪",
+                "追番",
+                "进度同步",
+                "追蹤",
+            ),
+        ),
+
+        // Backup
+        SearchableSettingEntry(
+            id = "backup-exchange",
+            section = SettingsSection.Backup,
+            title = strings.settingsBackupTitle,
+            subtitle = strings.settingsBackupDescription,
+            keywords = listOf(
+                "backup",
+                "restore",
+                "export",
+                "import",
+                "tachiyomi",
+                "suwayomi",
+                "json",
+                "proto",
+                "备份",
+                "備份",
+                "还原",
+                "匯出",
+                "匯入",
+                "导入",
+                "导出",
+            ),
+        ),
+        SearchableSettingEntry(
+            id = "backup-schedule",
+            section = SettingsSection.Backup,
+            title = strings.backupAutoTitle,
+            subtitle = "${strings.backupInterval}, ${strings.backupRetention}",
+            keywords = listOf("auto backup", "schedule", "retention", "interval", "自动备份", "自動備份", "备份保留", "定时备份"),
+        ),
+        SearchableSettingEntry(
+            id = "backup-location",
+            section = SettingsSection.Backup,
+            title = strings.backupLocation,
+            subtitle = null,
+            keywords = listOf("backup location", "backup folder", "path", "directory", "备份目录", "備份目錄", "存储路径"),
+        ),
+        SearchableSettingEntry(
+            id = "backup-sync-server",
+            section = SettingsSection.Backup,
+            title = strings.syncCardTitle,
+            subtitle = strings.syncCardDescription,
+            keywords = listOf("sync", "server", "cloud", "multi-device", "pairing", "同步", "同步服务器", "配对", "云同步"),
+        ),
+
+        // Advanced
+        SearchableSettingEntry(
+            id = "advanced-background-tasks",
+            section = SettingsSection.Advanced,
+            title = backgroundTasksTitle,
+            subtitle = null,
+            keywords = listOf("background tasks", "task scheduler", "windows", "后台任务", "工作排程", "计划任务"),
+        ),
+        SearchableSettingEntry(
+            id = "advanced-network-proxy",
+            section = SettingsSection.Advanced,
+            title = strings.networkSettingsTitle,
+            subtitle = strings.networkSettingsDescription,
+            keywords = listOf("network", "proxy", "http", "socks", "port", "host", "timeout", "网络", "代理", "網絡", "超時"),
+        ),
+        SearchableSettingEntry(
+            id = "advanced-storage-cleaner",
+            section = SettingsSection.Advanced,
+            title = strings.storageCleanerTitle,
+            subtitle = strings.storageCleanerDescription,
+            keywords = listOf("cleaner", "cache", "disk", "storage", "image cache", "清理", "缓存", "快取", "空间"),
+        ),
+        SearchableSettingEntry(
+            id = "advanced-cookie-manager",
+            section = SettingsSection.Advanced,
+            title = strings.cookieManagerTitle,
+            subtitle = strings.cookieManagerDescription,
+            keywords = listOf(
+                "cookie",
+                "cookies",
+                "webview",
+                "cloudflare",
+                "session",
+                "login",
+                "cookie 管理器",
+                "浏览器",
+                "验证",
+            ),
+        ),
+        SearchableSettingEntry(
+            id = "advanced-diagnostics",
+            section = SettingsSection.Advanced,
+            title = strings.settingsDiagnosticsTitle,
+            subtitle = strings.settingsRunIntegrityCheck,
+            keywords = listOf(
+                "database",
+                "integrity",
+                "vacuum",
+                "sqlite",
+                "diagnostics",
+                "bundle",
+                "export",
+                "logs",
+                "数据库",
+                "完整性",
+                "诊断",
+                "日志",
+            ),
+        ),
+    )
 }
 
 @Composable
@@ -1340,6 +2199,7 @@ private fun ReaderSettingsPane(readerSettingsStore: DesktopReaderSettingsStore) 
                         ReaderColorFilter.GRAYSCALE to strings.readerFilterGrayscale,
                         ReaderColorFilter.SEPIA to strings.readerFilterSepia,
                         ReaderColorFilter.NIGHT to strings.readerFilterNight,
+                        ReaderColorFilter.CUSTOM to strings.readerFilterCustom,
                     ).forEach { (filter, label) ->
                         val isSelected = settings.colorFilter == filter
                         if (isSelected) {
@@ -1430,6 +2290,54 @@ private fun ReaderSettingsPane(readerSettingsStore: DesktopReaderSettingsStore) 
                         modifier = Modifier.testTag("reader-keep-screen-on"),
                     )
                 }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(strings.readerPageFlash, fontWeight = FontWeight.Bold)
+                    Switch(
+                        checked = settings.pageFlash,
+                        onCheckedChange = { checked ->
+                            settings = settings.copy(pageFlash = checked)
+                            readerSettingsStore.save(settings)
+                        },
+                        modifier = Modifier.testTag("reader-page-flash"),
+                    )
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(strings.readerWebtoonPreventDownsizing, fontWeight = FontWeight.Bold)
+                    Switch(
+                        checked = settings.webtoonPreventDownsizing,
+                        onCheckedChange = { checked ->
+                            settings = settings.copy(webtoonPreventDownsizing = checked)
+                            readerSettingsStore.save(settings)
+                        },
+                        modifier = Modifier.testTag("reader-webtoon-prevent-downsizing"),
+                    )
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(strings.readerWebtoonDoubleTapZoom, fontWeight = FontWeight.Bold)
+                    Switch(
+                        checked = settings.webtoonDoubleTapZoom,
+                        onCheckedChange = { checked ->
+                            settings = settings.copy(webtoonDoubleTapZoom = checked)
+                            readerSettingsStore.save(settings)
+                        },
+                        modifier = Modifier.testTag("reader-webtoon-double-tap-zoom"),
+                    )
+                }
             }
         }
     }
@@ -1440,6 +2348,7 @@ private fun DownloadsSettingsPane(
     preferenceStore: DesktopPreferenceStore,
     onPreferencesChanged: ((DesktopPreferences) -> Unit)?,
     downloadsDir: Path?,
+    categories: List<mihon.desktop.category.DesktopCategory> = emptyList(),
 ) {
     val strings = LocalStrings.current
     var preferences by remember { mutableStateOf(preferenceStore.load()) }
@@ -1680,6 +2589,84 @@ private fun DownloadsSettingsPane(
             }
         }
 
+        // Auto-download filters use the same category membership as library updates.
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(strings.libraryAutoDownloadNew, fontWeight = FontWeight.Bold)
+                Switch(
+                    checked = preferences.autoDownloadNewChapters,
+                    onCheckedChange = { checked ->
+                        val updated = preferenceStore.updatePreferences { it.copy(autoDownloadNewChapters = checked) }
+                        preferences = updated
+                        onPreferencesChanged?.invoke(updated)
+                    },
+                    modifier = Modifier.testTag("download-auto-new-switch"),
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(strings.downloadNewUnreadOnly, modifier = Modifier.weight(1f))
+                    Switch(
+                        checked = preferences.autoDownloadUnreadOnly,
+                        onCheckedChange = { checked ->
+                            val updated = preferenceStore.updatePreferences {
+                                it.copy(autoDownloadUnreadOnly = checked)
+                            }
+                            preferences = updated
+                            onPreferencesChanged?.invoke(updated)
+                        },
+                        enabled = preferences.autoDownloadNewChapters,
+                        modifier = Modifier.testTag("download-new-unread-only-switch"),
+                    )
+                }
+                Text(strings.downloadNewCategories, fontWeight = FontWeight.Medium)
+                val selectableCategories = categories.filter { it.id > 0L }
+                if (selectableCategories.isEmpty()) {
+                    Text(strings.downloadNoCategories, style = MaterialTheme.typography.bodySmall)
+                }
+                selectableCategories.forEach { category ->
+                    val selection = when (category.id) {
+                        in preferences.autoDownloadCategories -> strings.downloadCategoryInclude
+                        in preferences.autoDownloadCategoriesExclude -> strings.downloadCategoryExclude
+                        else -> strings.downloadCategoryAny
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(category.name, modifier = Modifier.weight(1f))
+                        OutlinedButton(
+                            onClick = {
+                                val updated = preferenceStore.updatePreferences { current ->
+                                    when (category.id) {
+                                        in current.autoDownloadCategories -> current.copy(
+                                            autoDownloadCategories = current.autoDownloadCategories - category.id,
+                                            autoDownloadCategoriesExclude =
+                                            current.autoDownloadCategoriesExclude + category.id,
+                                        )
+                                        in current.autoDownloadCategoriesExclude -> current.copy(
+                                            autoDownloadCategoriesExclude =
+                                            current.autoDownloadCategoriesExclude - category.id,
+                                        )
+                                        else -> current.copy(
+                                            autoDownloadCategories = current.autoDownloadCategories + category.id,
+                                        )
+                                    }
+                                }
+                                preferences = updated
+                                onPreferencesChanged?.invoke(updated)
+                            },
+                            enabled = preferences.autoDownloadNewChapters,
+                            modifier = Modifier.testTag("download-category-${category.id}"),
+                        ) { Text(selection) }
+                    }
+                }
+            }
+        }
+
         // Delete read chapters card
         Card(modifier = Modifier.fillMaxWidth()) {
             Row(
@@ -1704,6 +2691,62 @@ private fun DownloadsSettingsPane(
                         onPreferencesChanged?.invoke(updated)
                     },
                     modifier = Modifier.testTag("delete-downloaded-read-switch"),
+                )
+            }
+        }
+
+        // CBZ archive card
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(strings.settingsSaveChapterAsCbzTitle, fontWeight = FontWeight.Bold)
+                    Text(
+                        strings.settingsSaveChapterAsCbzDesc,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Checkbox(
+                    checked = preferences.saveChapterAsCbz,
+                    onCheckedChange = { checked ->
+                        val updated = preferenceStore.updatePreferences { it.copy(saveChapterAsCbz = checked) }
+                        preferences = updated
+
+                        onPreferencesChanged?.invoke(updated)
+                    },
+                    modifier = Modifier.testTag("save-downloaded-chapter-as-cbz-checkbox"),
+                )
+            }
+        }
+
+        // Tall image split card
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(strings.settingsSplitTallImagesTitle, fontWeight = FontWeight.Bold)
+                    Text(
+                        strings.settingsSplitTallImagesDesc,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Checkbox(
+                    checked = preferences.splitTallImages,
+                    onCheckedChange = { checked ->
+                        val updated = preferenceStore.updatePreferences { it.copy(splitTallImages = checked) }
+                        preferences = updated
+
+                        onPreferencesChanged?.invoke(updated)
+                    },
+                    modifier = Modifier.testTag("split-tall-images-checkbox"),
                 )
             }
         }
@@ -2674,6 +3717,25 @@ private fun LibrarySettingsPane(
                     )
                 }
 
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(strings.libraryUpdateSkipOutsideReleasePeriod)
+                    Switch(
+                        checked = preferences.libraryUpdateSkipOutsideReleasePeriod,
+                        onCheckedChange = { checked ->
+                            val updated = preferenceStore.updatePreferences {
+                                it.copy(libraryUpdateSkipOutsideReleasePeriod = checked)
+                            }
+                            preferences = updated
+                            onPreferencesChanged?.invoke(updated)
+                        },
+                        modifier = Modifier.testTag("skip-outside-release-period-switch"),
+                    )
+                }
+
                 OutlinedTextField(
                     value = preferences.libraryUpdateCategories.sorted().joinToString(","),
                     onValueChange = { value ->
@@ -2882,12 +3944,30 @@ private fun AdvancedSettingsPane(
     downloadCacheCleaner: mihon.desktop.download.DownloadCacheCleaner? = null,
     downloadsDir: Path? = null,
     diskCacheDir: Path? = null,
+    profileRoot: Path? = null,
+    databaseCleaner: mihon.desktop.library.repository.LibraryDatabaseCleaner? = null,
 ) {
     val strings = LocalStrings.current
     val scope = rememberCoroutineScope()
     var summary by remember { mutableStateOf<DiagnosticSummary?>(null) }
     var checkingIntegrity by remember { mutableStateOf(false) }
     var bundleExportPath by remember { mutableStateOf<String?>(null) }
+    var nonLibrarySources by remember {
+        mutableStateOf(emptyList<mihon.desktop.library.repository.NonLibrarySourceCount>())
+    }
+    var selectedSources by remember { mutableStateOf(emptySet<Long>()) }
+    var keepReadManga by remember { mutableStateOf(true) }
+    var confirmDatabaseClear by remember { mutableStateOf(false) }
+    var clearingDatabase by remember { mutableStateOf(false) }
+    var databaseClearMessage by remember { mutableStateOf<String?>(null) }
+
+    androidx.compose.runtime.LaunchedEffect(databaseCleaner) {
+        nonLibrarySources = if (databaseCleaner == null) {
+            emptyList()
+        } else {
+            withContext(Dispatchers.IO) { databaseCleaner.nonLibrarySourceCounts() }
+        }
+    }
 
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
@@ -2920,13 +4000,28 @@ private fun AdvancedSettingsPane(
                 )
 
                 var downloadSizeBytes by remember { mutableStateOf<Long?>(null) }
+                var storageUsage by remember { mutableStateOf<mihon.desktop.storage.StorageUsage?>(null) }
+                var usageRefresh by remember { mutableStateOf(0) }
                 var isCleaning by remember { mutableStateOf(false) }
                 var cleanerMessage by remember { mutableStateOf<String?>(null) }
 
-                androidx.compose.runtime.LaunchedEffect(downloadsDir) {
+                androidx.compose.runtime.LaunchedEffect(downloadsDir, profileRoot, usageRefresh) {
                     if (downloadCacheCleaner != null) {
                         downloadSizeBytes = withContext(Dispatchers.IO) {
                             downloadCacheCleaner.calculateDownloadSize()
+                        }
+                    }
+                    if (profileRoot != null && downloadsDir != null) {
+                        storageUsage = withContext(Dispatchers.IO) {
+                            val configuredBackup = preferenceStore.load().backupStoragePath
+                            val backupDir = configuredBackup.takeIf { it.isNotBlank() }
+                                ?.let { runCatching { Path.of(it) }.getOrNull() }
+                                ?: profileRoot.resolve("backups")
+                            mihon.desktop.storage.StorageUsageCalculator().calculate(
+                                profileRoot,
+                                downloadsDir,
+                                backupDir,
+                            )
                         }
                     }
                 }
@@ -2944,6 +4039,25 @@ private fun AdvancedSettingsPane(
                     )
                 }
 
+                storageUsage?.let { usage ->
+                    listOf(
+                        strings.storageUsageCache to usage.imageCache,
+                        strings.storageUsageDatabase to usage.database,
+                        strings.storageUsageExtensions to usage.extensions,
+                        strings.storageUsageCovers to usage.covers,
+                        strings.storageUsageBackups to usage.backups,
+                        strings.storageUsageLogs to usage.logs,
+                    ).forEach { (label, bytes) ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Text(label, style = MaterialTheme.typography.bodyMedium)
+                            Text(formatStorageSize(bytes), style = MaterialTheme.typography.bodyMedium)
+                        }
+                    }
+                }
+
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     FilledTonalButton(
                         onClick = {
@@ -2959,7 +4073,9 @@ private fun AdvancedSettingsPane(
                                     isCleaning = false
                                     val freed = formatStorageSize(report.freedBytes)
                                     cleanerMessage =
-                                        "${strings.storageCleanerClearReadSuccess}: ${report.deletedChaptersCount} ($freed)"
+                                        "${strings.storageCleanerClearReadSuccess}: " +
+                                        "${report.deletedChaptersCount} ($freed)"
+                                    usageRefresh++
                                 }
                             }
                         },
@@ -2981,6 +4097,7 @@ private fun AdvancedSettingsPane(
                                     val freed = formatStorageSize(cleared)
                                     cleanerMessage =
                                         "${strings.storageCleanerClearImageCacheSuccess}: $freed"
+                                    usageRefresh++
                                 }
                             }
                         },
@@ -2999,6 +4116,111 @@ private fun AdvancedSettingsPane(
                         modifier = Modifier.testTag("storage-cleaner-message"),
                     )
                 }
+            }
+        }
+
+        if (databaseCleaner != null) {
+            Card(
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth().testTag("clear-database-card"),
+            ) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        strings.clearDatabaseTitle,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(strings.clearDatabaseDescription, style = MaterialTheme.typography.bodySmall)
+                    if (nonLibrarySources.isEmpty()) {
+                        Text(strings.clearDatabaseEmpty, modifier = Modifier.testTag("clear-database-empty"))
+                    } else {
+                        nonLibrarySources.forEach { source ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text("${source.sourceName} (${source.mangaCount})", modifier = Modifier.weight(1f))
+                                Switch(
+                                    checked = source.sourceId in selectedSources,
+                                    onCheckedChange = { checked ->
+                                        selectedSources = if (checked) {
+                                            selectedSources + source.sourceId
+                                        } else {
+                                            selectedSources - source.sourceId
+                                        }
+                                    },
+                                    modifier = Modifier.testTag("clear-database-source-${source.sourceId}"),
+                                )
+                            }
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(strings.clearDatabaseKeepRead, modifier = Modifier.weight(1f))
+                            Switch(
+                                checked = keepReadManga,
+                                onCheckedChange = { keepReadManga = it },
+                                modifier = Modifier.testTag("clear-database-keep-read"),
+                            )
+                        }
+                        Button(
+                            onClick = { confirmDatabaseClear = true },
+                            enabled = selectedSources.isNotEmpty() && !clearingDatabase,
+                            modifier = Modifier.testTag("clear-database-button"),
+                        ) {
+                            Text(strings.clearDatabaseAction)
+                        }
+                    }
+                    databaseClearMessage?.let { Text(it, modifier = Modifier.testTag("clear-database-message")) }
+                }
+            }
+            if (confirmDatabaseClear) {
+                AlertDialog(
+                    onDismissRequest = { confirmDatabaseClear = false },
+                    title = { Text(strings.clearDatabaseTitle) },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(strings.clearDatabaseConfirm)
+                            if (!keepReadManga) {
+                                Text(strings.clearDatabaseReadWarning, color = MaterialTheme.colorScheme.error)
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                confirmDatabaseClear = false
+                                clearingDatabase = true
+                                scope.launch {
+                                    try {
+                                        val removed = withContext(Dispatchers.IO) {
+                                            databaseCleaner.clearNonLibraryManga(selectedSources, keepReadManga)
+                                        }
+                                        nonLibrarySources = withContext(Dispatchers.IO) {
+                                            databaseCleaner.nonLibrarySourceCounts()
+                                        }
+                                        selectedSources = emptySet()
+                                        databaseClearMessage = strings.clearDatabaseResult(removed)
+                                    } catch (error: Exception) {
+                                        databaseClearMessage =
+                                            "${strings.clearDatabaseFailed}: ${error.message.orEmpty()}"
+                                    } finally {
+                                        clearingDatabase = false
+                                    }
+                                }
+                            },
+                            modifier = Modifier.testTag("clear-database-confirm"),
+                        ) { Text(strings.clearDatabaseAction) }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { confirmDatabaseClear = false }) {
+                            Text(strings.text(UiText.AppUpdateCancel))
+                        }
+                    },
+                )
             }
         }
 

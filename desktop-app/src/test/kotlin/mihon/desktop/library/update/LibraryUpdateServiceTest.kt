@@ -28,6 +28,38 @@ class LibraryUpdateServiceTest {
     lateinit var tempDir: Path
 
     @Test
+    fun `release period filter skips recently fetched weekly manga when enabled`() = runBlocking {
+        val today = java.time.LocalDate.of(2026, 9, 29)
+        val zone = java.time.ZoneId.systemDefault()
+        fun epoch(date: java.time.LocalDate) = date.atStartOfDay(zone).toInstant().toEpochMilli()
+        DesktopLibraryDatabaseFactory.open(tempDir.resolve("release-period.db")).use { repo ->
+            val mangaId = repo.insertManga(MangaRecord(sourceId = 9L, url = "/weekly", title = "Weekly"))
+            listOf(0L, 7L, 14L).forEachIndexed { index, daysAgo ->
+                repo.insertChapter(
+                    ChapterRecord(
+                        mangaId = mangaId,
+                        url = "/chapter-$index",
+                        name = "Chapter $index",
+                        dateUpload = epoch(today.minusDays(daysAgo)),
+                        dateFetch = epoch(today),
+                    ),
+                )
+            }
+            val service = LibraryUpdateService(repo, refreshManga = {}, nowMillis = { epoch(today) })
+            val filtered = service.updateLibrary(
+                options = LibraryUpdateOptions(skipOutsideReleasePeriod = true),
+                throttleDelayMs = 0,
+            )
+            assertEquals(0, filtered.totalMangaChecked)
+            val unfiltered = service.updateLibrary(
+                options = LibraryUpdateOptions(skipOutsideReleasePeriod = false),
+                throttleDelayMs = 0,
+            )
+            assertEquals(1, unfiltered.totalMangaChecked)
+        }
+    }
+
+    @Test
     fun `empty library returns zero checked`() = runBlocking {
         val dbFile = tempDir.resolve("empty.db")
         val repo = DesktopLibraryDatabaseFactory.open(dbFile)

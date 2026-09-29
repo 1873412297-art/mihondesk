@@ -27,6 +27,7 @@ import io.kotest.matchers.shouldBe
 import mihon.desktop.preferences.DesktopPreferenceStore
 import mihon.desktop.reader.DesktopReaderSettings
 import mihon.desktop.reader.DesktopReaderSettingsStore
+import mihon.desktop.ui.UI_TEST_TIMEOUT
 import mihon.reader.model.PageDescriptor
 import mihon.reader.session.ReaderLoadState
 import mihon.reader.session.ReaderSession
@@ -41,7 +42,9 @@ class ReaderScreenActionsTest {
     lateinit var tempDir: Path
 
     @Test
-    fun `details button remains clickable while the pointer rests on the toolbar`() = runComposeUiTest {
+    fun `details button remains clickable while the pointer rests on the toolbar`() = runComposeUiTest(
+        testTimeout = UI_TEST_TIMEOUT,
+    ) {
         mainClock.autoAdvance = false
         val session = TestReaderSession(testReaderState())
         var openedDetails = false
@@ -64,7 +67,9 @@ class ReaderScreenActionsTest {
     }
 
     @Test
-    fun `reader offers a direct manga details action and flushes only once`() = runComposeUiTest {
+    fun `reader offers a direct manga details action and flushes only once`() = runComposeUiTest(
+        testTimeout = UI_TEST_TIMEOUT,
+    ) {
         val session = TestReaderSession(testReaderState())
         var openedDetails = 0
         setReaderScreen(
@@ -83,7 +88,9 @@ class ReaderScreenActionsTest {
     }
 
     @Test
-    fun `details navigation still completes when progress persistence fails`() = runComposeUiTest {
+    fun `details navigation still completes when progress persistence fails`() = runComposeUiTest(
+        testTimeout = UI_TEST_TIMEOUT,
+    ) {
         val session = TestReaderSession(testReaderState()).also {
             it.closeFailure = IllegalStateException("database unavailable")
         }
@@ -100,7 +107,9 @@ class ReaderScreenActionsTest {
     }
 
     @Test
-    fun `chrome menu and long press open the page actions dialog with local actions`() = runComposeUiTest {
+    fun `chrome menu and long press open the page actions dialog with local actions`() = runComposeUiTest(
+        testTimeout = UI_TEST_TIMEOUT,
+    ) {
         val handler = RecordingPageActionHandler()
         val session = TestReaderSession(testReaderState())
         setReaderScreen(
@@ -129,7 +138,9 @@ class ReaderScreenActionsTest {
     }
 
     @Test
-    fun `secondary click opens page actions and escape dismisses it before leaving reader`() = runComposeUiTest {
+    fun `secondary click opens page actions and escape dismisses it before leaving reader`() = runComposeUiTest(
+        testTimeout = UI_TEST_TIMEOUT,
+    ) {
         val session = TestReaderSession(testReaderState())
         var escapeRequests = 0
         var backRequests = 0
@@ -159,7 +170,9 @@ class ReaderScreenActionsTest {
     }
 
     @Test
-    fun `page action dialog wires copy share cover and browser callbacks`() = runComposeUiTest {
+    fun `page action dialog wires copy share cover and browser callbacks`() = runComposeUiTest(
+        testTimeout = UI_TEST_TIMEOUT,
+    ) {
         val handler = RecordingPageActionHandler()
         val session = TestReaderSession(testReaderState())
         setReaderScreen(
@@ -194,7 +207,9 @@ class ReaderScreenActionsTest {
     }
 
     @Test
-    fun `bookmark toggle reflects state and persists through the bookmark store`() = runComposeUiTest {
+    fun `bookmark toggle reflects state and persists through the bookmark store`() = runComposeUiTest(
+        testTimeout = UI_TEST_TIMEOUT,
+    ) {
         val settingsFile = tempDir.resolve("bookmark-settings.properties")
         val store = DesktopReaderSettingsStore(DesktopPreferenceStore(settingsFile))
         val session = TestReaderSession(testReaderState(chapterId = 7))
@@ -217,7 +232,9 @@ class ReaderScreenActionsTest {
     }
 
     @Test
-    fun `chapter navigation shows a transition with titles and continues externally when enabled`() = runComposeUiTest {
+    fun `chapter navigation shows a transition with titles and continues externally when enabled`() = runComposeUiTest(
+        testTimeout = UI_TEST_TIMEOUT,
+    ) {
         val session = TestReaderSession(
             testReaderState(chapterId = 2, hasPreviousChapter = true, hasNextChapter = true),
         )
@@ -250,7 +267,9 @@ class ReaderScreenActionsTest {
     }
 
     @Test
-    fun `boundary next without an adjacent chapter shows no-next transition`() = runComposeUiTest {
+    fun `boundary next without an adjacent chapter shows no-next transition`() = runComposeUiTest(
+        testTimeout = UI_TEST_TIMEOUT,
+    ) {
         mainClock.autoAdvance = false
         val session = TestReaderSession(
             testReaderState(selectedIndex = 3, hasNextChapter = false),
@@ -271,7 +290,7 @@ class ReaderScreenActionsTest {
     }
 
     @Test
-    fun `disabled chapter transition keeps seamless navigation`() = runComposeUiTest {
+    fun `disabled chapter transition keeps seamless navigation`() = runComposeUiTest(testTimeout = UI_TEST_TIMEOUT) {
         val session = TestReaderSession(
             testReaderState(hasPreviousChapter = true, hasNextChapter = true),
         )
@@ -290,7 +309,9 @@ class ReaderScreenActionsTest {
     }
 
     @Test
-    fun `page boundary navigation leaves chapter changes to the desktop navigator`() = runComposeUiTest {
+    fun `page boundary navigation leaves chapter changes to the desktop navigator`() = runComposeUiTest(
+        testTimeout = UI_TEST_TIMEOUT,
+    ) {
         val session = TestReaderSession(
             testReaderState(selectedIndex = 3, hasNextChapter = true),
         )
@@ -309,7 +330,9 @@ class ReaderScreenActionsTest {
     }
 
     @Test
-    fun `page boundary transition waits for confirmation before desktop navigation`() = runComposeUiTest {
+    fun `page boundary transition waits for confirmation before desktop navigation`() = runComposeUiTest(
+        testTimeout = UI_TEST_TIMEOUT,
+    ) {
         mainClock.autoAdvance = false
         val session = TestReaderSession(
             testReaderState(chapterId = 2, selectedIndex = 3, hasNextChapter = true),
@@ -339,7 +362,7 @@ class ReaderScreenActionsTest {
     }
 
     @Test
-    fun `chapter transition navigates to the selected skip target`() = runComposeUiTest {
+    fun `chapter transition navigates to the selected skip target`() = runComposeUiTest(testTimeout = UI_TEST_TIMEOUT) {
         val session = TestReaderSession(testReaderState(chapterId = 2, hasNextChapter = true))
         var adjacentRequests = 0
         var selectedChapterId: Long? = null
@@ -371,7 +394,9 @@ class ReaderScreenActionsTest {
     }
 
     @Test
-    fun `escape flushes the reader before leaving when window mode allows close`() = runComposeUiTest {
+    fun `escape flushes the reader before leaving when window mode allows close`() = runComposeUiTest(
+        testTimeout = UI_TEST_TIMEOUT,
+    ) {
         val session = TestReaderSession(testReaderState())
         var backRequests = 0
         setReaderScreen(
@@ -389,7 +414,9 @@ class ReaderScreenActionsTest {
     }
 
     @Test
-    fun `escape exits after a mode menu selection and hiding the focused toolbar`() = runComposeUiTest {
+    fun `escape exits after a mode menu selection and hiding the focused toolbar`() = runComposeUiTest(
+        testTimeout = UI_TEST_TIMEOUT,
+    ) {
         val session = TestReaderSession(testReaderState())
         var backRequests = 0
         setReaderScreen(
@@ -413,7 +440,9 @@ class ReaderScreenActionsTest {
     }
 
     @Test
-    fun `wheel scrolling returns keyboard focus from the mode toolbar to the reader`() = runComposeUiTest {
+    fun `wheel scrolling returns keyboard focus from the mode toolbar to the reader`() = runComposeUiTest(
+        testTimeout = UI_TEST_TIMEOUT,
+    ) {
         val session = TestReaderSession(testReaderState())
         var backRequests = 0
         setReaderScreen(
@@ -439,7 +468,9 @@ class ReaderScreenActionsTest {
     }
 
     @Test
-    fun `escape cancels chapter loading and leaves without waiting for a progress flush`() = runComposeUiTest {
+    fun `escape cancels chapter loading and leaves without waiting for a progress flush`() = runComposeUiTest(
+        testTimeout = UI_TEST_TIMEOUT,
+    ) {
         val session = TestReaderSession(
             testReaderState().copy(loadState = ReaderLoadState.Loading(generation = 1L)),
         )
@@ -462,7 +493,7 @@ class ReaderScreenActionsTest {
     }
 
     @Test
-    fun `loading chapter offers an immediate cancel action`() = runComposeUiTest {
+    fun `loading chapter offers an immediate cancel action`() = runComposeUiTest(testTimeout = UI_TEST_TIMEOUT) {
         val session = TestReaderSession(
             testReaderState().copy(loadState = ReaderLoadState.Loading(generation = 1L)),
         )
@@ -481,7 +512,9 @@ class ReaderScreenActionsTest {
     }
 
     @Test
-    fun `escape keeps the reader open when it only exits fullscreen`() = runComposeUiTest {
+    fun `escape keeps the reader open when it only exits fullscreen`() = runComposeUiTest(
+        testTimeout = UI_TEST_TIMEOUT,
+    ) {
         val session = TestReaderSession(testReaderState())
         var backRequests = 0
         setReaderScreen(
@@ -502,7 +535,9 @@ class ReaderScreenActionsTest {
     }
 
     @Test
-    fun `progress flush failure does not trap the user inside the reader`() = runComposeUiTest {
+    fun `progress flush failure does not trap the user inside the reader`() = runComposeUiTest(
+        testTimeout = UI_TEST_TIMEOUT,
+    ) {
         val session = TestReaderSession(testReaderState()).also {
             it.closeFailure = IllegalStateException("database unavailable")
         }

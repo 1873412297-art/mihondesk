@@ -56,12 +56,12 @@ class DesktopCategoryServiceTest {
         service.createCategory("Action")
         val categories = awaitCategories { it.any { c -> c.name == "Action" } }
         val action = categories.first { it.name == "Action" }
-        action.order shouldBe 1L
+        action.order shouldBe 0L
 
         service.createCategory("Comedy")
         val updated = awaitCategories { it.size == 2 }
         val comedy = updated.first { it.name == "Comedy" }
-        comedy.order shouldBe 2L
+        comedy.order shouldBe 1L
     }
 
     @Test

@@ -123,9 +123,13 @@ class DesktopPreferenceStoreTest {
             libraryUpdateSkipCompleted = false,
             libraryUpdateSkipUnread = true,
             libraryUpdateSkipStarted = true,
+            libraryUpdateSkipOutsideReleasePeriod = true,
             libraryUpdateCategories = setOf(2L, 7L),
             libraryUpdateCategoriesExclude = setOf(9L),
             autoDownloadNewChapters = true,
+            autoDownloadUnreadOnly = true,
+            autoDownloadCategories = setOf(4L),
+            autoDownloadCategoriesExclude = setOf(9L),
             desktopNotificationsEnabled = false,
             desktopNotificationsHideContent = true,
             lastLibraryUpdateEpochMillis = 987654321L,
@@ -137,9 +141,13 @@ class DesktopPreferenceStoreTest {
         loaded.libraryUpdateSkipCompleted shouldBe false
         loaded.libraryUpdateSkipUnread shouldBe true
         loaded.libraryUpdateSkipStarted shouldBe true
+        loaded.libraryUpdateSkipOutsideReleasePeriod shouldBe true
         loaded.libraryUpdateCategories shouldBe setOf(2L, 7L)
         loaded.libraryUpdateCategoriesExclude shouldBe setOf(9L)
         loaded.autoDownloadNewChapters shouldBe true
+        loaded.autoDownloadUnreadOnly shouldBe true
+        loaded.autoDownloadCategories shouldBe setOf(4L)
+        loaded.autoDownloadCategoriesExclude shouldBe setOf(9L)
         loaded.desktopNotificationsEnabled shouldBe false
         loaded.desktopNotificationsHideContent shouldBe true
         loaded.lastLibraryUpdateEpochMillis shouldBe 987654321L
@@ -274,5 +282,33 @@ class DesktopPreferenceStoreTest {
         loaded.showNsfwSources shouldBe true
         loaded.hiddenSourceIds shouldBe setOf(101L, 202L)
         loaded.globalSearchOnlyPinned shouldBe true
+    }
+
+    @Test
+    fun `CBZ chapter layout preference is off by default and survives reload`() {
+        val file = tempDir.resolve("preferences-cbz.properties")
+        val store = DesktopPreferenceStore(file)
+        store.load().saveChapterAsCbz shouldBe false
+
+        store.save(DesktopPreferences(saveChapterAsCbz = true))
+        store.load().saveChapterAsCbz shouldBe true
+        store.property("download.save_as_cbz") shouldBe "true"
+
+        store.save(DesktopPreferences(saveChapterAsCbz = false))
+        store.load().saveChapterAsCbz shouldBe false
+    }
+
+    @Test
+    fun `tall image splitting is off by default and survives reload`() {
+        val file = tempDir.resolve("preferences-split-tall-images.properties")
+        val store = DesktopPreferenceStore(file)
+        store.load().splitTallImages shouldBe false
+
+        store.save(DesktopPreferences(splitTallImages = true))
+        store.load().splitTallImages shouldBe true
+        store.property("download.split_tall_images") shouldBe "true"
+
+        store.save(DesktopPreferences(splitTallImages = false))
+        store.load().splitTallImages shouldBe false
     }
 }

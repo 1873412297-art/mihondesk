@@ -81,6 +81,7 @@ class DesktopDownloaderTest {
                     chapterId = chapter.id,
                     relativePath = disk.sanitizeFileName(chapter.name),
                     sizeBytes = page.size.toLong(),
+                    assetKind = "DIRECTORY",
                 ) shouldBe true
 
                 downloader.deleteDownloadedChapter(
@@ -94,6 +95,7 @@ class DesktopDownloaderTest {
                     chapterId = chapter.id,
                     relativePath = disk.sanitizeFileName(chapter.name),
                     sizeBytes = page.size.toLong(),
+                    assetKind = "DIRECTORY",
                 ) shouldBe false
                 repository.localMangaStoragePaths() shouldBe emptySet()
                 downloader.queueState.value shouldBe emptyList()

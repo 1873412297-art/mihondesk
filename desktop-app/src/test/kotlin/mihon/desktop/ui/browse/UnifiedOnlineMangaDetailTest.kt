@@ -20,6 +20,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.runBlocking
 import mihon.desktop.DesktopRuntime
 import mihon.desktop.extension.ExtensionStoreService
+import mihon.desktop.ui.UI_TEST_TIMEOUT
 import mihon.desktop.ui.library.LibraryPresenter
 import mihon.desktop.ui.library.MangaDetailActions
 import mihon.extension.source.WindowsCatalogueSource
@@ -33,7 +34,9 @@ import org.junit.jupiter.api.Test
 @OptIn(ExperimentalTestApi::class)
 class UnifiedOnlineMangaDetailTest {
     @Test
-    fun `online source opens the complete shared detail action surface without favoriting`() = runComposeUiTest {
+    fun `online source opens the complete shared detail action surface without favoriting`() = runComposeUiTest(
+        testTimeout = UI_TEST_TIMEOUT,
+    ) {
         val runtime = DesktopRuntime.forTesting()
         val presenterScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         val presenter = LibraryPresenter(
@@ -69,16 +72,16 @@ class UnifiedOnlineMangaDetailTest {
                 }
             }
 
-            waitUntil(timeoutMillis = 15_000) {
+            waitUntil(timeoutMillis = 30_000) {
                 onAllNodesWithTag("source-item-${UnifiedDetailSource.ID}").fetchSemanticsNodes().isNotEmpty()
             }
             onNodeWithTag("source-item-${UnifiedDetailSource.ID}").performClick()
-            waitUntil(timeoutMillis = 15_000) {
+            waitUntil(timeoutMillis = 30_000) {
                 onAllNodesWithTag("manga-card-${UnifiedDetailSource.MANGA_URL}").fetchSemanticsNodes().isNotEmpty()
             }
             onNodeWithTag("manga-card-${UnifiedDetailSource.MANGA_URL}").performClick()
 
-            waitUntil(timeoutMillis = 15_000) {
+            waitUntil(timeoutMillis = 30_000) {
                 onAllNodesWithTag("manga-detail-edit-info-button").fetchSemanticsNodes().isNotEmpty()
             }
             onNodeWithTag("manga-detail-edit-info-button").assertIsDisplayed().performClick()

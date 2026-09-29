@@ -14,6 +14,7 @@ enum class ReaderColorFilter {
     INVERT_GRAYSCALE,
     SEPIA,
     NIGHT,
+    CUSTOM,
 }
 
 enum class ReaderBackgroundColor {
@@ -21,6 +22,12 @@ enum class ReaderBackgroundColor {
     BLACK,
     WHITE,
     WARM_CREAM,
+}
+
+enum class ReaderPageTransition {
+    NONE,
+    FADE,
+    SLIDE,
 }
 
 /** Versioned desktop-only reader preferences, kept separate from the portable reader-core API. */
@@ -43,8 +50,24 @@ data class DesktopReaderSettings(
     val skipDuplicateChapters: Boolean = false,
     val preloadPages: Int = PrefetchPolicy.AHEAD_PAGES,
     val keepScreenOn: Boolean = true,
+    val pageFlash: Boolean = false,
+    val webtoonPreventDownsizing: Boolean = false,
+    val webtoonDoubleTapZoom: Boolean = true,
+    val customHue: Int = 0,
+    val customBrightness: Int = 0,
+    val customContrast: Int = 0,
+    val dimmingPercent: Int = 100,
+    val pageTransition: ReaderPageTransition = ReaderPageTransition.NONE,
+    val dualPageSplit: mihon.reader.layout.DualPageSplit = mihon.reader.layout.DualPageSplit.WIDE,
+    val dualPageRotateToFit: Boolean = false,
 ) {
-    fun toCoreSettings(): ReaderSettings = ReaderSettings(mode, coverOffset, scaleMode)
+    fun toCoreSettings(): ReaderSettings = ReaderSettings(
+        mode = mode,
+        coverOffset = coverOffset,
+        scaleMode = scaleMode,
+        dualPageSplit = dualPageSplit,
+        dualPageRotateToFit = dualPageRotateToFit,
+    )
 
     fun withOverride(override: MangaReaderSettingsOverride?): DesktopReaderSettings {
         if (override == null || override.isEmpty) return this
@@ -130,6 +153,23 @@ class DesktopReaderSettingsStore(private val preferences: DesktopPreferenceStore
                 ?.coerceIn(DesktopPreloadPolicy.MIN_PRELOAD_PAGES, DesktopPreloadPolicy.MAX_PRELOAD_PAGES)
                 ?: defaults.preloadPages,
             keepScreenOn = preferences.property(KEEP_SCREEN_ON)?.toBooleanStrictOrNull() ?: defaults.keepScreenOn,
+            pageFlash = preferences.property(PAGE_FLASH)?.toBooleanStrictOrNull() ?: defaults.pageFlash,
+            webtoonPreventDownsizing = preferences.property(WEBTOON_PREVENT_DOWNSIZING)?.toBooleanStrictOrNull()
+                ?: defaults.webtoonPreventDownsizing,
+            webtoonDoubleTapZoom = preferences.property(WEBTOON_DOUBLE_TAP_ZOOM)?.toBooleanStrictOrNull()
+                ?: defaults.webtoonDoubleTapZoom,
+            customHue = preferences.property(CUSTOM_HUE)?.toIntOrNull()
+                ?.coerceIn(0, 360) ?: defaults.customHue,
+            customBrightness = preferences.property(CUSTOM_BRIGHTNESS)?.toIntOrNull()
+                ?.coerceIn(-100, 100) ?: defaults.customBrightness,
+            customContrast = preferences.property(CUSTOM_CONTRAST)?.toIntOrNull()
+                ?.coerceIn(-100, 100) ?: defaults.customContrast,
+            dimmingPercent = preferences.property(DIMMING_PERCENT)?.toIntOrNull()
+                ?.coerceIn(20, 100) ?: defaults.dimmingPercent,
+            pageTransition = enumOrDefault(preferences.property(PAGE_TRANSITION), defaults.pageTransition),
+            dualPageSplit = enumOrDefault(preferences.property(DUAL_PAGE_SPLIT), defaults.dualPageSplit),
+            dualPageRotateToFit = preferences.property(DUAL_PAGE_ROTATE_TO_FIT)?.toBooleanStrictOrNull()
+                ?: defaults.dualPageRotateToFit,
         )
     }
 
@@ -157,6 +197,16 @@ class DesktopReaderSettingsStore(private val preferences: DesktopPreferenceStore
             setProperty(SKIP_DUPLICATE, settings.skipDuplicateChapters.toString())
             setProperty(PRELOAD_PAGES, settings.preloadPages.toString())
             setProperty(KEEP_SCREEN_ON, settings.keepScreenOn.toString())
+            setProperty(PAGE_FLASH, settings.pageFlash.toString())
+            setProperty(WEBTOON_PREVENT_DOWNSIZING, settings.webtoonPreventDownsizing.toString())
+            setProperty(WEBTOON_DOUBLE_TAP_ZOOM, settings.webtoonDoubleTapZoom.toString())
+            setProperty(CUSTOM_HUE, settings.customHue.toString())
+            setProperty(CUSTOM_BRIGHTNESS, settings.customBrightness.toString())
+            setProperty(CUSTOM_CONTRAST, settings.customContrast.toString())
+            setProperty(DIMMING_PERCENT, settings.dimmingPercent.toString())
+            setProperty(PAGE_TRANSITION, settings.pageTransition.name)
+            setProperty(DUAL_PAGE_SPLIT, settings.dualPageSplit.name)
+            setProperty(DUAL_PAGE_ROTATE_TO_FIT, settings.dualPageRotateToFit.toString())
         }
     }
 
@@ -210,5 +260,15 @@ class DesktopReaderSettingsStore(private val preferences: DesktopPreferenceStore
         const val SKIP_DUPLICATE = "reader.v1.skip-duplicate"
         const val PRELOAD_PAGES = "reader.v1.preload-pages"
         const val KEEP_SCREEN_ON = "reader.v1.keep-screen-on"
+        const val PAGE_FLASH = "reader.v1.page-flash"
+        const val WEBTOON_PREVENT_DOWNSIZING = "reader.v1.webtoon-prevent-downsizing"
+        const val WEBTOON_DOUBLE_TAP_ZOOM = "reader.v1.webtoon-double-tap-zoom"
+        const val CUSTOM_HUE = "reader.v1.custom-hue"
+        const val CUSTOM_BRIGHTNESS = "reader.v1.custom-brightness"
+        const val CUSTOM_CONTRAST = "reader.v1.custom-contrast"
+        const val DIMMING_PERCENT = "reader.v1.dimming-percent"
+        const val PAGE_TRANSITION = "reader.v1.page-transition"
+        const val DUAL_PAGE_SPLIT = "reader.v1.dual-page-split"
+        const val DUAL_PAGE_ROTATE_TO_FIT = "reader.v1.dual-page-rotate-to-fit"
     }
 }

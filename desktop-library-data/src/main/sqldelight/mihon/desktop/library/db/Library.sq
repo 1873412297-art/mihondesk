@@ -47,6 +47,13 @@ CREATE TABLE chapter (
   UNIQUE(manga_id, url)
 );
 
+deleteNonLibraryMangaBySource:
+DELETE FROM manga
+WHERE source_id = ? AND favorite = 0
+  AND (? = 0 OR NOT EXISTS (
+    SELECT 1 FROM chapter WHERE chapter.manga_id = manga.id AND chapter.read = 1
+  ));
+
 CREATE TABLE category (
   id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL COLLATE NOCASE UNIQUE,
@@ -431,7 +438,8 @@ UPDATE chapter SET manga_id=:manga_id, url=:url, name=:name, scanlator=:scanlato
 WHERE id=:id;
 
 insertCategory:
-INSERT INTO category(name, sort_order, flags) VALUES (:name, :sort_order, :flags)
+INSERT INTO category(name, sort_order, flags)
+SELECT :name, coalesce(max(sort_order), -1) + 1, :flags FROM category WHERE 1
 ON CONFLICT(name) DO UPDATE SET
   sort_order=MAX(category.sort_order, excluded.sort_order),
   flags=(category.flags | excluded.flags);
@@ -482,7 +490,19 @@ INSERT INTO tracking(
 ) VALUES (
   :manga_id, :tracker_id, :remote_id, :library_id, :title, :last_chapter_read, :total_chapters,
   :score, :status, :started_reading_date, :finished_reading_date, :private, :tracking_url
-);
+)
+ON CONFLICT(manga_id, tracker_id) DO UPDATE SET
+  remote_id=excluded.remote_id,
+  library_id=excluded.library_id,
+  title=excluded.title,
+  last_chapter_read=excluded.last_chapter_read,
+  total_chapters=excluded.total_chapters,
+  score=excluded.score,
+  status=excluded.status,
+  started_reading_date=excluded.started_reading_date,
+  finished_reading_date=excluded.finished_reading_date,
+  private=excluded.private,
+  tracking_url=excluded.tracking_url;
 
 selectTrackingByIdentity:
 SELECT * FROM tracking WHERE manga_id=? AND tracker_id=?;
@@ -560,7 +580,7 @@ SELECT EXISTS(
     AND local_manga_entry.manga_id = ?
     AND COALESCE(local_chapter_storage.storage_path, local_manga_entry.storage_path) = ?
     AND local_chapter_asset.relative_path = ?
-    AND local_chapter_asset.asset_kind = 'DIRECTORY'
+    AND local_chapter_asset.asset_kind = ?
     AND local_chapter_asset.size_bytes = ?
 );
 

@@ -34,6 +34,11 @@ fun main(args: Array<String>) {
     args.firstOrNull { it.startsWith("--stderr=") }?.substringAfter("=")?.let {
         System.setErr(java.io.PrintStream(FileOutputStream(it, true), true, "UTF-8"))
     }
+    Thread.setDefaultUncaughtExceptionHandler { thread, error ->
+        System.err.println("Uncaught extension-host exception on thread ${thread.name}:")
+        error.printStackTrace(System.err)
+        System.err.flush()
+    }
     val isolatedRead = args.firstOrNull { it.startsWith("--pipe-read=") }?.substringAfter("=")
     val isolatedWrite = args.firstOrNull { it.startsWith("--pipe-write=") }?.substringAfter("=")
     val (input, output) = try {

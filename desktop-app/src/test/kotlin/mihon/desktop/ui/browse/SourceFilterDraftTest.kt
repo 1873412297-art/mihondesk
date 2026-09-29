@@ -20,6 +20,7 @@ import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.runBlocking
 import mihon.desktop.DesktopRuntime
 import mihon.desktop.extension.ExtensionStoreService
+import mihon.desktop.ui.UI_TEST_TIMEOUT
 import mihon.extension.source.WindowsCatalogueSource
 import mihon.extension.source.model.Filter
 import mihon.extension.source.model.FilterList
@@ -56,7 +57,7 @@ class SourceFilterDraftTest {
     @ValueSource(booleans = [false, true])
     fun `cancel and reset are drafts until applied and source keeps custom filter type`(
         checkFeedback: Boolean,
-    ) = runComposeUiTest {
+    ) = runComposeUiTest(testTimeout = UI_TEST_TIMEOUT) {
         val runtime = DesktopRuntime.forTesting()
         val source = FilterSource()
         try {

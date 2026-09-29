@@ -64,7 +64,7 @@ class DesktopStatsServiceTest {
             repo.upsertHistory(HistoryRecord(chapterId = m2c1, lastRead = 2000L, readDuration = 240_000L))
 
             // 4. Insert Category & Link
-            val catId = repo.upsertCategory(CategoryRecord(name = "Favorites", sortOrder = 1L))
+            val catId = repo.upsertCategory(CategoryRecord(name = "Favorites"))
             repo.linkCategory(manga1Id, catId)
 
             // 5. Insert Tracking

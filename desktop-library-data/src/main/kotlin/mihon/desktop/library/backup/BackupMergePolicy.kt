@@ -152,6 +152,14 @@ object BackupMergePolicy {
         )
     }
 
+    /** A backup may advance progress, but the installed track retains its remote entry identity. */
+    fun mergeRestoredTracking(existing: TrackingRecord, incoming: TrackingRecord): TrackingRecord =
+        if (incoming.lastChapterRead > existing.lastChapterRead) {
+            existing.copy(lastChapterRead = incoming.lastChapterRead)
+        } else {
+            existing
+        }
+
     private fun unionJsonStringSets(existing: String, incoming: String): String {
         val values = buildSet {
             addAll(Json.decodeFromString<List<String>>(existing))

@@ -70,6 +70,20 @@ object ReaderGesturePolicy {
         }
     }
 
+    fun shouldDoubleTapZoom(mode: ReadingMode, webtoonDoubleTapZoomEnabled: Boolean): Boolean {
+        if (mode == ReadingMode.WEBTOON && !webtoonDoubleTapZoomEnabled) return false
+        return true
+    }
+
+    fun clampWebtoonZoom(mode: ReadingMode, zoom: Float, preventDownsizing: Boolean): Float {
+        val clamped = ReaderLayout.clampZoom(zoom)
+        return if (mode == ReadingMode.WEBTOON && preventDownsizing && clamped < FIT_ZOOM) {
+            FIT_ZOOM
+        } else {
+            clamped
+        }
+    }
+
     fun effectiveScaleMode(mode: ReadingMode, scaleMode: ScaleMode): ScaleMode =
         if (mode == ReadingMode.WEBTOON) ScaleMode.FIT_WIDTH else scaleMode
 

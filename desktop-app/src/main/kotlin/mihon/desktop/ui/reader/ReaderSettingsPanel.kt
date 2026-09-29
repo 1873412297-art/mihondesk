@@ -33,7 +33,9 @@ import mihon.desktop.reader.DesktopReaderSettings
 import mihon.desktop.reader.ReaderBackgroundColor
 import mihon.desktop.reader.ReaderClickAction
 import mihon.desktop.reader.ReaderColorFilter
+import mihon.desktop.reader.ReaderPageTransition
 import mihon.desktop.reader.ReaderWheelBehavior
+import mihon.reader.layout.DualPageSplit
 import mihon.reader.model.ReadingMode
 import mihon.reader.model.ScaleMode
 import kotlin.math.roundToInt
@@ -133,6 +135,15 @@ private fun ReadingSettingsPage(settings: DesktopReaderSettings, onChange: (Desk
     val strings = LocalStrings.current
     SettingModeMenu(settings.mode) { onChange(settings.copy(mode = it)) }
     SettingScaleMenu(settings.scaleMode) { onChange(settings.copy(scaleMode = it)) }
+    SettingTransitionMenu(settings.pageTransition) { onChange(settings.copy(pageTransition = it)) }
+    SettingDualPageSplitMenu(settings.dualPageSplit) { onChange(settings.copy(dualPageSplit = it)) }
+    SettingCheckBox(
+        "reader-setting-dual-page-rotate",
+        settings.dualPageRotateToFit,
+        strings.readerDualPageRotateToFit,
+    ) {
+        onChange(settings.copy(dualPageRotateToFit = it))
+    }
     SettingCheckBox("reader-setting-cover", settings.coverOffset, strings.readerReserveCover) {
         onChange(settings.copy(coverOffset = it))
     }
@@ -163,6 +174,20 @@ private fun ReadingSettingsPage(settings: DesktopReaderSettings, onChange: (Desk
         valueRange = 0f..30f,
         modifier = Modifier.testTag("reader-setting-webtoon-side-padding"),
     )
+    SettingCheckBox(
+        "reader-setting-webtoon-prevent-downsizing",
+        settings.webtoonPreventDownsizing,
+        strings.readerWebtoonPreventDownsizing,
+    ) {
+        onChange(settings.copy(webtoonPreventDownsizing = it))
+    }
+    SettingCheckBox(
+        "reader-setting-webtoon-double-tap-zoom",
+        settings.webtoonDoubleTapZoom,
+        strings.readerWebtoonDoubleTapZoom,
+    ) {
+        onChange(settings.copy(webtoonDoubleTapZoom = it))
+    }
 }
 
 @Composable
@@ -228,6 +253,13 @@ private fun GeneralSettingsPage(settings: DesktopReaderSettings, onChange: (Desk
     ) {
         onChange(settings.copy(skipDuplicateChapters = it))
     }
+    SettingCheckBox(
+        "reader-setting-page-flash",
+        settings.pageFlash,
+        strings.readerPageFlash,
+    ) {
+        onChange(settings.copy(pageFlash = it))
+    }
 }
 
 @Composable
@@ -236,6 +268,46 @@ private fun FilterSettingsPage(settings: DesktopReaderSettings, onChange: (Deskt
     Text(strings.settingsSectionAppearance, style = MaterialTheme.typography.titleSmall)
     SettingColorFilterMenu(settings.colorFilter) { onChange(settings.copy(colorFilter = it)) }
     SettingBackgroundColorMenu(settings.backgroundColor) { onChange(settings.copy(backgroundColor = it)) }
+
+    Box(modifier = Modifier.testTag("reader-setting-hue")) {
+        Text(strings.readerCustomHueLabel(settings.customHue))
+    }
+    Slider(
+        value = settings.customHue.toFloat(),
+        onValueChange = { onChange(settings.copy(customHue = it.roundToInt())) },
+        valueRange = 0f..360f,
+        modifier = Modifier.testTag("reader-setting-custom-hue"),
+    )
+
+    Box(modifier = Modifier.testTag("reader-setting-brightness")) {
+        Text(strings.readerCustomBrightnessLabel(settings.customBrightness))
+    }
+    Slider(
+        value = settings.customBrightness.toFloat(),
+        onValueChange = { onChange(settings.copy(customBrightness = it.roundToInt())) },
+        valueRange = -100f..100f,
+        modifier = Modifier.testTag("reader-setting-custom-brightness"),
+    )
+
+    Box(modifier = Modifier.testTag("reader-setting-contrast")) {
+        Text(strings.readerCustomContrastLabel(settings.customContrast))
+    }
+    Slider(
+        value = settings.customContrast.toFloat(),
+        onValueChange = { onChange(settings.copy(customContrast = it.roundToInt())) },
+        valueRange = -100f..100f,
+        modifier = Modifier.testTag("reader-setting-custom-contrast"),
+    )
+
+    Box(modifier = Modifier.testTag("reader-setting-dimming-percent")) {
+        Text(strings.readerDimmingLabel(settings.dimmingPercent))
+    }
+    Slider(
+        value = settings.dimmingPercent.toFloat(),
+        onValueChange = { onChange(settings.copy(dimmingPercent = it.roundToInt().coerceIn(20, 100))) },
+        valueRange = 20f..100f,
+        modifier = Modifier.testTag("reader-setting-dimming"),
+    )
 }
 
 @Composable
@@ -298,6 +370,32 @@ private fun SettingScaleMenu(current: ScaleMode, onSelected: (ScaleMode) -> Unit
         { strings.readerScaleLabel(it) },
         onSelected,
         optionTag = { "reader-setting-scale-${it.name}" },
+    )
+}
+
+@Composable
+private fun SettingTransitionMenu(current: ReaderPageTransition, onSelected: (ReaderPageTransition) -> Unit) {
+    val strings = LocalStrings.current
+    SettingsMenu(
+        "reader-setting-transition",
+        "${strings.readerPageTransitions}: ${strings.readerPageTransitionLabel(current)}",
+        ReaderPageTransition.entries,
+        { strings.readerPageTransitionLabel(it) },
+        onSelected,
+        optionTag = { "reader-setting-transition-${it.name}" },
+    )
+}
+
+@Composable
+private fun SettingDualPageSplitMenu(current: DualPageSplit, onSelected: (DualPageSplit) -> Unit) {
+    val strings = LocalStrings.current
+    SettingsMenu(
+        "reader-setting-dual-page-split",
+        "${strings.readerDualPageSplit}: ${strings.readerDualPageSplitLabel(current)}",
+        DualPageSplit.entries,
+        { strings.readerDualPageSplitLabel(it) },
+        onSelected,
+        optionTag = { "reader-setting-dual-page-split-${it.name}" },
     )
 }
 

@@ -5,9 +5,11 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
@@ -136,6 +138,12 @@ class EditMangaInfoTest {
             status = 2L,
             notes = "Must read this weekend!",
         )
+
+        withTimeout(5_000) {
+            while (savedManga == null) {
+                delay(10)
+            }
+        }
 
         savedManga?.title shouldBe "Custom New Title"
         savedManga?.author shouldBe "New Author"

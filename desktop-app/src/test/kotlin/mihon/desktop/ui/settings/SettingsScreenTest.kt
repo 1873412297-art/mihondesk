@@ -14,10 +14,13 @@ import androidx.compose.ui.test.v2.runComposeUiTest
 import androidx.compose.ui.unit.dp
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
+import mihon.desktop.library.repository.LibraryDatabaseCleaner
+import mihon.desktop.library.repository.NonLibrarySourceCount
 import mihon.desktop.preferences.DesktopPreferenceStore
 import mihon.desktop.preferences.ThemeMode
 import mihon.desktop.reader.DesktopReaderSettingsStore
 import mihon.desktop.security.DesktopAppLockController
+import mihon.desktop.ui.UI_TEST_TIMEOUT
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Path
@@ -26,7 +29,74 @@ class SettingsScreenTest {
 
     @OptIn(ExperimentalTestApi::class)
     @Test
-    fun `backup path draft cannot redirect automatic backups until validated and saved`() = runComposeUiTest {
+    fun `clear database requires source selection and confirmation`() = runComposeUiTest(
+        testTimeout = UI_TEST_TIMEOUT,
+    ) {
+        val store = DesktopPreferenceStore(tempDir.resolve("clear-ui.properties"))
+        val removed = java.util.concurrent.atomic.AtomicInteger(0)
+        val keptRead = java.util.concurrent.atomic.AtomicBoolean(false)
+        val cleaner = object : LibraryDatabaseCleaner {
+            override fun nonLibrarySourceCounts() = if (removed.get() == 0) {
+                listOf(NonLibrarySourceCount(42L, "Example", 2))
+            } else {
+                emptyList()
+            }
+
+            override fun clearNonLibraryManga(sourceIds: Set<Long>, keepReadManga: Boolean): Int {
+                sourceIds shouldBe setOf(42L)
+                keptRead.set(keepReadManga)
+                return removed.incrementAndGet()
+            }
+        }
+        setContent {
+            Box(Modifier.requiredSize(1024.dp, 768.dp)) {
+                SettingsScreen(
+                    preferenceStore = store,
+                    readerSettingsStore = DesktopReaderSettingsStore(store),
+                    databaseCleaner = cleaner,
+                )
+            }
+        }
+        onNodeWithTag("settings-section-Advanced").performClick()
+        waitUntil {
+            onAllNodes(
+                androidx.compose.ui.test.hasTestTag("clear-database-source-42"),
+            ).fetchSemanticsNodes().isNotEmpty()
+        }
+        onNodeWithTag("clear-database-source-42").performScrollTo().performClick()
+        removed.get() shouldBe 0
+        onNodeWithTag("clear-database-button").performScrollTo().performClick()
+        removed.get() shouldBe 0
+        onNodeWithTag("clear-database-confirm").performClick()
+        waitUntil { removed.get() == 1 }
+        keptRead.get() shouldBe true
+    }
+
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun `settings search finds an option and opens its section`() = runComposeUiTest(testTimeout = UI_TEST_TIMEOUT) {
+        val store = DesktopPreferenceStore(tempDir.resolve("search.properties"))
+        setContent {
+            Box(Modifier.requiredSize(1024.dp, 768.dp)) {
+                SettingsScreen(preferenceStore = store, readerSettingsStore = DesktopReaderSettingsStore(store))
+            }
+        }
+
+        onNodeWithTag("settings-search").performTextInput("download location")
+        onNodeWithTag("settings-search-result-downloads-location").assertExists()
+        onNodeWithTag("settings-search-result-downloads-location").performClick()
+        onNodeWithTag("settings-search-pane").assertDoesNotExist()
+        onNodeWithTag("download-storage-input").assertExists()
+
+        onNodeWithTag("settings-search").performTextReplacement("nothingmatches123")
+        onNodeWithTag("settings-search-empty").assertExists()
+    }
+
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun `backup path draft cannot redirect automatic backups until validated and saved`() = runComposeUiTest(
+        testTimeout = UI_TEST_TIMEOUT,
+    ) {
         val store = DesktopPreferenceStore(tempDir.resolve("backup-path.properties"))
         setContent {
             Box(Modifier.requiredSize(1024.dp, 768.dp)) {
@@ -61,7 +131,9 @@ class SettingsScreenTest {
 
     @OptIn(ExperimentalTestApi::class)
     @Test
-    fun `download path draft is validated before save and preserves other settings`() = runComposeUiTest {
+    fun `download path draft is validated before save and preserves other settings`() = runComposeUiTest(
+        testTimeout = UI_TEST_TIMEOUT,
+    ) {
         val store = DesktopPreferenceStore(tempDir.resolve("path-draft.properties"))
         setContent {
             Box(Modifier.requiredSize(1024.dp, 768.dp)) {
@@ -93,7 +165,9 @@ class SettingsScreenTest {
 
     @OptIn(ExperimentalTestApi::class)
     @Test
-    fun `changing theme preserves settings changed while the pane was open`() = runComposeUiTest {
+    fun `changing theme preserves settings changed while the pane was open`() = runComposeUiTest(
+        testTimeout = UI_TEST_TIMEOUT,
+    ) {
         val store = DesktopPreferenceStore(tempDir.resolve("concurrent.properties"))
         setContent {
             Box(Modifier.requiredSize(1024.dp, 768.dp)) {
@@ -124,7 +198,7 @@ class SettingsScreenTest {
 
     @OptIn(ExperimentalTestApi::class)
     @Test
-    fun `settings screen displays sections and switches panes`() = runComposeUiTest {
+    fun `settings screen displays sections and switches panes`() = runComposeUiTest(testTimeout = UI_TEST_TIMEOUT) {
         val prefStore = DesktopPreferenceStore(tempDir.resolve("preferences.properties"))
         val readerSettingsStore = DesktopReaderSettingsStore(prefStore)
 
@@ -170,7 +244,7 @@ class SettingsScreenTest {
 
     @OptIn(ExperimentalTestApi::class)
     @Test
-    fun `about screen displays application info`() = runComposeUiTest {
+    fun `about screen displays application info`() = runComposeUiTest(testTimeout = UI_TEST_TIMEOUT) {
         setContent {
             Box(modifier = Modifier.requiredSize(800.dp, 600.dp)) {
                 AboutScreen()
@@ -184,7 +258,9 @@ class SettingsScreenTest {
 
     @OptIn(ExperimentalTestApi::class)
     @Test
-    fun `settings screen allows selecting Simplified Chinese and saves preference`() = runComposeUiTest {
+    fun `settings screen allows selecting Simplified Chinese and saves preference`() = runComposeUiTest(
+        testTimeout = UI_TEST_TIMEOUT,
+    ) {
         val prefStore = DesktopPreferenceStore(tempDir.resolve("preferences.properties"))
         val readerSettingsStore = DesktopReaderSettingsStore(prefStore)
 
@@ -205,7 +281,9 @@ class SettingsScreenTest {
 
     @OptIn(ExperimentalTestApi::class)
     @Test
-    fun `about screen renders in Simplified Chinese when Chinese strings are provided`() = runComposeUiTest {
+    fun `about screen renders in Simplified Chinese when Chinese strings are provided`() = runComposeUiTest(
+        testTimeout = UI_TEST_TIMEOUT,
+    ) {
         setContent {
             mihon.desktop.i18n.ProvideDesktopStrings(mihon.desktop.i18n.AppLanguage.SimplifiedChinese) {
                 Box(modifier = Modifier.requiredSize(800.dp, 600.dp)) {
@@ -221,7 +299,9 @@ class SettingsScreenTest {
 
     @OptIn(ExperimentalTestApi::class)
     @Test
-    fun `settings screen displays downloads and tracking panes and updates preferences`() = runComposeUiTest {
+    fun `settings screen displays downloads and tracking panes and updates preferences`() = runComposeUiTest(
+        testTimeout = UI_TEST_TIMEOUT,
+    ) {
         val prefStore = DesktopPreferenceStore(tempDir.resolve("preferences-down-track.properties"))
         val readerSettingsStore = DesktopReaderSettingsStore(prefStore)
         val trackerStore = mihon.desktop.track.DesktopTrackerStore(prefStore)
@@ -253,6 +333,10 @@ class SettingsScreenTest {
         prefStore.load().downloadAhead shouldBe 2
         onNodeWithTag("delete-downloaded-read-switch").performScrollTo().performClick()
         prefStore.load().deleteDownloadedRead shouldBe true
+        onNodeWithTag("save-downloaded-chapter-as-cbz-checkbox").performScrollTo().performClick()
+        prefStore.load().saveChapterAsCbz shouldBe true
+        onNodeWithTag("split-tall-images-checkbox").performScrollTo().performClick()
+        prefStore.load().splitTallImages shouldBe true
 
         // Switch to Tracking pane
         onNodeWithTag("settings-section-Tracking").performClick()
@@ -263,7 +347,9 @@ class SettingsScreenTest {
 
     @OptIn(ExperimentalTestApi::class)
     @Test
-    fun `settings screen allows toggling incognito mode and configuring automated backups`() = runComposeUiTest {
+    fun `settings screen allows toggling incognito mode and configuring automated backups`() = runComposeUiTest(
+        testTimeout = UI_TEST_TIMEOUT,
+    ) {
         val prefStore = DesktopPreferenceStore(tempDir.resolve("preferences-incognito-backup.properties"))
         val readerSettingsStore = DesktopReaderSettingsStore(prefStore)
 
@@ -291,7 +377,9 @@ class SettingsScreenTest {
 
     @OptIn(ExperimentalTestApi::class)
     @Test
-    fun `settings screen allows configuring library update and opening cookie manager`() = runComposeUiTest {
+    fun `settings screen allows configuring library update and opening cookie manager`() = runComposeUiTest(
+        testTimeout = UI_TEST_TIMEOUT,
+    ) {
         val prefStore = DesktopPreferenceStore(tempDir.resolve("preferences-library-update.properties"))
         val readerSettingsStore = DesktopReaderSettingsStore(prefStore)
         var cookieManagerOpened = false
@@ -337,7 +425,7 @@ class SettingsScreenTest {
 
     @OptIn(ExperimentalTestApi::class)
     @Test
-    fun `settings screen configures app lock security controls`() = runComposeUiTest {
+    fun `settings screen configures app lock security controls`() = runComposeUiTest(testTimeout = UI_TEST_TIMEOUT) {
         val prefStore = DesktopPreferenceStore(tempDir.resolve("preferences-security.properties"))
         val readerSettingsStore = DesktopReaderSettingsStore(prefStore)
         val appLockController = DesktopAppLockController(prefStore, clock = { 0L })
@@ -399,7 +487,7 @@ class SettingsScreenTest {
     @Test
     fun `general settings handles nsfw switch, reset hidden sources, and reshow onboarding`(
         @TempDir tempDir: Path,
-    ) = runComposeUiTest {
+    ) = runComposeUiTest(testTimeout = UI_TEST_TIMEOUT) {
         val prefStore = DesktopPreferenceStore(tempDir.resolve("prefs.properties"))
         prefStore.updatePreferences {
             it.copy(

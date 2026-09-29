@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import mihon.reader.image.ImageMetadata
 import mihon.reader.model.PageDescriptor
 import mihon.reader.model.PageId
+import mihon.reader.model.SplitSide
 
 /** Intrinsic pixel dimensions of one reader page image. */
 data class PageSize(
@@ -37,6 +38,17 @@ data class PageSize(
  */
 fun PageDescriptor.withIntrinsicSize(intrinsicSize: PageSize?): PageDescriptor {
     val resolved = intrinsicSize ?: if (width == 1 && height == 1) PageSize.PLACEHOLDER else return this
+    if (splitSide == SplitSide.LEFT) {
+        val halfWidth = maxOf(1, resolved.width / 2)
+        return copy(width = halfWidth, height = resolved.height)
+    }
+    if (splitSide == SplitSide.RIGHT) {
+        val halfWidth = maxOf(1, resolved.width / 2)
+        return copy(width = maxOf(1, resolved.width - halfWidth), height = resolved.height)
+    }
+    if (rotated) {
+        return copy(width = resolved.height, height = resolved.width)
+    }
     return copy(width = resolved.width, height = resolved.height)
 }
 

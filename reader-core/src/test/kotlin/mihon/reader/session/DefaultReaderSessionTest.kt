@@ -164,6 +164,31 @@ class DefaultReaderSessionTest {
     }
 
     @Test
+    fun `intrinsic wide page size keeps dual page navigation aligned with split spreads`() = runTest {
+        val asset = asset(chapterId = 7, lastPageRead = 0)
+        val source = FakeSource(asset, pages(7, 3))
+        val session = DefaultReaderSession(
+            scope = backgroundScope,
+            catalog = catalog(asset),
+            sourceFactory = ChapterSourceFactory { source },
+            progressSink = ReaderProgressSink { ProgressWriteResult.APPLIED },
+            generationSource = AtomicReaderGenerationSource(),
+            settings = ReaderSettings(mode = ReadingMode.DUAL_LTR),
+        )
+        session.open(7)
+        session.dispatch(ReaderAction.SetPageIntrinsicSize(source.descriptors[1].id, 1600, 900))
+        runCurrent()
+
+        session.state.value.pages[1].width shouldBe 1600
+        session.dispatch(ReaderAction.Next)
+        runCurrent()
+        session.state.value.selectedIndex shouldBe 1
+        session.dispatch(ReaderAction.Next)
+        runCurrent()
+        session.state.value.selectedIndex shouldBe 2
+    }
+
+    @Test
     fun `retry reopens a chapter after visible page decoding failed`() = runTest {
         val asset = asset(chapterId = 7, lastPageRead = 0)
         val descriptors = pages(7, 3)

@@ -96,6 +96,7 @@ import mihon.desktop.ui.reader.DecodedReaderPage
 import mihon.desktop.ui.reader.LibraryChapterBookmarkStore
 import mihon.desktop.ui.reader.ReaderChapterTransitionChapter
 import mihon.desktop.ui.reader.ReaderScreen
+import mihon.desktop.ui.reader.readerNavigationChapters
 import mihon.desktop.ui.shortcut.DesktopShortcutMatcher
 import mihon.desktop.ui.shortcut.DesktopShortcutsDialog
 import mihon.desktop.ui.shortcut.ShellShortcutAction
@@ -656,11 +657,16 @@ fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
                                 }
                                 if (destination is DesktopDestination.Reader) {
                                     val currentChapterId = destination.chapterId
-                                    val navigationChapters = if (mangaDetailState.readerChapters.isNotEmpty()) {
+                                    val filteredNavigationChapters = if (mangaDetailState.readerChapters.isNotEmpty()) {
                                         mangaDetailState.readerChapters
                                     } else {
                                         mangaDetailState.allChapters
                                     }
+                                    val navigationChapters = readerNavigationChapters(
+                                        filteredNavigationChapters,
+                                        mangaDetailState.allChapters,
+                                        currentChapterId,
+                                    )
                                     val readableChapters = remember(
                                         navigationChapters,
                                         mangaDetailState.readerAvailability,
@@ -1002,8 +1008,15 @@ fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
                                             if (manga != null) {
                                                 isMangaLibraryActionRunning = true
                                                 val wasFavorite = manga.favorite
-                                                if (wasFavorite) {
-                                                    if (libraryPresenter.setDetailFavorite(false)) {
+                                                libraryPresenter.setDetailFavorite(!wasFavorite) { updated ->
+                                                    isMangaLibraryActionRunning = false
+                                                    if (!updated) {
+                                                        presenterScope.launch {
+                                                            snackbarHostState.showSnackbar(
+                                                                "Unable to update library membership",
+                                                            )
+                                                        }
+                                                    } else if (wasFavorite) {
                                                         presenterScope.launch {
                                                             val result = snackbarHostState.showSnackbar(
                                                                 message = strings.text(UiText.LibraryRemoved),
@@ -1014,17 +1027,8 @@ fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
                                                                 libraryPresenter.setDetailFavorite(true)
                                                             }
                                                         }
-                                                    } else {
-                                                        presenterScope.launch {
-                                                            snackbarHostState.showSnackbar(
-                                                                "Unable to update library membership",
-                                                            )
-                                                        }
                                                     }
-                                                } else {
-                                                    libraryPresenter.setDetailFavorite(true)
                                                 }
-                                                isMangaLibraryActionRunning = false
                                             }
                                         },
                                         onRefreshMangaSource = {
@@ -1360,6 +1364,9 @@ fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
                                         downloadsDir = runtime.downloader?.diskProvider?.downloadsDir
                                             ?: runtime.directories.root.resolve("media").resolve("downloads"),
                                         diskCacheDir = runtime.directories.cache,
+                                        profileRoot = runtime.directories.root,
+                                        databaseCleaner =
+                                        runtime.library as? mihon.desktop.library.repository.LibraryDatabaseCleaner,
                                         onOpenTracking = { isTrackingDialogOpen = true },
                                         onExportBackup = {
                                             presenterScope.launch {
@@ -1495,16 +1502,9 @@ fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
                                                     runtime.trackingQueue?.enqueue(local)
                                                     local
                                                 }
-                                                val record = resolved.toTrackingRecord()
-                                                val existing = runtime.library.findTracking(
-                                                    currentTrackingManga.id,
-                                                    track.trackerId,
-                                                )
-                                                if (existing != null) {
-                                                    runtime.library.updateTracking(record.copy(id = existing.id))
-                                                } else {
-                                                    runtime.library.insertTracking(record)
-                                                }
+                                                // The insert upserts, so a track already bound to this
+                                                // manga and tracker keeps its row id.
+                                                runtime.library.insertTracking(resolved.toTrackingRecord())
                                             }
                                         },
                                         onUnbindTrack = { trackerId ->
@@ -1521,21 +1521,22 @@ fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
                                         confirmButton = {
                                             TextButton(
                                                 onClick = {
-                                                    val added = libraryPresenter.setDetailFavorite(true)
                                                     pendingMangaOrganizationAction = null
-                                                    if (added) {
-                                                        when (pendingAction) {
-                                                            MangaOrganizationAction.Categories ->
-                                                                isEditMangaCategoriesDialogOpen = true
-                                                            MangaOrganizationAction.Tracking ->
-                                                                isTrackingDialogOpen =
-                                                                    true
-                                                        }
-                                                    } else {
-                                                        presenterScope.launch {
-                                                            snackbarHostState.showSnackbar(
-                                                                "Unable to add this manga to the library",
-                                                            )
+                                                    libraryPresenter.setDetailFavorite(true) { added ->
+                                                        if (added) {
+                                                            when (pendingAction) {
+                                                                MangaOrganizationAction.Categories ->
+                                                                    isEditMangaCategoriesDialogOpen = true
+                                                                MangaOrganizationAction.Tracking ->
+                                                                    isTrackingDialogOpen =
+                                                                        true
+                                                            }
+                                                        } else {
+                                                            presenterScope.launch {
+                                                                snackbarHostState.showSnackbar(
+                                                                    "Unable to add this manga to the library",
+                                                                )
+                                                            }
                                                         }
                                                     }
                                                 },

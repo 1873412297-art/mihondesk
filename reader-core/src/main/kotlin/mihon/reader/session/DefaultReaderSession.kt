@@ -48,6 +48,8 @@ class DefaultReaderSession(
             coverOffset = settings.coverOffset,
             scaleMode = settings.scaleMode,
             zoom = settings.zoom,
+            dualPageSplit = settings.dualPageSplit,
+            dualPageRotateToFit = settings.dualPageRotateToFit,
         ),
     )
     override val state: StateFlow<ReaderState> = _state.asStateFlow()
@@ -91,6 +93,7 @@ class DefaultReaderSession(
             if (closed) return@withLock
             val chapterAction = action is ReaderAction.SelectPage ||
                 action is ReaderAction.SetViewportAnchor || action is ReaderAction.SetVisiblePages ||
+                action is ReaderAction.SetPageIntrinsicSize ||
                 action is ReaderAction.Next || action is ReaderAction.Previous
             if (chapterAction && requestedChapterId != _state.value.chapterId) return@withLock
             when (action) {
@@ -263,6 +266,8 @@ class DefaultReaderSession(
             scaleMode = _state.value.scaleMode,
             zoom = _state.value.zoom,
             pan = _state.value.pan,
+            dualPageSplit = _state.value.dualPageSplit,
+            dualPageRotateToFit = _state.value.dualPageRotateToFit,
             hasPreviousChapter = previous,
             hasNextChapter = next,
             foreground = _state.value.foreground,
@@ -364,11 +369,33 @@ class DefaultReaderSession(
     private fun nextLogicalIndex(state: ReaderState, direction: NavigationDirection): Int {
         val step = if (direction == NavigationDirection.FORWARD) 1 else -1
         if (!state.mode.isDualPage) return state.selectedIndex + step
-        return when {
-            direction == NavigationDirection.FORWARD && state.coverOffset && state.selectedIndex == 0 -> 1
-            direction == NavigationDirection.BACKWARD && state.coverOffset && state.selectedIndex == 1 -> 0
-            else -> state.selectedIndex + step * 2
+        val groups = mihon.reader.layout.PageGrouping.forMode(
+            state.pages,
+            state.mode,
+            state.coverOffset,
+            state.dualPageSplit,
+            state.dualPageRotateToFit,
+        )
+        val currentId = state.pages.getOrNull(state.selectedIndex)?.id
+        val currentGroupIndex = groups.indexOfFirst { group ->
+            group.any { it.id == currentId }
         }
+        if (currentGroupIndex == -1) {
+            return when {
+                direction == NavigationDirection.FORWARD && state.coverOffset && state.selectedIndex == 0 -> 1
+                direction == NavigationDirection.BACKWARD && state.coverOffset && state.selectedIndex == 1 -> 0
+                else -> state.selectedIndex + step * 2
+            }
+        }
+        val targetGroupIndex = currentGroupIndex + step
+        if (targetGroupIndex !in groups.indices) {
+            return if (direction == NavigationDirection.FORWARD) state.pages.size else -1
+        }
+        val targetGroup = groups[targetGroupIndex]
+        val targetIndices = targetGroup.mapNotNull { page ->
+            state.pages.indexOfFirst { it.id == page.id }.takeIf { it != -1 }
+        }
+        return targetIndices.minOrNull() ?: (state.selectedIndex + step)
     }
 
     private fun failLocked(code: ReaderErrorCode, cause: Throwable? = null) {

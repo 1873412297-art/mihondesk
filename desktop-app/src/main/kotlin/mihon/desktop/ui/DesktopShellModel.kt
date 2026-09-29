@@ -76,6 +76,8 @@ data class DesktopShellState(
     val downloadCacheCleaner: DownloadCacheCleaner? = null,
     val downloadsDir: Path? = null,
     val diskCacheDir: Path? = null,
+    val profileRoot: Path? = null,
+    val databaseCleaner: mihon.desktop.library.repository.LibraryDatabaseCleaner? = null,
     val appLockController: DesktopAppLockController? = null,
     val sourceNameFor: (Long) -> String = { "Source #$it" },
     val sourceBaseUrlFor: (Long) -> String? = { null },

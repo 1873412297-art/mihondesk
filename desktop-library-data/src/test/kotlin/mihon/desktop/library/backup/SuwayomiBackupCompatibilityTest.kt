@@ -27,8 +27,9 @@ class SuwayomiBackupCompatibilityTest {
     fun `export disambiguates colliding desktop category orders without losing links`() {
         DesktopLibraryDatabaseFactory.open(tempDir.resolve("categories.db")).use { repository ->
             repository.transaction {
-                val first = upsertCategory(mihon.desktop.library.model.CategoryRecord(name = "First", sortOrder = 0))
-                val second = upsertCategory(mihon.desktop.library.model.CategoryRecord(name = "Second", sortOrder = 0))
+                val first = upsertCategory(mihon.desktop.library.model.CategoryRecord(name = "First"))
+                val second = upsertCategory(mihon.desktop.library.model.CategoryRecord(name = "Second"))
+                updateCategoryOrder(second, 0)
                 val manga = insertManga(mihon.desktop.library.model.MangaRecord(sourceId = 5, url = "/m", title = "M"))
                 linkCategory(manga, first)
                 linkCategory(manga, second)
@@ -104,7 +105,7 @@ class SuwayomiBackupCompatibilityTest {
             restored.backupCategories.sortedBy { it.order }.map { it.name } shouldBe listOf("First", "Later")
             val manga = restored.backupManga.single()
             manga.source shouldBe fixture.backupManga.single().source
-            manga.categories.sorted() shouldBe listOf(0, 8)
+            manga.categories.sorted() shouldBe restored.backupCategories.sortedBy { it.order }.map { it.order }
             manga.chapters.single().bookmark shouldBe true
             manga.chapters.single().lastPageRead shouldBe 7
             manga.history.single().lastRead shouldBe 12345L

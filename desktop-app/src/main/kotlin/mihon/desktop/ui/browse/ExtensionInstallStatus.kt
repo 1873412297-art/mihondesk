@@ -1,10 +1,12 @@
 package mihon.desktop.ui.browse
 
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -49,6 +51,23 @@ internal fun ExtensionInstallStatus(state: BrowseUiState, onCancel: () -> Unit) 
                     Text(strings.dialogCancel)
                 }
             }
+        }
+    } else if (state.installFailure != null) {
+        val failure = state.installFailure
+        Column(
+            Modifier.fillMaxWidth().padding(vertical = 8.dp).testTag("extension-install-failure"),
+        ) {
+            Text(
+                strings.extensionInstallFailureTitle(failure),
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.testTag("extension-install-failure-title"),
+            )
+            Text(
+                strings.extensionInstallFailureHint(failure),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall,
+            )
         }
     } else if (state.installationCancelled) {
         Text(

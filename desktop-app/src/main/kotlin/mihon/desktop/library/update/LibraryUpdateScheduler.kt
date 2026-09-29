@@ -168,8 +168,12 @@ class LibraryUpdateScheduler(
         skipCompleted = libraryUpdateSkipCompleted,
         skipUnread = libraryUpdateSkipUnread,
         skipNotStarted = libraryUpdateSkipStarted,
+        skipOutsideReleasePeriod = libraryUpdateSkipOutsideReleasePeriod,
         includedCategoryIds = libraryUpdateCategories.takeIf(Set<Long>::isNotEmpty),
         excludedCategoryIds = libraryUpdateCategoriesExclude.takeIf(Set<Long>::isNotEmpty),
         autoDownloadNewChapters = autoDownloadNewChapters,
+        autoDownloadUnreadOnly = autoDownloadUnreadOnly,
+        autoDownloadCategories = autoDownloadCategories,
+        autoDownloadCategoriesExclude = autoDownloadCategoriesExclude,
     )
 }

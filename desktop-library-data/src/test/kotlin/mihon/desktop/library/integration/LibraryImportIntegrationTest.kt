@@ -99,7 +99,7 @@ class LibraryImportIntegrationTest {
             "SELECT tracking.last_chapter_read, tracking.title FROM tracking " +
                 "JOIN manga ON manga.id=tracking.manga_id " +
                 "WHERE manga.url='/overlap' AND tracker_id=7",
-        ) shouldBe listOf(listOf("3.5", "进度更新"))
+        ) shouldBe listOf(listOf("3.5", "原进度"))
     }
 
     @Test

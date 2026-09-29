@@ -100,7 +100,7 @@ class ExtensionDetailsScreenTest {
         onNodeWithTag("extension-details-nsfw").assertExists()
         onNodeWithTag("extension-details-enabled").assertExists()
         onNodeWithTag("extension-details-install-date").assertExists()
-        onNodeWithTag("extension-details-repo").assertExists()
+        onNodeWithTag("extension-details-repo").assertTextContains("Store: example.com/repo")
 
         onNodeWithTag("extension-details-toggle-enabled").performScrollTo().performClick()
         toggled shouldBe false

@@ -17,6 +17,7 @@ import mihon.desktop.extension.SourcePreferenceDefinition
 import mihon.desktop.extension.SourcePreferenceOption
 import mihon.desktop.extension.SourcePreferenceType
 import mihon.desktop.extension.SourcePreferencesSnapshot
+import mihon.desktop.ui.UI_TEST_TIMEOUT
 import mihon.extension.model.SourceDescriptor
 import org.junit.jupiter.api.Test
 
@@ -31,7 +32,9 @@ class SourcePreferencesScreenTest {
 
     @OptIn(ExperimentalTestApi::class)
     @Test
-    fun `shows clear empty state when source has no configurable preferences`() = runComposeUiTest {
+    fun `shows clear empty state when source has no configurable preferences`() = runComposeUiTest(
+        testTimeout = UI_TEST_TIMEOUT,
+    ) {
         setContent {
             Box(modifier = Modifier.requiredSize(1000.dp, 800.dp)) {
                 SourcePreferencesScreen(
@@ -51,7 +54,9 @@ class SourcePreferencesScreenTest {
 
     @OptIn(ExperimentalTestApi::class)
     @Test
-    fun `renders supported boolean and text preferences and reports changes`() = runComposeUiTest {
+    fun `renders supported boolean and text preferences and reports changes`() = runComposeUiTest(
+        testTimeout = UI_TEST_TIMEOUT,
+    ) {
         var changed: Pair<String, String>? = null
         val definitions = listOf(
             SourcePreferenceDefinition(
@@ -99,7 +104,9 @@ class SourcePreferencesScreenTest {
 
     @OptIn(ExperimentalTestApi::class)
     @Test
-    fun `loads real extension preferences and saves supported control changes`() = runComposeUiTest {
+    fun `loads real extension preferences and saves supported control changes`() = runComposeUiTest(
+        testTimeout = UI_TEST_TIMEOUT,
+    ) {
         val setCalls = mutableListOf<Triple<Long, String, String>>()
         val snapshot = SourcePreferencesSnapshot(
             supported = true,
@@ -184,7 +191,9 @@ class SourcePreferencesScreenTest {
 
     @OptIn(ExperimentalTestApi::class)
     @Test
-    fun `shows unsupported state when source does not implement configurable source`() = runComposeUiTest {
+    fun `shows unsupported state when source does not implement configurable source`() = runComposeUiTest(
+        testTimeout = UI_TEST_TIMEOUT,
+    ) {
         setContent {
             Box(modifier = Modifier.requiredSize(1000.dp, 800.dp)) {
                 SourcePreferencesScreen(

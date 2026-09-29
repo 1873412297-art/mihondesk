@@ -7,6 +7,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
@@ -450,7 +451,7 @@ class LibraryPresenter(
                 extension = ext,
             )
         }
-    }
+    }.flowOn(Dispatchers.IO)
 
     val detailState: StateFlow<MangaDetailUiState> = combine(
         selectedRepositoryState,
@@ -551,26 +552,24 @@ class LibraryPresenter(
             detailManga != null -> detailManga.id
             else -> return
         }
-        val sourceId = when {
-            detailManga != null && detailManga.id == mangaId -> detailManga.sourceId
-            else -> repository.allMangaSnapshot().find { it.id == mangaId }?.sourceId ?: return
-        }
+        presenterScope.launch(Dispatchers.IO) {
+            val sourceId = when {
+                detailManga != null && detailManga.id == mangaId -> detailManga.sourceId
+                else -> repository.allMangaSnapshot().find { it.id == mangaId }?.sourceId ?: return@launch
+            }
+            if (sourceId == 0L || sourceManager?.get(sourceId) == null) return@launch
+            if (!autoRefreshedCoverMangaIds.add(mangaId)) return@launch
 
-        if (sourceId == 0L) return
-        if (sourceManager?.get(sourceId) == null) return
-        if (!autoRefreshedCoverMangaIds.add(mangaId)) return
-
-        val delegate = mangaRefreshDelegate
-        if (delegate != null) {
-            presenterScope.launch {
+            val delegate = mangaRefreshDelegate
+            if (delegate != null) {
                 try {
                     delegate(mangaId)
                 } finally {
                     if (detailManga?.id == mangaId) refreshDetails()
                 }
+            } else if (detailManga?.id == mangaId) {
+                refreshDetails()
             }
-        } else if (detailManga?.id == mangaId) {
-            refreshDetails()
         }
     }
 
@@ -655,55 +654,80 @@ class LibraryPresenter(
 
     fun saveReadingSettingsOverride(override: MangaReaderSettingsOverride) {
         val mangaId = detailMangaId.value ?: return
-        val currentManga = runCatching { repository.mangaSnapshot(mangaId) }.getOrNull()
-            ?: detailState.value.manga?.takeIf { it.id == mangaId }
-            ?: return
-        val updatedViewerFlags = MangaReaderSettings.encodeViewerFlags(currentManga.viewerFlags, override.readingMode)
-        val updatedMemo = MangaReaderSettings.encode(currentManga.memoJson, override)
-        val updatedRecord = currentManga.toMangaRecord().copy(
-            viewerFlags = updatedViewerFlags,
-            memoJson = updatedMemo,
-        )
-        mutationPort?.updateManga(updatedRecord)
-        detailRetryRequest.value = System.currentTimeMillis()
+        presenterScope.launch(Dispatchers.IO) {
+            val currentManga = runCatching { repository.mangaSnapshot(mangaId) }.getOrNull()
+                ?: detailState.value.manga?.takeIf { it.id == mangaId }
+                ?: return@launch
+            val updatedViewerFlags = MangaReaderSettings.encodeViewerFlags(
+                currentManga.viewerFlags,
+                override.readingMode,
+            )
+            val updatedMemo = MangaReaderSettings.encode(currentManga.memoJson, override)
+            val updatedRecord = currentManga.toMangaRecord().copy(
+                viewerFlags = updatedViewerFlags,
+                memoJson = updatedMemo,
+            )
+            mutationPort?.updateManga(updatedRecord)
+            detailRetryRequest.value = System.currentTimeMillis()
+        }
     }
 
     fun clearReadingSettingsOverride() {
         val mangaId = detailMangaId.value ?: return
-        val currentManga = runCatching { repository.mangaSnapshot(mangaId) }.getOrNull()
-            ?: detailState.value.manga?.takeIf { it.id == mangaId }
-            ?: return
-        val updatedViewerFlags = MangaReaderSettings.encodeViewerFlags(currentManga.viewerFlags, null)
-        val updatedMemo = MangaReaderSettings.encode(currentManga.memoJson, null)
-        val updatedRecord = currentManga.toMangaRecord().copy(
-            viewerFlags = updatedViewerFlags,
-            memoJson = updatedMemo,
-        )
-        mutationPort?.updateManga(updatedRecord)
-        detailRetryRequest.value = System.currentTimeMillis()
+        presenterScope.launch(Dispatchers.IO) {
+            val currentManga = runCatching { repository.mangaSnapshot(mangaId) }.getOrNull()
+                ?: detailState.value.manga?.takeIf { it.id == mangaId }
+                ?: return@launch
+            val updatedViewerFlags = MangaReaderSettings.encodeViewerFlags(currentManga.viewerFlags, null)
+            val updatedMemo = MangaReaderSettings.encode(currentManga.memoJson, null)
+            val updatedRecord = currentManga.toMangaRecord().copy(
+                viewerFlags = updatedViewerFlags,
+                memoJson = updatedMemo,
+            )
+            mutationPort?.updateManga(updatedRecord)
+            detailRetryRequest.value = System.currentTimeMillis()
+        }
     }
 
     fun setChapterSettingsAsDefault(applyToExisting: Boolean) {
         val mangaId = detailMangaId.value ?: return
-        val settings = currentChapterSettings(mangaId)
-        preferences?.update {
-            setProperty(CHAPTER_DEFAULT_FLAGS_KEY, encodeChapterFlags(0L, settings).toString())
-            setProperty(CHAPTER_DEFAULT_SHOW_MISSING_KEY, settings.showMissingChapters.toString())
+        val currentOverrides = chapterSettingsOverrides.value
+        val inMemorySettings = if (currentOverrides.mangaId == mangaId && currentOverrides.settings != null) {
+            currentOverrides.settings
+        } else {
+            detailState.value.manga?.takeIf { it.id == mangaId }?.toChapterSettings()
         }
-        if (applyToExisting) {
-            val now = System.currentTimeMillis()
-            val records = repository.allMangaSnapshot().filter { it.favorite }
-            mutationPort?.transaction {
-                for (record in records) {
-                    updateManga(
-                        record.copy(
-                            chapterFlags = encodeChapterFlags(record.chapterFlags, settings),
-                            memoJson = encodeShowMissingChapters(record.memoJson, settings.showMissingChapters),
-                        ),
-                    )
+        if (inMemorySettings != null) {
+            preferences?.update {
+                setProperty(CHAPTER_DEFAULT_FLAGS_KEY, encodeChapterFlags(0L, inMemorySettings).toString())
+                setProperty(CHAPTER_DEFAULT_SHOW_MISSING_KEY, inMemorySettings.showMissingChapters.toString())
+            }
+        }
+        if (applyToExisting || inMemorySettings == null) {
+            presenterScope.launch(Dispatchers.IO) {
+                val settings = inMemorySettings ?: currentChapterSettings(mangaId)
+                if (inMemorySettings == null) {
+                    preferences?.update {
+                        setProperty(CHAPTER_DEFAULT_FLAGS_KEY, encodeChapterFlags(0L, settings).toString())
+                        setProperty(CHAPTER_DEFAULT_SHOW_MISSING_KEY, settings.showMissingChapters.toString())
+                    }
+                }
+                if (applyToExisting) {
+                    val now = System.currentTimeMillis()
+                    val records = repository.allMangaSnapshot().filter { it.favorite }
+                    mutationPort?.transaction {
+                        for (record in records) {
+                            updateManga(
+                                record.copy(
+                                    chapterFlags = encodeChapterFlags(record.chapterFlags, settings),
+                                    memoJson = encodeShowMissingChapters(record.memoJson, settings.showMissingChapters),
+                                ),
+                            )
+                        }
+                    }
+                    detailRetryRequest.value = now
                 }
             }
-            detailRetryRequest.value = now
         }
     }
 
@@ -711,7 +735,7 @@ class LibraryPresenter(
         val mangaId = detailMangaId.value ?: return
         val defaults = defaultChapterSettings().copy(excludedScanlators = emptySet())
         chapterSettingsOverrides.update { it.copy(mangaId = mangaId, settings = defaults) }
-        persistChapterSettings(mangaId, defaults)
+        persistChapterSettingsInBackground(mangaId, defaults)
     }
 
     fun dismissDuplicateDialog() {
@@ -734,26 +758,51 @@ class LibraryPresenter(
     fun migrateDuplicateTo(existingMangaId: Long) {
         val dialog = duplicateDialogState.value ?: return
         val sourceMangaId = dialog.target.id
-        if (sourceMangaId != existingMangaId) {
-            migrateManga(sourceMangaId, existingMangaId)
-        }
         advanceDuplicateDialog(markDismissed = true)
-        retry()
+        if (sourceMangaId == existingMangaId) {
+            retry()
+            return
+        }
+        // Migrating rewrites every chapter of the source manga, so it must not run on the UI thread.
+        presenterScope.launch(Dispatchers.IO) {
+            migrateManga(sourceMangaId, existingMangaId)
+            retry()
+        }
     }
 
     private fun updateChapterSettings(mangaId: Long, transform: (ChapterSettings) -> ChapterSettings) {
         val updated = transform(currentChapterSettings(mangaId))
         chapterSettingsOverrides.update { it.copy(mangaId = mangaId, settings = updated) }
-        persistChapterSettings(mangaId, updated)
+        persistChapterSettingsInBackground(mangaId, updated)
+    }
+
+    /**
+     * Chapter settings writes read-modify-write the manga row, so they are applied one at a time in
+     * call order away from the UI thread; overlapping writes could discard the newer choice.
+     */
+    private val chapterSettingWrites = Channel<Pair<Long, ChapterSettings>>(Channel.UNLIMITED)
+
+    init {
+        presenterScope.launch(Dispatchers.IO) {
+            for ((mangaId, settings) in chapterSettingWrites) {
+                persistChapterSettings(mangaId, settings)
+            }
+        }
+    }
+
+    private fun persistChapterSettingsInBackground(mangaId: Long, settings: ChapterSettings) {
+        chapterSettingWrites.trySend(mangaId to settings)
     }
 
     private fun currentChapterSettings(mangaId: Long): ChapterSettings {
-        val persisted = runCatching { repository.mangaSnapshot(mangaId) }.getOrNull()?.toChapterSettings()
-            ?: detailState.value.manga?.takeIf { it.id == mangaId }?.toChapterSettings()
-            ?: defaultChapterSettings()
         val overrides = chapterSettingsOverrides.value
         val overrideSettings = overrides.settings
-        return if (overrides.mangaId == mangaId && overrideSettings != null) overrideSettings else persisted
+        if (overrides.mangaId == mangaId && overrideSettings != null) return overrideSettings
+        val detailManga = detailState.value.manga
+        if (detailManga?.id == mangaId) return detailManga.toChapterSettings()
+        val persisted = runCatching { repository.mangaSnapshot(mangaId) }.getOrNull()?.toChapterSettings()
+            ?: defaultChapterSettings()
+        return persisted
     }
 
     private fun persistChapterSettings(mangaId: Long, settings: ChapterSettings) {
@@ -873,58 +922,64 @@ class LibraryPresenter(
 
     fun toggleChapterBookmark(chapterId: Long) {
         val mangaId = detailMangaId.value ?: return
-        val currentChapters = repository.chapterSnapshot(mangaId)
-        val chapter = currentChapters.find { it.id == chapterId } ?: return
-        val updated = chapter.copy(bookmark = !chapter.bookmark)
-        mutationPort?.updateChapter(updated.toChapterRecord())
-        detailRetryRequest.value = System.currentTimeMillis()
+        presenterScope.launch(Dispatchers.IO) {
+            val chapter = repository.chapterSnapshot(mangaId).find { it.id == chapterId } ?: return@launch
+            val updated = chapter.copy(bookmark = !chapter.bookmark)
+            mutationPort?.updateChapter(updated.toChapterRecord())
+            detailRetryRequest.value = System.currentTimeMillis()
+        }
     }
 
     fun toggleChapterRead(chapterId: Long) {
         val mangaId = detailMangaId.value ?: return
-        val currentChapters = repository.chapterSnapshot(mangaId)
-        val chapter = currentChapters.find { it.id == chapterId } ?: return
-        val newRead = !chapter.read
-        val updated = chapter.copy(
-            read = newRead,
-            lastPageRead = if (!newRead) 0L else chapter.lastPageRead,
-            lastModifiedAt = System.currentTimeMillis(),
-        )
-        mutationPort?.updateChapter(updated.toChapterRecord())
-        detailRetryRequest.value = System.currentTimeMillis()
+        presenterScope.launch(Dispatchers.IO) {
+            val chapter = repository.chapterSnapshot(mangaId).find { it.id == chapterId } ?: return@launch
+            val newRead = !chapter.read
+            val updated = chapter.copy(
+                read = newRead,
+                lastPageRead = if (!newRead) 0L else chapter.lastPageRead,
+                lastModifiedAt = System.currentTimeMillis(),
+            )
+            mutationPort?.updateChapter(updated.toChapterRecord())
+            detailRetryRequest.value = System.currentTimeMillis()
+        }
     }
 
     fun batchBookmarkChapters(chapterIds: Set<Long>, bookmark: Boolean) {
         val mangaId = detailMangaId.value ?: return
-        val currentChapters = repository.chapterSnapshot(mangaId)
-        val toUpdate = currentChapters.filter { it.id in chapterIds && it.bookmark != bookmark }
-        if (toUpdate.isEmpty()) return
-        mutationPort?.transaction {
-            toUpdate.forEach { ch ->
-                updateChapter(ch.copy(bookmark = bookmark).toChapterRecord())
+        presenterScope.launch(Dispatchers.IO) {
+            val currentChapters = repository.chapterSnapshot(mangaId)
+            val toUpdate = currentChapters.filter { it.id in chapterIds && it.bookmark != bookmark }
+            if (toUpdate.isEmpty()) return@launch
+            mutationPort?.transaction {
+                toUpdate.forEach { ch ->
+                    updateChapter(ch.copy(bookmark = bookmark).toChapterRecord())
+                }
             }
+            detailRetryRequest.value = System.currentTimeMillis()
         }
-        detailRetryRequest.value = System.currentTimeMillis()
     }
 
     fun batchMarkChaptersRead(chapterIds: Set<Long>, read: Boolean) {
         val mangaId = detailMangaId.value ?: return
-        val currentChapters = repository.chapterSnapshot(mangaId)
-        val toUpdate = currentChapters.filter { it.id in chapterIds && it.read != read }
-        if (toUpdate.isEmpty()) return
-        val now = System.currentTimeMillis()
-        mutationPort?.transaction {
-            toUpdate.forEach { ch ->
-                updateChapter(
-                    ch.copy(
-                        read = read,
-                        lastPageRead = if (!read) 0L else ch.lastPageRead,
-                        lastModifiedAt = now,
-                    ).toChapterRecord(),
-                )
+        presenterScope.launch(Dispatchers.IO) {
+            val currentChapters = repository.chapterSnapshot(mangaId)
+            val toUpdate = currentChapters.filter { it.id in chapterIds && it.read != read }
+            if (toUpdate.isEmpty()) return@launch
+            val now = System.currentTimeMillis()
+            mutationPort?.transaction {
+                toUpdate.forEach { ch ->
+                    updateChapter(
+                        ch.copy(
+                            read = read,
+                            lastPageRead = if (!read) 0L else ch.lastPageRead,
+                            lastModifiedAt = now,
+                        ).toChapterRecord(),
+                    )
+                }
             }
+            detailRetryRequest.value = System.currentTimeMillis()
         }
-        detailRetryRequest.value = System.currentTimeMillis()
     }
 
     fun batchDownloadChapters(chapterIds: Set<Long>) {
@@ -946,19 +1001,21 @@ class LibraryPresenter(
 
     fun markPreviousChaptersRead(chapterId: Long) {
         val mangaId = detailMangaId.value ?: return
-        val currentChapters = repository.chapterSnapshot(mangaId)
-        val target = currentChapters.find { it.id == chapterId } ?: return
-        val now = System.currentTimeMillis()
-        mutationPort?.transaction {
-            currentChapters.forEach { ch ->
-                if (ch.sourceOrder > target.sourceOrder || ch.chapterNumber < target.chapterNumber) {
-                    if (!ch.read) {
-                        updateChapter(ch.copy(read = true, lastModifiedAt = now).toChapterRecord())
+        presenterScope.launch(Dispatchers.IO) {
+            val currentChapters = repository.chapterSnapshot(mangaId)
+            val target = currentChapters.find { it.id == chapterId } ?: return@launch
+            val now = System.currentTimeMillis()
+            mutationPort?.transaction {
+                currentChapters.forEach { ch ->
+                    if (ch.sourceOrder > target.sourceOrder || ch.chapterNumber < target.chapterNumber) {
+                        if (!ch.read) {
+                            updateChapter(ch.copy(read = true, lastModifiedAt = now).toChapterRecord())
+                        }
                     }
                 }
             }
+            detailRetryRequest.value = System.currentTimeMillis()
         }
-        detailRetryRequest.value = System.currentTimeMillis()
     }
 
     fun downloadChapter(chapterId: Long) {
@@ -997,18 +1054,20 @@ class LibraryPresenter(
 
     /** Marks a chapter read from surfaces that do not have the detail page open (e.g. Updates). */
     fun markChapterRead(mangaId: Long, chapterId: Long) {
-        val chapter = repository.chapterSnapshot(mangaId).find { it.id == chapterId } ?: return
-        if (chapter.read) return
-        mutationPort?.updateChapter(
-            chapter.copy(read = true, lastModifiedAt = System.currentTimeMillis()).toChapterRecord(),
-        )
+        presenterScope.launch(Dispatchers.IO) {
+            val chapter = repository.chapterSnapshot(mangaId).find { it.id == chapterId } ?: return@launch
+            if (chapter.read) return@launch
+            mutationPort?.updateChapter(
+                chapter.copy(read = true, lastModifiedAt = System.currentTimeMillis()).toChapterRecord(),
+            )
+        }
     }
 
     /** Enqueues a chapter download from surfaces that do not have the detail page open. */
     fun enqueueChapterDownload(mangaId: Long, chapterId: Long) {
-        val manga = repository.librarySnapshot().firstOrNull { it.id == mangaId } ?: return
-        val chapter = repository.chapterSnapshot(mangaId).find { it.id == chapterId } ?: return
-        presenterScope.launch {
+        presenterScope.launch(Dispatchers.IO) {
+            val manga = repository.librarySnapshot().firstOrNull { it.id == mangaId } ?: return@launch
+            val chapter = repository.chapterSnapshot(mangaId).find { it.id == chapterId } ?: return@launch
             downloader?.enqueue(
                 sourceId = manga.sourceId,
                 mangaId = manga.id,
@@ -1028,34 +1087,38 @@ class LibraryPresenter(
         status: Long,
         notes: String,
     ) {
-        val existing = repository.allMangaSnapshot().find { it.id == mangaId } ?: return
-        val genreJson = Json.encodeToString(genres)
-        val now = System.currentTimeMillis()
-        val updated = existing.copy(
-            title = title,
-            author = author,
-            artist = artist,
-            description = description,
-            genreJson = genreJson,
-            status = status,
-            notes = notes,
-            lastModifiedAt = now,
-        )
-        mutationPort?.updateManga(updated)
-        isEditInfoDialogOpenState.value = false
-        detailRetryRequest.value = System.currentTimeMillis()
+        presenterScope.launch(Dispatchers.IO) {
+            val existing = repository.allMangaSnapshot().find { it.id == mangaId } ?: return@launch
+            val genreJson = Json.encodeToString(genres)
+            val now = System.currentTimeMillis()
+            val updated = existing.copy(
+                title = title,
+                author = author,
+                artist = artist,
+                description = description,
+                genreJson = genreJson,
+                status = status,
+                notes = notes,
+                lastModifiedAt = now,
+            )
+            mutationPort?.updateManga(updated)
+            isEditInfoDialogOpenState.value = false
+            detailRetryRequest.value = System.currentTimeMillis()
+        }
     }
 
     fun resetMangaInfo(mangaId: Long) {
-        val existing = repository.allMangaSnapshot().find { it.id == mangaId } ?: return
-        val now = System.currentTimeMillis()
-        val updated = existing.copy(
-            notes = "",
-            lastModifiedAt = now,
-        )
-        mutationPort?.updateManga(updated)
-        isEditInfoDialogOpenState.value = false
-        detailRetryRequest.value = System.currentTimeMillis()
+        presenterScope.launch(Dispatchers.IO) {
+            val existing = repository.allMangaSnapshot().find { it.id == mangaId } ?: return@launch
+            val now = System.currentTimeMillis()
+            val updated = existing.copy(
+                notes = "",
+                lastModifiedAt = now,
+            )
+            mutationPort?.updateManga(updated)
+            isEditInfoDialogOpenState.value = false
+            detailRetryRequest.value = System.currentTimeMillis()
+        }
     }
 
     fun updateSelectedMangaInfo(
@@ -1090,22 +1153,36 @@ class LibraryPresenter(
         detailMangaId.value = id
     }
 
-    fun setDetailFavorite(favorite: Boolean): Boolean {
-        val mangaId = detailMangaId.value ?: return false
-        val record = repository.allMangaSnapshot().firstOrNull { it.id == mangaId } ?: return false
-        if (record.favorite == favorite) return true
-        val now = System.currentTimeMillis()
-        mutationPort?.updateManga(
-            record.copy(
-                favorite = favorite,
-                dateAdded = if (favorite) record.dateAdded.takeIf { it > 0L } ?: now else 0L,
-                lastModifiedAt = now,
-                favoriteModifiedAt = now,
-            ),
-        ) ?: return false
-        detailRetryRequest.value = now
-        retry()
-        return true
+    /**
+     * Toggles library membership off the UI thread. [onResult] reports whether the record was
+     * written; it runs on the presenter's own dispatcher so callers may touch UI state.
+     */
+    fun setDetailFavorite(favorite: Boolean, onResult: (Boolean) -> Unit = {}) {
+        val mangaId = detailMangaId.value
+        if (mangaId == null) {
+            onResult(false)
+            return
+        }
+        presenterScope.launch(Dispatchers.IO) {
+            val success = runCatching {
+                val record = repository.allMangaSnapshot().firstOrNull { it.id == mangaId }
+                    ?: return@runCatching false
+                if (record.favorite == favorite) return@runCatching true
+                val now = System.currentTimeMillis()
+                mutationPort?.updateManga(
+                    record.copy(
+                        favorite = favorite,
+                        dateAdded = if (favorite) record.dateAdded.takeIf { it > 0L } ?: now else 0L,
+                        lastModifiedAt = now,
+                        favoriteModifiedAt = now,
+                    ),
+                ) ?: return@runCatching false
+                detailRetryRequest.value = now
+                retry()
+                true
+            }.getOrDefault(false)
+            presenterScope.launch { onResult(success) }
+        }
     }
 
     fun selectCategory(categoryId: Long) {

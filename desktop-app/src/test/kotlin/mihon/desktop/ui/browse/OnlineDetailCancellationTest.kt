@@ -21,6 +21,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import mihon.desktop.DesktopRuntime
 import mihon.desktop.extension.ExtensionStoreService
+import mihon.desktop.ui.UI_TEST_TIMEOUT
 import mihon.extension.source.WindowsCatalogueSource
 import mihon.extension.source.model.FilterList
 import mihon.extension.source.model.MangasPage
@@ -59,7 +60,7 @@ class OnlineDetailCancellationTest {
         "chapters,false,true",
     )
     fun `leaving a pending detail never opens it after navigation`(stage: String, late: Boolean, dispose: Boolean) =
-        runComposeUiTest {
+        runComposeUiTest(testTimeout = UI_TEST_TIMEOUT) {
             val runtime = DesktopRuntime.forTesting()
             val source = DelayedSource(stage, late)
             val visible = mutableStateOf(true)

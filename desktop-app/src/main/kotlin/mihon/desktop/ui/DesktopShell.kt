@@ -322,6 +322,9 @@ fun DesktopShell(
                                     downloadCacheCleaner = state.downloadCacheCleaner,
                                     downloadsDir = state.downloadsDir,
                                     diskCacheDir = state.diskCacheDir,
+                                    profileRoot = state.profileRoot,
+                                    databaseCleaner = state.databaseCleaner,
+                                    downloadCategories = state.libraryState.categories,
                                     appLockController = state.appLockController,
                                 )
                             } else {
@@ -523,6 +526,8 @@ fun DesktopShell(
     downloadCacheCleaner: mihon.desktop.download.DownloadCacheCleaner? = null,
     downloadsDir: java.nio.file.Path? = null,
     diskCacheDir: java.nio.file.Path? = null,
+    profileRoot: java.nio.file.Path? = null,
+    databaseCleaner: mihon.desktop.library.repository.LibraryDatabaseCleaner? = null,
     appLockController: DesktopAppLockController? = null,
     onLockNow: (() -> Unit)? = null,
 ) {
@@ -565,6 +570,8 @@ fun DesktopShell(
         downloadCacheCleaner = downloadCacheCleaner,
         downloadsDir = downloadsDir,
         diskCacheDir = diskCacheDir,
+        profileRoot = profileRoot,
+        databaseCleaner = databaseCleaner,
         appLockController = appLockController,
         sourceNameFor = sourceNameFor,
         sourceBaseUrlFor = sourceBaseUrlFor,

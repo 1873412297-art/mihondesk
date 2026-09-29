@@ -15,7 +15,7 @@ git fetch upstream --tags
 
 - 触发条件：**落后上游最新 tag（或 main 分支新提交）超过 2 周**即触发一次合入；宁可小步多次，不要攒半年一次大合并（冲突面随落后时长复利增长）。
 - 监测：weekly Actions 工作流比对上游最新 tag 与本仓库合并基点，超期自动开 issue（3B）。
-- 当前基线：上游 main 提交 `7f342ca07`（2026-08-29，PR #3874，**尚未打 tag**；最近的上游 tag 是 `v0.20.4`，2026-08-05）。详见 `docs/upstream/MIHON_CHANGELOG.md` 副本与 3C 演练记录。
+- 当前基线：上游 main 提交 `424bbc53b`（2026-09-20；上一基线 `7f342ca07`，2026-08-29）。基线以 `docs/upstream/MIHON_CHANGELOG.md` 里的 sync record 为准（weekly 检查解析的就是这一行），详见该副本与 3C 演练记录。
 
 ## 3. 合并方式
 

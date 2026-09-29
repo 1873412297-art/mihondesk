@@ -30,6 +30,7 @@ class LibraryUpdateService(
     private val refreshManga: (suspend (MangaRecord) -> Unit)? = null,
     private val maxConcurrentSources: Int = 3,
     private val requestTimeoutMs: Long = 60_000L,
+    private val nowMillis: () -> Long = System::currentTimeMillis,
 ) {
 
     init {
@@ -73,6 +74,10 @@ class LibraryUpdateService(
                 if (!hasStarted) return@filter false
             }
 
+            if (options.skipOutsideReleasePeriod && ReleasePeriodFilter.shouldSkip(chapters, nowMillis())) {
+                return@filter false
+            }
+
             // 3. Check categories filter
             val mangaCategories = categoryLinks[manga.id].orEmpty()
             if (!includedCategoryIds.isNullOrEmpty() && mangaCategories.none { it in includedCategoryIds }) {
@@ -105,7 +110,14 @@ class LibraryUpdateService(
                                     ),
                                 )
                             }
-                            val result = updateManga(manga, options)
+                            val mangaCategories = categoryLinks[manga.id].orEmpty()
+                            val autoDownloadAllowed =
+                                (
+                                    options.autoDownloadCategories.isEmpty() ||
+                                        mangaCategories.any { it in options.autoDownloadCategories }
+                                    ) &&
+                                    mangaCategories.none { it in options.autoDownloadCategoriesExclude }
+                            val result = updateManga(manga, options, autoDownloadAllowed)
                             if (throttleDelayMs > 0 && index < sourceManga.size - 1) delay(throttleDelayMs)
                             result
                         }
@@ -143,7 +155,11 @@ class LibraryUpdateService(
         report
     }
 
-    private suspend fun updateManga(manga: MangaRecord, options: LibraryUpdateOptions): MangaUpdateItemResult {
+    private suspend fun updateManga(
+        manga: MangaRecord,
+        options: LibraryUpdateOptions,
+        autoDownloadAllowed: Boolean,
+    ): MangaUpdateItemResult {
         try {
             val existingChapterUrls = repository.chapterSnapshot(manga.id).map { it.url }.toSet()
             val refreshed = withTimeoutOrNull(requestTimeoutMs) {
@@ -170,12 +186,15 @@ class LibraryUpdateService(
             } ?: false
             check(refreshed) { "Source ${manga.sourceId} timed out after $requestTimeoutMs ms" }
             val newlyAdded = repository.chapterSnapshot(manga.id).filter { it.url !in existingChapterUrls }
-            if (newlyAdded.isNotEmpty() && options.autoDownloadNewChapters && downloader != null) {
+            val downloads = if (options.autoDownloadUnreadOnly) newlyAdded.filter { !it.read } else newlyAdded
+            if (downloads.isNotEmpty() && options.autoDownloadNewChapters && autoDownloadAllowed &&
+                downloader != null
+            ) {
                 downloader.enqueue(
                     sourceId = manga.sourceId,
                     mangaId = manga.id,
                     mangaTitle = manga.title,
-                    chapters = newlyAdded,
+                    chapters = downloads,
                     autoStart = true,
                 )
             }

@@ -16,6 +16,7 @@ import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.runBlocking
 import mihon.desktop.DesktopRuntime
 import mihon.desktop.extension.ExtensionStoreService
+import mihon.desktop.ui.UI_TEST_TIMEOUT
 import mihon.extension.source.WindowsCatalogueSource
 import mihon.extension.source.model.FilterList
 import mihon.extension.source.model.MangasPage
@@ -47,7 +48,9 @@ class SourcePaginationRecoveryTest {
 
     @ParameterizedTest
     @ValueSource(booleans = [false, true])
-    fun `retry appends failed page and pagination ignores unsubmitted query`(editDraft: Boolean) = runComposeUiTest {
+    fun `retry appends failed page and pagination ignores unsubmitted query`(
+        editDraft: Boolean,
+    ) = runComposeUiTest(testTimeout = UI_TEST_TIMEOUT) {
         val runtime = DesktopRuntime.forTesting()
         val source = PagedSource()
         try {

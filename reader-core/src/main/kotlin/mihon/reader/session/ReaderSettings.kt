@@ -8,6 +8,8 @@ data class ReaderSettings(
     val coverOffset: Boolean = false,
     val scaleMode: ScaleMode = ScaleMode.FIT_WIDTH,
     val zoom: Float = 1f,
+    val dualPageSplit: mihon.reader.layout.DualPageSplit = mihon.reader.layout.DualPageSplit.WIDE,
+    val dualPageRotateToFit: Boolean = false,
 ) {
     init {
         require(zoom.isFinite()) { "zoom must be finite" }

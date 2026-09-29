@@ -11,6 +11,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import mihon.desktop.ui.UI_TEST_TIMEOUT
 import mihon.desktop.updates.AppUpdatePhase
 import mihon.desktop.updates.AppUpdatePresenter
 import mihon.desktop.updates.DesktopAppUpdateService
@@ -27,7 +28,9 @@ class AppUpdateNavigationTest {
     @TempDir lateinit var root: Path
 
     @Test
-    fun `leaving about keeps the download and returning shows its verified result`() = runComposeUiTest {
+    fun `leaving about keeps the download and returning shows its verified result`() = runComposeUiTest(
+        testTimeout = UI_TEST_TIMEOUT,
+    ) {
         val content = "app bytes".toByteArray()
         val hash = MessageDigest.getInstance("SHA-256").digest(content).joinToString("") { "%02x".format(it) }
         val name = "mihondesk-0.3.0.exe"

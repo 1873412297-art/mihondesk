@@ -16,6 +16,7 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import mihon.desktop.DesktopRuntime
 import mihon.desktop.extension.ExtensionStoreService
+import mihon.desktop.ui.UI_TEST_TIMEOUT
 import mihon.extension.model.ExtensionManifest
 import mihon.extension.model.SourceDescriptor
 import org.junit.jupiter.api.Test
@@ -28,7 +29,9 @@ class BrowseNavigationTest {
 
     @OptIn(ExperimentalTestApi::class)
     @Test
-    fun `extension details back returns to extensions tab and preserves installed list`() = runComposeUiTest {
+    fun `extension details back returns to extensions tab and preserves installed list`() = runComposeUiTest(
+        testTimeout = UI_TEST_TIMEOUT,
+    ) {
         val runtime = DesktopRuntime.forTesting()
         try {
             // Keep the presenter's repository refresh fast and offline.
@@ -102,7 +105,9 @@ class BrowseNavigationTest {
 
     @OptIn(ExperimentalTestApi::class)
     @Test
-    fun `local source opens local detail and reads chapter through callback`() = runComposeUiTest {
+    fun `local source opens local detail and reads chapter through callback`() = runComposeUiTest(
+        testTimeout = UI_TEST_TIMEOUT,
+    ) {
         val runtime = DesktopRuntime.forTesting()
         val sourceDir = Files.createTempDirectory("local-browse-source")
         val chapterDir = Files.createDirectories(sourceDir.resolve("Chapter 1"))

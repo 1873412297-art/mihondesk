@@ -33,13 +33,7 @@ class DesktopCategoryService(
         val trimmed = name.trim()
         if (trimmed.isBlank()) return
         scope.launch(Dispatchers.IO) {
-            val maxOrder = categories.value.maxOfOrNull { it.order } ?: 0L
-            mutationPort.upsertCategory(
-                CategoryRecord(
-                    name = trimmed,
-                    sortOrder = maxOrder + 1,
-                ),
-            )
+            mutationPort.upsertCategory(CategoryRecord(name = trimmed))
         }
     }
 

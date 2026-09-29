@@ -1,5 +1,6 @@
 package mihon.sync.server
 
+import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
@@ -16,6 +17,38 @@ import org.junit.jupiter.api.Test
 
 @OptIn(ExperimentalSerializationApi::class)
 class SyncServerAbuseTest {
+
+    @Test
+    fun `rate limit is enforced per paired identity with retry header`() = testApplication {
+        val store = SqliteChangesetStore.inMemory()
+        application {
+            configureServerApplication(
+                token = "token-a",
+                additionalTokens = setOf("token-b"),
+                store = store,
+                maxRequestsPerMinute = 2,
+            )
+        }
+
+        repeat(2) {
+            assertEquals(
+                HttpStatusCode.OK,
+                client.get("/v1/head") {
+                    header("Authorization", "Bearer token-a")
+                }.status,
+            )
+        }
+        val limited = client.get("/v1/head") { header("Authorization", "Bearer token-a") }
+        assertEquals(HttpStatusCode.TooManyRequests, limited.status)
+        val retryAfter = limited.headers["Retry-After"]?.toLongOrNull()
+        assertEquals(true, retryAfter != null && retryAfter in 1L..60L)
+        assertEquals(
+            HttpStatusCode.OK,
+            client.get("/v1/head") {
+                header("Authorization", "Bearer token-b")
+            }.status,
+        )
+    }
 
     private fun sampleChangeset(
         deviceId: String,

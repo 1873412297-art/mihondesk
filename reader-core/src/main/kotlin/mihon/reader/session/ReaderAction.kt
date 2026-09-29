@@ -19,6 +19,9 @@ sealed interface ReaderAction {
     data class SetPan(val pan: ReaderPan) : ReaderAction
     data class SetViewport(val viewport: ReaderViewport) : ReaderAction
     data class SetVisiblePages(val pageIds: List<PageId>) : ReaderAction
+    data class SetPageIntrinsicSize(val pageId: PageId, val width: Int, val height: Int) : ReaderAction
     data class SetForeground(val foreground: Boolean) : ReaderAction
     data class SetContentVisible(val visible: Boolean) : ReaderAction
+    data class SetDualPageSplit(val split: mihon.reader.layout.DualPageSplit) : ReaderAction
+    data class SetDualPageRotateToFit(val enabled: Boolean) : ReaderAction
 }

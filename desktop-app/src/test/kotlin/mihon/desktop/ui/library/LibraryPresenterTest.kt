@@ -215,10 +215,12 @@ class LibraryPresenterTest {
         presenter.openMangaDetail(mangaId)
         presenter.awaitDetail { it.manga?.id == mangaId }
 
-        presenter.setDetailFavorite(true) shouldBe true
+        val reported = MutableStateFlow<Boolean?>(null)
+        presenter.setDetailFavorite(true) { reported.value = it }
 
         presenter.awaitDetail { it.manga?.favorite == true }
         repository.librarySnapshot(null).single().id shouldBe mangaId
+        reported.first { it != null } shouldBe true
         presenter.close()
     }
 

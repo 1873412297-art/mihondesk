@@ -24,9 +24,11 @@ import mihon.desktop.extension.DesktopExtensionInstaller
 import mihon.desktop.extension.DesktopSourceManager
 import mihon.desktop.extension.ExtensionStoreItem
 import mihon.desktop.extension.ExtensionStoreService
+import mihon.desktop.extension.ExtensionStoreUnavailableException
 import mihon.desktop.extension.InstalledExtension
 import mihon.desktop.extension.SourcePreferenceDefinition
 import mihon.desktop.extension.SourceState
+import mihon.desktop.extension.isStoreCandidateInstallable
 import mihon.desktop.i18n.DesktopStrings
 import mihon.desktop.library.db.SqlDelightLibraryRepository
 import mihon.desktop.library.model.ChapterRecord
@@ -185,7 +187,7 @@ class BrowsePresenter(
 
     fun refresh() {
         scope.launch {
-            _state.update { it.copy(isLoading = true, errorMessage = null) }
+            _state.update { it.copy(isLoading = true, installFailure = null, errorMessage = null) }
             try {
                 val repos = storeService.getRepositories()
                 val installed = installer.getInstalledExtensions()
@@ -221,9 +223,7 @@ class BrowsePresenter(
                     }
                 }
 
-                val available = successfulItems.groupBy { it.pkg }.map { (_, items) ->
-                    items.maxByOrNull { it.versionCode }!!
-                }.sortedBy { it.name }
+                val available = mihon.desktop.extension.selectAvailableStoreItems(installed, successfulItems)
 
                 val repoErrorMessage = if (repositoryFailures.isNotEmpty()) {
                     val count = repositoryFailures.size
@@ -249,6 +249,7 @@ class BrowsePresenter(
                 _state.update {
                     it.copy(
                         isLoading = false,
+                        installFailure = null,
                         errorMessage = "Failed to refresh: ${e.message}",
                     )
                 }
@@ -406,7 +407,7 @@ class BrowsePresenter(
                 refreshMigrationCounts()
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
-                _state.update { it.copy(errorMessage = "Migration failed: ${e.message}") }
+                _state.update { it.copy(installFailure = null, errorMessage = "Migration failed: ${e.message}") }
                 _snackbarEvents.emit(strings.migrateFailedSnackbar(oldManga.title, e.message ?: "Unknown error"))
             } finally {
                 _state.update { it.copy(isLoading = false) }
@@ -636,7 +637,7 @@ class BrowsePresenter(
                         )
                     }
                 }
-                require(item.downloadUrl.isNotBlank()) { "Extension download URL is missing" }
+                requireStoreInstallAvailable(item)
                 installer.downloadAndInstall(
                     item.downloadUrl,
                     item.sha256,
@@ -654,6 +655,23 @@ class BrowsePresenter(
             installer.installFromLocalFile(file)
             refreshInstalledAndSources()
         }
+    }
+
+    /**
+     * Blocks a store candidate that the configured repositories no longer offer, so the user learns
+     * that the listing is gone instead of seeing a failed download.
+     */
+    private fun requireStoreInstallAvailable(item: ExtensionStoreItem) {
+        if (
+            isStoreCandidateInstallable(
+                item = item,
+                repositories = _state.value.repositories,
+                available = _state.value.availableExtensions,
+            )
+        ) {
+            return
+        }
+        throw ExtensionStoreUnavailableException(item.pkg, item.version)
     }
 
     @Synchronized
@@ -681,6 +699,7 @@ class BrowsePresenter(
                 installingName = name,
                 installPhase = phase,
                 installationCancelled = false,
+                installFailure = null,
                 errorMessage = null,
             )
         }
@@ -690,7 +709,13 @@ class BrowsePresenter(
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (failure: Exception) {
-                _state.update { it.copy(errorMessage = "Failed to install ${it.installingName}: ${failure.message}") }
+                val reason = classifyInstallFailure(failure)
+                _state.update {
+                    it.copy(
+                        errorMessage = "Failed to install ${it.installingName}: ${failure.message}",
+                        installFailure = reason,
+                    )
+                }
             }
         }
         installJob = job
@@ -719,7 +744,9 @@ class BrowsePresenter(
                 sourceManager.unloadExtension(pkg)
                 refreshInstalledAndSources()
             } catch (e: Exception) {
-                _state.update { it.copy(errorMessage = "Failed to uninstall $pkg: ${e.message}") }
+                _state.update {
+                    it.copy(installFailure = null, errorMessage = "Failed to uninstall $pkg: ${e.message}")
+                }
             }
         }
     }
@@ -733,7 +760,7 @@ class BrowsePresenter(
                 }
                 refreshInstalledAndSources()
             } catch (e: Exception) {
-                _state.update { it.copy(errorMessage = "Failed to toggle $pkg: ${e.message}") }
+                _state.update { it.copy(installFailure = null, errorMessage = "Failed to toggle $pkg: ${e.message}") }
             }
         }
     }
@@ -933,7 +960,7 @@ internal fun countPendingExtensionUpdates(
     available: List<ExtensionStoreItem>,
 ): Int {
     val installedVersions = installed.associate { extension -> extension.pkg to extension.manifest.versionCode }
-    return available.count { extension ->
+    return mihon.desktop.extension.selectAvailableStoreItems(installed, available).count { extension ->
         val installedVersion = installedVersions[extension.pkg]
         installedVersion != null && extension.versionCode > installedVersion
     }

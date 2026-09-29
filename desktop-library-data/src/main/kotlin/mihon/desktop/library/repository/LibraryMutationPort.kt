@@ -21,6 +21,11 @@ interface LibraryMutationPort {
     fun findChapter(mangaId: Long, url: String): ChapterRecord?
     fun insertChapter(value: ChapterRecord): Long
     fun updateChapter(value: ChapterRecord)
+
+    /**
+     * Creates the category at the next free position, or updates the row of an existing name in
+     * place with the flags ORed. The record's `id` and `sortOrder` are ignored.
+     */
     fun upsertCategory(value: CategoryRecord): Long
     fun deleteCategory(categoryId: Long)
     fun updateCategoryName(categoryId: Long, name: String)
@@ -53,6 +58,7 @@ interface LibraryMutationPort {
         chapterId: Long,
         relativePath: String,
         sizeBytes: Long,
+        assetKind: String,
     ): Boolean = false
 
     /** Removes the chapter asset and its manga root when no other local assets use that root. */

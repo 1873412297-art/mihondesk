@@ -65,9 +65,7 @@ class ExtensionUpdateChecker(
                     emptyList()
                 }
             }
-            .groupBy { it.pkg }
-            .map { (_, items) -> items.maxByOrNull { it.versionCode }!! }
-            .sortedBy { it.name }
+            .let { selectAvailableStoreItems(installed, it) }
 
         val pending = countPendingExtensionUpdates(installed, available)
         if (pending > 0 && pending != lastNotifiedCount) {

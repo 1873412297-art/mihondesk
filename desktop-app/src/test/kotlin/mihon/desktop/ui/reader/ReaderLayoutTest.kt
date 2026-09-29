@@ -14,6 +14,7 @@ import androidx.compose.ui.unit.width
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.floats.shouldBeExactly
 import io.kotest.matchers.shouldBe
+import mihon.reader.layout.DualPageSplit
 import mihon.reader.model.PageDescriptor
 import mihon.reader.model.PageId
 import mihon.reader.model.ReaderPan
@@ -21,6 +22,7 @@ import mihon.reader.model.ReaderPosition
 import mihon.reader.model.ReaderViewport
 import mihon.reader.model.ReadingMode
 import mihon.reader.model.ScaleMode
+import mihon.reader.model.SplitSide
 import mihon.reader.session.ReaderAction
 import mihon.reader.session.ReaderState
 import org.junit.jupiter.api.Test
@@ -35,6 +37,29 @@ class ReaderLayoutTest {
         ready(ReadingMode.DUAL_LTR, coverOffset = true).visibleSpread().pageIndices.shouldContainExactly(0)
         ready(ReadingMode.DUAL_RTL, coverOffset = true, selected = 1)
             .visibleSpread().pageIndices.shouldContainExactly(2, 1)
+    }
+
+    @Test
+    fun `dual mode with wide page splits into spread with both halves`() {
+        val wideState = ReaderState.ready(
+            chapterId = 7,
+            pages = listOf(
+                page(0, width = 600, height = 900),
+                page(1, width = 1600, height = 900),
+                page(2, width = 600, height = 900),
+            ),
+            selectedIndex = 1,
+        ).copy(
+            mode = ReadingMode.DUAL_LTR,
+            dualPageSplit = DualPageSplit.WIDE,
+        )
+
+        val spread = wideState.visibleSpread()
+        spread.pages.size shouldBe 2
+        spread.pages[0].splitSide shouldBe SplitSide.LEFT
+        spread.pages[1].splitSide shouldBe SplitSide.RIGHT
+        spread.pages[0].id shouldBe page(1).id
+        spread.pages[1].id shouldBe page(1).id
     }
 
     @Test

@@ -46,17 +46,26 @@ data class FrameId(
     }
 }
 
+enum class SplitSide {
+    LEFT,
+    RIGHT,
+}
+
 data class PageDescriptor(
     val id: PageId,
     val width: Int,
     val height: Int,
     val frameCount: Int = 1,
+    val splitSide: SplitSide? = null,
+    val rotated: Boolean = false,
 ) {
     init {
         require(width > 0) { "width must be positive" }
         require(height > 0) { "height must be positive" }
         require(frameCount > 0) { "frameCount must be positive" }
     }
+
+    val isWide: Boolean get() = width > height
 }
 
 data class ReaderViewport(

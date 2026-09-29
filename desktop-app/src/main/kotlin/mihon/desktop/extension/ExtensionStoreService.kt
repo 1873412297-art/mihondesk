@@ -39,6 +39,8 @@ data class ExtensionStoreItem(
     val iconUrl: String = "",
     val sha256: String = "",
     val repoUrl: String = "",
+    /** Store name as the repository declares it, when its index publishes one. */
+    val storeName: String = "",
     val declaredDomains: List<String> = emptyList(),
     /** Repository signing key (certificate SHA-256 fingerprint) for this package, if known. */
     val signingKey: String = "",
@@ -148,11 +150,11 @@ class ExtensionStoreService(
 
         // Try index.pb first (modern protobuf format); it carries its own signingKey.
         val pbResult = tryFetchAndParse(normalized, "$normalized/index.pb")
-        if (pbResult != null) return@withContext applyLegacySigningKey(normalized, pbResult)
+        if (pbResult != null) return@withContext applyLegacyRepoMetadata(normalized, pbResult)
 
         // Fall back to index.min.json (legacy JSON format)
         val jsonResult = tryFetchAndParse(normalized, "$normalized/index.min.json")
-        if (jsonResult != null) return@withContext applyLegacySigningKey(normalized, jsonResult)
+        if (jsonResult != null) return@withContext applyLegacyRepoMetadata(normalized, jsonResult)
 
         throw IllegalStateException(
             "Failed to fetch extension index from $normalized: neither index.pb nor index.min.json available",
@@ -160,26 +162,29 @@ class ExtensionStoreService(
     }
 
     /**
-     * Legacy repositories publish their signing key separately in repo.json. Fetch it only when
-     * the index itself does not carry usable signing metadata for every extension.
+     * Legacy repositories publish their signing key and store name separately in repo.json. Fetch
+     * it only when the index itself does not carry that metadata for every extension.
      */
-    private fun applyLegacySigningKey(
+    private fun applyLegacyRepoMetadata(
         repoUrl: String,
         items: List<ExtensionStoreItem>,
     ): List<ExtensionStoreItem> {
-        if (items.none { !it.hasUsableSigningKey() }) return items
-        val legacySigningKey = fetchLegacySigningKey(repoUrl)
-        if (legacySigningKey.isBlank()) return items
+        if (items.none { !it.hasUsableSigningKey() || it.storeName.isBlank() }) return items
+        val metadata = fetchLegacyRepoMetadata(repoUrl)
+        if (metadata.signingKey.isBlank() && metadata.name.isBlank()) return items
         return items.map { item ->
-            if (item.hasUsableSigningKey()) item else item.copy(signingKey = legacySigningKey)
+            item.copy(
+                signingKey = if (item.hasUsableSigningKey()) item.signingKey else metadata.signingKey,
+                storeName = item.storeName.ifBlank { metadata.name },
+            )
         }
     }
 
     /**
-     * Fetch a legacy `repo.json` and return its signing key fingerprint, if present.
+     * Fetch a legacy `repo.json` and return its signing key fingerprint and store name, if present.
      * Failures are intentionally ignored so repositories without repo.json still work.
      */
-    private fun fetchLegacySigningKey(repoUrl: String): String {
+    private fun fetchLegacyRepoMetadata(repoUrl: String): LegacyRepoMetadata {
         val request = Request.Builder()
             .url("$repoUrl/repo.json")
             .header("User-Agent", "MihonW/${DesktopAppUpdateService.CURRENT_VERSION}")
@@ -187,27 +192,39 @@ class ExtensionStoreService(
         val response = try {
             httpClient.newCall(request).execute()
         } catch (_: Exception) {
-            return ""
+            return LegacyRepoMetadata()
         }
         if (!response.isSuccessful) {
             response.close()
-            return ""
+            return LegacyRepoMetadata()
         }
         return try {
             val body = decompressIfGzipped(response.body.bytes()).decodeToString()
             val obj = json.parseToJsonElement(body).jsonObject
             val meta = obj["meta"]?.jsonObject
-            obj["signingKey"]?.jsonPrimitive?.content
-                ?: obj["signingKeyFingerprint"]?.jsonPrimitive?.content
-                ?: meta?.get("signingKeyFingerprint")?.jsonPrimitive?.content
-                ?: meta?.get("signingKey")?.jsonPrimitive?.content
-                ?: ""
+            LegacyRepoMetadata(
+                signingKey = obj["signingKey"]?.jsonPrimitive?.content
+                    ?: obj["signingKeyFingerprint"]?.jsonPrimitive?.content
+                    ?: meta?.get("signingKeyFingerprint")?.jsonPrimitive?.content
+                    ?: meta?.get("signingKey")?.jsonPrimitive?.content
+                    ?: "",
+                name = meta?.get("name")?.jsonPrimitive?.content
+                    ?: meta?.get("shortName")?.jsonPrimitive?.content
+                    ?: obj["name"]?.jsonPrimitive?.content
+                    ?: obj["shortName"]?.jsonPrimitive?.content
+                    ?: "",
+            )
         } catch (_: Exception) {
-            ""
+            LegacyRepoMetadata()
         } finally {
             response.close()
         }
     }
+
+    private data class LegacyRepoMetadata(
+        val signingKey: String = "",
+        val name: String = "",
+    )
 
     /**
      * Fetch a URL and auto-detect the format (protobuf vs JSON) based on content sniffing.
@@ -361,6 +378,7 @@ class ExtensionStoreService(
                     downloadUrl = downloadUrl,
                     iconUrl = iconUrl,
                     repoUrl = repoBaseUrl,
+                    storeName = store.name.ifBlank { store.badgeLabel },
                     signingKey = store.signingKey,
                 )
             } catch (_: Exception) {

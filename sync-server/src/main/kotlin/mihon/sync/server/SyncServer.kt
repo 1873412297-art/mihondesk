@@ -35,6 +35,7 @@ class SyncServer(
     val maxRequestBodyBytes: Long = 16L * 1024 * 1024,
     val maxChangesetPayloadBytes: Long = 16L * 1024 * 1024,
     val additionalTokens: Set<String> = emptySet(),
+    val maxRequestsPerMinute: Int = 120,
 ) {
     private var engine: EmbeddedServer<CIOApplicationEngine, CIOApplicationEngine.Configuration>? = null
 
@@ -53,6 +54,7 @@ class SyncServer(
                 maxRequestBodyBytes = maxRequestBodyBytes,
                 maxChangesetPayloadBytes = maxChangesetPayloadBytes,
                 additionalTokens = additionalTokens,
+                maxRequestsPerMinute = maxRequestsPerMinute,
             )
         }
         server.start(wait = wait)
@@ -74,6 +76,7 @@ class SyncServer(
             maxRequestBodyBytes: Long = 16L * 1024 * 1024,
             maxChangesetPayloadBytes: Long = 16L * 1024 * 1024,
             additionalTokens: Set<String> = emptySet(),
+            maxRequestsPerMinute: Int = 120,
         ) {
             routing {
                 syncServerRoutes(
@@ -84,6 +87,7 @@ class SyncServer(
                     maxRequestBodyBytes = maxRequestBodyBytes,
                     maxChangesetPayloadBytes = maxChangesetPayloadBytes,
                     additionalTokens = additionalTokens,
+                    maxRequestsPerMinute = maxRequestsPerMinute,
                 )
             }
         }
@@ -97,8 +101,10 @@ class SyncServer(
             maxRequestBodyBytes: Long = 16L * 1024 * 1024,
             maxChangesetPayloadBytes: Long = 16L * 1024 * 1024,
             additionalTokens: Set<String> = emptySet(),
+            maxRequestsPerMinute: Int = 120,
         ) {
             val allTokens = (setOf(token) + additionalTokens).filter { it.isNotBlank() }.toSet()
+            val rateLimiter = FixedWindowRateLimiter(maxRequestsPerMinute, 60_000)
 
             fun isAuthorized(authHeader: String?): String? {
                 if (authHeader == null || !authHeader.startsWith("Bearer ")) return null
@@ -125,6 +131,12 @@ class SyncServer(
 
             post("/v1/changesets") {
                 val matchedToken = isAuthorized(call.request.header(HttpHeaders.Authorization))
+                val retryAfter = rateLimiter.acquire(matchedToken?.let(::tokenHash) ?: "anonymous")
+                if (retryAfter != null) {
+                    call.response.header(HttpHeaders.RetryAfter, retryAfter.toString())
+                    call.respond(HttpStatusCode.TooManyRequests, "Too many requests")
+                    return@post
+                }
                 if (matchedToken == null) {
                     call.respond(HttpStatusCode.Unauthorized, "Unauthorized")
                     return@post
@@ -262,7 +274,14 @@ class SyncServer(
             }
 
             get("/v1/changesets") {
-                if (isAuthorized(call.request.header(HttpHeaders.Authorization)) == null) {
+                val matchedToken = isAuthorized(call.request.header(HttpHeaders.Authorization))
+                val retryAfter = rateLimiter.acquire(matchedToken?.let(::tokenHash) ?: "anonymous")
+                if (retryAfter != null) {
+                    call.response.header(HttpHeaders.RetryAfter, retryAfter.toString())
+                    call.respond(HttpStatusCode.TooManyRequests, "Too many requests")
+                    return@get
+                }
+                if (matchedToken == null) {
                     call.respond(HttpStatusCode.Unauthorized, "Unauthorized")
                     return@get
                 }
@@ -301,7 +320,14 @@ class SyncServer(
             }
 
             get("/v1/head") {
-                if (isAuthorized(call.request.header(HttpHeaders.Authorization)) == null) {
+                val matchedToken = isAuthorized(call.request.header(HttpHeaders.Authorization))
+                val retryAfter = rateLimiter.acquire(matchedToken?.let(::tokenHash) ?: "anonymous")
+                if (retryAfter != null) {
+                    call.response.header(HttpHeaders.RetryAfter, retryAfter.toString())
+                    call.respond(HttpStatusCode.TooManyRequests, "Too many requests")
+                    return@get
+                }
+                if (matchedToken == null) {
                     call.respond(HttpStatusCode.Unauthorized, "Unauthorized")
                     return@get
                 }

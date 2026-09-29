@@ -50,4 +50,10 @@ class DesktopPreloadPolicyTest {
         DesktopPreloadPolicy.clamp(10) shouldBe 10
         DesktopPreloadPolicy.clamp(99) shouldBe 10
     }
+
+    @Test
+    fun `dual page preloading covers spread partner and ahead pages for split spreads`() {
+        val plan = DesktopPreloadPolicy.plan(10, 0, ReadingMode.DUAL_LTR, NavigationDirection.FORWARD, 4)
+        plan shouldBe listOf(2, 3, 4, 5)
+    }
 }

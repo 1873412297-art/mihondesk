@@ -7,6 +7,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
@@ -160,10 +161,7 @@ class ChapterSettingsTest {
             .filterIsInstance<ChapterListItem.Chapter>()
             .map { it.label } shouldContainExactly listOf("1", "4")
 
-        val persisted = repository.mangaSnapshot(1) ?: error("missing manga")
-        persisted.excludedScanlatorsJson shouldBe encodeExcludedScanlators(setOf("Group B"))
-        persisted.memoJson shouldBe encodeShowMissingChapters("{}", showMissingChapters = false)
-        persisted.chapterFlags shouldBe encodeChapterFlags(
+        val expectedFlags = encodeChapterFlags(
             existingFlags = 0L,
             settings = initial.chapterSettings.copy(
                 displayMode = ChapterDisplayMode.Number,
@@ -173,6 +171,17 @@ class ChapterSettingsTest {
                 showMissingChapters = false,
             ),
         )
+        // Settings persist off the UI thread, so wait for the write before reading it back.
+        withTimeout(5_000) {
+            while (repository.mangaSnapshot(1)?.chapterFlags != expectedFlags) {
+                delay(10)
+            }
+        }
+
+        val persisted = repository.mangaSnapshot(1) ?: error("missing manga")
+        persisted.excludedScanlatorsJson shouldBe encodeExcludedScanlators(setOf("Group B"))
+        persisted.memoJson shouldBe encodeShowMissingChapters("{}", showMissingChapters = false)
+        persisted.chapterFlags shouldBe expectedFlags
         presenter.close()
     }
 
@@ -192,15 +201,21 @@ class ChapterSettingsTest {
         presenter.setShowMissingChapters(false)
         presenter.setChapterSettingsAsDefault(applyToExisting = true)
 
-        val first = repository.mangaSnapshot(1) ?: error("missing manga 1")
-        val second = repository.mangaSnapshot(2) ?: error("missing manga 2")
-        first.chapterFlags shouldBe encodeChapterFlags(
+        val expectedFlags = encodeChapterFlags(
             existingFlags = 0L,
             settings = ChapterSettings(
                 displayMode = ChapterDisplayMode.Number,
                 showMissingChapters = false,
             ),
         )
+        withTimeout(5_000) {
+            while (repository.mangaSnapshot(2)?.chapterFlags != expectedFlags) {
+                delay(10)
+            }
+        }
+        val first = repository.mangaSnapshot(1) ?: error("missing manga 1")
+        val second = repository.mangaSnapshot(2) ?: error("missing manga 2")
+        first.chapterFlags shouldBe expectedFlags
         second.chapterFlags shouldBe first.chapterFlags
         second.memoJson shouldBe encodeShowMissingChapters("{}", showMissingChapters = false)
         preferences.property(CHAPTER_DEFAULT_FLAGS_KEY) shouldBe first.chapterFlags.toString()
@@ -239,6 +254,14 @@ class ChapterSettingsTest {
         }
         reset.chapterSettings.sortMode shouldBe ChapterSortMode.SourceOrder
         reset.chapterSettings.sortAscending shouldBe false
+        // The reset is persisted off the UI thread, so wait for the row before reading it back.
+        withTimeout(5_000) {
+            while (repository.mangaSnapshot(1)?.chapterFlags != CHAPTER_DISPLAY_NUMBER ||
+                repository.mangaSnapshot(1)?.excludedScanlatorsJson != "[]"
+            ) {
+                delay(10)
+            }
+        }
         val persisted = repository.mangaSnapshot(1) ?: error("missing manga")
         persisted.excludedScanlatorsJson shouldBe "[]"
         persisted.chapterFlags shouldBe CHAPTER_DISPLAY_NUMBER

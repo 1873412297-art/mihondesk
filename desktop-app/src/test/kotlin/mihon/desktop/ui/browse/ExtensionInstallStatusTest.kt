@@ -10,6 +10,7 @@ import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
@@ -18,6 +19,7 @@ import androidx.compose.ui.unit.dp
 import io.kotest.matchers.shouldBe
 import mihon.desktop.extension.ExtensionStoreItem
 import mihon.desktop.i18n.AppLanguage
+import mihon.desktop.i18n.DesktopStrings
 import mihon.desktop.i18n.ProvideDesktopStrings
 import mihon.desktop.preferences.ThemeMode
 import mihon.desktop.ui.MihonDesktopTheme
@@ -29,6 +31,34 @@ import java.nio.file.Path
 
 @OptIn(ExperimentalTestApi::class)
 class ExtensionInstallStatusTest {
+    @ParameterizedTest
+    @CsvSource("English", "SimplifiedChinese", "TraditionalChinese")
+    fun `install failures name the failing step in every language`(language: AppLanguage) =
+        runComposeUiTest {
+            val state = mutableStateOf(BrowseUiState(selectedTab = BrowseTab.Extensions))
+            val strings = DesktopStrings.resolve(language)
+
+            setContent {
+                ProvideDesktopStrings(language) {
+                    MihonDesktopTheme(themeMode = ThemeMode.Light) {
+                        Surface(Modifier.requiredSize(1024.dp, 700.dp)) {
+                            BrowseScreen(state.value, {}, {})
+                        }
+                    }
+                }
+            }
+
+            ExtensionInstallFailure.entries.forEach { failure ->
+                runOnIdle { state.value = state.value.copy(installFailure = failure) }
+                onNodeWithTag("extension-install-failure").assertIsDisplayed()
+                onNodeWithTag("extension-install-failure-title")
+                    .assertTextContains(strings.extensionInstallFailureTitle(failure))
+            }
+
+            runOnIdle { state.value = state.value.copy(installFailure = null) }
+            onNodeWithTag("extension-install-failure").assertDoesNotExist()
+        }
+
     @ParameterizedTest
     @CsvSource(
         "1024,English,false",

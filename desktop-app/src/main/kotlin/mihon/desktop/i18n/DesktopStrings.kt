@@ -7,8 +7,10 @@ import mihon.desktop.navigation.DesktopDestination
 import mihon.desktop.reader.ReaderBackgroundColor
 import mihon.desktop.reader.ReaderClickAction
 import mihon.desktop.reader.ReaderColorFilter
+import mihon.desktop.reader.ReaderPageTransition
 import mihon.desktop.reader.ReaderWheelBehavior
 import mihon.desktop.track.TrackStatus
+import mihon.desktop.ui.browse.ExtensionInstallFailure
 import mihon.desktop.ui.browse.SourceListingMode
 import mihon.desktop.ui.theme.DesktopAppTheme
 import mihon.reader.model.ReaderErrorCode
@@ -199,6 +201,27 @@ interface DesktopStrings {
     val storageCleanerTitle: String
     val storageCleanerDescription: String
     val storageCleanerDownloadSize: String
+    val storageUsageCache: String
+    val storageUsageDatabase: String
+    val storageUsageExtensions: String
+    val storageUsageCovers: String
+    val storageUsageLogs: String
+    val storageUsageBackups: String
+    val clearDatabaseTitle: String
+    val clearDatabaseDescription: String
+    val clearDatabaseKeepRead: String
+    val clearDatabaseEmpty: String
+    val clearDatabaseAction: String
+    val clearDatabaseConfirm: String
+    val clearDatabaseReadWarning: String
+    val clearDatabaseFailed: String
+    val downloadNewUnreadOnly: String
+    val downloadNewCategories: String
+    val downloadCategoryAny: String
+    val downloadCategoryInclude: String
+    val downloadCategoryExclude: String
+    val downloadNoCategories: String
+    fun clearDatabaseResult(count: Int): String
     val storageCleanerClearRead: String
     val storageCleanerClearReadSuccess: String
     val storageCleanerClearImageCache: String
@@ -291,6 +314,11 @@ interface DesktopStrings {
     val extensionIncognitoSummary: String
     val extensionDebugInfoCopied: String
     val extensionCookiesCleared: String
+
+    /** Label for the store (repository) an extension was listed by. */
+    fun extensionStoreLabel(store: String): String
+    fun extensionInstallFailureTitle(failure: ExtensionInstallFailure): String
+    fun extensionInstallFailureHint(failure: ExtensionInstallFailure): String
     val sourcePreferencesTitle: String
     val sourcePreferencesEmpty: String
     val sourcePreferencesUnsupported: String
@@ -316,6 +344,15 @@ interface DesktopStrings {
     val readerFilterInvertGrayscale: String
     val readerFilterSepia: String
     val readerFilterNight: String
+    val readerFilterCustom: String
+    val readerCustomHue: String
+    val readerCustomBrightness: String
+    val readerCustomContrast: String
+    val readerDimming: String
+    fun readerCustomHueLabel(value: Int): String = "$readerCustomHue: $value°"
+    fun readerCustomBrightnessLabel(value: Int): String = "$readerCustomBrightness: $value%"
+    fun readerCustomContrastLabel(value: Int): String = "$readerCustomContrast: $value%"
+    fun readerDimmingLabel(value: Int): String = "$readerDimming: $value%"
     val readerBackgroundColor: String
     val readerBgDarkGray: String
     val readerBgBlack: String
@@ -326,9 +363,15 @@ interface DesktopStrings {
     val readerWebtoonMaxWidth: String
     val readerWebtoonSidePadding: String
     val readerKeepScreenOn: String
+    val readerPageFlash: String
+    val readerWebtoonPreventDownsizing: String
+    val readerWebtoonDoubleTapZoom: String
 
     // Settings
     val settingsTitle: String
+    val settingsSearchPlaceholder: String
+    val settingsSearchNoResults: String
+    fun settingsSearchResultsCount(count: Int): String
     val settingsSectionGeneral: String
     val settingsSectionAppearance: String
     val settingsSectionReader: String
@@ -541,6 +584,7 @@ interface DesktopStrings {
     val libraryUpdateIntervalWeekly: String
     val libraryUpdateSkipCompleted: String
     val libraryUpdateSkipUnread: String
+    val libraryUpdateSkipOutsideReleasePeriod: String
     val libraryAutoDownloadNew: String
     val libraryUpdateOnlyOnAcPower: String
     val notificationsDesktopEnabled: String
@@ -635,6 +679,11 @@ interface DesktopStrings {
     fun readerScaleLabel(scale: ScaleMode): String
     fun readerFilterLabel(filter: ReaderColorFilter): String
     fun readerBackgroundLabel(bg: ReaderBackgroundColor): String
+    val readerPageTransitions: String
+    fun readerPageTransitionLabel(transition: ReaderPageTransition): String
+    val readerDualPageSplit: String
+    fun readerDualPageSplitLabel(split: mihon.reader.layout.DualPageSplit): String
+    val readerDualPageRotateToFit: String
     val readerSettingsDialogTitle: String
     val readerSettingsTabReading: String
     val readerSettingsTabGeneral: String
@@ -757,6 +806,10 @@ interface DesktopStrings {
     fun settingsDownloadAheadChapters(count: Int): String
     val settingsDeleteReadChaptersTitle: String
     val settingsDeleteReadChaptersDesc: String
+    val settingsSaveChapterAsCbzTitle: String
+    val settingsSaveChapterAsCbzDesc: String
+    val settingsSplitTallImagesTitle: String
+    val settingsSplitTallImagesDesc: String
     fun settingsTrackerLoggedInAs(user: String, server: String?): String
     val settingsTrackerLogout: String
     fun settingsLibraryUpdateResult(checked: Int, newChapters: Int): String
@@ -1014,6 +1067,28 @@ object EnglishStrings : DesktopStrings {
     override val storageCleanerDescription =
         "Manage downloaded chapters and image caches to free up local disk space."
     override val storageCleanerDownloadSize = "Downloaded Chapters Size"
+    override val storageUsageCache = "Image cache"
+    override val storageUsageDatabase = "Database"
+    override val storageUsageExtensions = "Extensions"
+    override val storageUsageCovers = "Covers"
+    override val storageUsageLogs = "Logs"
+    override val storageUsageBackups = "Backups"
+    override val clearDatabaseTitle = "Clear database records"
+    override val clearDatabaseDescription =
+        "Remove online manga that are not in your library, grouped by source. Library manga are preserved."
+    override val clearDatabaseKeepRead = "Keep manga with read chapters"
+    override val clearDatabaseEmpty = "No non-library manga to remove"
+    override val clearDatabaseAction = "Remove selected records"
+    override val clearDatabaseConfirm = "Remove selected non-library manga and their chapters?"
+    override val clearDatabaseReadWarning = "Read history for removed manga will also be deleted."
+    override val clearDatabaseFailed = "Unable to clear database records"
+    override val downloadNewUnreadOnly = "Download only unread new chapters"
+    override val downloadNewCategories = "Auto-download categories"
+    override val downloadCategoryAny = "Any"
+    override val downloadCategoryInclude = "Include"
+    override val downloadCategoryExclude = "Exclude"
+    override val downloadNoCategories = "Create a library category to filter auto-downloads"
+    override fun clearDatabaseResult(count: Int) = "Removed $count manga"
     override val storageCleanerClearRead = "Delete Read Chapters"
     override val storageCleanerClearReadSuccess = "Deleted read chapters"
     override val storageCleanerClearImageCache = "Clear Image Disk Cache"
@@ -1105,6 +1180,23 @@ object EnglishStrings : DesktopStrings {
     override val extensionIncognitoSummary = "Reading history will not be recorded for manga from this extension."
     override val extensionDebugInfoCopied = "Extension debug information copied to clipboard"
     override val extensionCookiesCleared = "Cookies cleared"
+    override fun extensionStoreLabel(store: String) = "Store: $store"
+    override fun extensionInstallFailureTitle(failure: ExtensionInstallFailure) = when (failure) {
+        ExtensionInstallFailure.DownloadFailed -> "Could not download the extension package."
+        ExtensionInstallFailure.SignatureRejected -> "The extension was rejected by the signature policy."
+        ExtensionInstallFailure.StoreUnavailable -> "No configured store offers this extension anymore."
+        ExtensionInstallFailure.Unknown -> "The extension could not be installed."
+    }
+    override fun extensionInstallFailureHint(failure: ExtensionInstallFailure) = when (failure) {
+        ExtensionInstallFailure.DownloadFailed ->
+            "Check your connection or proxy, then retry the install."
+        ExtensionInstallFailure.SignatureRejected ->
+            "Its signer does not match the key trusted for this package, so nothing was installed."
+        ExtensionInstallFailure.StoreUnavailable ->
+            "Refresh the extension list, or add the store that publishes it."
+        ExtensionInstallFailure.Unknown ->
+            "Retry the install. If it keeps failing, copy the error details when reporting it."
+    }
     override val sourcePreferencesTitle = "Source preferences"
     override val sourcePreferencesEmpty = "No configurable preferences for this source."
     override val sourcePreferencesUnsupported = "This source does not support configurable preferences."
@@ -1129,6 +1221,11 @@ object EnglishStrings : DesktopStrings {
     override val readerFilterInvertGrayscale = "Invert Grayscale"
     override val readerFilterSepia = "Sepia"
     override val readerFilterNight = "Night"
+    override val readerFilterCustom = "Custom"
+    override val readerCustomHue = "Hue"
+    override val readerCustomBrightness = "Brightness"
+    override val readerCustomContrast = "Contrast"
+    override val readerDimming = "Dimming"
     override val readerBackgroundColor = "Background Color"
     override val readerBgDarkGray = "Dark Gray"
     override val readerBgBlack = "Black"
@@ -1139,8 +1236,14 @@ object EnglishStrings : DesktopStrings {
     override val readerWebtoonMaxWidth = "Webtoon Max Width"
     override val readerWebtoonSidePadding = "Webtoon Side Padding"
     override val readerKeepScreenOn = "Keep screen on while reading"
+    override val readerPageFlash = "Flash on page change"
+    override val readerWebtoonPreventDownsizing = "Prevent downsizing (Webtoon)"
+    override val readerWebtoonDoubleTapZoom = "Double-tap to zoom (Webtoon)"
 
     override val settingsTitle = "Settings"
+    override val settingsSearchPlaceholder = "Search settings"
+    override val settingsSearchNoResults = "No results found"
+    override fun settingsSearchResultsCount(count: Int) = if (count == 1) "1 result found" else "$count results found"
     override val settingsSectionGeneral = "General"
     override val settingsSectionAppearance = "Appearance"
     override val settingsSectionReader = "Reader"
@@ -1369,6 +1472,7 @@ object EnglishStrings : DesktopStrings {
     override val libraryUpdateIntervalWeekly = "Weekly"
     override val libraryUpdateSkipCompleted = "Skip completed manga"
     override val libraryUpdateSkipUnread = "Skip manga with unread chapters"
+    override val libraryUpdateSkipOutsideReleasePeriod = "Skip manga outside their release period"
     override val libraryAutoDownloadNew = "Automatically download new chapters"
     override val libraryUpdateOnlyOnAcPower = "Only update library when on AC power"
     override val notificationsDesktopEnabled = "Show desktop notifications"
@@ -1494,6 +1598,7 @@ object EnglishStrings : DesktopStrings {
         ReaderColorFilter.INVERT_GRAYSCALE -> "Invert grayscale"
         ReaderColorFilter.SEPIA -> "Sepia"
         ReaderColorFilter.NIGHT -> "Night"
+        ReaderColorFilter.CUSTOM -> "Custom"
     }
     override fun readerBackgroundLabel(bg: ReaderBackgroundColor) = when (bg) {
         ReaderBackgroundColor.DARK_GRAY -> "Dark gray"
@@ -1501,6 +1606,19 @@ object EnglishStrings : DesktopStrings {
         ReaderBackgroundColor.WHITE -> "White"
         ReaderBackgroundColor.WARM_CREAM -> "Warm cream"
     }
+    override val readerPageTransitions = "Page transitions"
+    override fun readerPageTransitionLabel(transition: ReaderPageTransition) = when (transition) {
+        ReaderPageTransition.NONE -> "None"
+        ReaderPageTransition.FADE -> "Fade"
+        ReaderPageTransition.SLIDE -> "Slide"
+    }
+    override val readerDualPageSplit = "Split wide pages"
+    override fun readerDualPageSplitLabel(split: mihon.reader.layout.DualPageSplit) = when (split) {
+        mihon.reader.layout.DualPageSplit.NEVER -> "Never"
+        mihon.reader.layout.DualPageSplit.ALWAYS -> "Always"
+        mihon.reader.layout.DualPageSplit.WIDE -> "Wide pages only"
+    }
+    override val readerDualPageRotateToFit = "Rotate wide pages to fit"
     override val readerSettingsDialogTitle = "Reader settings"
     override val readerSettingsTabReading = "Reading mode"
     override val readerSettingsTabGeneral = "General"
@@ -1667,6 +1785,12 @@ object EnglishStrings : DesktopStrings {
     override val settingsDeleteReadChaptersTitle = "Delete Read Chapters"
     override val settingsDeleteReadChaptersDesc =
         "Automatically delete downloaded chapter files when marked as read."
+    override val settingsSaveChapterAsCbzTitle = "Save Downloaded Chapters as CBZ"
+    override val settingsSaveChapterAsCbzDesc =
+        "Publish each finished chapter download as a single .cbz archive instead of a folder."
+    override val settingsSplitTallImagesTitle = "Split Tall Images When Downloading"
+    override val settingsSplitTallImagesDesc =
+        "Cut very tall downloaded pages into several screen-sized parts so the reader loads them faster."
     override fun settingsTrackerLoggedInAs(user: String, server: String?) =
         "Logged in as $user" + if (!server.isNullOrBlank()) " ($server)" else ""
     override val settingsTrackerLogout = "Log Out"
@@ -1923,6 +2047,27 @@ object SimplifiedChineseStrings : DesktopStrings {
     override val storageCleanerTitle = "数据与存储管理"
     override val storageCleanerDescription = "管理已下载的漫画章节与本地图片缓存以释放存储空间。"
     override val storageCleanerDownloadSize = "已下载章节占用"
+    override val storageUsageCache = "图片缓存"
+    override val storageUsageDatabase = "数据库"
+    override val storageUsageExtensions = "扩展"
+    override val storageUsageCovers = "封面"
+    override val storageUsageLogs = "日志"
+    override val storageUsageBackups = "备份"
+    override val clearDatabaseTitle = "清除数据库记录"
+    override val clearDatabaseDescription = "按图源删除不在书库中的在线漫画及章节；书库漫画会保留。"
+    override val clearDatabaseKeepRead = "保留有已读章节的漫画"
+    override val clearDatabaseEmpty = "没有可清理的非书库漫画"
+    override val clearDatabaseAction = "删除选中的记录"
+    override val clearDatabaseConfirm = "确定删除所选图源的非书库漫画及章节吗？"
+    override val clearDatabaseReadWarning = "被删除漫画的阅读历史也会一并删除。"
+    override val clearDatabaseFailed = "清除数据库记录失败"
+    override val downloadNewUnreadOnly = "仅下载新章节中的未读章节"
+    override val downloadNewCategories = "自动下载的分类"
+    override val downloadCategoryAny = "不限"
+    override val downloadCategoryInclude = "包含"
+    override val downloadCategoryExclude = "排除"
+    override val downloadNoCategories = "创建书库分类后可筛选自动下载"
+    override fun clearDatabaseResult(count: Int) = "已删除 $count 部漫画"
     override val storageCleanerClearRead = "清理已读章节下载"
     override val storageCleanerClearReadSuccess = "已清理已读章节"
     override val storageCleanerClearImageCache = "清理图片磁盘缓存"
@@ -2015,6 +2160,23 @@ object SimplifiedChineseStrings : DesktopStrings {
     override val extensionIncognitoSummary = "该扩展的漫画将不会记录阅读历史"
     override val extensionDebugInfoCopied = "已复制扩展调试信息到剪贴板"
     override val extensionCookiesCleared = "已清除 Cookies"
+    override fun extensionStoreLabel(store: String) = "商店：$store"
+    override fun extensionInstallFailureTitle(failure: ExtensionInstallFailure) = when (failure) {
+        ExtensionInstallFailure.DownloadFailed -> "扩展包下载失败。"
+        ExtensionInstallFailure.SignatureRejected -> "该扩展未通过签名校验，已被拒绝安装。"
+        ExtensionInstallFailure.StoreUnavailable -> "已配置的商店都不再提供该扩展。"
+        ExtensionInstallFailure.Unknown -> "扩展安装失败。"
+    }
+    override fun extensionInstallFailureHint(failure: ExtensionInstallFailure) = when (failure) {
+        ExtensionInstallFailure.DownloadFailed ->
+            "请检查网络或代理设置后重试安装。"
+        ExtensionInstallFailure.SignatureRejected ->
+            "其签名与此扩展包已受信任的密钥不一致，因此没有安装任何内容。"
+        ExtensionInstallFailure.StoreUnavailable ->
+            "请刷新扩展列表，或添加发布该扩展的仓库。"
+        ExtensionInstallFailure.Unknown ->
+            "请重试安装；若持续失败，可复制错误详情并反馈。"
+    }
     override val sourcePreferencesTitle = "图源偏好设置"
     override val sourcePreferencesEmpty = "此图源没有可配置的偏好设置"
     override val sourcePreferencesUnsupported = "此图源不支持偏好设置配置"
@@ -2039,6 +2201,11 @@ object SimplifiedChineseStrings : DesktopStrings {
     override val readerFilterInvertGrayscale = "反转灰阶"
     override val readerFilterSepia = "暖色怀旧"
     override val readerFilterNight = "夜间微光"
+    override val readerFilterCustom = "自定义"
+    override val readerCustomHue = "色相"
+    override val readerCustomBrightness = "亮度"
+    override val readerCustomContrast = "对比度"
+    override val readerDimming = "屏幕变暗"
     override val readerBackgroundColor = "阅读背景色"
     override val readerBgDarkGray = "深灰"
     override val readerBgBlack = "纯黑"
@@ -2049,8 +2216,14 @@ object SimplifiedChineseStrings : DesktopStrings {
     override val readerWebtoonMaxWidth = "条漫最大宽度限制"
     override val readerWebtoonSidePadding = "条漫侧边距"
     override val readerKeepScreenOn = "阅读时保持屏幕常亮"
+    override val readerPageFlash = "翻页时闪烁"
+    override val readerWebtoonPreventDownsizing = "条漫禁用缩小"
+    override val readerWebtoonDoubleTapZoom = "条漫双击缩放"
 
     override val settingsTitle = "设置"
+    override val settingsSearchPlaceholder = "搜索设置"
+    override val settingsSearchNoResults = "未找到结果"
+    override fun settingsSearchResultsCount(count: Int) = "找到 $count 个结果"
     override val settingsSectionGeneral = "常规"
     override val settingsSectionAppearance = "外观"
     override val settingsSectionReader = "阅读"
@@ -2278,6 +2451,7 @@ object SimplifiedChineseStrings : DesktopStrings {
     override val libraryUpdateIntervalWeekly = "每周"
     override val libraryUpdateSkipCompleted = "跳过已完结作品"
     override val libraryUpdateSkipUnread = "跳过存在未读章节的作品"
+    override val libraryUpdateSkipOutsideReleasePeriod = "跳过非更新周期的作品"
     override val libraryAutoDownloadNew = "自动下载新更新章节"
     override val libraryUpdateOnlyOnAcPower = "仅在接通电源时更新书架"
     override val notificationsDesktopEnabled = "显示桌面通知"
@@ -2402,6 +2576,7 @@ object SimplifiedChineseStrings : DesktopStrings {
         ReaderColorFilter.INVERT_GRAYSCALE -> readerFilterInvertGrayscale
         ReaderColorFilter.SEPIA -> readerFilterSepia
         ReaderColorFilter.NIGHT -> readerFilterNight
+        ReaderColorFilter.CUSTOM -> readerFilterCustom
     }
     override fun readerBackgroundLabel(bg: ReaderBackgroundColor) = when (bg) {
         ReaderBackgroundColor.DARK_GRAY -> readerBgDarkGray
@@ -2409,6 +2584,19 @@ object SimplifiedChineseStrings : DesktopStrings {
         ReaderBackgroundColor.WHITE -> readerBgWhite
         ReaderBackgroundColor.WARM_CREAM -> readerBgWarmCream
     }
+    override val readerPageTransitions = "翻页过渡"
+    override fun readerPageTransitionLabel(transition: ReaderPageTransition) = when (transition) {
+        ReaderPageTransition.NONE -> "无"
+        ReaderPageTransition.FADE -> "淡入淡出"
+        ReaderPageTransition.SLIDE -> "滑动"
+    }
+    override val readerDualPageSplit = "跨页拆分"
+    override fun readerDualPageSplitLabel(split: mihon.reader.layout.DualPageSplit) = when (split) {
+        mihon.reader.layout.DualPageSplit.NEVER -> "从不"
+        mihon.reader.layout.DualPageSplit.ALWAYS -> "总是"
+        mihon.reader.layout.DualPageSplit.WIDE -> "仅宽图"
+    }
+    override val readerDualPageRotateToFit = "旋转宽图以适应"
     override val readerSettingsDialogTitle = "阅读器设置"
     override val readerSettingsTabReading = "阅读模式"
     override val readerSettingsTabGeneral = "常规"
@@ -2577,6 +2765,10 @@ object SimplifiedChineseStrings : DesktopStrings {
     override fun settingsDownloadAheadChapters(count: Int) = "后 $count 话"
     override val settingsDeleteReadChaptersTitle = "自动删除已读章节"
     override val settingsDeleteReadChaptersDesc = "章节被标记为已读后，自动删除本地已下载的文件以节省存储空间。"
+    override val settingsSaveChapterAsCbzTitle = "下载章节保存为 CBZ"
+    override val settingsSaveChapterAsCbzDesc = "下载完成后，每章保存为单个 .cbz 压缩包，而不是文件夹。"
+    override val settingsSplitTallImagesTitle = "下载时拆分长图"
+    override val settingsSplitTallImagesDesc = "把下载到的超长页面切成若干屏幕高度的片段，阅读时加载更快。"
     override fun settingsTrackerLoggedInAs(user: String, server: String?) =
         "已登录为 $user" + if (!server.isNullOrBlank()) " ($server)" else ""
     override val settingsTrackerLogout = "退出登录"
@@ -2828,6 +3020,27 @@ object TraditionalChineseStrings : DesktopStrings {
     override val storageCleanerTitle = "資料與儲存管理"
     override val storageCleanerDescription = "管理已下載的漫畫章節與本機圖片快取以釋放儲存空間。"
     override val storageCleanerDownloadSize = "已下載章節佔用"
+    override val storageUsageCache = "圖片快取"
+    override val storageUsageDatabase = "資料庫"
+    override val storageUsageExtensions = "擴充套件"
+    override val storageUsageCovers = "封面"
+    override val storageUsageLogs = "日誌"
+    override val storageUsageBackups = "備份"
+    override val clearDatabaseTitle = "清除資料庫記錄"
+    override val clearDatabaseDescription = "按圖源刪除不在書庫中的線上漫畫及章節；書庫漫畫會保留。"
+    override val clearDatabaseKeepRead = "保留有已讀章節的漫畫"
+    override val clearDatabaseEmpty = "沒有可清理的非書庫漫畫"
+    override val clearDatabaseAction = "刪除選取的記錄"
+    override val clearDatabaseConfirm = "確定刪除所選圖源的非書庫漫畫及章節嗎？"
+    override val clearDatabaseReadWarning = "被刪除漫畫的閱讀歷史也會一併刪除。"
+    override val clearDatabaseFailed = "清除資料庫記錄失敗"
+    override val downloadNewUnreadOnly = "僅下載新章節中的未讀章節"
+    override val downloadNewCategories = "自動下載的分類"
+    override val downloadCategoryAny = "不限"
+    override val downloadCategoryInclude = "包含"
+    override val downloadCategoryExclude = "排除"
+    override val downloadNoCategories = "建立書庫分類後可篩選自動下載"
+    override fun clearDatabaseResult(count: Int) = "已刪除 $count 部漫畫"
     override val storageCleanerClearRead = "清理已讀章節下載"
     override val storageCleanerClearReadSuccess = "已清理已讀章節"
     override val storageCleanerClearImageCache = "清理圖片磁碟快取"
@@ -2920,6 +3133,23 @@ object TraditionalChineseStrings : DesktopStrings {
     override val extensionIncognitoSummary = "此擴充套件的漫畫將不會記錄閱讀記錄"
     override val extensionDebugInfoCopied = "已複製擴充套件偵錯資訊至剪貼簿"
     override val extensionCookiesCleared = "已清除 Cookie"
+    override fun extensionStoreLabel(store: String) = "商店：$store"
+    override fun extensionInstallFailureTitle(failure: ExtensionInstallFailure) = when (failure) {
+        ExtensionInstallFailure.DownloadFailed -> "擴充套件下載失敗。"
+        ExtensionInstallFailure.SignatureRejected -> "此擴充套件未通過簽章驗證，已被拒絕安裝。"
+        ExtensionInstallFailure.StoreUnavailable -> "已設定的商店都不再提供此擴充套件。"
+        ExtensionInstallFailure.Unknown -> "擴充套件安裝失敗。"
+    }
+    override fun extensionInstallFailureHint(failure: ExtensionInstallFailure) = when (failure) {
+        ExtensionInstallFailure.DownloadFailed ->
+            "請檢查網路或代理設定後重試安裝。"
+        ExtensionInstallFailure.SignatureRejected ->
+            "其簽章與此擴充套件已受信任的金鑰不一致，因此沒有安裝任何內容。"
+        ExtensionInstallFailure.StoreUnavailable ->
+            "請重新整理擴充套件清單，或新增發佈此擴充套件的存放庫。"
+        ExtensionInstallFailure.Unknown ->
+            "請重試安裝；若持續失敗，可複製錯誤詳情並回報。"
+    }
     override val sourcePreferencesTitle = "圖源偏好設定"
     override val sourcePreferencesEmpty = "此圖源沒有可設定的偏好設定"
     override val sourcePreferencesUnsupported = "此圖源不支援偏好設定"
@@ -2944,6 +3174,11 @@ object TraditionalChineseStrings : DesktopStrings {
     override val readerFilterInvertGrayscale = "反轉灰階"
     override val readerFilterSepia = "暖色懷舊"
     override val readerFilterNight = "夜間微光"
+    override val readerFilterCustom = "自訂"
+    override val readerCustomHue = "色相"
+    override val readerCustomBrightness = "亮度"
+    override val readerCustomContrast = "對比度"
+    override val readerDimming = "螢幕變暗"
     override val readerBackgroundColor = "閱讀背景色"
     override val readerBgDarkGray = "深灰"
     override val readerBgBlack = "純黑"
@@ -2954,8 +3189,14 @@ object TraditionalChineseStrings : DesktopStrings {
     override val readerWebtoonMaxWidth = "條漫最大寬度限制"
     override val readerWebtoonSidePadding = "條漫側邊距"
     override val readerKeepScreenOn = "閱讀時保持螢幕常亮"
+    override val readerPageFlash = "翻頁時閃爍畫面"
+    override val readerWebtoonPreventDownsizing = "條漫停用縮小"
+    override val readerWebtoonDoubleTapZoom = "條漫輕觸兩下以縮放"
 
     override val settingsTitle = "設定"
+    override val settingsSearchPlaceholder = "搜尋設定"
+    override val settingsSearchNoResults = "找不到結果"
+    override fun settingsSearchResultsCount(count: Int) = "找到 $count 個結果"
     override val settingsSectionGeneral = "一般"
     override val settingsSectionAppearance = "外觀"
     override val settingsSectionReader = "閱讀"
@@ -3183,6 +3424,7 @@ object TraditionalChineseStrings : DesktopStrings {
     override val libraryUpdateIntervalWeekly = "每週"
     override val libraryUpdateSkipCompleted = "跳過已完結作品"
     override val libraryUpdateSkipUnread = "跳過存在未讀章節的作品"
+    override val libraryUpdateSkipOutsideReleasePeriod = "跳過非更新週期的作品"
     override val libraryAutoDownloadNew = "自動下載新更新章節"
     override val libraryUpdateOnlyOnAcPower = "僅在接通電源時更新書架"
     override val notificationsDesktopEnabled = "顯示桌面通知"
@@ -3307,6 +3549,7 @@ object TraditionalChineseStrings : DesktopStrings {
         ReaderColorFilter.INVERT_GRAYSCALE -> readerFilterInvertGrayscale
         ReaderColorFilter.SEPIA -> readerFilterSepia
         ReaderColorFilter.NIGHT -> readerFilterNight
+        ReaderColorFilter.CUSTOM -> readerFilterCustom
     }
     override fun readerBackgroundLabel(bg: ReaderBackgroundColor) = when (bg) {
         ReaderBackgroundColor.DARK_GRAY -> readerBgDarkGray
@@ -3314,6 +3557,19 @@ object TraditionalChineseStrings : DesktopStrings {
         ReaderBackgroundColor.WHITE -> readerBgWhite
         ReaderBackgroundColor.WARM_CREAM -> readerBgWarmCream
     }
+    override val readerPageTransitions = "翻頁過渡"
+    override fun readerPageTransitionLabel(transition: ReaderPageTransition) = when (transition) {
+        ReaderPageTransition.NONE -> "無"
+        ReaderPageTransition.FADE -> "淡入淡出"
+        ReaderPageTransition.SLIDE -> "滑動"
+    }
+    override val readerDualPageSplit = "跨頁分割"
+    override fun readerDualPageSplitLabel(split: mihon.reader.layout.DualPageSplit) = when (split) {
+        mihon.reader.layout.DualPageSplit.NEVER -> "從不"
+        mihon.reader.layout.DualPageSplit.ALWAYS -> "總是"
+        mihon.reader.layout.DualPageSplit.WIDE -> "僅寬頁"
+    }
+    override val readerDualPageRotateToFit = "旋轉寬頁以適應"
     override val readerSettingsDialogTitle = "閱讀器設定"
     override val readerSettingsTabReading = "閱讀模式"
     override val readerSettingsTabGeneral = "一般"
@@ -3482,6 +3738,10 @@ object TraditionalChineseStrings : DesktopStrings {
     override fun settingsDownloadAheadChapters(count: Int) = "後 $count 話"
     override val settingsDeleteReadChaptersTitle = "自動刪除已讀章節"
     override val settingsDeleteReadChaptersDesc = "章節被標記為已讀後，自動刪除本機已下載的檔案以節省空間。"
+    override val settingsSaveChapterAsCbzTitle = "下載章節儲存為 CBZ"
+    override val settingsSaveChapterAsCbzDesc = "下載完成後，每章儲存為單一 .cbz 壓縮檔，而非資料夾。"
+    override val settingsSplitTallImagesTitle = "下載時分割長圖"
+    override val settingsSplitTallImagesDesc = "把下載到的超長頁面切成數個螢幕高度的片段，閱讀時載入更快。"
     override fun settingsTrackerLoggedInAs(user: String, server: String?) =
         "已登入為 $user" + if (!server.isNullOrBlank()) " ($server)" else ""
     override val settingsTrackerLogout = "登出"

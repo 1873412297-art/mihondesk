@@ -11,6 +11,7 @@ import mihon.desktop.platform.BackgroundProcessResult
 import mihon.desktop.platform.BackgroundProcessRunner
 import mihon.desktop.platform.WindowsBackgroundScheduler
 import mihon.desktop.preferences.DesktopPreferenceStore
+import mihon.desktop.ui.UI_TEST_TIMEOUT
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -24,7 +25,7 @@ class BackgroundSettingsCardTest {
 
     @OptIn(ExperimentalTestApi::class)
     @Test
-    fun `background remains off without any configured interval`() = runComposeUiTest {
+    fun `background remains off without any configured interval`() = runComposeUiTest(testTimeout = UI_TEST_TIMEOUT) {
         val preferences = DesktopPreferenceStore(directory.resolve("prefs.properties"))
         preferences.save(preferences.load().copy(language = AppLanguage.SimplifiedChinese))
         val calls = CopyOnWriteArrayList<List<String>>()
@@ -38,7 +39,9 @@ class BackgroundSettingsCardTest {
 
     @OptIn(ExperimentalTestApi::class)
     @Test
-    fun `explicit enabling persists only after task registration succeeds`() = runComposeUiTest {
+    fun `explicit enabling persists only after task registration succeeds`() = runComposeUiTest(
+        testTimeout = UI_TEST_TIMEOUT,
+    ) {
         val preferences = DesktopPreferenceStore(directory.resolve("prefs.properties"))
         preferences.save(preferences.load().copy(backupIntervalHours = 24))
         val calls = CopyOnWriteArrayList<List<String>>()

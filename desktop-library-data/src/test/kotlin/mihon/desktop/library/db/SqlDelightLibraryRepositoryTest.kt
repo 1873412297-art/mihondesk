@@ -3,6 +3,7 @@ package mihon.desktop.library.db
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.assertions.throwables.shouldThrowAny
 import io.kotest.matchers.collections.shouldBeEmpty
+import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -34,6 +35,34 @@ import java.util.concurrent.atomic.AtomicInteger
 class SqlDelightLibraryRepositoryTest {
     @TempDir
     lateinit var tempDir: Path
+
+    @Test
+    fun `clear database deletes selected non library manga and preserves read and favorites`() {
+        DesktopLibraryDatabaseFactory.open(tempDir.resolve("clear.db")).use { repo ->
+            repo.upsertSource(SourceRecord(7L, "Seven", 1L))
+            val unread = repo.insertManga(
+                MangaRecord(sourceId = 7, url = "/unread", title = "Unread", favorite = false),
+            )
+            val read = repo.insertManga(MangaRecord(sourceId = 7, url = "/read", title = "Read", favorite = false))
+            val favorite = repo.insertManga(MangaRecord(sourceId = 7, url = "/favorite", title = "Favorite"))
+            val other = repo.insertManga(MangaRecord(sourceId = 8, url = "/other", title = "Other", favorite = false))
+            repo.insertChapter(ChapterRecord(mangaId = unread, url = "/c", name = "C"))
+            repo.insertChapter(ChapterRecord(mangaId = read, url = "/c", name = "C", read = true))
+            repo.insertChapter(ChapterRecord(mangaId = favorite, url = "/c", name = "C"))
+
+            repo.nonLibrarySourceCounts().first { it.sourceId == 7L }.mangaCount shouldBe 2
+            repo.clearNonLibraryManga(setOf(7L), keepReadManga = true) shouldBe 1
+            repo.findManga(7L, "/unread") shouldBe null
+            repo.findManga(7L, "/read")?.id shouldBe read
+            repo.findManga(7L, "/favorite")?.id shouldBe favorite
+            repo.findManga(8L, "/other")?.id shouldBe other
+            repo.allChaptersSnapshot().none { it.mangaId == unread } shouldBe true
+
+            repo.clearNonLibraryManga(setOf(7L), keepReadManga = false) shouldBe 1
+            repo.findManga(7L, "/read") shouldBe null
+            repo.findManga(7L, "/favorite")?.id shouldBe favorite
+        }
+    }
 
     @Test
     fun `committed library survives reopen and rollback never leaks rows`() {
@@ -114,7 +143,7 @@ class SqlDelightLibraryRepositoryTest {
                     memoJson = "{\"key\":\"value\"}",
                 ),
             )
-            val categoryId = repository.upsertCategory(CategoryRecord(name = "Imported", sortOrder = 7, flags = 8))
+            val categoryId = repository.upsertCategory(CategoryRecord(name = "Imported", flags = 8))
             repository.linkCategory(mangaId, categoryId)
             val chapterId = repository.insertChapter(
                 ChapterRecord(
@@ -162,7 +191,7 @@ class SqlDelightLibraryRepositoryTest {
                 notes = "Notes",
                 initialized = true,
                 memoJson = "{\"key\":\"value\"}",
-                categories = listOf(CategoryRecord(categoryId, "Imported", 7, 8)),
+                categories = listOf(CategoryRecord(categoryId, "Imported", 0, 8)),
             )
             repository.chapterSnapshot(mangaId).single() shouldBe LibraryChapter(
                 id = chapterId,
@@ -275,6 +304,7 @@ class SqlDelightLibraryRepositoryTest {
                 chapterId = chapterId,
                 relativePath = "Chapter",
                 sizeBytes = 10L,
+                assetKind = "DIRECTORY",
             ) shouldBe true
 
             repository.deleteLocalChapterAsset(mangaId, chapterId)
@@ -285,6 +315,7 @@ class SqlDelightLibraryRepositoryTest {
                 chapterId = chapterId,
                 relativePath = "Chapter",
                 sizeBytes = 10L,
+                assetKind = "DIRECTORY",
             ) shouldBe false
             repository.localMangaStoragePaths() shouldBe emptySet()
         }
@@ -391,15 +422,17 @@ class SqlDelightLibraryRepositoryTest {
     fun `category CRUD, sorting, and manga category assignment work as expected`(): Unit = runBlocking {
         val file = tempDir.resolve("categories.db")
         DesktopLibraryDatabaseFactory.open(file).use { repo ->
-            val cat1 = repo.upsertCategory(CategoryRecord(name = "Action", sortOrder = 2))
-            val cat2 = repo.upsertCategory(CategoryRecord(name = "Comedy", sortOrder = 1))
+            val cat1 = repo.upsertCategory(CategoryRecord(name = "Action"))
+            val cat2 = repo.upsertCategory(CategoryRecord(name = "Comedy"))
 
+            // The insert assigns the position, so the newer category lands last whatever its name.
             val categories = repo.categoriesSnapshot()
-            categories.map { it.name } shouldBe listOf("Comedy", "Action")
+            categories.map { it.name } shouldBe listOf("Action", "Comedy")
+            categories.map { it.sortOrder } shouldBe listOf(0L, 1L)
 
             repo.updateCategoryName(cat1, "Action/Adventure")
-            repo.updateCategoryOrder(cat1, 0)
-            repo.categoriesSnapshot().first().name shouldBe "Action/Adventure"
+            repo.updateCategoryOrder(cat2, -1)
+            repo.categoriesSnapshot().map { it.name } shouldBe listOf("Comedy", "Action/Adventure")
 
             val mangaId = repo.insertManga(MangaRecord(sourceId = 1, url = "/manga", title = "Manga"))
             repo.setMangaCategories(mangaId, listOf(cat1, cat2))
@@ -409,6 +442,28 @@ class SqlDelightLibraryRepositoryTest {
             repo.deleteCategory(cat2)
             repo.categoriesSnapshot().map { it.id } shouldBe listOf(cat1)
             repo.mangaSnapshot(mangaId)!!.categories.map { it.id } shouldBe listOf(cat1)
+        }
+    }
+
+    @Test
+    fun `category insert assigns the next position and a duplicate name updates in place`(): Unit = runBlocking {
+        val file = tempDir.resolve("category-positions.db")
+        DesktopLibraryDatabaseFactory.open(file).use { repo ->
+            val actionId = repo.upsertCategory(CategoryRecord(name = "Action"))
+            val comedyId = repo.upsertCategory(CategoryRecord(name = "Comedy"))
+
+            repo.categoriesSnapshot().map { it.id to it.sortOrder } shouldBe
+                listOf(actionId to 0L, comedyId to 1L)
+
+            // Same name: one row, ORed flags, and the position the upsert keeps is the higher one.
+            repo.upsertCategory(CategoryRecord(name = "Action", flags = 2))
+            repo.upsertCategory(CategoryRecord(name = "Action", flags = 4))
+
+            val categories = repo.allCategoriesSnapshot()
+            categories.shouldHaveSize(2)
+            val action = categories.single { it.id == actionId }
+            action.flags shouldBe 6L
+            action.sortOrder shouldBe 3L
         }
     }
 
@@ -473,11 +528,46 @@ class SqlDelightLibraryRepositoryTest {
     }
 
     @Test
+    fun `reinserting a track for the same manga and tracker updates that row`(): Unit = runBlocking {
+        val file = tempDir.resolve("tracking-upsert.db")
+        DesktopLibraryDatabaseFactory.open(file).use { repo ->
+            val mangaId = repo.insertManga(MangaRecord(sourceId = 1, url = "/manga", title = "One Piece"))
+            repo.insertTracking(
+                TrackingRecord(mangaId = mangaId, trackerId = 1, remoteId = 13, title = "One Piece"),
+            )
+            val originalId = repo.findTracking(mangaId, 1)!!.id
+            val otherMangaId = repo.insertManga(MangaRecord(sourceId = 1, url = "/other", title = "Other"))
+            repo.insertTracking(TrackingRecord(mangaId = otherMangaId, trackerId = 1, remoteId = 99))
+
+            val incoming = TrackingRecord(
+                mangaId = mangaId,
+                trackerId = 1,
+                remoteId = 14,
+                libraryId = 7,
+                title = "One Piece (updated)",
+                lastChapterRead = 1001.0,
+                totalChapters = 1100,
+                score = 9.0,
+                status = 2,
+                startedReadingDate = 100,
+                finishedReadingDate = 200,
+                private = true,
+                trackingUrl = "https://tracker.invalid/one-piece",
+            )
+            repo.insertTracking(incoming)
+
+            // The duplicate insert updates in place, keeping the id anything else is keyed to.
+            repo.trackingSnapshot(mangaId).single() shouldBe incoming.copy(id = originalId)
+            repo.trackingSnapshot(otherMangaId).single().remoteId shouldBe 99L
+        }
+    }
+
+    @Test
     fun `export snapshots return full database state correctly`(): Unit = runBlocking {
         val file = tempDir.resolve("export-snapshot.db")
         DesktopLibraryDatabaseFactory.open(file).use { repo ->
             val mangaId = repo.insertManga(MangaRecord(sourceId = 42, url = "/manga1", title = "Export Manga"))
-            val catId = repo.upsertCategory(CategoryRecord(name = "Export Cat", sortOrder = 1))
+            val catId = repo.upsertCategory(CategoryRecord(name = "Export Cat"))
             repo.linkCategory(mangaId, catId)
             val chapterId = repo.insertChapter(ChapterRecord(mangaId = mangaId, url = "/c1", name = "Ch 1"))
             repo.upsertHistory(HistoryRecord(chapterId, lastRead = 5000L, readDuration = 120L))

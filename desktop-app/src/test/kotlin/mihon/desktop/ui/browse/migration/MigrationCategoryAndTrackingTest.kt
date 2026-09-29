@@ -137,8 +137,8 @@ class MigrationCategoryAndTrackingTest {
         )
 
         // Seed categories (Category 1: Favorites, Category 2: Shonen)
-        val cat1Id = db.upsertCategory(CategoryRecord(id = 0L, name = "Favorites", sortOrder = 0L))
-        val cat2Id = db.upsertCategory(CategoryRecord(id = 0L, name = "Shonen", sortOrder = 1L))
+        val cat1Id = db.upsertCategory(CategoryRecord(id = 0L, name = "Favorites"))
+        val cat2Id = db.upsertCategory(CategoryRecord(id = 0L, name = "Shonen"))
         db.linkCategory(sourceMangaId, cat1Id)
         db.linkCategory(sourceMangaId, cat2Id)
 

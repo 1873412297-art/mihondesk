@@ -33,8 +33,10 @@ import mihon.desktop.library.model.SourceRecord
 import mihon.desktop.library.model.TrackingRecord
 import mihon.desktop.library.reader.ReaderLibraryPort
 import mihon.desktop.library.reader.ReaderOnlineChapter
+import mihon.desktop.library.repository.LibraryDatabaseCleaner
 import mihon.desktop.library.repository.LibraryMutationPort
 import mihon.desktop.library.repository.LibraryRepository
+import mihon.desktop.library.repository.NonLibrarySourceCount
 import mihon.reader.session.ProgressWriteResult
 import mihon.reader.session.ReaderProgressUpdate
 import mihon.reader.source.ChapterDirection
@@ -44,10 +46,37 @@ import java.nio.file.Path
 class SqlDelightLibraryRepository(
     private val driver: SqlDriver,
     val database: DesktopLibraryDatabase,
-) : LibraryRepository, LibraryMutationPort, ReaderLibraryPort, AutoCloseable {
+) : LibraryRepository, LibraryMutationPort, LibraryDatabaseCleaner, ReaderLibraryPort, AutoCloseable {
     private val queries = database.libraryQueries
     private val readerProgressMutex = Mutex()
     private val acceptedReaderProgress = mutableMapOf<Long, ReaderProgressVersion>()
+
+    override fun nonLibrarySourceCounts(): List<NonLibrarySourceCount> {
+        val names = allSourcesSnapshot().associate { it.sourceId to it.name }
+        return allMangaSnapshot()
+            .asSequence()
+            .filter { !it.favorite && it.sourceId != 0L }
+            .groupingBy { it.sourceId }
+            .eachCount()
+            .map { (sourceId, count) ->
+                NonLibrarySourceCount(sourceId, names[sourceId] ?: "Source #$sourceId", count)
+            }
+            .sortedBy { it.sourceName.lowercase() }
+    }
+
+    override fun clearNonLibraryManga(sourceIds: Set<Long>, keepReadManga: Boolean): Int =
+        database.transactionWithResult {
+            val ids = sourceIds.filter { it != 0L }.toSet()
+            if (ids.isEmpty()) return@transactionWithResult 0
+            val toRemove = allMangaSnapshot().count { manga ->
+                !manga.favorite && manga.sourceId in ids &&
+                    (!keepReadManga || chapterSnapshot(manga.id).none { it.read })
+            }
+            ids.forEach { sourceId ->
+                queries.deleteNonLibraryMangaBySource(sourceId, if (keepReadManga) 1L else 0L)
+            }
+            toRemove
+        }
 
     override fun observeLibrary(categoryId: Long?): Flow<List<LibraryManga>> =
         if (categoryId == null || categoryId == -1L) {
@@ -353,7 +382,7 @@ class SqlDelightLibraryRepository(
     }
 
     override fun upsertCategory(value: CategoryRecord): Long {
-        queries.insertCategory(value.name, value.sortOrder, value.flags)
+        queries.insertCategory(value.name, value.flags)
         return checkNotNull(queries.selectCategoryByName(value.name).executeAsOneOrNull()).id
     }
 
@@ -504,11 +533,13 @@ class SqlDelightLibraryRepository(
         chapterId: Long,
         relativePath: String,
         sizeBytes: Long,
+        assetKind: String,
     ): Boolean = queries.isLocalChapterAssetRegistered(
         chapter_id = chapterId,
         manga_id = mangaId,
         storage_path = storagePath,
         relative_path = relativePath,
+        asset_kind = assetKind,
         size_bytes = sizeBytes,
     ).executeAsOne()
 

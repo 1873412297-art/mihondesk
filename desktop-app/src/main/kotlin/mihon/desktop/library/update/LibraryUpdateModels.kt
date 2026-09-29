@@ -6,9 +6,13 @@ data class LibraryUpdateOptions(
     val skipCompleted: Boolean = true,
     val skipUnread: Boolean = false,
     val skipNotStarted: Boolean = false,
+    val skipOutsideReleasePeriod: Boolean = false,
     val includedCategoryIds: Set<Long>? = null,
     val excludedCategoryIds: Set<Long>? = null,
     val autoDownloadNewChapters: Boolean = false,
+    val autoDownloadUnreadOnly: Boolean = false,
+    val autoDownloadCategories: Set<Long> = emptySet(),
+    val autoDownloadCategoriesExclude: Set<Long> = emptySet(),
     val mangaIds: Set<Long>? = null,
 )
 

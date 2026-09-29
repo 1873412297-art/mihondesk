@@ -123,6 +123,114 @@ class PageGroupingTest {
             forcedScaleMode = ScaleMode.FIT_WIDTH,
         )
     }
+
+    @Test
+    fun `shouldSplit decision respects NEVER ALWAYS and WIDE modes`() {
+        val widePage = PageDescriptor(id = pageId(0), width = 400, height = 200)
+        val portraitPage = PageDescriptor(id = pageId(1), width = 100, height = 200)
+        val squarePage = PageDescriptor(id = pageId(2), width = 200, height = 200)
+
+        // NEVER never splits
+        PageGrouping.shouldSplit(widePage, DualPageSplit.NEVER) shouldBe false
+        PageGrouping.shouldSplit(portraitPage, DualPageSplit.NEVER) shouldBe false
+
+        // WIDE only splits wide images (width > height)
+        PageGrouping.shouldSplit(widePage, DualPageSplit.WIDE) shouldBe true
+        PageGrouping.shouldSplit(portraitPage, DualPageSplit.WIDE) shouldBe false
+        PageGrouping.shouldSplit(squarePage, DualPageSplit.WIDE) shouldBe false
+
+        // ALWAYS splits all pages
+        PageGrouping.shouldSplit(widePage, DualPageSplit.ALWAYS) shouldBe true
+        PageGrouping.shouldSplit(portraitPage, DualPageSplit.ALWAYS) shouldBe true
+        PageGrouping.shouldSplit(squarePage, DualPageSplit.ALWAYS) shouldBe true
+
+        // rotateToFit suppresses split for wide images
+        PageGrouping.shouldSplit(widePage, DualPageSplit.WIDE, rotateToFit = true) shouldBe false
+        PageGrouping.shouldSplit(widePage, DualPageSplit.ALWAYS, rotateToFit = true) shouldBe false
+    }
+
+    @Test
+    fun `splitPages splits wide images with left half first in LTR and right half first in RTL`() {
+        val widePage = PageDescriptor(id = pageId(0), width = 401, height = 200)
+
+        val ltrSplit = PageGrouping.splitPages(listOf(widePage), DualPageSplit.WIDE, isRightToLeft = false)
+        ltrSplit.size shouldBe 2
+        ltrSplit[0].splitSide shouldBe mihon.reader.model.SplitSide.LEFT
+        ltrSplit[0].width shouldBe 200
+        ltrSplit[0].height shouldBe 200
+        ltrSplit[1].splitSide shouldBe mihon.reader.model.SplitSide.RIGHT
+        ltrSplit[1].width shouldBe 201
+        ltrSplit[1].height shouldBe 200
+
+        // RTL puts right half first
+        val rtlSplit = PageGrouping.splitPages(listOf(widePage), DualPageSplit.WIDE, isRightToLeft = true)
+        rtlSplit.size shouldBe 2
+        rtlSplit[0].splitSide shouldBe mihon.reader.model.SplitSide.RIGHT
+        rtlSplit[0].width shouldBe 201
+        rtlSplit[0].height shouldBe 200
+        rtlSplit[1].splitSide shouldBe mihon.reader.model.SplitSide.LEFT
+        rtlSplit[1].width shouldBe 200
+        rtlSplit[1].height shouldBe 200
+    }
+
+    @Test
+    fun `splitPages with rotateToFit rotates wide page 90 degrees without splitting`() {
+        val widePage = PageDescriptor(id = pageId(0), width = 400, height = 200)
+        val result = PageGrouping.splitPages(listOf(widePage), DualPageSplit.WIDE, rotateToFit = true)
+        result.size shouldBe 1
+        result[0].width shouldBe 200
+        result[0].height shouldBe 400
+        result[0].rotated shouldBe true
+        result[0].splitSide shouldBe null
+    }
+
+    @Test
+    fun `dual grouping pairs split halves into spread in LTR and reverses spread in RTL`() {
+        val widePage = PageDescriptor(id = pageId(0), width = 400, height = 200)
+        val ltrGroups = PageGrouping.dual(
+            listOf(widePage),
+            reserveCover = false,
+            split = DualPageSplit.WIDE,
+            isRightToLeft = false,
+        )
+        ltrGroups.size shouldBe 1
+        ltrGroups[0].size shouldBe 2
+        ltrGroups[0][0].splitSide shouldBe mihon.reader.model.SplitSide.LEFT
+        ltrGroups[0][1].splitSide shouldBe mihon.reader.model.SplitSide.RIGHT
+
+        // In RTL forMode, spread is reversed for visual presentation: Left on left, Right on right
+        val rtlGroups = PageGrouping.forMode(
+            listOf(widePage),
+            ReadingMode.DUAL_RTL,
+            reserveCover = false,
+            split = DualPageSplit.WIDE,
+        )
+        rtlGroups.size shouldBe 1
+        rtlGroups[0].size shouldBe 2
+        rtlGroups[0][0].splitSide shouldBe mihon.reader.model.SplitSide.LEFT
+        rtlGroups[0][1].splitSide shouldBe mihon.reader.model.SplitSide.RIGHT
+    }
+
+    @Test
+    fun `dual grouping with reserveCover keeps cover alone and pairs wide page halves together`() {
+        val cover = PageDescriptor(id = pageId(0), width = 100, height = 200)
+        val wide = PageDescriptor(id = pageId(1), width = 400, height = 200)
+        val regular = PageDescriptor(id = pageId(2), width = 100, height = 200)
+
+        val groups = PageGrouping.dual(listOf(cover, wide, regular), reserveCover = true, split = DualPageSplit.WIDE)
+        groups.size shouldBe 3
+        groups[0].size shouldBe 1
+        groups[0][0].id shouldBe pageId(0)
+
+        groups[1].size shouldBe 2
+        groups[1][0].id shouldBe pageId(1)
+        groups[1][0].splitSide shouldBe mihon.reader.model.SplitSide.LEFT
+        groups[1][1].id shouldBe pageId(1)
+        groups[1][1].splitSide shouldBe mihon.reader.model.SplitSide.RIGHT
+
+        groups[2].size shouldBe 1
+        groups[2][0].id shouldBe pageId(2)
+    }
 }
 
 private fun pageDescriptors(count: Int) = (0 until count).map { index ->

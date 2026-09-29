@@ -25,6 +25,10 @@ import java.io.FileOutputStream
 import java.io.IOException
 import java.security.MessageDigest
 
+/** Thrown when the extension package itself could not be downloaded (network or HTTP failure). */
+class ExtensionDownloadException(message: String, cause: Throwable? = null) :
+    ExtensionValidationException(message, cause)
+
 @Serializable
 data class InstalledExtension(
     val pkg: String,
@@ -166,7 +170,7 @@ class DesktopExtensionInstaller(
                     try {
                         call.execute().use { response ->
                             if (!response.isSuccessful) {
-                                throw ExtensionValidationException(
+                                throw ExtensionDownloadException(
                                     "Failed to download extension package: HTTP ${response.code}",
                                 )
                             }

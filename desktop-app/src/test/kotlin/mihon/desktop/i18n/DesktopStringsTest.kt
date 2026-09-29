@@ -3,10 +3,28 @@ package mihon.desktop.i18n
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldNotBeBlank
 import mihon.desktop.navigation.DesktopDestination
+import mihon.desktop.ui.browse.ExtensionInstallFailure
 import org.junit.jupiter.api.Test
 import java.util.Locale
 
 class DesktopStringsTest {
+
+    @Test
+    fun `extension install failures are distinguished in every language`() {
+        listOf(EnglishStrings, SimplifiedChineseStrings, TraditionalChineseStrings).forEach { bundle ->
+            val titles = ExtensionInstallFailure.entries.map { bundle.extensionInstallFailureTitle(it) }
+            val hints = ExtensionInstallFailure.entries.map { bundle.extensionInstallFailureHint(it) }
+
+            titles.forEach { it.shouldNotBeBlank() }
+            hints.forEach { it.shouldNotBeBlank() }
+            titles.toSet().size shouldBe ExtensionInstallFailure.entries.size
+            hints.toSet().size shouldBe ExtensionInstallFailure.entries.size
+
+            val storeLabel = bundle.extensionStoreLabel("Keiyoushi")
+            storeLabel.shouldNotBeBlank()
+            storeLabel.contains("Keiyoushi") shouldBe true
+        }
+    }
 
     @Test
     fun `AppLanguage parses code accurately with fallback to System`() {
@@ -63,17 +81,35 @@ class DesktopStringsTest {
             bundle.libraryTitle.shouldNotBeBlank()
             bundle.libraryImportBackup.shouldNotBeBlank()
             bundle.settingsTitle.shouldNotBeBlank()
+            bundle.settingsSearchPlaceholder.shouldNotBeBlank()
+            bundle.settingsSearchNoResults.shouldNotBeBlank()
+            bundle.settingsSearchResultsCount(1).shouldNotBeBlank()
+            bundle.settingsSearchResultsCount(5).shouldNotBeBlank()
             bundle.aboutTitle.shouldNotBeBlank()
             bundle.historyTitle.shouldNotBeBlank()
             bundle.downloadsTitle.shouldNotBeBlank()
             bundle.updatesTitle.shouldNotBeBlank()
             bundle.browseTitle.shouldNotBeBlank()
             bundle.readerColorFilter.shouldNotBeBlank()
+            bundle.readerFilterCustom.shouldNotBeBlank()
+            bundle.readerCustomHue.shouldNotBeBlank()
+            bundle.readerCustomBrightness.shouldNotBeBlank()
+            bundle.readerCustomContrast.shouldNotBeBlank()
+            bundle.readerDimming.shouldNotBeBlank()
+            bundle.readerFilterLabel(mihon.desktop.reader.ReaderColorFilter.CUSTOM).shouldNotBeBlank()
+            bundle.readerCustomHueLabel(180).shouldNotBeBlank()
+            bundle.readerCustomBrightnessLabel(50).shouldNotBeBlank()
+            bundle.readerCustomContrastLabel(20).shouldNotBeBlank()
+            bundle.readerDimmingLabel(80).shouldNotBeBlank()
             bundle.readerBackgroundColor.shouldNotBeBlank()
             bundle.readerCropBorders.shouldNotBeBlank()
             bundle.readerCropBordersWebtoon.shouldNotBeBlank()
             bundle.readerWebtoonMaxWidth.shouldNotBeBlank()
             bundle.readerWebtoonSidePadding.shouldNotBeBlank()
+            bundle.readerPageTransitions.shouldNotBeBlank()
+            bundle.readerPageTransitionLabel(mihon.desktop.reader.ReaderPageTransition.NONE).shouldNotBeBlank()
+            bundle.readerPageTransitionLabel(mihon.desktop.reader.ReaderPageTransition.FADE).shouldNotBeBlank()
+            bundle.readerPageTransitionLabel(mihon.desktop.reader.ReaderPageTransition.SLIDE).shouldNotBeBlank()
 
             DesktopDestination.entries.forEach { dest ->
                 bundle.destinationLabel(dest).shouldNotBeBlank()
@@ -241,6 +277,8 @@ class DesktopStringsTest {
             bundle.settingsDownloadAheadChapters(1).shouldNotBeBlank()
             bundle.settingsDeleteReadChaptersTitle.shouldNotBeBlank()
             bundle.settingsDeleteReadChaptersDesc.shouldNotBeBlank()
+            bundle.settingsSaveChapterAsCbzTitle.shouldNotBeBlank()
+            bundle.settingsSaveChapterAsCbzDesc.shouldNotBeBlank()
             bundle.settingsTrackerLoggedInAs("user", "server").shouldNotBeBlank()
             bundle.settingsTrackerLogout.shouldNotBeBlank()
             bundle.settingsLibraryUpdateResult(10, 2).shouldNotBeBlank()

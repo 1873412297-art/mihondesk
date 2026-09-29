@@ -29,7 +29,7 @@ internal class WindowsAppContainerLauncher(
     private var job: WindowsJobObject? = null
     private var process: SandboxProcess? = null
     private var sidText = ""
-    private var runtimeLease: String? = null
+    private val runtimeLeases = mutableListOf<String>()
     private var pendingLogHandle: com.sun.jna.platform.win32.WinNT.HANDLE? = null
 
     fun launch(command: List<String>, extraEnvironment: Map<String, String> = emptyMap()): Process {
@@ -239,26 +239,25 @@ internal class WindowsAppContainerLauncher(
         }
     }
 
-    private fun stageRuntime(original: File): File = synchronized(runtimeCaches) {
-        runtimeCaches[original.absolutePath]?.takeIf { it.isDirectory }?.let {
-            runtimeUsers[original.absolutePath] = runtimeUsers.getValue(original.absolutePath) + 1
-            runtimeLease = original.absolutePath
-            return@synchronized it
-        }
-        val target = java.nio.file.Files.createTempDirectory("mihonw-sandbox-runtime-").toFile()
-        original.walkTopDown().forEach { source ->
-            val destination = target.resolve(source.relativeTo(original))
-            if (source.isDirectory) destination.mkdirs() else source.copyTo(destination)
-        }
-        runtimeCaches[original.absolutePath] = target
-        runtimeUsers[original.absolutePath] = 1
-        runtimeLease = original.absolutePath
-        target
+    private fun stageRuntime(original: File): File {
+        val staged = runtimeStaging.acquire(original)
+        runtimeLeases += original.absolutePath
+        return staged
+    }
+
+    /**
+     * Releases every runtime staged by this launcher. Each stage is tracked separately, so a
+     * launcher that staged more than one source still releases all of them, and a copy that cannot
+     * be deleted is reported instead of escaping [close].
+     */
+    private fun releaseRuntimeLeases() {
+        val leased = runtimeLeases.toList()
+        runtimeLeases.clear()
+        leased.forEach(runtimeStaging::release)
     }
 
     companion object {
-        private val runtimeCaches = mutableMapOf<String, File>()
-        private val runtimeUsers = mutableMapOf<String, Int>()
+        private val runtimeStaging = SandboxRuntimeStaging.shared
 
         private val supported: Boolean by lazy {
             detectAppContainerSupport()
@@ -342,44 +341,34 @@ internal class WindowsAppContainerLauncher(
         check(process.waitFor() == 0) { "Sandbox ACL setup failed for $path: $result" }
     }
     override fun close() {
-        pendingLogHandle?.let { Kernel32.INSTANCE.CloseHandle(it) }
-        pendingLogHandle = null
-        job?.terminate(1)
-        process?.destroyForcibly()
-        process?.waitFor(5, TimeUnit.SECONDS)
-        pipe?.close()
-        pipe = null
-        job?.close()
-        job = null
-        process?.closeHandle()
-        process = null
-        if (sidText.isNotEmpty()) {
-            grants.asReversed().forEach { runCatching { runAcl(it, "/remove:g", "*$sidText") } }
-            grants.clear()
-        }
-        if (profileCreated) {
-            native.userenv.DeleteAppContainerProfile(WString(profile))
-            profileCreated = false
-        }
-        sid.value?.let {
-            native.advapi.FreeSid(it)
-            sid.value = null
-        }
-        synchronized(runtimeCaches) {
-            runtimeLease?.let { key ->
-                val remaining = runtimeUsers.getValue(key) - 1
-                if (remaining == 0) {
-                    runtimeUsers.remove(key)
-                    runtimeCaches.remove(key)?.let { owned ->
-                        java.nio.file.Files.walk(owned.toPath()).use { paths ->
-                            paths.sorted(Comparator.reverseOrder()).forEach { java.nio.file.Files.deleteIfExists(it) }
-                        }
-                    }
-                } else {
-                    runtimeUsers[key] = remaining
-                }
+        try {
+            pendingLogHandle?.let { Kernel32.INSTANCE.CloseHandle(it) }
+            pendingLogHandle = null
+            job?.terminate(1)
+            process?.destroyForcibly()
+            process?.waitFor(5, TimeUnit.SECONDS)
+            pipe?.close()
+            pipe = null
+            job?.close()
+            job = null
+            process?.closeHandle()
+            process = null
+            if (sidText.isNotEmpty()) {
+                grants.asReversed().forEach { runCatching { runAcl(it, "/remove:g", "*$sidText") } }
+                grants.clear()
             }
-            runtimeLease = null
+            if (profileCreated) {
+                native.userenv.DeleteAppContainerProfile(WString(profile))
+                profileCreated = false
+            }
+            sid.value?.let {
+                native.advapi.FreeSid(it)
+                sid.value = null
+            }
+        } finally {
+            // Must run even when tearing the host down failed above: an unreleased lease would
+            // strand its staged runtime for good, for this process and for the ones after it.
+            releaseRuntimeLeases()
         }
     }
 }

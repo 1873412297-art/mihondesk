@@ -60,6 +60,7 @@ import mihon.desktop.extension.InstalledExtension
 import mihon.desktop.extension.SourcePreferenceDefinition
 import mihon.desktop.extension.SourceState
 import mihon.desktop.extension.builtin.BundledLocalSource
+import mihon.desktop.extension.extensionStoreLabel
 import mihon.desktop.i18n.LocalStrings
 import mihon.desktop.i18n.UiText
 import mihon.desktop.i18n.text
@@ -100,6 +101,8 @@ data class BrowseUiState(
     val installPhase: ExtensionInstallPhase? = null,
     val installationCancelled: Boolean = false,
     val errorMessage: String? = null,
+    /** Set when the last install/update attempt failed, so the UI can explain which step failed. */
+    val installFailure: ExtensionInstallFailure? = null,
     val searchQuery: String = "",
     // Migration state
     val sourcesWithMangaCounts: List<SourceWithMangaCount> = emptyList(),
@@ -399,7 +402,11 @@ fun BrowseScreen(
         // Error Banner
         state.errorMessage?.let { error ->
             Column(Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
-                mihon.desktop.ui.common.FailureExplanation(mihon.desktop.download.classifyDownloadFailure(error))
+                // Install failures get their own explanation next to the install status; everything
+                // else is classified as a download/source failure.
+                if (state.installFailure == null) {
+                    mihon.desktop.ui.common.FailureExplanation(mihon.desktop.download.classifyDownloadFailure(error))
+                }
                 mihon.desktop.ui.common.ErrorDetails(error, "browse-error")
                 TextButton(
                     onClick = onRefresh,
@@ -474,6 +481,9 @@ fun BrowseScreen(
                     Text(strings.browsePackageLabel(item.pkg))
                     Text(strings.browseVersionLabel(item.version))
                     Text(strings.browseLanguageLabel(item.lang.uppercase()))
+                    extensionStoreLabel(item)?.let { store ->
+                        Text(strings.extensionStoreLabel(store))
+                    }
                     if (item.declaredDomains.isNotEmpty()) {
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
@@ -1207,6 +1217,18 @@ private fun ExtensionItemRow(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.outline,
                 )
+                val storeLabel = extensionStoreLabel(
+                    item.storeName,
+                    item.repoUrl.ifBlank { installed?.repoUrl.orEmpty() },
+                )
+                if (storeLabel != null) {
+                    Text(
+                        text = strings.extensionStoreLabel(storeLabel),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.outline,
+                        modifier = Modifier.testTag("extension-store-${item.pkg}"),
+                    )
+                }
                 if (item.sources.isNotEmpty()) {
                     Text(
                         text = strings.text(UiText.ExtensionSources, item.sources.joinToString(", ") { it.name }),

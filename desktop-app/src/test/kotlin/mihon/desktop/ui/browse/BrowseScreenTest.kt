@@ -4,8 +4,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertTextContains
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -93,6 +95,50 @@ class BrowseScreenTest {
         onNodeWithTag("install-btn-ext.test.sample").performClick()
         onNodeWithTag("confirm-install-button").assertIsDisplayed()
         onNodeWithText("Declared Network Domains:").assertIsDisplayed()
+    }
+
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun `shows the store that listed each extension`() = runComposeUiTest {
+        val named = ExtensionStoreItem(
+            pkg = "ext.test.named",
+            name = "Named Store Extension",
+            version = "1.0.0",
+            versionCode = 1,
+            repoUrl = "https://raw.githubusercontent.com/keiyoushi/extensions/repo",
+            storeName = "Keiyoushi",
+        )
+        val unnamed = named.copy(pkg = "ext.test.unnamed", name = "Unnamed Store Extension", storeName = "")
+
+        setContent {
+            Box(modifier = Modifier.requiredSize(1000.dp, 700.dp)) {
+                BrowseScreen(
+                    state = BrowseUiState(
+                        selectedTab = BrowseTab.Extensions,
+                        availableExtensions = listOf(named, unnamed),
+                    ),
+                    onTabSelected = {},
+                    onSearchQueryChange = {},
+                    onSourceSelected = { _, _ -> },
+                    onInstallExtension = {},
+                    onUninstallExtension = {},
+                    onToggleExtensionEnabled = { _, _ -> },
+                    onAddRepository = {},
+                    onRemoveRepository = {},
+                )
+            }
+        }
+
+        onNodeWithTag("extension-store-${named.pkg}", useUnmergedTree = true)
+            .assertTextContains("Keiyoushi", substring = true)
+        // Indexes that do not declare a name fall back to the repository the candidate came from.
+        onNodeWithTag("extension-store-${unnamed.pkg}", useUnmergedTree = true)
+            .assertTextContains("keiyoushi/extensions", substring = true)
+
+        onNodeWithTag("install-btn-${named.pkg}").performClick()
+        onNodeWithTag("confirm-install-button").assertIsDisplayed()
+        // The confirmation dialog repeats the store so the trust decision names its source.
+        onAllNodesWithText("Store: Keiyoushi").assertCountEquals(2)
     }
 
     @OptIn(ExperimentalTestApi::class)

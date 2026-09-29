@@ -51,6 +51,8 @@ data class ReaderState(
     val cacheMetrics: CacheMetrics = EMPTY_CACHE_METRICS,
     val foreground: Boolean = true,
     val contentVisible: Boolean = true,
+    val dualPageSplit: mihon.reader.layout.DualPageSplit = mihon.reader.layout.DualPageSplit.WIDE,
+    val dualPageRotateToFit: Boolean = false,
     val navigationRequest: ReaderNavigationRequest? = null,
 ) {
     init {
@@ -91,8 +93,24 @@ data class ReaderState(
             )
         }
         is ReaderAction.SetVisiblePages -> copy(visiblePages = action.pageIds.toList())
+        is ReaderAction.SetPageIntrinsicSize -> {
+            require(action.width > 0 && action.height > 0) { "intrinsic size must be positive" }
+            val index = pages.indexOfFirst { it.id == action.pageId }
+            if (index < 0 || (pages[index].width == action.width && pages[index].height == action.height)) {
+                this
+            } else {
+                copy(
+                    pages = pages.toMutableList().also {
+                        it[index] =
+                            it[index].copy(width = action.width, height = action.height)
+                    },
+                )
+            }
+        }
         is ReaderAction.SetForeground -> copy(foreground = action.foreground)
         is ReaderAction.SetContentVisible -> copy(contentVisible = action.visible)
+        is ReaderAction.SetDualPageSplit -> copy(dualPageSplit = action.split)
+        is ReaderAction.SetDualPageRotateToFit -> copy(dualPageRotateToFit = action.enabled)
         ReaderAction.Next,
         ReaderAction.Previous,
         -> this

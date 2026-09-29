@@ -44,6 +44,9 @@ data class DesktopPreferences(
     val downloadPageParallelCount: Int = 5,
     val downloadAhead: Int = 0,
     val deleteDownloadedRead: Boolean = false,
+    val saveChapterAsCbz: Boolean = false,
+    // Android defaults this on; the desktop download path is newer and opt-in until proven.
+    val splitTallImages: Boolean = false,
     val incognitoMode: Boolean = false,
     // App lock. Only a salted PBKDF2 hash, its salt and iteration count are persisted.
     val appLockEnabled: Boolean = false,
@@ -61,10 +64,14 @@ data class DesktopPreferences(
     val libraryUpdateSkipCompleted: Boolean = true,
     val libraryUpdateSkipUnread: Boolean = false,
     val libraryUpdateSkipStarted: Boolean = false,
+    val libraryUpdateSkipOutsideReleasePeriod: Boolean = false,
     val libraryUpdateCategories: Set<Long> = emptySet(),
     val libraryUpdateCategoriesExclude: Set<Long> = emptySet(),
     val libraryUpdateOnlyOnAcPower: Boolean = false,
     val autoDownloadNewChapters: Boolean = false,
+    val autoDownloadUnreadOnly: Boolean = false,
+    val autoDownloadCategories: Set<Long> = emptySet(),
+    val autoDownloadCategoriesExclude: Set<Long> = emptySet(),
     val desktopNotificationsEnabled: Boolean = true,
     val desktopNotificationsHideContent: Boolean = false,
     val lastLibraryUpdateEpochMillis: Long = 0L,
@@ -188,6 +195,8 @@ class DesktopPreferenceStore(private val file: Path) {
             ) ?: 5,
             downloadAhead = properties.getProperty("download.ahead")?.toIntOrNull() ?: 0,
             deleteDownloadedRead = properties.getProperty("download.delete_read")?.toBooleanStrictOrNull() ?: false,
+            saveChapterAsCbz = properties.getProperty("download.save_as_cbz")?.toBooleanStrictOrNull() ?: false,
+            splitTallImages = properties.getProperty("download.split_tall_images")?.toBooleanStrictOrNull() ?: false,
             incognitoMode = properties.getProperty("security.incognito_mode")?.toBooleanStrictOrNull() ?: false,
             appLockEnabled = appLockEnabled,
             appLockPinHash = if (hasValidPinCredential) storedAppLockHash else "",
@@ -209,6 +218,8 @@ class DesktopPreferenceStore(private val file: Path) {
                 ?.toBooleanStrictOrNull() ?: false,
             libraryUpdateSkipStarted = properties.getProperty("library.update_skip_started")
                 ?.toBooleanStrictOrNull() ?: false,
+            libraryUpdateSkipOutsideReleasePeriod = properties.getProperty("library.update_skip_outside_release_period")
+                ?.toBooleanStrictOrNull() ?: false,
             libraryUpdateCategories = properties.firstLongSet(
                 "library.update_categories",
                 "library_update_categories",
@@ -221,6 +232,10 @@ class DesktopPreferenceStore(private val file: Path) {
                 ?.toBooleanStrictOrNull() ?: false,
             autoDownloadNewChapters = properties.getProperty("library.auto_download_new")
                 ?.toBooleanStrictOrNull() ?: false,
+            autoDownloadUnreadOnly = properties.getProperty("download.new_unread_only")
+                ?.toBooleanStrictOrNull() ?: false,
+            autoDownloadCategories = properties.firstLongSet("download.new_categories"),
+            autoDownloadCategoriesExclude = properties.firstLongSet("download.new_categories_exclude"),
             desktopNotificationsEnabled = properties.getProperty("notifications.desktop_enabled")
                 ?.toBooleanStrictOrNull() ?: true,
             desktopNotificationsHideContent = properties.firstBoolean(
@@ -276,6 +291,8 @@ class DesktopPreferenceStore(private val file: Path) {
         properties.setProperty("download.page_parallel_count", preferences.downloadPageParallelCount.toString())
         properties.setProperty("download.ahead", preferences.downloadAhead.toString())
         properties.setProperty("download.delete_read", preferences.deleteDownloadedRead.toString())
+        properties.setProperty("download.save_as_cbz", preferences.saveChapterAsCbz.toString())
+        properties.setProperty("download.split_tall_images", preferences.splitTallImages.toString())
         properties.setProperty("security.incognito_mode", preferences.incognitoMode.toString())
         properties.setProperty("security.app_lock.enabled", preferences.appLockEnabled.toString())
         properties.setProperty("security.app_lock.pin_hash", preferences.appLockPinHash)
@@ -314,6 +331,10 @@ class DesktopPreferenceStore(private val file: Path) {
             "library.update_skip_started",
             preferences.libraryUpdateSkipStarted.toString(),
         )
+        properties.setProperty(
+            "library.update_skip_outside_release_period",
+            preferences.libraryUpdateSkipOutsideReleasePeriod.toString(),
+        )
         properties.setProperty("library.update_categories", preferences.libraryUpdateCategories.encodeLongSet())
         properties.setProperty(
             "library.update_categories_exclude",
@@ -326,6 +347,12 @@ class DesktopPreferenceStore(private val file: Path) {
         properties.setProperty(
             "library.auto_download_new",
             preferences.autoDownloadNewChapters.toString(),
+        )
+        properties.setProperty("download.new_unread_only", preferences.autoDownloadUnreadOnly.toString())
+        properties.setProperty("download.new_categories", preferences.autoDownloadCategories.encodeLongSet())
+        properties.setProperty(
+            "download.new_categories_exclude",
+            preferences.autoDownloadCategoriesExclude.encodeLongSet(),
         )
         properties.setProperty(
             "notifications.desktop_enabled",

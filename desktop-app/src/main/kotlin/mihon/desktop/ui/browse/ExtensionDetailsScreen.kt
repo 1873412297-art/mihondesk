@@ -64,6 +64,7 @@ import mihon.desktop.extension.ExtensionTrustStatus
 import mihon.desktop.extension.ExtensionTrustStore
 import mihon.desktop.extension.InstalledExtension
 import mihon.desktop.extension.SourceState
+import mihon.desktop.extension.extensionStoreLabel
 import mihon.desktop.i18n.LocalStrings
 import mihon.desktop.i18n.UiText
 import mihon.desktop.i18n.locale
@@ -677,9 +678,13 @@ private fun DetailsHeader(
                     modifier = Modifier.testTag("extension-details-install-date"),
                 )
             }
-            if (extension.repoUrl.isNotBlank()) {
+            val detailsStoreLabel = extensionStoreLabel(
+                updateItem?.storeName.orEmpty(),
+                updateItem?.repoUrl?.takeIf { it.isNotBlank() } ?: extension.repoUrl,
+            )
+            if (detailsStoreLabel != null) {
                 Text(
-                    text = extension.repoUrl,
+                    text = strings.extensionStoreLabel(detailsStoreLabel),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.outline,
                     modifier = Modifier.testTag("extension-details-repo"),

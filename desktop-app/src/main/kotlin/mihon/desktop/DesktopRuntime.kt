@@ -205,7 +205,8 @@ class DesktopRuntime(
             closeReaderServices: () -> Unit = {},
             closeLibrary: () -> Unit = {},
         ): DesktopRuntime {
-            val root = java.nio.file.Files.createTempDirectory("mihon-runtime-test")
+            // Roots stay on disk until the JVM exits: tests read their files after shutdown() too.
+            val root = TestRuntimeRoots.shared.create()
             val directories = AppDirectories(root).create()
             val library = DesktopLibraryDatabaseFactory.open(directories.database.resolve("library.db"))
             return DesktopRuntime(
@@ -295,7 +296,7 @@ object DesktopRuntimeFactory {
             ) ?: defaultDownloadsDir
             val registeredDownloadDirectory: (Long, Long, Long) -> Path? = { sourceId, mangaId, chapterId ->
                 library.chapterAsset(chapterId)?.takeIf {
-                    sourceId != 0L && it.mangaId == mangaId && it.assetKind == "DIRECTORY" &&
+                    sourceId != 0L && it.mangaId == mangaId && it.assetKind in LOCAL_DOWNLOAD_ASSET_KINDS &&
                         library.mangaSnapshot(mangaId)?.sourceId == sourceId
                 }?.let { asset ->
                     asset.storageRoot.resolve(asset.relativePath).normalize().takeIf {
@@ -308,6 +309,7 @@ object DesktopRuntimeFactory {
                     downloadsDir = configuredDownloadsDir,
                     legacyDownloadsDirs = listOf(defaultDownloadsDir).filterNot { it == configuredDownloadsDir },
                     registeredChapterDirectory = registeredDownloadDirectory,
+                    saveAsCbz = { preferences.load().saveChapterAsCbz },
                 )
             }.getOrElse { error ->
                 System.err.println(
@@ -317,6 +319,7 @@ object DesktopRuntimeFactory {
                 mihon.desktop.download.DownloadDiskProvider(
                     defaultDownloadsDir,
                     registeredChapterDirectory = registeredDownloadDirectory,
+                    saveAsCbz = { preferences.load().saveChapterAsCbz },
                 )
             }
             val downloadStore = mihon.desktop.download.DownloadStore(directories.root.resolve("downloads.json"))
@@ -419,6 +422,10 @@ object DesktopRuntimeFactory {
                         download.progress,
                     )
                 },
+                tallImageSplitter = mihon.desktop.download.TallImageSplitter(
+                    diskProvider = downloadDiskProvider,
+                    enabled = { preferences.load().splitTallImages },
+                ),
             )
             val historyService = mihon.desktop.history.DesktopHistoryService(
                 repository = library,
@@ -610,5 +617,8 @@ object DesktopRuntimeFactory {
         throw CommandLineException("$option contains an invalid path", option, error)
     }
 }
+
+/** Published download layouts that still resolve to a chapter inside the download root. */
+private val LOCAL_DOWNLOAD_ASSET_KINDS = setOf("DIRECTORY", "ARCHIVE")
 
 private fun Throwable?.append(error: Throwable): Throwable = this?.also { it.addSuppressed(error) } ?: error

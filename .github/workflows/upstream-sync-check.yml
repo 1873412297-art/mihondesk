@@ -76,18 +76,30 @@ jobs:
                   return f"Unavailable ({e})"
 
           def main():
-              # 1. Determine the last upstream merge base in our history
-              # (the most recent commit that is an ancestor of both our main/HEAD and upstream/main)
+              # 1. Prefer the last recorded sync baseline when fork history was squashed.
+              # A merge-base alone can point before the latest upstream sync.
               ok, mb_out = run_git_allow_fail(['merge-base', '-a', 'HEAD', 'upstream/main'])
-              if not ok or not mb_out:
-                  print("::error::Could not determine merge-base between HEAD and upstream/main")
-                  sys.exit(1)
+              merge_base_sha = None
+              if ok and mb_out:
+                  mb_candidates = mb_out.split()
+                  merge_base_sha = (mb_candidates[0] if len(mb_candidates) == 1 else
+                                    run_git(['rev-list', '-1', '--date-order'] + mb_candidates))
 
-              mb_candidates = mb_out.split()
-              if len(mb_candidates) == 1:
-                  merge_base_sha = mb_candidates[0]
-              else:
-                  merge_base_sha = run_git(['rev-list', '-1', '--date-order'] + mb_candidates)
+              changelog = open('docs/upstream/MIHON_CHANGELOG.md', encoding='utf-8').read()
+              records = re.findall(r'<!--\s*sync record:\s*merged upstream main up to\s+([0-9a-f]{7,40})\b', changelog)
+              if records:
+                  recorded_sha = run_git(['rev-parse', '--verify', f'{records[-1]}^{{commit}}'])
+                  ok_ancestor, _ = run_git_allow_fail(['merge-base', '--is-ancestor', recorded_sha, 'upstream/main'])
+                  if not ok_ancestor:
+                      raise RuntimeError(f'Recorded sync baseline {recorded_sha} is not on upstream/main')
+                  if merge_base_sha is None:
+                      merge_base_sha = recorded_sha
+                  else:
+                      ok_newer, _ = run_git_allow_fail(['merge-base', '--is-ancestor', merge_base_sha, recorded_sha])
+                      if ok_newer:
+                          merge_base_sha = recorded_sha
+              if merge_base_sha is None:
+                  raise RuntimeError('No merge-base and no sync record in docs/upstream/MIHON_CHANGELOG.md')
 
               merge_base_ts = int(run_git(['log', '-1', '--format=%ct', merge_base_sha]))
               merge_base_date = run_git(['log', '-1', '--format=%cI', merge_base_sha])
@@ -97,7 +109,7 @@ jobs:
               upstream_tip_ts = int(run_git(['log', '-1', '--format=%ct', 'upstream/main']))
               upstream_tip_date = run_git(['log', '-1', '--format=%cI', 'upstream/main'])
 
-              # 3. Count of upstream commits since merge-base
+              # 3. Count of upstream commits since the selected sync baseline
               upstream_commits_count = int(run_git(['rev-list', '--count', f'{merge_base_sha}..upstream/main']))
 
               # 4. Find newest tag on upstream and its tag date
@@ -195,11 +207,11 @@ jobs:
               status_label = "OVERDUE" if is_overdue else "UP-TO-DATE"
               summary_line = (
                   f"Upstream sync status: {status_label}. "
-                  f"Merge-base: {merge_base_sha[:9]} ({merge_base_date}), "
+                  f"Sync baseline: {merge_base_sha[:9]} ({merge_base_date}), "
                   f"Reference ({ref_type}): {ref_name} ({ref_date}), "
                   f"Unmerged-reference age: {days_since_ref:.1f} days (threshold: 14), "
                   f"Pending span: {pending_span_days:.1f} days, "
-                  f"Upstream commits since merge-base: {upstream_commits_count}, "
+                  f"Upstream commits since baseline: {upstream_commits_count}, "
                   f"ExtensionLoader libVersion mismatch: {lib_version_diff}."
               )
               print(summary_line)
@@ -241,10 +253,10 @@ jobs:
                   The mihon-w repository is overdue for an upstream sync with [mihonapp/mihon](https://github.com/mihonapp/mihon).
 
                   - **Newest Upstream Tag**: `{newest_tag}` ({newest_tag_date})
-                  - **Our Merge-Base**: `{merge_base_sha}` ({merge_base_date})
+                  - **Our Sync Baseline**: `{merge_base_sha}` ({merge_base_date})
                   - **Upstream Reference**: `{ref_type}` `{ref_name}` ({ref_date})
                   - **Unmerged Reference Age**: **{days_since_ref:.1f} days** (Threshold: 14 days)
-                  - **Upstream Commits Since Merge-Base**: **{upstream_commits_count} commits**
+                  - **Upstream Commits Since Baseline**: **{upstream_commits_count} commits**
                   - **ExtensionLoader Lib Versions**:
                     - `HEAD`: `{head_lib_version}`
                     - `upstream/main`: `{upstream_lib_version}`
@@ -286,11 +298,11 @@ jobs:
                   with open(github_summary, 'a', encoding='utf-8') as f:
                       f.write("### Upstream Sync Check\n\n")
                       f.write(f"**Status**: {'⚠️ Overdue' if is_overdue else '✅ Up to date'}\n\n")
-                      f.write(f"- **Merge Base**: `{merge_base_sha[:9]}` ({merge_base_date})\n")
+                      f.write(f"- **Sync Baseline**: `{merge_base_sha[:9]}` ({merge_base_date})\n")
                       f.write(f"- **Newest Upstream Tag**: `{newest_tag}` ({newest_tag_date})\n")
                       f.write(f"- **Upstream Reference**: `{ref_type}` `{ref_name}` ({ref_date})\n")
-                      f.write(f"- **Days Difference**: {diff_days:.1f} days (Threshold: 14 days)\n")
-                      f.write(f"- **Upstream Commits Since Merge-Base**: {upstream_commits_count}\n")
+                      f.write(f"- **Unmerged Reference Age**: {days_since_ref:.1f} days (Threshold: 14 days)\n")
+                      f.write(f"- **Upstream Commits Since Baseline**: {upstream_commits_count}\n")
                       f.write(f"- **ExtensionLoader Supported Lib Versions**: `HEAD`={head_lib_version}, `upstream/main`={upstream_lib_version}\n\n")
                       if lib_version_diff:
                           f.write(lib_diff_markdown)

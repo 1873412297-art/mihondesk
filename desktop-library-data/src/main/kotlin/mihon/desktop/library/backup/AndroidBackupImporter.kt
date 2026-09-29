@@ -59,10 +59,12 @@ class AndroidBackupImporter(
         val databaseCategoryIdByOrder = mutableMapOf<Long, Long>()
         val databaseCategoryIdByName = mutableMapOf<String, Long>()
         val backupCategoryNameById = mutableMapOf<Long, String>()
-        backup.backupCategories.forEach { category ->
+        backup.backupCategories.sortedBy { it.order }.forEach { category ->
             control.checkpoint()
-            val databaseId =
-                upsertCategory(CategoryRecord(name = category.name, sortOrder = category.order, flags = category.flags))
+            // The insert assigns local positions; the backup's own order is then written back so a
+            // round trip through Android keeps the exact category order it arrived with.
+            val databaseId = upsertCategory(CategoryRecord(name = category.name, flags = category.flags))
+            updateCategoryOrder(databaseId, category.order)
             databaseCategoryIdByOrder[category.order] = databaseId
             databaseCategoryIdByName[category.name.lowercase(Locale.ROOT)] = databaseId
             if (category.id != 0L) backupCategoryNameById[category.id] = category.name
@@ -108,12 +110,14 @@ class AndroidBackupImporter(
                 chapterIdByUrl[chapter.url] = chapterId
             }
 
-            manga.history.forEach { history ->
+            manga.history.groupBy { it.url }.forEach { (chapterUrl, copies) ->
                 control.checkpoint()
                 val incoming = HistoryRecord(
-                    chapterId = checkNotNull(chapterIdByUrl[history.url]),
-                    lastRead = history.lastRead,
-                    readDuration = history.readDuration,
+                    chapterId = checkNotNull(chapterIdByUrl[chapterUrl]),
+                    lastRead = copies.maxOf { it.lastRead },
+                    readDuration = copies.fold(0L) { total, copy ->
+                        if (copy.readDuration > Long.MAX_VALUE - total) Long.MAX_VALUE else total + copy.readDuration
+                    },
                 )
                 upsertHistory(incoming)
             }
@@ -125,7 +129,7 @@ class AndroidBackupImporter(
                 if (existing == null) {
                     insertTracking(incoming)
                 } else {
-                    updateTracking(BackupMergePolicy.mergeTracking(existing, incoming))
+                    updateTracking(BackupMergePolicy.mergeRestoredTracking(existing, incoming))
                 }
             }
             control.report(BackupImportProgress(BackupImportStage.RESTORING, mangaIndex + 1, backup.backupManga.size))
