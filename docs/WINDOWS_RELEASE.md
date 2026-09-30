@@ -71,6 +71,8 @@ EXE、MSI 和便携 ZIP 都依赖 `verifyCleanDistribution`，打包前执行 `s
 
 最后一个脚本验证独立目录中的便携运行、版本、帮助和备份导出。Windows 10 / 11 的全新系统验收需另外执行。
 
+从临时或草稿目录（含上面便携 ZIP 的沙箱）运行过 `mihondesk.exe` 后，Windows 会在 `HKCU\Control Panel\NotifyIconSettings` 为该可执行文件路径留下一条持久记录——**即使只跑了 `--version` 这类无界面命令**，因为运行时对任何命令都会安装托盘图标；目录删掉后托盘图标仍会一直显示，重启资源管理器无效。因此请对该目录执行 `.\scripts\clear-tray-icon-registrations.ps1 -PathPrefix '<目录>'`（默认跳过运行中进程的记录，不会影响正在使用的安装）。
+
 推送代码分支不会发布 Windows 新版本。仓库保留的上游 Release 工作流只为上游 Android 仓库运行。Windows 发布时还需更新首页与更新日志，将验证后的 EXE、MSI、便携 ZIP、版本与构建信息、SHA-256 清单上传到对应版本的 GitHub Release，核对远程附件摘要后设为最新正式版。清单应只列出随 Release 上传的文件。
 
 ## 更新

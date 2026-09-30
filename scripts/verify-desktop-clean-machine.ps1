@@ -99,6 +99,13 @@ Write-Host "Exported backup verified! File: $targetBackup" -ForegroundColor Gree
     if (-not $resolvedSandbox.StartsWith($tempRoot, [StringComparison]::OrdinalIgnoreCase)) {
         throw 'Unsafe sandbox cleanup path'
     }
+    # Corrective, not just preventive: the packaged runtime installs a java.awt tray icon for
+    # every command (notification/DesktopNotificationService.kt and
+    # platform/DesktopNotificationService.kt both add a TrayIcon in their init), so even the
+    # headless commands run above make Windows record a NotifyIconSettings entry for this
+    # sandbox's mihondesk.exe. Without this sweep every run would leave one entry pointing at a
+    # directory that is about to be deleted.
+    & (Join-Path $PSScriptRoot 'clear-tray-icon-registrations.ps1') -PathPrefix $resolvedSandbox -KeepLiveProcesses
     Remove-Item -LiteralPath $resolvedSandbox -Recurse -Force -ErrorAction SilentlyContinue
     Write-Host "Sandbox cleanly removed." -ForegroundColor Green
 }

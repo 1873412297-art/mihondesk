@@ -260,6 +260,11 @@ try {
 } finally {
     $results | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $root 'results.json') -Encoding UTF8
     Write-Output "Evidence: $root"
+    # Preventive: the mihondesk.exe copies launched here are plain console executables compiled by
+    # csc.exe, and no NotifyIconSettings entry is recorded for them (verified on this machine). A
+    # fixture that ever starts the packaged runtime from this directory would register one, so the
+    # throwaway directory is swept either way - also when the artifacts are kept.
+    & (Join-Path $repository 'scripts/clear-tray-icon-registrations.ps1') -PathPrefix $root -KeepLiveProcesses
     if (-not $KeepArtifacts) {
         $resolved = [IO.Path]::GetFullPath($root)
         $expectedParent = [IO.Path]::GetFullPath((Join-Path $repository 'build'))

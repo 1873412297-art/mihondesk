@@ -226,3 +226,17 @@
 - 商店可用性检查（`isStoreCandidateInstallable`）：仅对带 `repoUrl` 的商店候选生效——下载地址为空、其仓库已不在配置中、或当前商店列表里已没有该包时，直接报 `StoreUnavailable`，不再尝试下载（原先只会抛 `Extension download URL is missing` 或下载后 404）。
 - **未移植**：上游把失败挂在条目上并提供「重试 + 错误详情」行内入口；桌面端仍只有顶部状态与错误横幅，详情对话框保留为横幅里的「错误详情」。缺源批量安装（`MihonDesktopApp` 直调 `downloadAndInstall`）与 `ExtensionUpdateChecker` 通知不在本次改动范围，仍走原有 snackbar。
 - 验证：`./gradlew :desktop-app:test spotlessCheck` 全绿（desktop-app 1049 例、0 失败、21 跳过——跳过项为此前即有的环境门控测试，如真实扩展包样例、Windows 隔离/进程、联网冒烟等）。新增 `ExtensionStoreLabelTest`（5）、`ExtensionStoreAvailabilityTest`（6）、`ExtensionInstallFailureTest`（5）、`ExtensionInstallFailurePresenterTest`（4，用本地 HttpServer 分别断言下载失败/签名拒绝/商店缺包/仓库被移除四类消息），并扩充 `ExtensionStoreSelectionTest`（+2）、`DesktopStringsTest`（+1）、`BrowseScreenTest`（+1）、`ExtensionInstallStatusTest`（+3）。
+
+## 2026-09-30 环境修复（残留的系统托盘图标登记）
+
+- **机制**：**每一次**运行 `mihondesk.exe` 都会让 Windows 在 `HKCU\Control Panel\NotifyIconSettings\<哈希>` 里按可执行文件路径登记一条持久记录（`ExecutablePath`、`IconSnapshot`、`InitialTooltip`、`UID`）。触发点不是界面：打包运行时在构造通知服务时就装了托盘图标（`notification/DesktopNotificationService.kt` 与 `platform/DesktopNotificationService.kt` 都在 `init` 里 `SystemTray.getSystemTray().add(TrayIcon(...))`，`DesktopRuntime.kt` 对**任何**命令都会构造它们），所以 `mihondesk.exe --version` 这类无界面命令同样会登记（实测首个 `--version` 即产生记录；同一路径再次运行不再新增）。记录不随目录删除而消失，副本早已不存在，通知区域与「设置 → 个性化 → 任务栏 → 其他系统托盘图标」里仍会一直显示它——**只要记录还在，重启 explorer.exe 也没用**。
+- **旧副本为何被当成另一个应用**：图标身份取自可执行文件路径（含启动文件的产品标识）。旧启动文件名为 **`MihonW.exe`**（产品名 `Mihon manga reader for Windows`），当前为 `mihondesk.exe`，因此工作树/soak 目录里的旧副本不会被归并到已安装版本，而是各算一个应用。
+- **本次清理**：本机累计 39 条陈旧记录，其中 9 条路径匹配 `/mihon/i`——2 条属于真实安装（`%LOCALAPPDATA%\mihondesk\mihondesk.exe`），7 条属于 `.worktrees\suwayomi`、`.worktrees\reader-wheel-navigation-fix`、`.worktrees\desktop-reader-control-parity`、`.superpowers\sdd\reader-soak-20260915-01` 等目录下的旧副本。全部按 `ExecutablePath` 前缀逐条删除（只写 `HKCU`，无需提权）。
+- **新增工具**：`scripts/clear-tray-icon-registrations.ps1 -PathPrefix <目录>` 按前缀（大小写不敏感、`[IO.Path]::GetFullPath` 归一化）逐条删除并打印路径与是否有 tooltip，支持 `-WhatIf`；**默认为安全模式**，跳过仍属于运行中进程的记录（`-KeepLiveProcesses` 只是把这一默认写明，`-IncludeLiveProcesses` 才连同运行中的一起删）。已接入两处：`scripts/verify-desktop-clean-machine.ps1`（临时沙箱）是**纠正性**的——它的无界面命令本身就会为 `mihon-sandbox-*` 里的 exe 留下一条记录，不扫就会每次运行攒一条；`scripts/tests/portable-updater.tests.ps1`（`build/portable-updater-tests-*`）是**预防性**的——那里的 `mihondesk.exe` 是 `csc.exe` 编译的纯控制台探针，实测不产生记录。**未接入** `scripts/mihondesk-updater.ps1`——它重启的是用户真实便携版，其托盘登记是合法的。
+
+## 2026-09-30 收尾（无界面运行不再登记托盘图标；候选版本改号为 0.2.24）
+
+- **根因修复**：上一节记录的登记来源在**产品代码**里——`DesktopRuntime` 对任何命令都构造通知服务，而它们在 `init` 里安装托盘图标。现在新增纯谓词 `DesktopCommand.needsNotificationTray`（穷举 `when`，新增命令会编译报错强制复核）：只有 `LaunchUi` / `BackgroundUpdate` / `BackgroundBackup` 安装图标，其余命令（`Version`、`Help`、导入导出、smoke、`VerifyReader`、清理后台任务…）完全不碰 shell。两个通知服务加 `trayIconEnabled`（默认 `true`，其他调用方零影响），在两个构造点由命令驱动。
+- **端到端证据**：修前镜像（复制到全新目录）跑 `--version` → 该路径登记 `0 → 1`；修后重建镜像同样操作 → **`0 → 0`**；对照组 `--background-backup` → `0 → 1`（会通知的命令仍然安装图标）。测试：谓词表驱动覆盖全部 12 个命令；两个服务各一个「关掉后不加图标」用例（断言确实执行，非跳过）。
+- **未覆盖**：`DesktopRuntimeFactory` 里的接线没有单测（需要完整 profile），由上面打包后的实测覆盖；`Version` / `Help` 仍会构造整个运行时（改其行为会影响锁获取与退出码，属另一件事，未动）。
+- **版本号**：0.2.23 未发布、未打 tag，在其内容之上追加本次修复后统一以 **0.2.24** 发布（同版本号 MSI 会被 Windows Installer 以 1638 拒绝覆盖，递增版本号才是干净升级路径）。发布说明文件已改名更新，原 0.2.23 草稿不再作为发布文档。

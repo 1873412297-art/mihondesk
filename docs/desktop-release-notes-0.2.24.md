@@ -1,14 +1,16 @@
-# 桌面版工作总结与发布说明（2026-09-30，v0.2.23）
+# 桌面版工作总结与发布说明（2026-09-30，v0.2.24）
 
-本文件总结 v0.2.23 的交付内容（对标 Android Mihon 的升级计划 Phase 6–9 与 7.5，详见 `docs/desktop-upgrade-plan.md`）。0.2.22 覆盖的是 Phase 0–3，本版是其后的实质工作。
+本文件总结 v0.2.24 的交付内容（对标 Android Mihon 的升级计划 Phase 6–9 与 7.5，详见 `docs/desktop-upgrade-plan.md`）。0.2.22 覆盖的是 Phase 0–3，本版是其后的实质工作。
+
+> **编号说明**：0.2.23 曾作为候选版本准备（内容与本版相同，本地门禁证据见 §七）但**从未发布、未打 tag**；在其之上追加了「无界面运行不再登记系统托盘图标」的修复后，统一以 **0.2.24** 发布。这也让 0.2.23 → 0.2.24 成为一次正常的版本递增（同版本号的 MSI 会被 Windows Installer 以 1638 拒绝覆盖）。
 
 ## 一、发布物
 
 | 产物 | 说明 |
 |---|---|
-| `mihondesk-0.2.23.msi` | Windows 安装包（per-user，含开始菜单与快捷方式） |
-| `mihondesk-0.2.23.exe` | Windows 安装器 |
-| `mihondesk-0.2.23-windows-x64-portable.zip` | 便携版（解压即用，数据随包） |
+| `mihondesk-0.2.24.msi` | Windows 安装包（per-user，含开始菜单与快捷方式） |
+| `mihondesk-0.2.24.exe` | Windows 安装器 |
+| `mihondesk-0.2.24-windows-x64-portable.zip` | 便携版（解压即用，数据随包） |
 
 发布包内容约定与 0.2.22 一致：不含任何图源扩展、用户配置、书架数据库、Cookie 或缓存；打包链 `verifyCleanDistribution` 与 `verifyRuntimeModules` 两道校验保持强制。
 
@@ -47,30 +49,33 @@
 - 同步服务器加入每令牌速率限制（超限 429 + `Retry-After`）。
 - extension-host 增加未捕获异常日志。
 - 删除下载在 Windows 上会因文件共享冲突（阅读器解码、启动恢复校验仍在读）偶发失败，改为短暂重试，失败语义不变。
+- **无界面运行不再登记系统托盘图标**：此前 `DesktopRuntime` 对任何命令都构造通知服务，而它们在 `init` 里安装托盘图标；Windows 会为**每个曾经安装过图标的可执行路径**永久保留一条 `HKCU\Control Panel\NotifyIconSettings` 登记，于是所有 CLI 运行（`--version`、导入导出、smoke、reader 校验、以及从临时目录跑的验证）都会在用户托盘里留下痕迹，且 Explorer 重启清不掉。现在只有会真正通知用户的命令（`LaunchUi`、`BackgroundUpdate`、`BackgroundBackup`）才安装图标；判定是穷举 `when`，新增命令会编译报错强制复核。
 
 ## 六、验证与质量
 
-- 仓库级门禁 `./gradlew spotlessCheck test verifySqlDelightMigration` **全绿**：`desktop-app` 1062 例、`desktop-library-data` 144 例、`app`（Android 侧契约）35 例、`reader-core` 189 例、`sync-server` 16 例，0 失败。
-- **Compose UI 测试预算加固**：Compose Multiplatform 的 `runComposeUiTest` 默认 `testTimeout = 60s`，且同一个值既充当协程预算（用尽报 `UncompletedCoroutinesError`）又充当框架 idle 等待阈值（用尽报 `ComposeTimeoutException`），重负载下会误报。现于 11 个文件、61 处显式传入 5 分钟预算（**仅测试改动，不动断言**）。
-- 沙箱扩展运行时目录（`%TEMP%\mihonw-sandbox-runtime-*`）的清理加固：不再因单次删除失败而中断整个 `close()`，并加入按目录年龄守卫的陈旧目录清扫。
+- 仓库级门禁 `./gradlew spotlessCheck test verifySqlDelightMigration` **全绿**：`desktop-app` 1066 例、`desktop-library-data` 144 例、`app`（Android 侧契约）35 例、`reader-core` 189 例、`sync-server` 16 例，0 失败。
+- **Compose UI 测试预算加固**：Compose Multiplatform 的 `runComposeUiTest` 默认 `testTimeout = 60s`，且同一个值既充当协程预算（用尽报 `UncompletedCoroutinesError`）又充当框架 idle 等待阈值（用尽报 `ComposeTimeoutException`），重负载下会误报。现于 11 个文件、61 处显式传入 5 分钟预算，并把此前仍用 1000ms 默认值的 31 处 `waitUntil` 按「是否跨 dispatcher」补齐预算（**仅测试改动，不动断言**）。
+- 沙箱扩展运行时目录（`%TEMP%\mihonw-sandbox-runtime-*`）的清理加固：不再因单次删除失败而中断整个 `close()`，并加入按目录年龄守卫的陈旧目录清扫；测试用的运行时目录（`%TEMP%\mihon-runtime-test*`）也在 JVM 退出时统一删除（此前每次全量测试约 +14 个、累计 1945 个 / 202 MB）。
+- 新增 `scripts/clear-tray-icon-registrations.ps1`（按路径前缀清理托盘登记，默认跳过仍在运行的进程），并接进 `verify-desktop-clean-machine.ps1`（纠正性：实测它此前每跑一次留一条）与 `scripts/tests/portable-updater.tests.ps1`（预防性）。
 
 ## 七、发版门禁状态
 
-已在**当版本构建**（`ab71ec5b4`，`dirty=false`）上完成的本地项：
+已在**当版本构建**（`mihon-build-info.properties` 里的 `revision`、`dirty=false`，与将要打 tag 的提交一致）上完成的本地项：
 
-- [x] 提交并记录构建身份：`mihon-build-info.properties` 记录 `version=0.2.23`、`dirty=false`，且 `revision` 与将要打 tag 的提交一致（本地用 `git log -1` 比对）
-- [x] 仓库级门禁 `spotlessCheck` + `test` + `verifySqlDelightMigration` 全绿（1446 例）
+- [x] 提交并记录构建身份：`mihon-build-info.properties` 记录 `version=0.2.24`、`dirty=false`，且 `revision` 与将要打 tag 的提交一致（本地用 `git log -1` 比对）
+- [x] 仓库级门禁 `spotlessCheck` + `test` + `verifySqlDelightMigration` 全绿（1450 例）
 - [x] 发行包清洁校验 `verify-release-clean.ps1` → PASS（无个人配置、无已装扩展、无用户数据）
 - [x] MSI 结构断言 `verify-msi-package.ps1` → PASS（WiX 升级码、许可、`RemoveFiles` 之前的延迟卸载钩子；**执行未测**）
-- [x] 便携交接失败注入 `scripts/tests/portable-updater.tests.ps1` → **17 项全 PASS**（成功/取消/身份不符/失败退出/回滚/超时/非法提交/校验和拒绝/占用配置拒绝/替换保留旧数据/替换后校验失败回滚/归档不得夹带用户数据/路径穿越拒绝/目录联接拒绝/两处中断恢复）
-- [x] 便携隔离目录验证 `verify-desktop-clean-machine.ps1 -SkipBuild` → `mihondesk 0.2.23 (Windows x64)`、`--help`、隔离 `data` 目录与备份导出全部通过
+- [x] 便携交接失败注入 `scripts/tests/portable-updater.tests.ps1` → **全项 PASS**（成功 / 取消 / 身份不符 / 失败退出 / 回滚 / 超时 / 非法提交 / 校验和拒绝 / 占用配置拒绝 / 替换保留旧数据 / 替换后校验失败回滚 / 归档不得夹带用户数据 / 路径穿越拒绝 / 目录联接拒绝 / 两处中断恢复）
+- [x] 便携隔离目录验证 `verify-desktop-clean-machine.ps1 -SkipBuild` → `mihondesk 0.2.24 (Windows x64)`、`--help`、隔离 `data` 目录与备份导出全部通过
+- [x] 真机升级实测：本机 0.2.21 → 0.2.23 → 0.2.24 的实际安装与启动（含数据目录保留、扩展宿主拉起、`--version` 输出）——**注意这不能替代 2A 的 VM 快照实测**
 
 仍需在你环境完成（**缺一不发**）：
 
 - [ ] **2A**：VM 快照上 N-1→N 升级与卸载两格实测（脚本部分已 PASS，执行部分必须实机）
 - [ ] **2C**：对真实已发布 Release 资产完成 检查→下载→清单/SHA 校验→交接→启动 端到端（断点续传与校验失败路径各一次）——依赖 Release 已存在
 - [ ] **1D**：干净 Windows 10 22H2 / Windows 11 上的安装冒烟（上面的隔离目录检查明确声明**不等同于**干净机器验收）
-- [ ] `verify-release-assets.ps1 -Tag v0.2.23`（需先有 Release）
+- [ ] `verify-release-assets.ps1 -Tag v0.2.24`（需先有 Release）
 - [ ] 推送提交并打 tag，上传 EXE、MSI、便携 ZIP、`SHA256SUMS.txt`、`desktop-version.txt`、`mihon-build-info.properties`，核对远程附件摘要后设为最新正式版
 
 本版跨越 Phase 6–9 与 7.5，差异面明显大于 0.2.22，建议按「新包新身份」原则把 VM 矩阵**全量重跑**，不要沿用 0.2.22 的结论。
