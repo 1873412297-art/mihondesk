@@ -17,6 +17,30 @@ sealed interface DesktopCommand {
     data class VerifyReader(val fixtureRoot: Path) : DesktopCommand
 }
 
+/**
+ * Whether the command can deliver a user-visible Windows notification, and therefore needs a tray icon.
+ *
+ * Windows records a persistent per-executable tray registration (`HKCU\Control Panel\NotifyIconSettings`)
+ * the first time a process adds a tray icon, and keeps it after the executable is deleted. Only
+ * [DesktopCommand.LaunchUi], [DesktopCommand.BackgroundUpdate] and [DesktopCommand.BackgroundBackup] can
+ * actually notify the user; every other command (version, help, export, import, smoke test, reader
+ * verification, background-task removal) is a plain command-line run that must not touch the shell.
+ */
+val DesktopCommand.needsNotificationTray: Boolean
+    get() = when (this) {
+        DesktopCommand.LaunchUi, DesktopCommand.BackgroundUpdate, DesktopCommand.BackgroundBackup -> true
+        DesktopCommand.Help,
+        DesktopCommand.Version,
+        DesktopCommand.FoundationSmoke,
+        DesktopCommand.ListLibraryJson,
+        DesktopCommand.RemoveBackgroundTasks,
+        is DesktopCommand.ImportBackup,
+        is DesktopCommand.ExportBackup,
+        is DesktopCommand.ImportLocal,
+        is DesktopCommand.VerifyReader,
+        -> false
+    }
+
 class CommandLineException(
     message: String,
     val argument: String? = null,

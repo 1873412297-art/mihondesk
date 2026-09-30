@@ -10,6 +10,7 @@ import kotlinx.coroutines.runBlocking
 import mihon.desktop.cli.CommandLineException
 import mihon.desktop.cli.DesktopCommand
 import mihon.desktop.cli.DesktopCommandParser
+import mihon.desktop.cli.needsNotificationTray
 import mihon.desktop.download.DownloadCacheCleaner
 import mihon.desktop.download.DownloadDiskProvider
 import mihon.desktop.extension.DesktopNetworkSettingsStore
@@ -286,6 +287,7 @@ object DesktopRuntimeFactory {
                 enabledProvider = { preferences.load().desktopNotificationsEnabled },
                 hideContentProvider = { preferences.load().desktopNotificationsHideContent },
                 stringsProvider = { mihon.desktop.i18n.DesktopStrings.resolve(preferences.load().language) },
+                trayIconEnabled = command.needsNotificationTray,
             )
             val defaultDownloadsDir = directories.root.resolve("media").resolve("downloads")
                 .toAbsolutePath()
@@ -480,6 +482,7 @@ object DesktopRuntimeFactory {
             val desktopNotificationService = mihon.desktop.platform.DesktopNotificationService(
                 enabledProvider = { preferences.load().desktopNotificationsEnabled },
                 hideContentProvider = { preferences.load().desktopNotificationsHideContent },
+                trayIconEnabled = command.needsNotificationTray,
             )
             val libraryUpdateService = mihon.desktop.library.update.LibraryUpdateService(
                 repository = library,

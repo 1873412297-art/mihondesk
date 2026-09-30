@@ -2,7 +2,10 @@ package mihon.desktop.notification
 
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
+import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
+import java.awt.GraphicsEnvironment
+import java.awt.SystemTray
 import java.nio.file.Path
 
 class DesktopNotificationServiceTest {
@@ -106,6 +109,22 @@ class DesktopNotificationServiceTest {
 
         service.clearNotifications()
         service.recentNotifications.value shouldHaveSize 0
+    }
+
+    @Test
+    fun `disabled tray icon leaves the system tray untouched and stays safe to notify`() {
+        assumeTrue(!GraphicsEnvironment.isHeadless() && SystemTray.isSupported())
+        val tray = SystemTray.getSystemTray()
+        val before = tray.trayIcons.toList()
+
+        val service = WindowsDesktopNotificationService(trayIconEnabled = false)
+        service.notifyDownloadComplete("Test Manga", "Gallery")
+        service.notifyDownloadError("Test Manga", "Gallery", "Connection interrupted")
+
+        val added = tray.trayIcons.filterNot { it in before }
+        added.forEach(tray::remove)
+        added shouldBe emptyList()
+        service.recentNotifications.value shouldHaveSize 2
     }
 
     @Test

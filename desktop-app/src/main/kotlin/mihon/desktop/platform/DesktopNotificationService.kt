@@ -25,6 +25,7 @@ data class DesktopNotificationEvent(
 class DesktopNotificationService(
     private val enabledProvider: () -> Boolean = { true },
     private val hideContentProvider: () -> Boolean = { false },
+    private val trayIconEnabled: Boolean = true,
 ) {
     private val _notifications = MutableStateFlow<DesktopNotificationEvent?>(null)
     val notifications: StateFlow<DesktopNotificationEvent?> = _notifications.asStateFlow()
@@ -32,7 +33,7 @@ class DesktopNotificationService(
     private var trayIcon: TrayIcon? = null
 
     init {
-        initTray()
+        if (trayIconEnabled) initTray()
     }
 
     private fun initTray() {

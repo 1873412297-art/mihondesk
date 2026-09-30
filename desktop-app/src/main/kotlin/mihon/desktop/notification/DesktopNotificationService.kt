@@ -41,6 +41,7 @@ class WindowsDesktopNotificationService(
     private val hideContentProvider: () -> Boolean = { false },
     private val systemMessageSink: ((String, String, Boolean) -> Unit)? = null,
     private val stringsProvider: () -> DesktopStrings = { EnglishStrings },
+    private val trayIconEnabled: Boolean = true,
 ) : DesktopNotificationService {
 
     private val _recentNotifications = MutableStateFlow<List<DesktopNotificationItem>>(emptyList())
@@ -49,7 +50,7 @@ class WindowsDesktopNotificationService(
     private var trayIcon: TrayIcon? = null
 
     init {
-        if (systemMessageSink == null) initTray()
+        if (trayIconEnabled && systemMessageSink == null) initTray()
     }
 
     private fun initTray() {

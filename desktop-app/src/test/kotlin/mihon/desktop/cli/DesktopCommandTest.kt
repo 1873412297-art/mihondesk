@@ -60,6 +60,26 @@ class DesktopCommandTest {
     }
 
     @Test
+    fun `only the commands that can notify a user need a notification tray icon`() {
+        val cases = listOf(
+            DesktopCommand.LaunchUi to true,
+            DesktopCommand.BackgroundUpdate to true,
+            DesktopCommand.BackgroundBackup to true,
+            DesktopCommand.RemoveBackgroundTasks to false,
+            DesktopCommand.FoundationSmoke to false,
+            DesktopCommand.Help to false,
+            DesktopCommand.Version to false,
+            DesktopCommand.ListLibraryJson to false,
+            DesktopCommand.ImportBackup(Path.of("C:\\备份\\a.tachibk")) to false,
+            DesktopCommand.ExportBackup(Path.of("C:\\备份\\out.tachibk")) to false,
+            DesktopCommand.ImportLocal(Path.of("C:\\漫画\\作品")) to false,
+            DesktopCommand.VerifyReader(Path.of("C:\\reader fixture")) to false,
+        )
+
+        cases.forEach { (command, expected) -> command.needsNotificationTray shouldBe expected }
+    }
+
+    @Test
     fun `rejects ambiguous missing and unknown command forms with exit code two`() {
         val invalid = listOf(
             arrayOf("--smoke-test", "--list-library-json"),
