@@ -20,6 +20,11 @@ import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
 import java.nio.file.Path
 
+/**
+ * The decoders keep [PackagedCodecPageDecoder]'s default scratch root: Windows keeps a directory
+ * locked while it is a live process's working directory, and JUnit deletes @TempDir exactly once,
+ * so no codec child may run with @TempDir as its working directory.
+ */
 class RealPackagedCodecIntegrationTest {
     @TempDir
     lateinit var temporaryDirectory: Path
@@ -31,7 +36,7 @@ class RealPackagedCodecIntegrationTest {
         val budget = BoundedReaderMemoryBudget(4L * 1024 * 1024)
         val decoder = CompositePageDecoder(
             ImageIoPageDecoder(budget),
-            PackagedCodecPageDecoder(budget, executable, temporaryRoot = temporaryDirectory.resolve("requests")),
+            PackagedCodecPageDecoder(budget, executable),
             ApngPageDecoder(budget),
         )
         val formats = listOf(
@@ -63,7 +68,7 @@ class RealPackagedCodecIntegrationTest {
         val budget = BoundedReaderMemoryBudget(4L * 1024 * 1024)
         val decoder = CompositePageDecoder(
             ImageIoPageDecoder(budget),
-            PackagedCodecPageDecoder(budget, executable, temporaryRoot = temporaryDirectory.resolve("requests")),
+            PackagedCodecPageDecoder(budget, executable),
             ApngPageDecoder(budget),
         )
         val fixtures = listOf(
@@ -93,7 +98,7 @@ class RealPackagedCodecIntegrationTest {
         val budget = BoundedReaderMemoryBudget(8L * 1024 * 1024)
         val decoder = CompositePageDecoder(
             ImageIoPageDecoder(budget),
-            PackagedCodecPageDecoder(budget, executable, temporaryRoot = temporaryDirectory.resolve("heic")),
+            PackagedCodecPageDecoder(budget, executable),
             ApngPageDecoder(budget),
         )
         val bytes = Files.readAllBytes(fixture)
@@ -122,7 +127,7 @@ class RealPackagedCodecIntegrationTest {
         val budget = BoundedReaderMemoryBudget(4L * 1024 * 1024)
         val decoder = CompositePageDecoder(
             ImageIoPageDecoder(budget),
-            PackagedCodecPageDecoder(budget, executable, temporaryRoot = temporaryDirectory.resolve("jpeg")),
+            PackagedCodecPageDecoder(budget, executable),
             ApngPageDecoder(budget),
         )
 

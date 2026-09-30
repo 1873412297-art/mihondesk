@@ -10,12 +10,14 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withTimeout
-import kotlinx.coroutines.withTimeoutOrNull
 import mihon.reader.source.ReaderFailure
+import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
+import java.io.IOException
+import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.TimeUnit
 import java.util.stream.Stream
@@ -23,6 +25,22 @@ import java.util.stream.Stream
 class ProcessCodecCommandRunnerTest {
     @TempDir
     lateinit var temporaryDirectory: Path
+
+    // Windows locks a directory while it is a live process's working directory. The runner kills the
+    // descendants it enumerated, so a child created between that enumeration and the parent's
+    // termination survives it; @TempDir is deleted exactly once, and a straggler holding it as its
+    // working directory fails the test during teardown instead of in an assertion. Keep the working
+    // directory of every child outside @TempDir.
+    private val processWorkingDirectory: Path = Files.createTempDirectory("codec-command-runner-")
+
+    @AfterEach
+    fun removeProcessWorkingDirectory() {
+        try {
+            Files.deleteIfExists(processWorkingDirectory)
+        } catch (_: IOException) {
+            // Empty scratch directory: a straggler still holding it must not fail the test.
+        }
+    }
 
     @Test
     fun `timed out process has actually exited before caller can remove its working directory`(): Unit = runTest {
@@ -87,13 +105,6 @@ class ProcessCodecCommandRunnerTest {
         delay(50)
         job.cancelAndJoin()
         process.isAlive shouldBe false
-        // On shared CI runners process teardown is asynchronous; descendants can
-        // outlive the direct child briefly and keep the @TempDir files locked when
-        // JUnit cleans up. Wait for the whole tree to exit first.
-        withTimeoutOrNull(5_000) {
-            while (process.descendants().anyMatch { it.isAlive }) delay(50)
-        }
-        delay(100)
         val elapsedMillis = (System.nanoTime() - startedAt) / 1_000_000
         (elapsedMillis < 5_000) shouldBe true
     }
@@ -105,7 +116,7 @@ class ProcessCodecCommandRunnerTest {
     ) = CodecCommand(
         executable = executable,
         arguments = arguments,
-        workingDirectory = temporaryDirectory,
+        workingDirectory = processWorkingDirectory,
         timeoutMillis = timeoutMillis,
         maxStdoutBytes = 1024,
     )
