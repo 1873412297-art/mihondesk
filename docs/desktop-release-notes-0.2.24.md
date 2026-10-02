@@ -69,14 +69,16 @@
 - [x] 便携交接失败注入 `scripts/tests/portable-updater.tests.ps1` → **全项 PASS**（成功 / 取消 / 身份不符 / 失败退出 / 回滚 / 超时 / 非法提交 / 校验和拒绝 / 占用配置拒绝 / 替换保留旧数据 / 替换后校验失败回滚 / 归档不得夹带用户数据 / 路径穿越拒绝 / 目录联接拒绝 / 两处中断恢复）
 - [x] 便携隔离目录验证 `verify-desktop-clean-machine.ps1 -SkipBuild` → `mihondesk 0.2.24 (Windows x64)`、`--help`、隔离 `data` 目录与备份导出全部通过
 - [x] 真机升级实测：本机 0.2.21 → 0.2.23 → 0.2.24 的实际安装与启动（含数据目录保留、扩展宿主拉起、`--version` 输出）——**注意这不能替代 2A 的 VM 快照实测**
+- [x] **1F**：CI 全绿——`Build & Test Windows Reader` 与 `Build & Test App` 两个 job 均 success（[运行 36748039493](https://github.com/1873412297-art/mihondesk/actions/runs/36748039493)，29m58s / 9m21s）。该运行跑在提交 `963640a1c`，与产出产物的 `d81990cc2` 之间**仅差 2 个测试文件 + 1 个构建脚本，产品代码相同**
+- [x] 打 tag `v0.2.24`（→ `d81990cc2`）并上传 6 个资产，远程摘要核对通过后于 2026-10-02 发布为**最新正式版**
+- [x] `verify-release-assets.ps1 -Tag v0.2.24` → **PASS**（6 个资产齐全、清单 5 条覆盖、发布哈希与本地 `desktop-app/build/releases/0.2.24` 一致）
+- [x] 2C 的**检查段**已用活体响应核对：`releases/latest` 返回 `tag=v0.2.24`、非 draft / 非预发布，6 个资产 URL 全为更新器断言的规范形态 `releases/download/v0.2.24/<名>`，`desktop-version.txt` 内容为 `0.2.24`
 
-仍需在你环境完成（**缺一不发**）：
+仍需在你环境完成（**缺一不发**；本次按维护者指令先发布，下列项在发布时尚未完成）：
 
 - [ ] **2A**：VM 快照上 N-1→N 升级与卸载两格实测（脚本部分已 PASS，执行部分必须实机）
-- [ ] **2C**：对真实已发布 Release 资产完成 检查→下载→清单/SHA 校验→交接→启动 端到端（断点续传与校验失败路径各一次）——依赖 Release 已存在
+- [ ] **2C 的下载→清单/SHA 校验→交接→启动段**：需以旧版便携副本经 UI 触发更新检查（断点续传与校验失败路径各一次，下载量约 500 MB）。命令行 `--background-update` 只跑**书库**自动更新，驱动不了应用自更新
 - [ ] **1D**：干净 Windows 10 22H2 / Windows 11 上的安装冒烟（上面的隔离目录检查明确声明**不等同于**干净机器验收）
-- [ ] `verify-release-assets.ps1 -Tag v0.2.24`（需先有 Release）
-- [ ] 推送提交并打 tag，上传 EXE、MSI、便携 ZIP、`SHA256SUMS.txt`、`desktop-version.txt`、`mihon-build-info.properties`，核对远程附件摘要后设为最新正式版
 
 本版跨越 Phase 6–9 与 7.5，差异面明显大于 0.2.22，建议按「新包新身份」原则把 VM 矩阵**全量重跑**，不要沿用 0.2.22 的结论。
 
