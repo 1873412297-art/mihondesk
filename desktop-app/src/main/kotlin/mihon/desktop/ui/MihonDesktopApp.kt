@@ -45,6 +45,9 @@ import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.rememberWindowState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import mihon.desktop.DesktopRuntime
@@ -62,6 +65,8 @@ import mihon.desktop.navigation.DesktopBackHandler
 import mihon.desktop.navigation.DesktopDestination
 import mihon.desktop.navigation.DesktopNavigator
 import mihon.desktop.navigation.LocalDesktopNavigator
+import mihon.desktop.platform.ForwardedFileKind
+import mihon.desktop.platform.SingleInstanceRequest
 import mihon.desktop.reader.DesktopReaderSettingsStore
 import mihon.desktop.reader.ReaderChapterBookmarkStore
 import mihon.desktop.reader.ReaderWindowMode
@@ -112,7 +117,10 @@ import java.io.File
 import androidx.compose.ui.window.WindowPlacement as ComposeWindowPlacement
 
 @Composable
-fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
+fun ApplicationScope.MihonDesktopApp(
+    runtime: DesktopRuntime,
+    instanceRequests: Flow<SingleInstanceRequest> = emptyFlow(),
+) {
     var preferences by remember { mutableStateOf(runtime.preferences.load()) }
     var showOnboarding by remember { mutableStateOf(!preferences.onboardingCompleted) }
     var pendingExportPath by remember { mutableStateOf<java.nio.file.Path?>(null) }
@@ -203,23 +211,29 @@ fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
     }
     val presenterScope = rememberCoroutineScope()
     lateinit var closeApplicationRef: (Boolean) -> Unit
+    fun showMainWindow(fromAnotherProcess: Boolean = false) {
+        composeWindow?.let { window ->
+            java.awt.EventQueue.invokeLater {
+                if (!window.isVisible) {
+                    window.isVisible = true
+                }
+                if ((window.extendedState and Frame.ICONIFIED) != 0) {
+                    window.extendedState = window.extendedState and Frame.ICONIFIED.inv()
+                }
+                if (fromAnotherProcess && !window.isAlwaysOnTop) {
+                    // Windows may only flash the taskbar for toFront() from a background process.
+                    window.isAlwaysOnTop = true
+                    window.isAlwaysOnTop = false
+                }
+                window.toFront()
+                window.requestFocus()
+            }
+        }
+    }
     val tray = remember {
         DesktopTray(
             stringsProvider = { mihon.desktop.i18n.DesktopStrings.resolve(preferences.language) },
-            onShow = {
-                composeWindow?.let { window ->
-                    java.awt.EventQueue.invokeLater {
-                        if (!window.isVisible) {
-                            window.isVisible = true
-                        }
-                        if ((window.extendedState and Frame.ICONIFIED) != 0) {
-                            window.extendedState = window.extendedState and Frame.ICONIFIED.inv()
-                        }
-                        window.toFront()
-                        window.requestFocus()
-                    }
-                }
-            },
+            onShow = { showMainWindow() },
             onQuit = {
                 closeApplicationRef(true)
             },
@@ -346,6 +360,33 @@ fun ApplicationScope.MihonDesktopApp(runtime: DesktopRuntime) {
     var pendingMangaOrganizationAction by remember { mutableStateOf<MangaOrganizationAction?>(null) }
     var pendingMissingSources by remember { mutableStateOf<List<MissingSourceInfo>?>(null) }
     var isInstallingMissingBatch by remember { mutableStateOf(false) }
+
+    // A second launch (Start Menu, tray-hidden instance, file double-click) is forwarded here.
+    val windowReady = composeWindow != null
+    LaunchedEffect(instanceRequests, windowReady) {
+        if (!windowReady) return@LaunchedEffect
+        instanceRequests.collect { request ->
+            showMainWindow(fromAnotherProcess = true)
+            val path = (request as? SingleInstanceRequest.Open)?.path ?: return@collect
+            presenterScope.launch {
+                // Forwarded files stay behind the app lock, exactly like the in-app import actions.
+                appLockController.isLocked.first { !it }
+                when (ForwardedFileKind.of(path)) {
+                    // Same flow as Library > Import backup: the user confirms restore options first.
+                    ForwardedFileKind.AndroidBackup -> pendingImportPath = path
+                    ForwardedFileKind.LocalArchive -> if (importState != ImportActionState.Running) {
+                        importState = ImportActionState.Running
+                        importState = importController.importLocal(path)
+                    }
+                    ForwardedFileKind.Unsupported ->
+                        mihon.desktop.logging.DesktopLogger.warn(
+                            "SingleInstance",
+                            "Ignoring forwarded unsupported file",
+                        )
+                }
+            }
+        }
+    }
 
     LaunchedEffect(backupRestoreState) {
         val finished = backupRestoreState as? BackupRestoreState.Finished

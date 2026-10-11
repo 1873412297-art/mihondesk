@@ -2,6 +2,9 @@ package mihon.desktop
 
 import androidx.compose.ui.window.application
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.receiveAsFlow
 import mihon.desktop.cli.CommandLineException
 import mihon.desktop.cli.DesktopCommand
 import mihon.desktop.cli.DesktopCommandParser
@@ -14,8 +17,13 @@ import mihon.desktop.platform.DesktopProfileLock
 import mihon.desktop.platform.PortableUpdateGuard
 import mihon.desktop.platform.PortableUpdatePendingException
 import mihon.desktop.platform.ProfileInUseException
+import mihon.desktop.platform.SingleInstanceClient
+import mihon.desktop.platform.SingleInstanceForwarding
+import mihon.desktop.platform.SingleInstanceRequest
+import mihon.desktop.platform.SingleInstanceServer
 import mihon.desktop.preferences.DesktopPreferenceStore
 import mihon.desktop.ui.MihonDesktopApp
+import java.io.PrintStream
 import java.nio.file.Path
 import kotlin.system.exitProcess
 
@@ -35,16 +43,18 @@ fun main(args: Array<String>) {
         ?: Path.of(System.getProperty("user.dir"))
     var interactiveStartup = false
     var startupLanguage = AppLanguage.System
+    var requestedCommand: DesktopCommand? = null
     val exitCode = try {
-        val requestedCommand = DesktopCommandParser.parse(args)
-        interactiveStartup = requestedCommand == DesktopCommand.LaunchUi
-        PortableUpdateGuard.requireAllowed(executableDirectory, requestedCommand, System.getenv())
+        val parsedCommand = DesktopCommandParser.parse(args)
+        requestedCommand = parsedCommand
+        interactiveStartup = parsedCommand == DesktopCommand.LaunchUi
+        PortableUpdateGuard.requireAllowed(executableDirectory, parsedCommand, System.getenv())
         val profile = DesktopProfileDirectories.resolve(args, System.getenv(), executableDirectory)
         DesktopLogger.init(profile.logs)
         DesktopLogger.info("Main", "Starting mihondesk with args: ${args.joinToString(" ")}")
         DesktopProfileLock.acquire(profile.root).use {
             // Close the race with an updater creating the guard after our initial check.
-            PortableUpdateGuard.requireAllowed(executableDirectory, requestedCommand, System.getenv())
+            PortableUpdateGuard.requireAllowed(executableDirectory, parsedCommand, System.getenv())
             startupLanguage = runCatching {
                 DesktopPreferenceStore(profile.root.resolve("preferences.properties")).load().language
             }.getOrDefault(AppLanguage.System)
@@ -56,16 +66,34 @@ fun main(args: Array<String>) {
                 },
                 launchUi = { activeRuntime ->
                     configureDesktopRendering()
-                    application(exitProcessOnExit = false) {
-                        MihonDesktopApp(activeRuntime)
+                    // Requests may arrive before the UI subscribes; keep a small buffer of the newest ones.
+                    val forwarded = Channel<SingleInstanceRequest>(16, BufferOverflow.DROP_OLDEST)
+                    val server = runCatching {
+                        SingleInstanceServer.start(profile.root) { request ->
+                            check(forwarded.trySend(request).isSuccess) { "UI is no longer accepting requests" }
+                        }
+                    }.onFailure {
+                        DesktopLogger.warn("Main", "Single-instance listener unavailable: ${it.message}")
+                    }.getOrNull()
+                    try {
+                        application(exitProcessOnExit = false) {
+                            MihonDesktopApp(activeRuntime, forwarded.receiveAsFlow())
+                        }
+                    } finally {
+                        forwarded.close()
+                        server?.close()
                     }
                 },
             )
         }
-    } catch (_: ProfileInUseException) {
-        DesktopLogger.warn("Main", "Profile in use; skipping startup")
-        System.out.println("""{"command":"startup","status":"SKIPPED","category":"PROFILE_IN_USE"}""")
-        if ("--background-update" in args || "--background-backup" in args) 0 else 75
+    } catch (error: ProfileInUseException) {
+        handleProfileInUse(
+            args = args,
+            command = requestedCommand,
+            profileRoot = error.profile,
+            workingDirectory = Path.of(System.getProperty("user.dir")),
+            out = System.out,
+        )
     } catch (error: CommandLineException) {
         DesktopLogger.error("Main", "Command line error: ${error.message}", error)
         DesktopCommandRunner.writeCommandLineError(System.out, error)
@@ -81,6 +109,35 @@ fun main(args: Array<String>) {
     DesktopLogger.info("Main", "Exiting mihondesk with exit code: $exitCode")
     DesktopLogger.close()
     exitProcess(exitCode)
+}
+
+/**
+ * A launch lost the profile lock to a running instance. Interactive launches (plain UI start, file
+ * association) are forwarded so the running window comes to the front; background tasks keep their
+ * silent skip (exit 0) and everything else, or a failed forward, keeps the historical exit 75.
+ */
+internal fun handleProfileInUse(
+    args: Array<String>,
+    command: DesktopCommand?,
+    profileRoot: Path,
+    workingDirectory: Path,
+    out: PrintStream,
+    forward: (Path, SingleInstanceRequest) -> Boolean = { root, request -> SingleInstanceClient.send(root, request) },
+): Int {
+    val background = "--background-update" in args || "--background-backup" in args
+    val request = if (background || command == null) {
+        null
+    } else {
+        SingleInstanceForwarding.requestFor(args, command, workingDirectory)
+    }
+    if (request != null && forward(profileRoot, request)) {
+        DesktopLogger.info("Main", "Profile in use; forwarded ${request::class.simpleName} to running instance")
+        out.println("""{"command":"startup","status":"FORWARDED","category":"PROFILE_IN_USE"}""")
+        return 0
+    }
+    DesktopLogger.warn("Main", "Profile in use; skipping startup")
+    out.println("""{"command":"startup","status":"SKIPPED","category":"PROFILE_IN_USE"}""")
+    return if (background) 0 else 75
 }
 
 internal fun executeDesktopRuntime(
