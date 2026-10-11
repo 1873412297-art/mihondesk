@@ -23,16 +23,16 @@ AI 辅助开发的开源项目 · 基于 Mihon · Kotlin / Compose Desktop
 
 ## 下载与安装
 
-当前版本：**0.2.22**。面向 **Windows 10 22H2 / Windows 11，x64**，发行包已内置运行环境，无需另装 Java。
+当前版本：**0.2.24**。面向 **Windows 10 22H2 / Windows 11，x64**，发行包已内置运行环境，无需另装 Java。
 
 程序、安装包和快捷方式现已统一命名为 **mihondesk**。安装版继续使用原有数据目录，支持从 MihonW 升级。
 
 | 下载 | 适用方式 |
 | --- | --- |
-| **[EXE 安装包](https://github.com/1873412297-art/mihondesk/releases/download/v0.2.22/mihondesk-0.2.22.exe)** | 推荐使用，下载后按向导安装 |
-| [MSI 安装包](https://github.com/1873412297-art/mihondesk/releases/download/v0.2.22/mihondesk-0.2.22.msi) | 需要 MSI 安装方式时使用 |
-| [便携 ZIP](https://github.com/1873412297-art/mihondesk/releases/download/v0.2.22/mihondesk-0.2.22-windows-x64-portable.zip) | 完整解压到可写目录，运行其中的 `mihondesk.exe` |
-| [SHA-256 校验文件](https://github.com/1873412297-art/mihondesk/releases/download/v0.2.22/SHA256SUMS.txt) | 校验下载文件的完整性 |
+| **[EXE 安装包](https://github.com/1873412297-art/mihondesk/releases/download/v0.2.24/mihondesk-0.2.24.exe)** | 推荐使用，下载后按向导安装 |
+| [MSI 安装包](https://github.com/1873412297-art/mihondesk/releases/download/v0.2.24/mihondesk-0.2.24.msi) | 需要 MSI 安装方式时使用 |
+| [便携 ZIP](https://github.com/1873412297-art/mihondesk/releases/download/v0.2.24/mihondesk-0.2.24-windows-x64-portable.zip) | 完整解压到可写目录，运行其中的 `mihondesk.exe` |
+| [SHA-256 校验文件](https://github.com/1873412297-art/mihondesk/releases/download/v0.2.24/SHA256SUMS.txt) | 校验下载文件的完整性 |
 
 **首次使用**：发行包不预装在线图源或扩展仓库，请自行添加仓库或安装扩展。本地文件阅读无需安装图源。升级会保留已有书架、设置和阅读数据。
 
@@ -56,6 +56,17 @@ AI 辅助开发的开源项目 · 基于 Mihon · Kotlin / Compose Desktop
 2. **阅读本地文件**：使用本地导入入口选择漫画文件或图片目录。
 3. **阅读在线内容**：在浏览页安装扩展包，再选择图源。安装入口支持 `.mext`，也可尝试转换受支持的扩展 `.apk`。
 4. **保留阅读数据**：使用备份功能定期导出。备份不包含已下载的漫画图片。
+
+## 0.2.24 更新
+
+- **阅读器**：双页跨页拆分（关闭 / 始终 / 仅宽图）与宽图旋转适配、翻页过渡动画（无 / 淡入 / 滑动）、自定义色相·亮度·对比度滤镜、翻页闪屏与 Webtoon 偏好；
+- **设置与数据**：设置内搜索、按来源清除非书库数据、存储占用明细、智能更新「非更新周期」过滤、自动下载仅未读与分类条件；
+- **下载**：可选「章节保存为 CBZ」与「下载时拆分长图」（两项**默认关闭**，与 Android 默认值不同）；
+- **扩展**：显示扩展来源商店；安装失败按原因分类提示（下载失败 / 签名被拒 / 商店已不再提供 / 其他）；
+- **健壮性**：书库读写移出 UI 线程、章节设置后台串行化、同步服务器按令牌限流、删除下载的文件占用重试；**命令行运行不再登记系统托盘图标**（此前每次 CLI 运行都会在系统托盘留下一条永久记录，累积成多个重复图标）；
+- 说明：0.2.23 未发布，本版直接以 0.2.24 编号发布（同版本号 MSI 会被 Windows Installer 拒绝覆盖）。
+
+详见[本版发布说明](https://github.com/1873412297-art/mihondesk/releases/tag/v0.2.24)和[更新日志](CHANGELOG.md)。
 
 ## 0.2.22 更新
 
