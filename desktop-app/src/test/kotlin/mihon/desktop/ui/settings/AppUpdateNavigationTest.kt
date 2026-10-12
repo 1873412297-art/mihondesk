@@ -33,9 +33,9 @@ class AppUpdateNavigationTest {
     ) {
         val content = "app bytes".toByteArray()
         val hash = MessageDigest.getInstance("SHA-256").digest(content).joinToString("") { "%02x".format(it) }
-        val name = "mihondesk-0.3.0.exe"
-        val base = "https://github.com/${DesktopAppUpdateService.DEFAULT_REPO}/releases/download/v0.3.0/"
-        val json = """{"tag_name":"v0.3.0","assets":[
+        val name = "mihondesk-9.9.0.exe"
+        val base = "https://github.com/${DesktopAppUpdateService.DEFAULT_REPO}/releases/download/v9.9.0/"
+        val json = """{"tag_name":"v9.9.0","assets":[
             {"name":"$name","browser_download_url":"$base$name","size":${content.size}},
             {"name":"SHA256SUMS.txt","browser_download_url":"${base}SHA256SUMS.txt"}]}"""
         val calls = AtomicInteger()

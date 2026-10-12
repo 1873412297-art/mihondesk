@@ -21,6 +21,10 @@ object WindowsTitleBar {
     private const val DWMWA_USE_IMMERSIVE_DARK_MODE = 20
     private const val DWMWA_USE_IMMERSIVE_DARK_MODE_LEGACY = 19
 
+    // Windows 11 22000+: colour of the 1px window border; DWMWA_COLOR_DEFAULT restores the system one.
+    private const val DWMWA_BORDER_COLOR = 34
+    private const val DWMWA_COLOR_DEFAULT = -0x1
+
     private val isWindows: Boolean = System.getProperty("os.name").orEmpty()
         .startsWith("Windows", ignoreCase = true)
 
@@ -60,5 +64,36 @@ object WindowsTitleBar {
                 api.DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE_LEGACY, value, 4)
             }
         }.onFailure { DesktopLogger.warn("TitleBar", "DwmSetWindowAttribute failed: ${it.message}") }
+    }
+
+    /** Sets the Windows 11 window border to [colorRef] (0x00BBGGRR), or the system default when null. */
+    fun applyBorderColor(window: Window, colorRef: Int?) {
+        if (!isWindows) return
+        val api = dwm ?: return
+        val action = {
+            runCatching {
+                val hwnd = Native.getWindowPointer(window)
+                if (hwnd != null) {
+                    api.DwmSetWindowAttribute(
+                        hwnd,
+                        DWMWA_BORDER_COLOR,
+                        IntByReference(colorRef ?: DWMWA_COLOR_DEFAULT),
+                        4,
+                    )
+                }
+            }
+        }
+        if (window.isDisplayable) {
+            action()
+        } else {
+            window.addWindowListener(
+                object : WindowAdapter() {
+                    override fun windowOpened(e: WindowEvent) {
+                        window.removeWindowListener(this)
+                        action()
+                    }
+                },
+            )
+        }
     }
 }

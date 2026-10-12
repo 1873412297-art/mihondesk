@@ -466,6 +466,9 @@ interface DesktopStrings {
     val syncServerQuickPairWarning: String
     val syncServerDeviceNameLabel: String
     val runInBackgroundTitle: String
+    val systemTitleBarTitle: String
+    val systemTitleBarSummary: String
+    val titleBarSystemMenu: String
     val runInBackgroundSummary: String
     val trayShow: String
     val trayQuit: String
@@ -1352,6 +1355,10 @@ object EnglishStrings : DesktopStrings {
         "Any device on the same Wi-Fi network can connect to your library without scanning the QR code."
     override val syncServerDeviceNameLabel = "Device name (shown on phone)"
     override val runInBackgroundTitle = "Keep running in background after closing"
+    override val systemTitleBarTitle = "Use system title bar"
+    override val systemTitleBarSummary =
+        "Show the classic Windows title bar instead of the mihondesk title bar. Applies after restarting. High-contrast themes always use the system title bar."
+    override val titleBarSystemMenu = "Window menu"
     override val runInBackgroundSummary =
         "Close button hides the window to the system tray; sync server stays alive"
     override val trayShow = "Show mihondesk"
@@ -2333,6 +2340,10 @@ object SimplifiedChineseStrings : DesktopStrings {
         "同一 Wi-Fi 下的任何设备将无需扫码即可连接你的书架同步。"
     override val syncServerDeviceNameLabel = "设备名称（显示在手机端）"
     override val runInBackgroundTitle = "关闭窗口后在后台运行"
+    override val systemTitleBarTitle = "使用系统标题栏"
+    override val systemTitleBarSummary =
+        "以经典 Windows 标题栏替代 mihondesk 标题栏。重启后生效。高对比度主题始终使用系统标题栏。"
+    override val titleBarSystemMenu = "窗口菜单"
     override val runInBackgroundSummary = "点关闭后窗口隐藏到系统托盘，同步服务器保持运行，托盘菜单可彻底退出"
     override val trayShow = "显示 mihondesk"
     override val trayQuit = "退出"
@@ -3307,6 +3318,10 @@ object TraditionalChineseStrings : DesktopStrings {
         "同一 Wi-Fi 下的任何裝置將無需掃碼即可連接你的書架同步。"
     override val syncServerDeviceNameLabel = "裝置名稱（顯示在手機端）"
     override val runInBackgroundTitle = "關閉視窗後在背景執行"
+    override val systemTitleBarTitle = "使用系統標題列"
+    override val systemTitleBarSummary =
+        "以傳統 Windows 標題列取代 mihondesk 標題列。重新啟動後生效。高對比佈景主題一律使用系統標題列。"
+    override val titleBarSystemMenu = "視窗選單"
     override val runInBackgroundSummary = "點關閉後視窗隱藏到系統匣，同步伺服器保持執行，系統匣選單可徹底結束"
     override val trayShow = "顯示 mihondesk"
     override val trayQuit = "結束"

@@ -77,6 +77,7 @@ import mihon.desktop.navigation.DesktopNavigator
 import mihon.desktop.navigation.LocalDesktopNavigator
 import mihon.desktop.platform.ForwardedFileKind
 import mihon.desktop.platform.SingleInstanceRequest
+import mihon.desktop.platform.toColorRef
 import mihon.desktop.reader.DesktopReaderSettingsStore
 import mihon.desktop.reader.ReaderChapterBookmarkStore
 import mihon.desktop.reader.ReaderWindowMode
@@ -638,13 +639,21 @@ fun ApplicationScope.MihonDesktopApp(
         }
     }
 
-    key(readerWindowMode == ReaderWindowMode.BORDERLESS) {
+    // Decided once per launch: the JBR caption is installed before the window is shown, and a
+    // user toggle in Advanced settings takes effect after restart.
+    val customTitleBarEnabled = remember {
+        mihon.desktop.platform.DesktopTitleBarPolicy.useCustomTitleBar(
+            jbrSupported = mihon.desktop.platform.JbrTitleBar.isSupported,
+            userPrefersSystemTitleBar = preferences.useSystemTitleBar,
+            highContrast = mihon.desktop.platform.JbrTitleBar.isHighContrast,
+        )
+    }
+    run {
         Window(
             onCloseRequest = { closeApplication() },
             state = windowState,
             title = windowTitle,
             icon = appIcon,
-            undecorated = readerWindowMode == ReaderWindowMode.BORDERLESS,
             onPreviewKeyEvent = { event ->
                 appLockController.recordActivity()
                 val action = if (ShortcutCaptureState.active) {
@@ -710,8 +719,12 @@ fun ApplicationScope.MihonDesktopApp(
                 window.minimumSize = java.awt.Dimension(960, 640)
             }
             val darkTitleBar = resolveDarkTheme(preferences.themeMode)
+            val customTitleBar = remember(window) {
+                if (customTitleBarEnabled) mihon.desktop.platform.JbrTitleBar.install(window, darkTitleBar) else null
+            }
             LaunchedEffect(window, darkTitleBar) {
                 mihon.desktop.platform.WindowsTitleBar.apply(window, darkTitleBar)
+                customTitleBar?.let { mihon.desktop.platform.JbrTitleBar.setDark(window, it, darkTitleBar) }
             }
             val libraryDropTarget = remember {
                 object : DragAndDropTarget {
@@ -726,6 +739,28 @@ fun ApplicationScope.MihonDesktopApp(
                 themeMode = preferences.themeMode,
                 appTheme = preferences.appTheme,
                 isAmoled = preferences.themeDarkAmoled,
+                topBar = {
+                    val borderColor = MaterialTheme.colorScheme.outlineVariant
+                    LaunchedEffect(window, borderColor, customTitleBar) {
+                        mihon.desktop.platform.WindowsTitleBar.applyBorderColor(
+                            window,
+                            if (customTitleBar != null) borderColor.toColorRef() else null,
+                        )
+                    }
+                    val showCaption = mihon.desktop.platform.DesktopTitleBarPolicy.showCaptionStrip(
+                        customTitleBar = customTitleBar != null,
+                        borderlessOrFullscreen = readerWindowMode != ReaderWindowMode.NORMAL,
+                    )
+                    if (showCaption && customTitleBar != null) {
+                        mihon.desktop.platform.MihonTitleBar(
+                            frame = window,
+                            titleBar = customTitleBar,
+                            title = windowTitle,
+                            icon = appIcon,
+                            iconDescription = currentLanguageStrings.titleBarSystemMenu,
+                        )
+                    }
+                },
             ) {
                 mihon.desktop.i18n.ProvideDesktopStrings(preferences.language) {
                     androidx.compose.runtime.CompositionLocalProvider(

@@ -134,9 +134,9 @@ class AppUpdatePresenterTest {
     @TempDir lateinit var root: Path
     private val data = "package bytes".toByteArray()
     private val hash = MessageDigest.getInstance("SHA-256").digest(data).joinToString("") { "%02x".format(it) }
-    private val name = "mihondesk-0.3.0.exe"
-    private val base = "https://github.com/${DesktopAppUpdateService.DEFAULT_REPO}/releases/download/v0.3.0/"
-    private val json = """{"tag_name":"v0.3.0","assets":[
+    private val name = "mihondesk-9.9.0.exe"
+    private val base = "https://github.com/${DesktopAppUpdateService.DEFAULT_REPO}/releases/download/v9.9.0/"
+    private val json = """{"tag_name":"v9.9.0","assets":[
         {"name":"$name","browser_download_url":"$base$name","size":${data.size}},
         {"name":"SHA256SUMS.txt","browser_download_url":"${base}SHA256SUMS.txt"}]}"""
 

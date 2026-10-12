@@ -4070,6 +4070,7 @@ private fun AdvancedSettingsPane(
         )
 
         BackgroundSettingsCard(preferenceStore, backgroundScheduler, onPreferencesChanged)
+        SystemTitleBarCard(preferenceStore, onPreferencesChanged)
         NetworkSettingsCard(preferenceStore)
 
         // Storage & Cache Cleaner Card
@@ -4487,6 +4488,47 @@ private fun InterfaceDensityCard(preferenceStore: DesktopPreferenceStore) {
                     )
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun SystemTitleBarCard(
+    preferenceStore: DesktopPreferenceStore,
+    onPreferencesChanged: ((DesktopPreferences) -> Unit)?,
+) {
+    val strings = LocalStrings.current
+    var useSystem by remember { mutableStateOf(preferenceStore.load().useSystemTitleBar) }
+    Card(shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth().testTag("system-title-bar-card")) {
+        Row(
+            modifier = Modifier.padding(16.dp).fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(
+                modifier = Modifier.weight(1f).padding(end = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text(
+                    strings.systemTitleBarTitle,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    strings.systemTitleBarSummary,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            androidx.compose.material3.Switch(
+                checked = useSystem,
+                onCheckedChange = { checked ->
+                    val updated = preferenceStore.updatePreferences { it.copy(useSystemTitleBar = checked) }
+                    useSystem = checked
+                    onPreferencesChanged?.invoke(updated)
+                },
+                modifier = Modifier.testTag("system-title-bar-switch"),
+            )
         }
     }
 }

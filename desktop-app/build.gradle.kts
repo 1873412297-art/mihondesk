@@ -45,10 +45,15 @@ tasks.named<ProcessResources>("processResources") {
     from(rootProject.file("scripts/mihondesk-updater.ps1"))
 }
 
-val desktopJavaHome = extensions
+// The packaged runtime is the JetBrains Runtime 21: its WindowDecorations API powers the custom
+// title bar while keeping the native frame (Snap, Snap Layouts, system menu, double-click maximize).
+// MIHON_JBR_HOME overrides the toolchain lookup; otherwise Gradle resolves a JetBrains JDK 21 from
+// ~/.gradle/jdks (auto-provisioned on first use).
+val desktopJavaHome = providers.environmentVariable("MIHON_JBR_HOME").orNull ?: extensions
     .getByType<JavaToolchainService>()
     .launcherFor {
-        languageVersion.set(JavaLanguageVersion.of(mihonx.versions.java.get().toInt()))
+        languageVersion.set(JavaLanguageVersion.of(21))
+        vendor.set(org.gradle.jvm.toolchain.JvmVendorSpec.JETBRAINS)
     }.get()
     .metadata
     .installationPath
@@ -63,6 +68,7 @@ dependencies {
     implementation(project(":sync-server"))
     implementation(project(":sync-transport-http"))
     implementation(libs.jna.platform)
+    implementation("org.jetbrains.runtime:jbr-api:1.10.1")
     implementation(compose.desktop.currentOs)
     implementation(compose.material3)
     implementation(compose.materialIconsExtended)

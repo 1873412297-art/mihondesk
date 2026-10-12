@@ -89,6 +89,8 @@ data class DesktopPreferences(
     val syncServerDeviceName: String = "",
     val syncServerSelectedIp: String = "",
     val runInBackgroundOnClose: Boolean = false,
+    /** Advanced: use the classic Windows caption instead of the custom title bar. */
+    val useSystemTitleBar: Boolean = false,
     val onboardingCompleted: Boolean = false,
     val showNsfwSources: Boolean = false,
     val hiddenSourceIds: Set<Long> = emptySet(),
@@ -257,6 +259,8 @@ class DesktopPreferenceStore(private val file: Path) {
             syncServerSelectedIp = properties.getProperty("sync.server_selected_ip") ?: "",
             runInBackgroundOnClose = properties.getProperty("background.run_in_background_on_close")
                 ?.toBooleanStrictOrNull() ?: false,
+            useSystemTitleBar = properties.getProperty("window.use_system_title_bar")
+                ?.toBooleanStrictOrNull() ?: false,
             onboardingCompleted = properties.getProperty("onboarding.completed")?.toBooleanStrictOrNull() ?: false,
             showNsfwSources = properties.firstBoolean("browse.show_nsfw", "show_nsfw") ?: false,
             hiddenSourceIds = properties.firstLongSet("browse.hidden_sources", "hidden_sources"),
@@ -315,6 +319,7 @@ class DesktopPreferenceStore(private val file: Path) {
             "background.run_in_background_on_close",
             preferences.runInBackgroundOnClose.toString(),
         )
+        properties.setProperty("window.use_system_title_bar", preferences.useSystemTitleBar.toString())
         properties.setProperty(
             "library.update_interval_hours",
             preferences.libraryUpdateIntervalHours.toString(),

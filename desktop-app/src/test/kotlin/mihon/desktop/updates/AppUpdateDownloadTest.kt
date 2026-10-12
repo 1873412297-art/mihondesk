@@ -13,10 +13,10 @@ import java.nio.file.Path
 import java.security.MessageDigest
 
 class AppUpdateDownloadTest {
-    private val base = "https://github.com/${DesktopAppUpdateService.DEFAULT_REPO}/releases/download/v0.3.0/"
-    private val asset = AppReleaseAsset("mihondesk-0.3.0.exe", base + "mihondesk-0.3.0.exe", 16)
+    private val base = "https://github.com/${DesktopAppUpdateService.DEFAULT_REPO}/releases/download/v9.9.0/"
+    private val asset = AppReleaseAsset("mihondesk-9.9.0.exe", base + "mihondesk-9.9.0.exe", 16)
     private val manifest = AppReleaseAsset("SHA256SUMS.txt", base + "SHA256SUMS.txt")
-    private val release = AppReleaseInfo("0.3.0", "v0.3.0", assets = listOf(asset, manifest))
+    private val release = AppReleaseInfo("9.9.0", "v9.9.0", assets = listOf(asset, manifest))
 
     @TempDir lateinit var root: Path
     private val bytes = "verified package".toByteArray()
@@ -96,11 +96,11 @@ class AppUpdateDownloadTest {
 
     @Test
     fun `wrong version assets and prereleases do not offer install packages`(): Unit = runBlocking {
-        val json = """{"tag_name":"v0.3.0","assets":[{"name":"mihondesk-0.2.9.exe"}]}"""
+        val json = """{"tag_name":"v9.9.0","assets":[{"name":"mihondesk-0.2.9.exe"}]}"""
         DesktopAppUpdateService(fetchText = { json }).checkForUpdates()
             .shouldBeInstanceOf<UpdateCheckResult.UpdateAvailable>().matchedAsset shouldBe null
         for (flag in listOf("draft", "prerelease")) {
-            DesktopAppUpdateService(fetchText = { """{"tag_name":"v0.3.0","$flag":true}""" })
+            DesktopAppUpdateService(fetchText = { """{"tag_name":"v9.9.0","$flag":true}""" })
                 .checkForUpdates().shouldBeInstanceOf<UpdateCheckResult.CheckFailed>()
         }
     }
@@ -210,7 +210,7 @@ class AppUpdateDownloadTest {
 
     @Test
     fun `invalid stable versions fail instead of reporting current`(): Unit = runBlocking {
-        for (tag in listOf("", "broken", "v0.3.0-beta.1")) {
+        for (tag in listOf("", "broken", "v9.9.0-beta.1")) {
             DesktopAppUpdateService(fetchText = { """{"tag_name":"$tag"}""" })
                 .checkForUpdates().shouldBeInstanceOf<UpdateCheckResult.CheckFailed>()
         }
