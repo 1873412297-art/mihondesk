@@ -3,6 +3,7 @@ package mihon.desktop.ui.theme
 import mihon.desktop.ui.theme.colorscheme.BaseColorScheme
 import mihon.desktop.ui.theme.colorscheme.CatppuccinColorScheme
 import mihon.desktop.ui.theme.colorscheme.GreenAppleColorScheme
+import mihon.desktop.ui.theme.colorscheme.InkColorScheme
 import mihon.desktop.ui.theme.colorscheme.LavenderColorScheme
 import mihon.desktop.ui.theme.colorscheme.MidnightDuskColorScheme
 import mihon.desktop.ui.theme.colorscheme.MonochromeColorScheme
@@ -18,7 +19,8 @@ import mihon.desktop.ui.theme.colorscheme.YotsubaColorScheme
 
 object ThemeRegistry {
     val colorSchemes: Map<DesktopAppTheme, BaseColorScheme> = mapOf(
-        DesktopAppTheme.DEFAULT to TachiyomiColorScheme,
+        DesktopAppTheme.DEFAULT to InkColorScheme,
+        DesktopAppTheme.MIHON_CLASSIC to TachiyomiColorScheme,
         DesktopAppTheme.CATPPUCCIN to CatppuccinColorScheme,
         DesktopAppTheme.TOKYONIGHT to TokyoNightColorScheme,
         DesktopAppTheme.GREEN_APPLE to GreenAppleColorScheme,
@@ -35,6 +37,6 @@ object ThemeRegistry {
     )
 
     fun getColorScheme(theme: DesktopAppTheme): BaseColorScheme {
-        return colorSchemes[theme] ?: TachiyomiColorScheme
+        return colorSchemes[theme] ?: InkColorScheme
     }
 }

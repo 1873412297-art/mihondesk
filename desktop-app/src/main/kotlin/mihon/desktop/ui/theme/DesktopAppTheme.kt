@@ -1,7 +1,8 @@
 package mihon.desktop.ui.theme
 
 enum class DesktopAppTheme(val displayName: String) {
-    DEFAULT("Mihon (Default)"),
+    DEFAULT("MihonDesk Ink (Default)"),
+    MIHON_CLASSIC("Mihon Classic"),
     GREEN_APPLE("Green Apple"),
     CATPPUCCIN("Catppuccin"),
     TOKYONIGHT("Tokyo Night"),

@@ -1,18 +1,18 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" fill="none">
   <title>mihondesk</title>
-  <desc>An open book with a cyan bookmark on a cobalt blue rounded square.</desc>
+  <desc>An open book drawn in ink with a terracotta ink drop, on a warm paper rounded square (splash v3 mark).</desc>
   <defs>
-    <linearGradient id="tile" x1="70" y1="36" x2="438" y2="486" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#336CF5"/>
-      <stop offset="1" stop-color="#1739B8"/>
-    </linearGradient>
+    <radialGradient id="tile" cx="256" cy="230" r="300" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F6F1E7"/>
+      <stop offset="1" stop-color="#E9DECB"/>
+    </radialGradient>
   </defs>
   <rect x="24" y="24" width="464" height="464" rx="108" fill="url(#tile)"/>
-  <g transform="translate(0 -20)">
-  <path d="M96 178C96 168 102 162 112 160C160 153 203 166 244 194V355C200 329 158 320 111 327C101 329 96 323 96 313V178Z" fill="#F6F1E4"/>
-  <path d="M268 194C309 166 352 153 400 160C410 162 416 168 416 178V313C416 323 411 329 401 327C354 320 312 329 268 355V194Z" fill="#FFFFFF"/>
-  <path d="M96 346C148 336 197 346 244 375V398C197 369 148 359 96 369V346Z" fill="#C5D5FF"/>
-  <path d="M268 375C315 346 364 336 416 346V369C364 359 315 369 268 398V375Z" fill="#C5D5FF"/>
-  <path d="M339 159C351 156 363 155 376 156V244L357.5 231L339 244V159Z" fill="#54E5CF"/>
+  <rect x="25.5" y="25.5" width="461" height="461" rx="106.5" stroke="#2B2622" stroke-opacity="0.12" stroke-width="3"/>
+  <g transform="translate(256 268) scale(3.3) translate(-66 -61)" stroke="#2B2622" stroke-width="3.2" stroke-linejoin="round" stroke-linecap="round">
+    <path d="M66 50 C52 42 36 42 22 46 V100 C36 96 52 96 66 104 Z" fill="#FFFAF1"/>
+    <path d="M66 50 C80 42 96 42 110 46 V100 C96 96 80 96 66 104 Z" fill="#FFFAF1"/>
+    <line x1="66" y1="50" x2="66" y2="104"/>
+    <path d="M66 14 C66 14 57 25.5 57 31 a9 9 0 0 0 18 0 C75 25.5 66 14 66 14Z" fill="#B0623B" stroke="none"/>
   </g>
 </svg>

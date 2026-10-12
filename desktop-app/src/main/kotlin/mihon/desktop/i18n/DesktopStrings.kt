@@ -1269,7 +1269,8 @@ object EnglishStrings : DesktopStrings {
     override val settingsThemeAmoledTitle = "Pure Black AMOLED Theme"
     override val settingsThemeAmoledSubtitle = "Use pure black (#000000) for background and surfaces in dark mode"
     override fun appThemeName(theme: DesktopAppTheme) = when (theme) {
-        DesktopAppTheme.DEFAULT -> "Mihon (Default)"
+        DesktopAppTheme.DEFAULT -> "MihonDesk Ink (Default)"
+        DesktopAppTheme.MIHON_CLASSIC -> "Mihon Classic"
         DesktopAppTheme.GREEN_APPLE -> "Green Apple"
         DesktopAppTheme.CATPPUCCIN -> "Catppuccin"
         DesktopAppTheme.TOKYONIGHT -> "Tokyo Night"
@@ -2249,7 +2250,8 @@ object SimplifiedChineseStrings : DesktopStrings {
     override val settingsThemeAmoledTitle = "纯黑 AMOLED 深色模式"
     override val settingsThemeAmoledSubtitle = "在深色模式下使用纯黑 (#000000) 背景与卡片表面"
     override fun appThemeName(theme: DesktopAppTheme) = when (theme) {
-        DesktopAppTheme.DEFAULT -> "Mihon 经典蓝绿"
+        DesktopAppTheme.DEFAULT -> "墨韵纸色（默认）"
+        DesktopAppTheme.MIHON_CLASSIC -> "Mihon 经典蓝绿"
         DesktopAppTheme.GREEN_APPLE -> "青苹果 (Green Apple)"
         DesktopAppTheme.CATPPUCCIN -> "Catppuccin 萌系紫"
         DesktopAppTheme.TOKYONIGHT -> "东京夜景 (Tokyo Night)"
@@ -3222,7 +3224,8 @@ object TraditionalChineseStrings : DesktopStrings {
     override val settingsThemeAmoledTitle = "純黑 AMOLED 深色模式"
     override val settingsThemeAmoledSubtitle = "在深色模式下使用純黑 (#000000) 背景與表面"
     override fun appThemeName(theme: DesktopAppTheme) = when (theme) {
-        DesktopAppTheme.DEFAULT -> "Mihon 經典藍綠"
+        DesktopAppTheme.DEFAULT -> "墨韻紙色（預設）"
+        DesktopAppTheme.MIHON_CLASSIC -> "Mihon 經典藍綠"
         DesktopAppTheme.GREEN_APPLE -> "青蘋果 (Green Apple)"
         DesktopAppTheme.CATPPUCCIN -> "Catppuccin 萌系紫"
         DesktopAppTheme.TOKYONIGHT -> "東京夜景 (Tokyo Night)"
