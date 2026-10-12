@@ -52,6 +52,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -70,6 +71,7 @@ import mihon.desktop.reader.ReaderClickAction
 import mihon.desktop.reader.ReaderColorFilter
 import mihon.desktop.reader.ReaderWheelBehavior
 import mihon.desktop.reader.input.ReaderShortcutAction
+import mihon.desktop.ui.common.DesktopTooltipBox
 import mihon.desktop.ui.shortcut.DesktopKeyBindings
 import mihon.desktop.ui.shortcut.KeyBindingMap
 import mihon.desktop.ui.shortcut.chordsLabel
@@ -201,14 +203,20 @@ internal fun ReaderChrome(
                             )
                         }
                     }
-                    IconButton(
-                        onClick = onToggleBookmark,
-                        modifier = Modifier.testTag("reader-bookmark-toggle"),
+                    val bookmarkLabel = if (bookmarked) strings.removeBookmark else strings.bookmarkChapter
+                    ReaderShortcutTooltip(
+                        label = bookmarkLabel,
+                        action = ReaderShortcutAction.TOGGLE_BOOKMARK,
                     ) {
-                        Icon(
-                            imageVector = if (bookmarked) Icons.Rounded.Bookmark else Icons.Rounded.BookmarkBorder,
-                            contentDescription = if (bookmarked) strings.removeBookmark else strings.bookmarkChapter,
-                        )
+                        IconButton(
+                            onClick = onToggleBookmark,
+                            modifier = Modifier.testTag("reader-bookmark-toggle"),
+                        ) {
+                            Icon(
+                                imageVector = if (bookmarked) Icons.Rounded.Bookmark else Icons.Rounded.BookmarkBorder,
+                                contentDescription = bookmarkLabel,
+                            )
+                        }
                     }
                     Box {
                         IconButton(
@@ -325,26 +333,51 @@ internal fun ReaderChrome(
                         ) {
                             Text(strings.readerCropToggle(cropActive))
                         }
-                        IconButton(
-                            onClick = { onZoom(state.zoom - 0.25f) },
-                            modifier = Modifier.testTag("reader-zoom-out"),
-                        ) {
-                            Icon(Icons.Rounded.Remove, contentDescription = strings.text(UiText.ZoomOut))
+                        ReaderShortcutTooltip(strings.text(UiText.ZoomOut), ReaderShortcutAction.ZOOM_OUT) {
+                            IconButton(
+                                onClick = { onZoom(state.zoom - 0.25f) },
+                                modifier = Modifier.testTag("reader-zoom-out"),
+                            ) {
+                                Icon(Icons.Rounded.Remove, contentDescription = strings.text(UiText.ZoomOut))
+                            }
                         }
-                        TextButton(
-                            onClick = { onZoom(1f) },
-                            modifier = Modifier.testTag("reader-zoom-reset"),
+                        ReaderShortcutTooltip(
+                            label = strings.text(UiText.ReaderZoomResetHint),
+                            action = ReaderShortcutAction.RESET_ZOOM,
                         ) {
-                            Text("${(state.zoom * 100).toInt()}%")
+                            TextButton(
+                                onClick = { onZoom(1f) },
+                                modifier = Modifier.testTag("reader-zoom-reset"),
+                            ) {
+                                val zoomed = kotlin.math.abs(state.zoom - 1f) > 0.01f
+                                Text(
+                                    "${(state.zoom * 100).toInt()}%",
+                                    color = if (zoomed) MaterialTheme.colorScheme.primary else Color.Unspecified,
+                                    fontWeight = if (zoomed) FontWeight.Bold else FontWeight.Normal,
+                                )
+                            }
                         }
-                        IconButton(
-                            onClick = { onZoom(state.zoom + 0.25f) },
-                            modifier = Modifier.testTag("reader-zoom-in"),
+                        ReaderShortcutTooltip(strings.text(UiText.ZoomIn), ReaderShortcutAction.ZOOM_IN) {
+                            IconButton(
+                                onClick = { onZoom(state.zoom + 0.25f) },
+                                modifier = Modifier.testTag("reader-zoom-in"),
+                            ) {
+                                Icon(Icons.Rounded.Add, contentDescription = strings.text(UiText.ZoomIn))
+                            }
+                        }
+                        ReaderShortcutTooltip(
+                            label = strings.shortcutLabel(ReaderShortcutAction.FULLSCREEN),
+                            action = ReaderShortcutAction.FULLSCREEN,
                         ) {
-                            Icon(Icons.Rounded.Add, contentDescription = strings.text(UiText.ZoomIn))
-                        }
-                        IconButton(onClick = onFullscreen, modifier = Modifier.testTag("reader-fullscreen")) {
-                            Icon(Icons.Rounded.Fullscreen, contentDescription = strings.text(UiText.ReaderImmersive))
+                            IconButton(
+                                onClick = onFullscreen,
+                                modifier = Modifier.testTag("reader-fullscreen"),
+                            ) {
+                                Icon(
+                                    Icons.Rounded.Fullscreen,
+                                    contentDescription = strings.text(UiText.ReaderImmersive),
+                                )
+                            }
                         }
                         IconButton(onClick = onOpenSettings, modifier = Modifier.testTag("reader-settings")) {
                             Icon(Icons.Rounded.Settings, contentDescription = strings.settingsTitle)
@@ -368,6 +401,22 @@ internal fun ReaderChrome(
 }
 
 private const val READER_BARS_SLIDE_MILLIS = 200
+
+@Composable
+private fun ReaderShortcutTooltip(
+    label: String,
+    action: ReaderShortcutAction,
+    content: @Composable () -> Unit,
+) {
+    val strings = LocalStrings.current
+    val chords = DesktopKeyBindings.defaultReader.chordsFor(action)
+    val tooltip = if (chords.isEmpty()) {
+        label
+    } else {
+        strings.text(UiText.ReaderTooltipWithKey, label, strings.chordsLabel(chords))
+    }
+    DesktopTooltipBox(tooltip = tooltip, content = content)
+}
 private const val READER_BARS_FADE_MILLIS = 150
 
 @Composable

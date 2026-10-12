@@ -620,6 +620,22 @@ fun ReaderScreen(
     var acknowledgedIndicator by remember(session) { mutableStateOf(-1 to 0L) }
     var pageIndicatorIndex by remember(session) { mutableStateOf<Int?>(null) }
     val pageIndicatorAlpha = remember(session) { Animatable(0f) }
+    // Zoom HUD: with chrome hidden the zoom percentage is otherwise invisible, so keyboard/wheel
+    // zoom gets a short, screen-reader-announced confirmation. Persistent zoom stays obvious.
+    var zoomHudVisible by remember(session) { mutableStateOf(false) }
+    var lastZoom by remember(session) { mutableStateOf(state.zoom) }
+    LaunchedEffect(state.zoom, ready) {
+        if (!ready) {
+            lastZoom = state.zoom
+            return@LaunchedEffect
+        }
+        if (state.zoom == lastZoom) return@LaunchedEffect
+        lastZoom = state.zoom
+        if (overlayVisibility.chromeVisible) return@LaunchedEffect
+        zoomHudVisible = true
+        delay(READER_ZOOM_HUD_MILLIS)
+        zoomHudVisible = false
+    }
     LaunchedEffect(state.selectedIndex, state.chapterId, overlayVisibility.chromeVisible, ready) {
         val chapterId = state.chapterId ?: 0L
         val index = state.selectedIndex
@@ -927,7 +943,26 @@ fun ReaderScreen(
                     style = MaterialTheme.typography.labelMedium,
                     modifier = Modifier
                         .padding(horizontal = 12.dp, vertical = 6.dp)
+                        .semantics { liveRegion = androidx.compose.ui.semantics.LiveRegionMode.Polite }
                         .testTag("reader-page-indicator"),
+                )
+            }
+        }
+        if (zoomHudVisible && !overlayVisibility.chromeVisible && ready) {
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 32.dp)
+                    .semantics { liveRegion = androidx.compose.ui.semantics.LiveRegionMode.Polite }
+                    .testTag("reader-zoom-hud"),
+                shape = RoundedCornerShape(999.dp),
+                color = Color(0xB3000000),
+                contentColor = Color.White,
+            ) {
+                Text(
+                    text = strings.text(UiText.ReaderZoomOverlay, (state.zoom * 100).toInt()),
+                    style = MaterialTheme.typography.labelMedium,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                 )
             }
         }
@@ -1195,6 +1230,7 @@ private class ReaderPanAccumulator {
 
 private const val CHROME_HIDE_DELAY_MILLIS = 2_500L
 private const val READER_PAGE_INDICATOR_MILLIS = 1_000L
+private const val READER_ZOOM_HUD_MILLIS = 1_200L
 private const val READER_PAGE_INDICATOR_FADE_MILLIS = 250
 private val TOP_REVEAL_HEIGHT = 24.dp
 
