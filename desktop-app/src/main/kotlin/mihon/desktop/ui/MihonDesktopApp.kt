@@ -644,18 +644,6 @@ fun ApplicationScope.MihonDesktopApp(
             undecorated = readerWindowMode == ReaderWindowMode.BORDERLESS,
             onPreviewKeyEvent = { event ->
                 appLockController.recordActivity()
-                if (!ShortcutCaptureState.active &&
-                    !textInputFocused.get() &&
-                    event.type == KeyEventType.KeyDown &&
-                    event.isCtrlPressed &&
-                    !event.isShiftPressed &&
-                    !event.isAltPressed &&
-                    event.key == Key.B &&
-                    navigator.current !is DesktopDestination.Reader
-                ) {
-                    mihon.desktop.ui.common.DesktopLayoutPrefs.requestRailToggle()
-                    return@Window true
-                }
                 val action = if (ShortcutCaptureState.active) {
                     null
                 } else {
@@ -673,6 +661,10 @@ fun ApplicationScope.MihonDesktopApp(
                         ShellShortcutAction.NavigateDestination8 -> navigator.navigate(DesktopDestination.About)
                         ShellShortcutAction.FocusSearch -> {
                             runCatching { searchFocusRequester.requestFocus() }
+                        }
+                        ShellShortcutAction.ToggleNavigationRail -> {
+                            if (navigator.current is DesktopDestination.Reader) return@Window false
+                            mihon.desktop.ui.common.DesktopLayoutPrefs.requestRailToggle()
                         }
                         ShellShortcutAction.RefreshCurrentPage -> {
                             when (navigator.current) {

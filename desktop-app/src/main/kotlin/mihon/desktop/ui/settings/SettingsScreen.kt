@@ -30,6 +30,7 @@ import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Code
 import androidx.compose.material.icons.rounded.CollectionsBookmark
 import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Keyboard
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Palette
@@ -132,6 +133,7 @@ enum class SettingsSection(val label: String) {
     Tracking("Tracking"),
     Backup("Backup & Restore"),
     Advanced("Advanced & Diagnostics"),
+    About("About"),
     ;
 
     val icon: ImageVector
@@ -146,6 +148,7 @@ enum class SettingsSection(val label: String) {
             Tracking -> Icons.Rounded.SyncAlt
             Backup -> Icons.Rounded.Backup
             Advanced -> Icons.Rounded.Code
+            About -> Icons.Rounded.Info
         }
 
     fun localized(strings: DesktopStrings): String = when (this) {
@@ -159,6 +162,7 @@ enum class SettingsSection(val label: String) {
         Tracking -> strings.settingsSectionTracking
         Backup -> strings.settingsSectionBackup
         Advanced -> strings.settingsSectionAdvanced
+        About -> strings.aboutTitle
     }
 }
 
@@ -186,6 +190,7 @@ fun SettingsScreen(
     appLockController: DesktopAppLockController? = null,
     backgroundScheduler: mihon.desktop.platform.WindowsBackgroundScheduler? = null,
     initialSection: SettingsSection? = null,
+    aboutContent: (@Composable () -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val backgroundScope = rememberCoroutineScope()
@@ -409,6 +414,7 @@ fun SettingsScreen(
                             profileRoot = profileRoot,
                             databaseCleaner = databaseCleaner,
                         )
+                        SettingsSection.About -> aboutContent?.invoke() ?: AboutScreen()
                     }
                 }
             }

@@ -26,6 +26,7 @@ fun DesktopStrings.shortcutLabel(action: ShellShortcutAction): String {
         ShellShortcutAction.RefreshCurrentPage -> text(UiText.ShortcutRefreshPage)
         ShellShortcutAction.NavigateBack -> text(UiText.ShortcutBack)
         ShellShortcutAction.ShowShortcutsHelp -> text(UiText.ShortcutShowHelp)
+        ShellShortcutAction.ToggleNavigationRail -> text(UiText.ShortcutToggleNavigationRail)
         else -> action.name
     }
 }

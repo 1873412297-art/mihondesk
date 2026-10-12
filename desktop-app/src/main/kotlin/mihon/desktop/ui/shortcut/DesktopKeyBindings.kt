@@ -242,9 +242,6 @@ private val DESTINATION_KEYS = listOf(
     Key.Three to Key.NumPad3,
     Key.Four to Key.NumPad4,
     Key.Five to Key.NumPad5,
-    Key.Six to Key.NumPad6,
-    Key.Seven to Key.NumPad7,
-    Key.Eight to Key.NumPad8,
 )
 
 fun ShellShortcutAction.defaultChords(): List<KeyChord> = when (this) {
@@ -253,9 +250,12 @@ fun ShellShortcutAction.defaultChords(): List<KeyChord> = when (this) {
     ShellShortcutAction.NavigateDestination3 -> destinationChords(2)
     ShellShortcutAction.NavigateDestination4 -> destinationChords(3)
     ShellShortcutAction.NavigateDestination5 -> destinationChords(4)
-    ShellShortcutAction.NavigateDestination6 -> destinationChords(5)
-    ShellShortcutAction.NavigateDestination7 -> destinationChords(6)
-    ShellShortcutAction.NavigateDestination8 -> destinationChords(7)
+    // 0.3.0: Ctrl+1~5 follow the rail order; Settings moved to the Windows-conventional Ctrl+, and
+    // Stats/About (now a History segment and a Settings section) have no default chord. Users who
+    // customised these actions keep their stored chords: only non-default bindings are persisted.
+    ShellShortcutAction.NavigateDestination6 -> emptyList()
+    ShellShortcutAction.NavigateDestination7 -> listOf(chord(Key.Comma, ctrl = true))
+    ShellShortcutAction.NavigateDestination8 -> emptyList()
     ShellShortcutAction.FocusSearch -> listOf(chord(Key.F, ctrl = true))
     ShellShortcutAction.RefreshCurrentPage -> listOf(chord(Key.F5), chord(Key.R, ctrl = true))
     ShellShortcutAction.NavigateBack -> listOf(
@@ -264,6 +264,7 @@ fun ShellShortcutAction.defaultChords(): List<KeyChord> = when (this) {
         chord(Key.Escape),
     )
     ShellShortcutAction.ShowShortcutsHelp -> listOf(chord(Key.Slash, ctrl = true), chord(Key.Slash, shift = true))
+    ShellShortcutAction.ToggleNavigationRail -> listOf(chord(Key.B, ctrl = true))
 }
 
 private fun destinationChords(index: Int): List<KeyChord> =

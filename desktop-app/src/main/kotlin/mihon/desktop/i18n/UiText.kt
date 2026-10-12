@@ -500,6 +500,7 @@ enum class UiText(val english: String, val simplified: String, val traditional: 
     KeyboardShortcuts("Keyboard Shortcuts", "快捷键速查", "快速鍵速查"),
     ShortcutSwitchDestination("Switch Destination (1-8)", "切换主导航 (1-8)", "切換主導航 (1-8)"),
     ShortcutFocusSearch("Focus Search Bar", "聚焦搜索框", "聚焦搜尋框"),
+    ShortcutToggleNavigationRail("Collapse / expand navigation", "折叠/展开导航栏", "摺疊/展開導覽列"),
     ShortcutRefreshPage("Refresh Page", "刷新当前页", "重新整理當前頁"),
     ShortcutBack("Back", "后退", "返回"),
     ShortcutShowHelp("Show Shortcuts Help", "显示快捷键速查", "顯示快速鍵速查"),

@@ -22,7 +22,17 @@ class DesktopShortcutMatcherTest {
         DesktopShortcutMatcher.matchAction(
             key = Key.Eight,
             isCtrlPressed = true,
-        ) shouldBe ShellShortcutAction.NavigateDestination8
+        ) shouldBe null
+
+        DesktopShortcutMatcher.matchAction(
+            key = Key.Comma,
+            isCtrlPressed = true,
+        ) shouldBe ShellShortcutAction.NavigateDestination7
+
+        DesktopShortcutMatcher.matchAction(
+            key = Key.B,
+            isCtrlPressed = true,
+        ) shouldBe ShellShortcutAction.ToggleNavigationRail
     }
 
     @Test

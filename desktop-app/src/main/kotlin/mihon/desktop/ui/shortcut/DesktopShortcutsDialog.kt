@@ -62,8 +62,11 @@ fun DesktopShortcutsDialog(
                     ShortcutItemRow(strings.chordsLabel(bindings.chordsFor(action)), strings.shortcutLabel(action))
                 }
                 ShortcutSectionHeader(strings.text(UiText.Navigation))
-                ShellShortcutAction.entries.filter { it.destination() != null }.forEach { row(it) }
+                ShellShortcutAction.entries
+                    .filter { it.destination() != null && bindings.chordsFor(it).isNotEmpty() }
+                    .forEach { row(it) }
                 row(ShellShortcutAction.NavigateBack)
+                row(ShellShortcutAction.ToggleNavigationRail)
 
                 ShortcutSectionHeader(strings.libraryFilterAndSort)
                 row(ShellShortcutAction.FocusSearch)

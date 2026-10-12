@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.MenuOpen
 import androidx.compose.material.icons.rounded.Lock
@@ -61,7 +62,7 @@ internal const val DESKTOP_RAIL_SCRIM_TEST_TAG = "desktop-rail-scrim"
 internal val RAIL_COLLAPSED_WIDTH = 80.dp
 internal val RAIL_EXPANDED_WIDTH = 220.dp
 
-/** Rail IA: daily destinations on top, Settings alone at the bottom. Stats and About live under Settings > More. */
+/** Rail IA: daily destinations on top, Settings alone at the bottom. Stats lives in History, About in Settings. */
 internal val RAIL_PRIMARY_DESTINATIONS = listOf(
     DesktopDestination.Library,
     DesktopDestination.Updates,
@@ -71,37 +72,37 @@ internal val RAIL_PRIMARY_DESTINATIONS = listOf(
 )
 internal val RAIL_SECONDARY_DESTINATIONS = listOf(DesktopDestination.Settings)
 
-/** Shown only in the expanded rail as secondary entries; collapsed rail reaches them via Settings > More. */
-internal val RAIL_EXPANDED_EXTRA_DESTINATIONS = listOf(DesktopDestination.Stats, DesktopDestination.About)
-
-/** Stats and About are reached from Settings, so the rail keeps Settings highlighted for them. */
+/** Stats is a History segment and About a Settings section, so the rail highlights their hosts. */
 internal fun railSelectionFor(selected: DesktopDestination): DesktopDestination = when (selected) {
-    DesktopDestination.Stats, DesktopDestination.About -> DesktopDestination.Settings
+    DesktopDestination.Stats -> DesktopDestination.History
+    DesktopDestination.About -> DesktopDestination.Settings
     else -> selected
 }
 
+internal const val HISTORY_SEGMENTS_TEST_TAG = "history-segments"
+
 @Composable
-private fun SettingsMoreRow(onDestinationSelected: (DesktopDestination) -> Unit) {
+private fun HistorySegments(
+    selected: DesktopDestination,
+    onDestinationSelected: (DesktopDestination) -> Unit,
+) {
     val strings = LocalStrings.current
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp).testTag("settings-more-row"),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    androidx.compose.material3.PrimaryTabRow(
+        selectedTabIndex = if (selected == DesktopDestination.Stats) 1 else 0,
+        modifier = Modifier.widthIn(max = 360.dp).testTag(HISTORY_SEGMENTS_TEST_TAG),
+        containerColor = androidx.compose.ui.graphics.Color.Transparent,
     ) {
-        Text(
-            strings.text(UiText.SettingsMore),
-            style = androidx.compose.material3.MaterialTheme.typography.titleSmall,
-        )
-        listOf(DesktopDestination.Stats, DesktopDestination.About).forEach { destination ->
-            androidx.compose.material3.AssistChip(
-                onClick = { onDestinationSelected(destination) },
-                label = { Text(strings.destinationLabel(destination)) },
-                leadingIcon = { Icon(destinationIcon(destination), contentDescription = null) },
-                modifier = Modifier.testTag("settings-more-${destination.name.lowercase()}"),
+        listOf(DesktopDestination.History, DesktopDestination.Stats).forEach { destination ->
+            androidx.compose.material3.Tab(
+                selected = selected == destination,
+                onClick = { if (selected != destination) onDestinationSelected(destination) },
+                text = { Text(strings.destinationLabel(destination)) },
+                modifier = Modifier.testTag("history-segment-${destination.name.lowercase()}"),
             )
         }
     }
 }
+
 const val DESKTOP_LOCK_NOW_BUTTON_TEST_TAG = "desktop-lock-now-button"
 
 @Composable
@@ -289,7 +290,8 @@ fun DesktopShell(
                                 sourceBaseUrlFor = state.sourceBaseUrlFor,
                             )
                         }
-                        DesktopDestination.History -> {
+                        DesktopDestination.History -> Column {
+                            HistorySegments(state.selected, actions.onDestinationSelected)
                             mihon.desktop.ui.history.HistoryScreen(
                                 groups = state.historyGroups,
                                 query = state.historyQuery,
@@ -346,10 +348,9 @@ fun DesktopShell(
                                 )
                             }
                         }
-                        DesktopDestination.Settings -> {
+                        DesktopDestination.Settings, DesktopDestination.About -> {
                             if (state.preferenceStore != null && state.readerSettingsStore != null) {
                                 Column {
-                                    SettingsMoreRow(onDestinationSelected = actions.onDestinationSelected)
                                     mihon.desktop.ui.settings.SettingsScreen(
                                         preferenceStore = state.preferenceStore,
                                         readerSettingsStore = state.readerSettingsStore,
@@ -372,7 +373,14 @@ fun DesktopShell(
                                         databaseCleaner = state.databaseCleaner,
                                         downloadCategories = state.libraryState.categories,
                                         appLockController = state.appLockController,
-                                        initialSection = state.settingsInitialSection,
+                                        initialSection = if (state.selected == DesktopDestination.About) {
+                                            mihon.desktop.ui.settings.SettingsSection.About
+                                        } else {
+                                            state.settingsInitialSection
+                                        },
+                                        aboutContent = {
+                                            mihon.desktop.ui.settings.AboutScreen(updateContent = actions.appUpdateContent)
+                                        },
                                     )
                                 }
                             } else {
@@ -383,14 +391,12 @@ fun DesktopShell(
                                 )
                             }
                         }
-                        DesktopDestination.Stats -> {
+                        DesktopDestination.Stats -> Column {
+                            HistorySegments(state.selected, actions.onDestinationSelected)
                             mihon.desktop.ui.stats.StatsScreen(
                                 data = state.statsData,
                                 onRefresh = actions.onRefreshStats,
                             )
-                        }
-                        DesktopDestination.About -> {
-                            mihon.desktop.ui.settings.AboutScreen(updateContent = actions.appUpdateContent)
                         }
                         DesktopDestination.Browse -> {
                             actions.browseContent?.invoke() ?: Text(
@@ -868,7 +874,7 @@ internal fun navBadgeFor(
     downloadsBadge: DownloadsNavBadge?,
 ): NavItemBadge? = when (destination) {
     DesktopDestination.Updates -> updatesUnreadCount.takeIf { it > 0 }
-        ?.let { NavItemBadge(it, error = true, testTag = "updates-unread-badge") }
+        ?.let { NavItemBadge(it, error = false, testTag = "updates-unread-badge") }
     DesktopDestination.Downloads ->
         downloadsBadge
             ?.let { NavItemBadge(it.count, error = it.failed, testTag = "downloads-nav-badge") }
@@ -889,7 +895,7 @@ private fun DesktopRail(
 ) {
     val strings = LocalStrings.current
     val toggleLabel = strings.text(if (expanded) UiText.CollapseNavigation else UiText.ExpandNavigation)
-    val selected = if (expanded) shellSelected else railSelected
+    val selected = railSelected
     Surface(
         modifier = Modifier.fillMaxHeight()
             .width(if (expanded) RAIL_EXPANDED_WIDTH else RAIL_COLLAPSED_WIDTH)
@@ -923,12 +929,7 @@ private fun DesktopRail(
             }
             Spacer(modifier = Modifier.weight(1f))
             HorizontalDivider()
-            val bottom = if (expanded) {
-                RAIL_EXPANDED_EXTRA_DESTINATIONS + RAIL_SECONDARY_DESTINATIONS
-            } else {
-                RAIL_SECONDARY_DESTINATIONS
-            }
-            bottom.forEach { destination ->
+            RAIL_SECONDARY_DESTINATIONS.forEach { destination ->
                 RailEntry(
                     destination = destination,
                     expanded = expanded,

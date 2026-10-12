@@ -28,10 +28,10 @@ import org.junit.jupiter.api.Test
 
 class DesktopShellTest {
     @Test
-    fun `rail keeps Stats and About under Settings`() {
+    fun `rail hosts Stats under History and About under Settings`() {
         (RAIL_PRIMARY_DESTINATIONS + RAIL_SECONDARY_DESTINATIONS).contains(DesktopDestination.Stats) shouldBe false
         (RAIL_PRIMARY_DESTINATIONS + RAIL_SECONDARY_DESTINATIONS).contains(DesktopDestination.About) shouldBe false
-        railSelectionFor(DesktopDestination.Stats) shouldBe DesktopDestination.Settings
+        railSelectionFor(DesktopDestination.Stats) shouldBe DesktopDestination.History
         railSelectionFor(DesktopDestination.About) shouldBe DesktopDestination.Settings
         railSelectionFor(DesktopDestination.Library) shouldBe DesktopDestination.Library
         mihon.desktop.ui.common.ContentDensity.parse("compact") shouldBe mihon.desktop.ui.common.ContentDensity.Compact

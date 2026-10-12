@@ -50,7 +50,7 @@ class DownloadGroupingTest {
     @Test
     fun `navigation badges map updates and downloads to their own colours`() {
         navBadgeFor(DesktopDestination.Updates, 3, null) shouldBe
-            NavItemBadge(3, error = true, testTag = "updates-unread-badge")
+            NavItemBadge(3, error = false, testTag = "updates-unread-badge")
         navBadgeFor(DesktopDestination.Updates, 0, null) shouldBe null
         navBadgeFor(DesktopDestination.Downloads, 0, DownloadsNavBadge(2, failed = false)) shouldBe
             NavItemBadge(2, error = false, testTag = "downloads-nav-badge")
