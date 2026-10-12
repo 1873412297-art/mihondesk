@@ -148,17 +148,38 @@ class ExtensionStoreService(
     suspend fun fetchRepository(repoUrl: String): List<ExtensionStoreItem> = withContext(Dispatchers.IO) {
         val normalized = normalizeRepoUrl(repoUrl)
 
-        // Try index.pb first (modern protobuf format); it carries its own signingKey.
-        val pbResult = tryFetchAndParse(normalized, "$normalized/index.pb")
-        if (pbResult != null) return@withContext applyLegacyRepoMetadata(normalized, pbResult)
-
-        // Fall back to index.min.json (legacy JSON format)
-        val jsonResult = tryFetchAndParse(normalized, "$normalized/index.min.json")
-        if (jsonResult != null) return@withContext applyLegacyRepoMetadata(normalized, jsonResult)
+        // cdn.jsdelivr.net is unreachable on some networks; try equivalent mirrors in order. Items
+        // keep the canonical repo URL so installed-extension bookkeeping is unaffected.
+        for (base in mirrorCandidates(normalized)) {
+            // Try index.pb first (modern protobuf format); it carries its own signingKey.
+            val items = tryFetchAndParse(base, "$base/index.pb")
+                ?: tryFetchAndParse(base, "$base/index.min.json") // legacy JSON format
+                ?: continue
+            return@withContext applyLegacyRepoMetadata(base, items)
+                .map { if (it.repoUrl == base) it.copy(repoUrl = normalized) else it }
+        }
 
         throw IllegalStateException(
-            "Failed to fetch extension index from $normalized: neither index.pb nor index.min.json available",
+            "Failed to fetch extension index from $normalized: neither index.pb nor index.min.json available" +
+                " (tried ${mirrorCandidates(normalized).joinToString()})",
         )
+    }
+
+    /**
+     * Base URLs to try for [normalizedRepoUrl], canonical first. jsDelivr GitHub URLs fall back to
+     * its other CDN hostnames and to raw.githubusercontent.com.
+     */
+    fun mirrorCandidates(normalizedRepoUrl: String): List<String> {
+        val match =
+            Regex("""^https?://(?:cdn|fastly|gcore|testingcf)\.jsdelivr\.net/gh/([^/@]+)/([^/@]+)@([^/]+)(/.*)?$""")
+                .matchEntire(normalizedRepoUrl) ?: return listOf(normalizedRepoUrl)
+        val (user, repo, ref, rest) = match.destructured
+        val path = "gh/$user/$repo@$ref$rest"
+        return (
+            listOf(normalizedRepoUrl) +
+                listOf("fastly", "gcore", "testingcf", "cdn").map { "https://$it.jsdelivr.net/$path" } +
+                "https://raw.githubusercontent.com/$user/$repo/$ref$rest"
+            ).distinct()
     }
 
     /**

@@ -17,6 +17,42 @@ import java.util.concurrent.atomic.AtomicInteger
 class ExtensionStoreServiceTest {
 
     @Test
+    fun `jsdelivr repo falls back to mirror and keeps canonical repo url`(@TempDir tempDir: Path) = runBlocking {
+        val canonical = "https://cdn.jsdelivr.net/gh/keiyoushi/extensions@repo"
+        val hosts = mutableListOf<String>()
+        val client = OkHttpClient.Builder().addInterceptor { chain ->
+            val url = chain.request().url
+            hosts += url.host
+            if (url.host == "cdn.jsdelivr.net") throw IOException("blocked")
+            val body = if (url.encodedPath.endsWith("/index.min.json")) {
+                """[{"name":"Tachiyomi: A","pkg":"p.a","apk":"a.apk","lang":"en","code":1,"version":"1.4.1",""" +
+                    """"nsfw":0,"sources":[{"name":"A","lang":"en","id":"1","baseUrl":"https://a"}]}]"""
+            } else {
+                ""
+            }
+            okhttp3.Response.Builder().request(chain.request()).protocol(okhttp3.Protocol.HTTP_1_1)
+                .code(if (body.isEmpty()) 404 else 200).message("x")
+                .body(okhttp3.ResponseBody.create(null, body)).build()
+        }.build()
+        val service =
+            ExtensionStoreService(DesktopPreferenceStore(tempDir.resolve("p.properties")), httpClient = client)
+
+        service.mirrorCandidates(canonical).first() shouldBe canonical
+        val items = service.fetchRepository(canonical)
+        items.shouldNotBeEmpty()
+        items.first().repoUrl shouldBe canonical
+        items.first().downloadUrl.startsWith("https://fastly.jsdelivr.net/") shouldBe true
+        hosts shouldContain "fastly.jsdelivr.net"
+        Unit
+    }
+
+    @Test
+    fun `non jsdelivr repo has no mirrors`(@TempDir tempDir: Path) {
+        val service = ExtensionStoreService(DesktopPreferenceStore(tempDir.resolve("p.properties")))
+        service.mirrorCandidates("https://example.com/repo") shouldBe listOf("https://example.com/repo")
+    }
+
+    @Test
     fun `repository management persists custom repos in preference store`(@TempDir tempDir: Path) {
         val storeFile = tempDir.resolve("prefs.properties")
         val prefStore = DesktopPreferenceStore(storeFile)
