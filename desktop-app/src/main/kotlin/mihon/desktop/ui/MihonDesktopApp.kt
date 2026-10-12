@@ -110,9 +110,11 @@ import mihon.desktop.ui.reader.LibraryChapterBookmarkStore
 import mihon.desktop.ui.reader.ReaderChapterTransitionChapter
 import mihon.desktop.ui.reader.ReaderScreen
 import mihon.desktop.ui.reader.readerNavigationChapters
+import mihon.desktop.ui.shortcut.DesktopKeyBindingStore
 import mihon.desktop.ui.shortcut.DesktopShortcutMatcher
 import mihon.desktop.ui.shortcut.DesktopShortcutsDialog
 import mihon.desktop.ui.shortcut.ShellShortcutAction
+import mihon.desktop.ui.shortcut.ShortcutCaptureState
 import mihon.desktop.ui.track.TrackingDialog
 import mihon.desktop.ui.upcoming.UpcomingPresenter
 import mihon.desktop.ui.upcoming.UpcomingScreen
@@ -165,6 +167,7 @@ fun ApplicationScope.MihonDesktopApp(
         }
     }
     var showShortcutsHelp by remember { mutableStateOf(false) }
+    val keyBindingStore = remember(runtime.preferences) { DesktopKeyBindingStore(runtime.preferences) }
     val windowState = rememberWindowState(
         placement = if (savedPlacement.maximized) {
             ComposeWindowPlacement.Maximized
@@ -638,7 +641,11 @@ fun ApplicationScope.MihonDesktopApp(
             undecorated = readerWindowMode == ReaderWindowMode.BORDERLESS,
             onPreviewKeyEvent = { event ->
                 appLockController.recordActivity()
-                val action = DesktopShortcutMatcher.matchAction(event, textInputFocused.get())
+                val action = if (ShortcutCaptureState.active) {
+                    null
+                } else {
+                    DesktopShortcutMatcher.matchAction(event, textInputFocused.get(), keyBindingStore.load().global)
+                }
                 if (action != null) {
                     when (action) {
                         ShellShortcutAction.NavigateDestination1 -> navigator.navigate(DesktopDestination.Library)
@@ -1865,6 +1872,7 @@ fun ApplicationScope.MihonDesktopApp(
                                 if (showShortcutsHelp) {
                                     DesktopShortcutsDialog(
                                         onDismiss = { showShortcutsHelp = false },
+                                        bindings = remember { keyBindingStore.load().global },
                                     )
                                 }
                             }
@@ -1957,6 +1965,7 @@ private fun ReaderDestination(
             title = mangaTitle,
             chapterTitle = chapterTitle,
             settingsStore = DesktopReaderSettingsStore(runtime.preferences),
+            keyBindingStore = remember(runtime.preferences) { DesktopKeyBindingStore(runtime.preferences) },
             readerSettingsOverride = mangaReaderSettingsOverride,
             onBack = onBack,
             onOpenMangaDetails = onOpenMangaDetails,

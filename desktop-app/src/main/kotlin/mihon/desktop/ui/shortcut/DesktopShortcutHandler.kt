@@ -27,6 +27,11 @@ enum class ShellShortcutAction {
 }
 
 object DesktopShortcutMatcher {
+    /**
+     * Resolves a shell shortcut through the (possibly user-customised) [bindings]. Plain keys without
+     * Ctrl/Alt (Backspace, Esc, ?) are ignored while a text field has focus so typing stays typing;
+     * function keys such as F5 still work there.
+     */
     fun matchAction(
         key: Key,
         type: KeyEventType = KeyEventType.KeyDown,
@@ -35,67 +40,23 @@ object DesktopShortcutMatcher {
         isShiftPressed: Boolean = false,
         isMetaPressed: Boolean = false,
         isTextInputFocused: Boolean = false,
+        bindings: KeyBindingMap<ShellShortcutAction> = DesktopKeyBindings.defaultGlobal,
     ): ShellShortcutAction? {
         if (type != KeyEventType.KeyDown) return null
-        val ctrl = isCtrlPressed || isMetaPressed
-        val alt = isAltPressed
-        val shift = isShiftPressed
-
-        // Ctrl + 1..8
-        if (ctrl && !alt && !shift) {
-            when (key) {
-                Key.One, Key.NumPad1 -> return ShellShortcutAction.NavigateDestination1
-                Key.Two, Key.NumPad2 -> return ShellShortcutAction.NavigateDestination2
-                Key.Three, Key.NumPad3 -> return ShellShortcutAction.NavigateDestination3
-                Key.Four, Key.NumPad4 -> return ShellShortcutAction.NavigateDestination4
-                Key.Five, Key.NumPad5 -> return ShellShortcutAction.NavigateDestination5
-                Key.Six, Key.NumPad6 -> return ShellShortcutAction.NavigateDestination6
-                Key.Seven, Key.NumPad7 -> return ShellShortcutAction.NavigateDestination7
-                Key.Eight, Key.NumPad8 -> return ShellShortcutAction.NavigateDestination8
-            }
-        }
-
-        // Ctrl + F
-        if (ctrl && !alt && !shift && key == Key.F) {
-            return ShellShortcutAction.FocusSearch
-        }
-
-        // F5 or Ctrl + R
-        if ((key == Key.F5 && !ctrl && !alt) || (ctrl && !alt && !shift && key == Key.R)) {
-            return ShellShortcutAction.RefreshCurrentPage
-        }
-
-        // Alt + Left
-        if (alt && !ctrl && key == Key.DirectionLeft) {
-            return ShellShortcutAction.NavigateBack
-        }
-
-        // Backspace (only if text input NOT focused)
-        if (!ctrl && !alt && !shift && key == Key.Backspace && !isTextInputFocused) {
-            return ShellShortcutAction.NavigateBack
-        }
-
-        // Ctrl + /
-        if (ctrl && !alt && key == Key.Slash) {
-            return ShellShortcutAction.ShowShortcutsHelp
-        }
-
-        // ? (Shift + /), only if text input NOT focused
-        if (shift && !ctrl && !alt && key == Key.Slash && !isTextInputFocused) {
-            return ShellShortcutAction.ShowShortcutsHelp
-        }
-
-        // Escape (when text input NOT focused)
-        if (!ctrl && !alt && !shift && key == Key.Escape && !isTextInputFocused) {
-            return ShellShortcutAction.NavigateBack
-        }
-
-        return null
+        val chord = KeyChord(
+            key = key,
+            ctrl = isCtrlPressed || isMetaPressed,
+            alt = isAltPressed,
+            shift = isShiftPressed,
+        )
+        if (isTextInputFocused && !chord.ctrl && !chord.alt && !chord.isFunctionKey) return null
+        return bindings.match(chord)
     }
 
     fun matchAction(
         event: KeyEvent,
         isTextInputFocused: Boolean = false,
+        bindings: KeyBindingMap<ShellShortcutAction> = DesktopKeyBindings.defaultGlobal,
     ): ShellShortcutAction? {
         if (event.type != KeyEventType.KeyDown) return null
         return matchAction(
@@ -106,6 +67,7 @@ object DesktopShortcutMatcher {
             isShiftPressed = event.isShiftPressed,
             isMetaPressed = event.isMetaPressed,
             isTextInputFocused = isTextInputFocused,
+            bindings = bindings,
         )
     }
 

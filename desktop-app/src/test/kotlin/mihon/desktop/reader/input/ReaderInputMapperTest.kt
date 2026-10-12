@@ -150,4 +150,16 @@ class ReaderInputMapperTest {
     }
 
     private var now = 0L
+
+    @Test
+    fun `mapped actions follow reading direction and open help`() {
+        val mapper = ReaderInputMapper()
+        val rtl = ReaderInputContext(ReadingMode.SINGLE_RTL)
+        mapper.mapAction(ReaderShortcutAction.PAGE_LEFT, rtl).action shouldBe
+            ReaderInputCommand.Core(mihon.reader.session.ReaderAction.Next)
+        mapper.mapAction(ReaderShortcutAction.PAGE_RIGHT, rtl).action shouldBe
+            ReaderInputCommand.Core(mihon.reader.session.ReaderAction.Previous)
+        mapper.mapAction(ReaderShortcutAction.SHOW_HELP, rtl).action shouldBe ReaderInputCommand.ShowHelp
+        mapper.mapAction(ReaderShortcutAction.EXIT, rtl.copy(focus = ReaderInputFocus.TEXT)).consumed shouldBe false
+    }
 }

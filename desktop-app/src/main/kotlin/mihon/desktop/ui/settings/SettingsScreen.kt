@@ -30,6 +30,7 @@ import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Code
 import androidx.compose.material.icons.rounded.CollectionsBookmark
 import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.Keyboard
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.Search
@@ -108,6 +109,7 @@ import mihon.desktop.ui.common.LocalSearchFocusRequester
 import mihon.desktop.ui.common.LocalSnackbarHostState
 import mihon.desktop.ui.common.searchFocusRequester
 import mihon.desktop.ui.common.trackTextInputFocus
+import mihon.desktop.ui.shortcut.DesktopKeyBindingStore
 import mihon.desktop.ui.theme.DesktopAppTheme
 import mihon.desktop.ui.theme.ThemeRegistry
 import mihon.desktop.ui.track.TrackerLoginDialog
@@ -122,6 +124,7 @@ enum class SettingsSection(val label: String) {
     Appearance("Appearance"),
     Library("Library"),
     Reader("Reader"),
+    Shortcuts("Keyboard shortcuts"),
     Downloads("Downloads"),
     Tracking("Tracking"),
     Backup("Backup & Restore"),
@@ -135,6 +138,7 @@ enum class SettingsSection(val label: String) {
             Appearance -> Icons.Rounded.Palette
             Library -> Icons.Rounded.CollectionsBookmark
             Reader -> Icons.AutoMirrored.Rounded.ChromeReaderMode
+            Shortcuts -> Icons.Rounded.Keyboard
             Downloads -> Icons.Rounded.Download
             Tracking -> Icons.Rounded.SyncAlt
             Backup -> Icons.Rounded.Backup
@@ -147,6 +151,7 @@ enum class SettingsSection(val label: String) {
         Appearance -> strings.settingsSectionAppearance
         Library -> strings.libraryTitle
         Reader -> strings.settingsSectionReader
+        Shortcuts -> strings.text(UiText.ShortcutSettingsTitle)
         Downloads -> strings.settingsSectionDownloads
         Tracking -> strings.settingsSectionTracking
         Backup -> strings.settingsSectionBackup
@@ -370,6 +375,9 @@ fun SettingsScreen(
                             notifyPreferencesChanged,
                         )
                         SettingsSection.Reader -> ReaderSettingsPane(readerSettingsStore)
+                        SettingsSection.Shortcuts -> ShortcutSettingsPane(
+                            remember(preferenceStore) { DesktopKeyBindingStore(preferenceStore) },
+                        )
                         SettingsSection.Downloads -> DownloadsSettingsPane(
                             preferenceStore = preferenceStore,
                             onPreferencesChanged = notifyPreferencesChanged,
@@ -928,6 +936,18 @@ private fun buildSearchableSettings(strings: DesktopStrings): List<SearchableSet
             title = strings.readerWebtoonPreventDownsizing,
             subtitle = strings.readerWebtoonDoubleTapZoom,
             keywords = listOf("downsizing", "double tap", "zoom", "webtoon zoom", "双击缩放", "禁用缩小"),
+        ),
+
+        // Shortcuts
+        SearchableSettingEntry(
+            id = "shortcuts-keymap",
+            section = SettingsSection.Shortcuts,
+            title = strings.text(UiText.ShortcutSettingsTitle),
+            subtitle = strings.text(UiText.ShortcutSettingsHint),
+            keywords = listOf(
+                "keyboard", "shortcut", "hotkey", "keymap", "key binding", "rebind",
+                "快捷键", "快速鍵", "按键", "按鍵", "热键", "熱鍵",
+            ),
         ),
 
         // Downloads

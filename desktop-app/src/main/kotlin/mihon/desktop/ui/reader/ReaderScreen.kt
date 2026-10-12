@@ -44,7 +44,6 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.isShiftPressed
@@ -81,10 +80,12 @@ import mihon.desktop.reader.input.ClickRegionPolicy
 import mihon.desktop.reader.input.InputPoint
 import mihon.desktop.reader.input.ReaderInputCommand
 import mihon.desktop.reader.input.ReaderInputContext
-import mihon.desktop.reader.input.ReaderInputKey
 import mihon.desktop.reader.input.ReaderInputMapper
 import mihon.desktop.reader.input.ReaderSideButton
 import mihon.desktop.reader.input.nextForShortcut
+import mihon.desktop.ui.shortcut.DesktopKeyBindingStore
+import mihon.desktop.ui.shortcut.DesktopKeyBindings
+import mihon.desktop.ui.shortcut.KeyChord
 import mihon.reader.model.PageDescriptor
 import mihon.reader.model.PageId
 import mihon.reader.model.ReaderErrorCode
@@ -108,6 +109,7 @@ fun ReaderScreen(
     chapterTitle: String,
     settingsStore: DesktopReaderSettingsStore?,
     onBack: () -> Unit,
+    keyBindingStore: DesktopKeyBindingStore? = null,
     onOpenMangaDetails: () -> Unit = {},
     modifier: Modifier = Modifier,
     onFullscreen: () -> Unit = {},
@@ -474,6 +476,7 @@ fun ReaderScreen(
             ReaderInputCommand.NextChapter -> requestChapter(ReaderChapterTransitionDirection.NEXT)
             ReaderInputCommand.ToggleBookmark -> toggleChapterBookmark()
             ReaderInputCommand.CycleReadingMode -> applySettings(settings.copy(mode = settings.mode.nextForShortcut()))
+            ReaderInputCommand.ShowHelp -> showShortcuts = true
         }
     }
 
@@ -690,13 +693,10 @@ fun ReaderScreen(
                     }
                     if (dismissedOverlay) return@onKeyEvent true
                 }
-                if (event.key == Key.F1 || event.key == Key.Slash || event.key == Key.Help) {
-                    showShortcuts = true
-                    return@onKeyEvent true
-                }
-                val key = event.toReaderInputKey() ?: return@onKeyEvent false
-                val result = inputMapper.mapKey(
-                    key,
+                val readerBindings = keyBindingStore?.load()?.reader ?: DesktopKeyBindings.defaultReader
+                val shortcut = readerBindings.match(KeyChord.from(event)) ?: return@onKeyEvent false
+                val result = inputMapper.mapAction(
+                    shortcut,
                     ReaderInputContext(
                         mode = state.mode,
                         wheelBehavior = settings.wheelBehavior,
@@ -976,37 +976,11 @@ fun ReaderScreen(
     if (showShortcuts) {
         ReaderShortcutsDialog(
             onDismiss = { showShortcuts = false },
+            bindings = remember(keyBindingStore) {
+                keyBindingStore?.load()?.reader ?: DesktopKeyBindings.defaultReader
+            },
         )
     }
-}
-
-private fun KeyEvent.toReaderInputKey(): ReaderInputKey? = when (key) {
-    Key.DirectionLeft -> ReaderInputKey.LEFT
-    Key.DirectionRight -> ReaderInputKey.RIGHT
-    Key.A -> ReaderInputKey.A
-    Key.D -> ReaderInputKey.D
-    Key.Spacebar -> ReaderInputKey.SPACE
-    Key.PageUp -> ReaderInputKey.PAGE_UP
-    Key.PageDown -> ReaderInputKey.PAGE_DOWN
-    Key.MoveHome -> ReaderInputKey.HOME
-    Key.MoveEnd -> ReaderInputKey.END
-    Key.Plus, Key.Equals -> ReaderInputKey.PLUS
-    Key.Minus -> ReaderInputKey.MINUS
-    Key.Zero -> ReaderInputKey.ZERO
-    Key.F -> ReaderInputKey.F
-    Key.F11 -> ReaderInputKey.F11
-    Key.B -> ReaderInputKey.B
-    Key.Escape -> ReaderInputKey.ESCAPE
-    Key.X -> ReaderInputKey.X
-    Key.DirectionUp -> ReaderInputKey.UP
-    Key.DirectionDown -> ReaderInputKey.DOWN
-    Key.N -> ReaderInputKey.N
-    Key.P -> ReaderInputKey.P
-    Key.LeftBracket -> ReaderInputKey.LEFT_BRACKET
-    Key.RightBracket -> ReaderInputKey.RIGHT_BRACKET
-    Key.M -> ReaderInputKey.M
-    Key.V -> ReaderInputKey.V
-    else -> null
 }
 
 @Composable

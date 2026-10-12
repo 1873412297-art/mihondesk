@@ -66,6 +66,11 @@ import mihon.desktop.reader.ReaderBackgroundColor
 import mihon.desktop.reader.ReaderClickAction
 import mihon.desktop.reader.ReaderColorFilter
 import mihon.desktop.reader.ReaderWheelBehavior
+import mihon.desktop.reader.input.ReaderShortcutAction
+import mihon.desktop.ui.shortcut.DesktopKeyBindings
+import mihon.desktop.ui.shortcut.KeyBindingMap
+import mihon.desktop.ui.shortcut.chordsLabel
+import mihon.desktop.ui.shortcut.shortcutLabel
 import mihon.reader.model.ReadingMode
 import mihon.reader.model.ScaleMode
 import mihon.reader.session.ReaderState
@@ -743,7 +748,10 @@ private fun SettingBackgroundColorMenu(current: ReaderBackgroundColor, onSelecte
 }
 
 @Composable
-internal fun ReaderShortcutsDialog(onDismiss: () -> Unit) {
+internal fun ReaderShortcutsDialog(
+    onDismiss: () -> Unit,
+    bindings: KeyBindingMap<ReaderShortcutAction> = DesktopKeyBindings.defaultReader,
+) {
     val strings = LocalStrings.current
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -767,25 +775,41 @@ internal fun ReaderShortcutsDialog(onDismiss: () -> Unit) {
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
+                @Composable
+                fun row(action: ReaderShortcutAction) {
+                    ShortcutItemRow(strings.chordsLabel(bindings.chordsFor(action)), strings.shortcutLabel(action))
+                }
                 ShortcutSectionHeader(strings.text(UiText.Navigation))
-                ShortcutItemRow(strings.text(UiText.ArrowKeys), strings.text(UiText.PreviousNextPage))
-                ShortcutItemRow("PageUp / PageDown, ↑ / ↓", strings.text(UiText.ScrollFlipPage))
-                ShortcutItemRow("Home / End", strings.text(UiText.FirstLastPage))
+                listOf(
+                    ReaderShortcutAction.PAGE_LEFT,
+                    ReaderShortcutAction.PAGE_RIGHT,
+                    ReaderShortcutAction.PREVIOUS_PAGE,
+                    ReaderShortcutAction.NEXT_PAGE,
+                    ReaderShortcutAction.FIRST_PAGE,
+                    ReaderShortcutAction.LAST_PAGE,
+                ).forEach { row(it) }
                 ShortcutItemRow(strings.text(UiText.MouseBackForward), strings.text(UiText.PreviousNextPage))
-                ShortcutItemRow("P / N, [ / ]", strings.text(UiText.PreviousNextChapterShortcut))
-                ShortcutItemRow("M", strings.text(UiText.ToggleChapterBookmarkShortcut))
-                ShortcutItemRow("V", strings.text(UiText.CycleReadingModeShortcut))
+                listOf(
+                    ReaderShortcutAction.PREVIOUS_CHAPTER,
+                    ReaderShortcutAction.NEXT_CHAPTER,
+                    ReaderShortcutAction.TOGGLE_BOOKMARK,
+                    ReaderShortcutAction.CYCLE_READING_MODE,
+                    ReaderShortcutAction.PAGE_ACTIONS,
+                ).forEach { row(it) }
 
                 ShortcutSectionHeader(strings.text(UiText.ZoomWindow))
-                ShortcutItemRow("+ / −", strings.text(UiText.ZoomInOut))
-                ShortcutItemRow("0", strings.text(UiText.ResetZoomFull))
-                ShortcutItemRow("F", strings.text(UiText.ToggleFullscreen))
-                ShortcutItemRow("B", strings.text(UiText.ToggleBorderless))
-                ShortcutItemRow("Escape", strings.text(UiText.ExitReader))
+                listOf(
+                    ReaderShortcutAction.ZOOM_IN,
+                    ReaderShortcutAction.ZOOM_OUT,
+                    ReaderShortcutAction.RESET_ZOOM,
+                    ReaderShortcutAction.FULLSCREEN,
+                    ReaderShortcutAction.BORDERLESS,
+                    ReaderShortcutAction.EXIT,
+                ).forEach { row(it) }
 
                 ShortcutSectionHeader(strings.text(UiText.ControlsHelp))
                 ShortcutItemRow(strings.text(UiText.ClickCenter), strings.text(UiText.ShowHideControls))
-                ShortcutItemRow(strings.text(UiText.HelpKeys), strings.text(UiText.ShowShortcuts))
+                row(ReaderShortcutAction.SHOW_HELP)
             }
         },
         confirmButton = {

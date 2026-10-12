@@ -33,6 +33,36 @@ enum class ReaderInputKey {
     M,
     V,
 }
+
+/**
+ * Every rebindable reader keyboard action. Physical keys are mapped to these through the persisted
+ * key map (see `mihon.desktop.ui.shortcut.DesktopKeyBindings`), then [ReaderInputMapper.mapAction]
+ * turns them into commands for the current reading context.
+ */
+enum class ReaderShortcutAction {
+    /** Left arrow semantics: previous page in left-to-right modes, next page in right-to-left ones. */
+    PAGE_LEFT,
+
+    /** Right arrow semantics: next page in left-to-right modes, previous page in right-to-left ones. */
+    PAGE_RIGHT,
+    PREVIOUS_PAGE,
+    NEXT_PAGE,
+    FIRST_PAGE,
+    LAST_PAGE,
+    ZOOM_IN,
+    ZOOM_OUT,
+    RESET_ZOOM,
+    FULLSCREEN,
+    BORDERLESS,
+    EXIT,
+    PAGE_ACTIONS,
+    PREVIOUS_CHAPTER,
+    NEXT_CHAPTER,
+    TOGGLE_BOOKMARK,
+    CYCLE_READING_MODE,
+    SHOW_HELP,
+}
+
 enum class ReaderInputFocus { READER, TEXT, MENU }
 enum class ReaderSideButton { BACK, FORWARD }
 data class InputPoint(val x: Float, val y: Float) {
@@ -66,6 +96,7 @@ sealed interface ReaderInputCommand {
     data object NextChapter : ReaderInputCommand
     data object ToggleBookmark : ReaderInputCommand
     data object CycleReadingMode : ReaderInputCommand
+    data object ShowHelp : ReaderInputCommand
 }
 
 /** The reading mode the reader switches to when the mode key (V) is pressed: the next one, wrapping around. */
@@ -82,30 +113,35 @@ class ReaderInputMapper(private val nowMillis: () -> Long = System::currentTimeM
 
     fun mapKey(key: ReaderInputKey, context: ReaderInputContext): ReaderInputResult {
         if (context.focus != ReaderInputFocus.READER || context.ctrl) return ReaderInputResult(null)
+        return mapAction(key.toShortcutAction(context.shift), context)
+    }
+
+    /** Translates a (possibly user-rebound) reader action into a command for the current context. */
+    fun mapAction(action: ReaderShortcutAction, context: ReaderInputContext): ReaderInputResult {
+        if (context.focus != ReaderInputFocus.READER) return ReaderInputResult(null)
         val previous = ReaderInputCommand.Core(ReaderAction.Previous)
         val next = ReaderInputCommand.Core(ReaderAction.Next)
-        val action = when (key) {
-            ReaderInputKey.LEFT, ReaderInputKey.A -> if (context.mode.isRightToLeft) next else previous
-            ReaderInputKey.RIGHT, ReaderInputKey.D -> if (context.mode.isRightToLeft) previous else next
-            ReaderInputKey.SPACE -> if (context.shift) previous else next
-            ReaderInputKey.PAGE_UP, ReaderInputKey.UP -> previous
-            ReaderInputKey.PAGE_DOWN, ReaderInputKey.DOWN -> next
-            ReaderInputKey.HOME -> ReaderInputCommand.Core(ReaderAction.SelectPage(0))
-            ReaderInputKey.END -> ReaderInputCommand.Core(ReaderAction.SelectPage(context.pageCount - 1))
-            ReaderInputKey.PLUS -> ReaderInputCommand.ZoomBy(1.1f, CENTER)
-            ReaderInputKey.MINUS -> ReaderInputCommand.ZoomBy(1f / 1.1f, CENTER)
-            ReaderInputKey.ZERO -> ReaderInputCommand.ZoomBy(0f, CENTER)
-            ReaderInputKey.F -> ReaderInputCommand.Fullscreen
-            ReaderInputKey.F11 -> ReaderInputCommand.Fullscreen
-            ReaderInputKey.B -> ReaderInputCommand.Borderless
-            ReaderInputKey.ESCAPE -> ReaderInputCommand.Escape
-            ReaderInputKey.X -> ReaderInputCommand.PageActions
-            ReaderInputKey.P, ReaderInputKey.LEFT_BRACKET -> ReaderInputCommand.PreviousChapter
-            ReaderInputKey.N, ReaderInputKey.RIGHT_BRACKET -> ReaderInputCommand.NextChapter
-            ReaderInputKey.M -> ReaderInputCommand.ToggleBookmark
-            ReaderInputKey.V -> ReaderInputCommand.CycleReadingMode
+        val command = when (action) {
+            ReaderShortcutAction.PAGE_LEFT -> if (context.mode.isRightToLeft) next else previous
+            ReaderShortcutAction.PAGE_RIGHT -> if (context.mode.isRightToLeft) previous else next
+            ReaderShortcutAction.PREVIOUS_PAGE -> previous
+            ReaderShortcutAction.NEXT_PAGE -> next
+            ReaderShortcutAction.FIRST_PAGE -> ReaderInputCommand.Core(ReaderAction.SelectPage(0))
+            ReaderShortcutAction.LAST_PAGE -> ReaderInputCommand.Core(ReaderAction.SelectPage(context.pageCount - 1))
+            ReaderShortcutAction.ZOOM_IN -> ReaderInputCommand.ZoomBy(1.1f, CENTER)
+            ReaderShortcutAction.ZOOM_OUT -> ReaderInputCommand.ZoomBy(1f / 1.1f, CENTER)
+            ReaderShortcutAction.RESET_ZOOM -> ReaderInputCommand.ZoomBy(0f, CENTER)
+            ReaderShortcutAction.FULLSCREEN -> ReaderInputCommand.Fullscreen
+            ReaderShortcutAction.BORDERLESS -> ReaderInputCommand.Borderless
+            ReaderShortcutAction.EXIT -> ReaderInputCommand.Escape
+            ReaderShortcutAction.PAGE_ACTIONS -> ReaderInputCommand.PageActions
+            ReaderShortcutAction.PREVIOUS_CHAPTER -> ReaderInputCommand.PreviousChapter
+            ReaderShortcutAction.NEXT_CHAPTER -> ReaderInputCommand.NextChapter
+            ReaderShortcutAction.TOGGLE_BOOKMARK -> ReaderInputCommand.ToggleBookmark
+            ReaderShortcutAction.CYCLE_READING_MODE -> ReaderInputCommand.CycleReadingMode
+            ReaderShortcutAction.SHOW_HELP -> ReaderInputCommand.ShowHelp
         }
-        return ReaderInputResult(action)
+        return ReaderInputResult(command)
     }
 
     fun mapWheel(
@@ -164,6 +200,27 @@ class ReaderInputMapper(private val nowMillis: () -> Long = System::currentTimeM
     fun mapPinch(scale: Float, centroid: InputPoint): ReaderInputResult {
         require(scale.isFinite() && scale > 0f) { "pinch scale must be positive and finite" }
         return ReaderInputResult(ReaderInputCommand.ZoomBy(scale, centroid))
+    }
+
+    private fun ReaderInputKey.toShortcutAction(shift: Boolean): ReaderShortcutAction = when (this) {
+        ReaderInputKey.LEFT, ReaderInputKey.A -> ReaderShortcutAction.PAGE_LEFT
+        ReaderInputKey.RIGHT, ReaderInputKey.D -> ReaderShortcutAction.PAGE_RIGHT
+        ReaderInputKey.SPACE -> if (shift) ReaderShortcutAction.PREVIOUS_PAGE else ReaderShortcutAction.NEXT_PAGE
+        ReaderInputKey.PAGE_UP, ReaderInputKey.UP -> ReaderShortcutAction.PREVIOUS_PAGE
+        ReaderInputKey.PAGE_DOWN, ReaderInputKey.DOWN -> ReaderShortcutAction.NEXT_PAGE
+        ReaderInputKey.HOME -> ReaderShortcutAction.FIRST_PAGE
+        ReaderInputKey.END -> ReaderShortcutAction.LAST_PAGE
+        ReaderInputKey.PLUS -> ReaderShortcutAction.ZOOM_IN
+        ReaderInputKey.MINUS -> ReaderShortcutAction.ZOOM_OUT
+        ReaderInputKey.ZERO -> ReaderShortcutAction.RESET_ZOOM
+        ReaderInputKey.F, ReaderInputKey.F11 -> ReaderShortcutAction.FULLSCREEN
+        ReaderInputKey.B -> ReaderShortcutAction.BORDERLESS
+        ReaderInputKey.ESCAPE -> ReaderShortcutAction.EXIT
+        ReaderInputKey.X -> ReaderShortcutAction.PAGE_ACTIONS
+        ReaderInputKey.P, ReaderInputKey.LEFT_BRACKET -> ReaderShortcutAction.PREVIOUS_CHAPTER
+        ReaderInputKey.N, ReaderInputKey.RIGHT_BRACKET -> ReaderShortcutAction.NEXT_CHAPTER
+        ReaderInputKey.M -> ReaderShortcutAction.TOGGLE_BOOKMARK
+        ReaderInputKey.V -> ReaderShortcutAction.CYCLE_READING_MODE
     }
 
     private companion object {

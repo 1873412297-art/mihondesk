@@ -29,7 +29,10 @@ import mihon.desktop.i18n.text
 const val DESKTOP_SHORTCUTS_DIALOG_TEST_TAG = "desktop-shortcuts-dialog"
 
 @Composable
-fun DesktopShortcutsDialog(onDismiss: () -> Unit) {
+fun DesktopShortcutsDialog(
+    onDismiss: () -> Unit,
+    bindings: KeyBindingMap<ShellShortcutAction> = DesktopKeyBindings.defaultGlobal,
+) {
     val strings = LocalStrings.current
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -54,17 +57,20 @@ fun DesktopShortcutsDialog(onDismiss: () -> Unit) {
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
+                @Composable
+                fun row(action: ShellShortcutAction) {
+                    ShortcutItemRow(strings.chordsLabel(bindings.chordsFor(action)), strings.shortcutLabel(action))
+                }
                 ShortcutSectionHeader(strings.text(UiText.Navigation))
-                ShortcutItemRow("Ctrl + 1..8", strings.text(UiText.ShortcutSwitchDestination))
-                ShortcutItemRow("Alt + ← / Backspace", strings.text(UiText.ShortcutBack))
-                ShortcutItemRow("Esc", strings.text(UiText.ShortcutBack))
+                ShellShortcutAction.entries.filter { it.destination() != null }.forEach { row(it) }
+                row(ShellShortcutAction.NavigateBack)
 
                 ShortcutSectionHeader(strings.libraryFilterAndSort)
-                ShortcutItemRow("Ctrl + F", strings.text(UiText.ShortcutFocusSearch))
-                ShortcutItemRow("F5 / Ctrl + R", strings.text(UiText.ShortcutRefreshPage))
+                row(ShellShortcutAction.FocusSearch)
+                row(ShellShortcutAction.RefreshCurrentPage)
 
                 ShortcutSectionHeader(strings.text(UiText.ControlsHelp))
-                ShortcutItemRow("? / Ctrl + /", strings.text(UiText.ShortcutShowHelp))
+                row(ShellShortcutAction.ShowShortcutsHelp)
             }
         },
         confirmButton = {
