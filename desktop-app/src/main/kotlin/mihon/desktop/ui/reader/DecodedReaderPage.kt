@@ -1,8 +1,15 @@
 package mihon.desktop.ui.reader
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -15,6 +22,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ImageBitmap
@@ -25,7 +33,9 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
 import mihon.desktop.i18n.LocalStrings
 import mihon.desktop.i18n.UiText
 import mihon.desktop.i18n.text
@@ -64,6 +74,13 @@ fun DecodedReaderPage(
     val selectedAnimationFrame by content.selectedAnimationFrame.collectAsState()
     var frame by remember(page.id, cropBorders) { mutableStateOf<DesktopReaderPageFrame?>(null) }
     var failure by remember(page.id) { mutableStateOf<String?>(null) }
+    // Bumped by the inline Retry button to re-run the decode for just this page.
+    var attempt by remember(page.id) { mutableStateOf(0) }
+    // Only show a spinner when decoding is actually slow; cache hits resolve well under this
+    // threshold, so fast page turns no longer flash a spinner on the reader background.
+    var showSpinner by remember(page.id, cropBorders, attempt) { mutableStateOf(false) }
+    var spinnerWasShown by remember(page.id) { mutableStateOf(false) }
+    val revealAlpha = remember(page.id) { Animatable(1f) }
 
     LaunchedEffect(frame, imageStore) {
         val image = frame?.tile?.image
@@ -85,7 +102,14 @@ fun DecodedReaderPage(
         }
     }
 
-    LaunchedEffect(content, page.id, cropBorders) {
+    LaunchedEffect(page.id, cropBorders, attempt) {
+        delay(SPINNER_DELAY_MS)
+        showSpinner = true
+        spinnerWasShown = true
+    }
+
+    LaunchedEffect(content, page.id, cropBorders, attempt) {
+        failure = null
         var owned: DesktopReaderPageFrame? = null
         try {
             val replacement = content.loadFrame(page.id, frameIndex = 0, cropBorders)
@@ -94,7 +118,9 @@ fun DecodedReaderPage(
                 PageSize(replacement.metadata.width, replacement.metadata.height),
             )
             owned = replacement
+            if (spinnerWasShown) revealAlpha.snapTo(0f)
             frame = replacement
+            if (spinnerWasShown) revealAlpha.animateTo(1f, tween(REVEAL_FADE_MS))
             kotlinx.coroutines.awaitCancellation()
         } catch (error: Exception) {
             if (error is CancellationException) throw error
@@ -118,7 +144,7 @@ fun DecodedReaderPage(
             content.stopAnimation(page.id)
         }
     }
-    Box(modifier, contentAlignment = Alignment.Center) {
+    Box(modifier.alpha(if (frame != null) revealAlpha.value else 1f), contentAlignment = Alignment.Center) {
         val current = frame
         val animatedFrame = selectedAnimationFrame?.takeIf { it.pageId == page.id && shouldAnimate }
         val effectiveColorFilter = LocalReaderComposeColorFilter.current ?: colorFilter.toComposeColorFilter()
@@ -171,11 +197,41 @@ fun DecodedReaderPage(
                     )
                 }
             }
-            failure != null -> Text(requireNotNull(failure))
-            else -> CircularProgressIndicator()
+            failure != null -> Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.testTag("reader-page-error-${page.id.entryName}"),
+            ) {
+                Text(strings.text(UiText.PageLoadFailed), style = MaterialTheme.typography.titleSmall)
+                Text(
+                    requireNotNull(failure),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                FilledTonalButton(
+                    onClick = { attempt++ },
+                    modifier = Modifier.testTag("reader-page-retry-${page.id.entryName}"),
+                ) { Text(strings.downloadsRetry) }
+            }
+            showSpinner -> Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.testTag("reader-page-loading-${page.id.entryName}"),
+            ) {
+                CircularProgressIndicator(modifier = Modifier.size(32.dp), strokeWidth = 3.dp)
+                Text(
+                    strings.text(UiText.PageLoading),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            else -> Unit
         }
     }
 }
+
+private const val SPINNER_DELAY_MS = 250L
+private const val REVEAL_FADE_MS = 160
 
 internal class SplitImagePainter(
     private val image: ImageBitmap,

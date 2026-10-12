@@ -487,6 +487,8 @@ enum class UiText(val english: String, val simplified: String, val traditional: 
         "忘記密碼時可以關閉應用程式鎖定。書庫、下載和閱讀紀錄都會保留。再次開啟鎖定時需要設定新密碼。",
     ),
     PageDescription("Page {0} of {1}", "第 {0} 页，共 {1} 页", "第 {0} 頁，共 {1} 頁"),
+    PageLoading("Loading page…", "正在加载页面…", "正在載入頁面…"),
+    PageLoadFailed("This page couldn't be loaded", "此页面加载失败", "此頁面載入失敗"),
     DecodedPage("Decoded page {0}", "阅读图片：{0}", "閱讀圖片：{0}"),
     AnimatedFrame("Animated page frame {0}", "动画图片第 {0} 帧", "動畫圖片第 {0} 影格"),
     ChooseExtension(
