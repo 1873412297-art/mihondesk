@@ -60,6 +60,19 @@ val desktopJavaHome = providers.environmentVariable("MIHON_JBR_HOME").orNull ?: 
     .asFile
     .absolutePath
 
+// The installer step keeps the JDK 17 jpackage: packaging/windows holds WiX overrides derived from
+// JDK 17's templates, and JDK 21's main.wxs adds symbols (e.g. JpCaDll) those overrides lack. It only
+// wraps the finished app image, whose bundled runtime is still the JBR 21 image above.
+val installerJavaHome = extensions
+    .getByType<JavaToolchainService>()
+    .launcherFor {
+        languageVersion.set(JavaLanguageVersion.of(mihonx.versions.java.get().toInt()))
+    }.get()
+    .metadata
+    .installationPath
+    .asFile
+    .absolutePath
+
 dependencies {
     implementation(project(":desktop-library-data"))
     implementation(project(":reader-core"))
@@ -360,7 +373,7 @@ tasks.withType<org.jetbrains.compose.desktop.application.tasks.AbstractJPackageT
             val artifact = File(output, "mihondesk-$desktopVersion.$format")
             if (artifact.exists()) check(artifact.delete()) { "Cannot replace previous $artifact" }
             val arguments = listOf(
-                File(desktopJavaHome, "bin/jpackage.exe").absolutePath,
+                File(installerJavaHome, "bin/jpackage.exe").absolutePath,
                 "--type", format,
                 "--app-image",
                 layout.buildDirectory.dir(
