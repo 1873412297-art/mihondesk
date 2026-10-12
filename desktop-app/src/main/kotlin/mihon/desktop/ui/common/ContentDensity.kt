@@ -88,6 +88,9 @@ enum class NavRailState {
     OverlayExpanded,
     ;
 
+    /** Collapsed rail is icon-only (labels via tooltip); expanded variants show icon+label. */
+    val showsLabels: Boolean get() = this != Collapsed
+
     companion object {
         const val PREF_KEY_COLLAPSED = "ui.navigation_rail_collapsed"
         val AUTO_COLLAPSE_WIDTH: Dp = 1200.dp

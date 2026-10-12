@@ -42,6 +42,9 @@ class DesktopShellTest {
             mihon.desktop.ui.common.NavRailState.OverlayExpanded
         mihon.desktop.ui.common.NavRailState.resolve(userCollapsed = true, narrow = false, overlayOpen = false) shouldBe
             mihon.desktop.ui.common.NavRailState.Collapsed
+        mihon.desktop.ui.common.NavRailState.Collapsed.showsLabels shouldBe false
+        mihon.desktop.ui.common.NavRailState.Expanded.showsLabels shouldBe true
+        mihon.desktop.ui.common.NavRailState.OverlayExpanded.showsLabels shouldBe true
     }
 
     @OptIn(ExperimentalTestApi::class)

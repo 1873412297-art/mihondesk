@@ -36,7 +36,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import mihon.desktop.i18n.LocalStrings
 import mihon.desktop.i18n.UiText
 import mihon.desktop.i18n.text
@@ -969,7 +968,6 @@ private fun RailEntry(
             destination = destination,
             selected = selected,
             onDestinationSelected = onDestinationSelected,
-            alwaysShowLabel = true,
             badge = badge,
         )
         return
@@ -1000,7 +998,6 @@ private fun DestinationItem(
     destination: DesktopDestination,
     selected: DesktopDestination,
     onDestinationSelected: (DesktopDestination) -> Unit,
-    alwaysShowLabel: Boolean = false,
     badge: NavItemBadge? = null,
 ) {
     val strings = LocalStrings.current
@@ -1037,16 +1034,9 @@ private fun DestinationItem(
                     )
                 }
             },
-            label = {
-                Text(
-                    text = strings.destinationLabel(destination),
-                    style = androidx.compose.material3.MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                    maxLines = 1,
-                    softWrap = false,
-                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                )
-            },
-            alwaysShowLabel = alwaysShowLabel,
+            // Collapsed rail is icon-only; the label is shown via the hover tooltip.
+            label = null,
+            alwaysShowLabel = false,
             colors = androidx.compose.material3.NavigationRailItemDefaults.colors(
                 selectedIconColor = androidx.compose.material3.MaterialTheme.colorScheme.primary,
                 selectedTextColor = androidx.compose.material3.MaterialTheme.colorScheme.primary,
