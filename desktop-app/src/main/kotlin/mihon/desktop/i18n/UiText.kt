@@ -333,6 +333,11 @@ enum class UiText(val english: String, val simplified: String, val traditional: 
     Security("Security", "安全", "安全"),
     AppLock("App Lock", "应用锁", "應用程式鎖定"),
     LockApp("Lock app", "锁定应用", "鎖定應用程式"),
+    CollapseNavigation("Collapse navigation", "收起导航栏", "收合導覽列"),
+    ExpandNavigation("Expand navigation", "展开导航栏", "展開導覽列"),
+    CompactDensity("Switch to compact density", "切换为紧凑密度", "切換為緊湊密度"),
+    StandardDensity("Switch to standard density", "切换为标准密度", "切換為標準密度"),
+    SettingsMore("More", "更多", "更多"),
     LockEnabledHint(
         "App lock is on. A PIN is required to view your library.",
         "应用锁已开启，查看书架需要输入密码。",

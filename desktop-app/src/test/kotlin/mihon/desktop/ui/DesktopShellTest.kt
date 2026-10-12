@@ -27,6 +27,33 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class DesktopShellTest {
+    @Test
+    fun `rail keeps Stats and About under Settings`() {
+        (RAIL_PRIMARY_DESTINATIONS + RAIL_SECONDARY_DESTINATIONS).contains(DesktopDestination.Stats) shouldBe false
+        (RAIL_PRIMARY_DESTINATIONS + RAIL_SECONDARY_DESTINATIONS).contains(DesktopDestination.About) shouldBe false
+        railSelectionFor(DesktopDestination.Stats) shouldBe DesktopDestination.Settings
+        railSelectionFor(DesktopDestination.About) shouldBe DesktopDestination.Settings
+        railSelectionFor(DesktopDestination.Library) shouldBe DesktopDestination.Library
+        mihon.desktop.ui.common.UiDensity.parse("compact") shouldBe mihon.desktop.ui.common.UiDensity.Compact
+        mihon.desktop.ui.common.UiDensity.parse(null) shouldBe mihon.desktop.ui.common.UiDensity.Standard
+    }
+
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun `rail collapse and density toggles toggle the rail`() = runComposeUiTest {
+        setContent {
+            Box(modifier = Modifier.requiredSize(1000.dp, 700.dp)) {
+                DesktopShell(selected = DesktopDestination.Library, onDestinationSelected = {})
+            }
+        }
+        val before = onNodeWithTag(DESKTOP_NAVIGATION_RAIL_TEST_TAG).getBoundsInRoot().width
+        onNodeWithTag(DESKTOP_RAIL_COLLAPSE_TEST_TAG).performClick()
+        val collapsed = onNodeWithTag(DESKTOP_NAVIGATION_RAIL_TEST_TAG).getBoundsInRoot().width
+        assertTrue(collapsed < before, "collapsed rail must be narrower")
+        onNodeWithTag(DESKTOP_DENSITY_TOGGLE_TEST_TAG).performClick()
+        onNodeWithTag(DESKTOP_DENSITY_TOGGLE_TEST_TAG).assertExists()
+    }
+
     @OptIn(ExperimentalTestApi::class)
     @Test
     fun `standalone details render without a selected library row even on wide desktop`() = runComposeUiTest {
