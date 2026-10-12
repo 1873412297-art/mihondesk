@@ -22,6 +22,14 @@ class FirstRunSplashTest {
     }
 
     @Test
+    fun `reset makes the splash play again`() {
+        val store = DesktopPreferenceStore(Files.createTempDirectory("splash").resolve("preferences.properties"))
+        FirstRunSplash.markShown(store)
+        FirstRunSplash.reset(store)
+        FirstRunSplash.shouldShow(store) shouldBe true
+    }
+
+    @Test
     fun `click skips the splash`() = runComposeUiTest {
         var finished = 0
         setContent {

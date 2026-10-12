@@ -1532,7 +1532,12 @@ fun ApplicationScope.MihonDesktopApp(
                                                 pendingExportPath = path
                                             }
                                         },
-                                        onOpenOnboarding = { showOnboarding = true },
+                                        onOpenOnboarding = {
+                                            // Replaying the first-run guide also replays splash v3 before it.
+                                            mihon.desktop.ui.splash.FirstRunSplash.reset(runtime.preferences)
+                                            showFirstRunSplash = true
+                                            showOnboarding = true
+                                        },
                                         onPreferencesChanged = { updated ->
                                             preferences = updated
                                             appLockController.refresh()

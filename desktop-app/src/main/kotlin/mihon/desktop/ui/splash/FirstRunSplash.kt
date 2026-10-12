@@ -100,6 +100,12 @@ object FirstRunSplash {
             .onFailure { DesktopLogger.warn("Splash", "Could not persist splash state: ${it.message}") }
     }
 
+    /** Clears the shown flag so the next launch (or an immediate overlay) plays the splash again. */
+    fun reset(preferences: DesktopPreferenceStore) {
+        runCatching { preferences.update { remove(SHOWN_KEY) } }
+            .onFailure { DesktopLogger.warn("Splash", "Could not reset splash state: ${it.message}") }
+    }
+
     /** Phase 0: a tiny undecorated AWT window with the static mark; safe to call from any thread. */
     fun showBootWindow(dark: Boolean) {
         if (GraphicsEnvironment.isHeadless()) return

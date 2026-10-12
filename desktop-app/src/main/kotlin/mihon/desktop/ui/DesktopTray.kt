@@ -38,6 +38,9 @@ class DesktopTray(
                 try {
                     val strings = stringsProvider()
                     val popup = PopupMenu().apply {
+                        // Heavyweight AWT menus use the logical "Dialog" font, whose Windows mapping
+                        // has no CJK glyphs under the bundled runtime: Chinese labels rendered as boxes.
+                        trayMenuFont(strings.trayShow + strings.trayQuit)?.let { font = it }
                         val showItem = MenuItem(strings.trayShow).apply {
                             addActionListener { onShow() }
                         }
@@ -88,6 +91,19 @@ class DesktopTray(
     }
 
     companion object {
+        private val CJK_FONT_CANDIDATES =
+            listOf("Microsoft YaHei UI", "Microsoft YaHei", "Microsoft JhengHei UI", "SimSun")
+
+        /** A system font able to display [text], or null when the default font already can. */
+        internal fun trayMenuFont(text: String, size: Int = 12): java.awt.Font? = runCatching {
+            if (text.all { it.code < 0x80 }) return@runCatching null
+            val families = GraphicsEnvironment.getLocalGraphicsEnvironment().availableFontFamilyNames.toSet()
+            CJK_FONT_CANDIDATES.asSequence()
+                .filter { it in families }
+                .map { java.awt.Font(it, java.awt.Font.PLAIN, size) }
+                .firstOrNull { it.canDisplayUpTo(text) == -1 }
+        }.getOrNull()
+
         fun shouldStayInBackground(
             enabled: Boolean,
             traySupported: Boolean,

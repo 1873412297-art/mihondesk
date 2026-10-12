@@ -214,7 +214,8 @@ class LibraryPresenter(
 
     private val categoriesState: Flow<List<DesktopCategory>> = repository.observeCategories()
         .map { records ->
-            listOf(SYSTEM_ALL_CATEGORY) + records.map {
+            // The Mihon schema seeds a nameless system "Default" category (_id 0); it is not a user tab.
+            listOf(SYSTEM_ALL_CATEGORY) + records.filter { it.id > 0 && it.name.isNotBlank() }.map {
                 DesktopCategory(id = it.id, name = it.name, order = it.sortOrder, flags = it.flags)
             }
         }
