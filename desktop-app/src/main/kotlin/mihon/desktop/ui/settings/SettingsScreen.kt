@@ -122,18 +122,18 @@ import mihon.reader.model.ScaleMode
 import java.nio.file.Path
 import javax.swing.JFileChooser
 
-enum class SettingsSection(val label: String) {
-    General("General"),
-    Security("Security"),
-    Appearance("Appearance"),
-    Library("Library"),
-    Reader("Reader"),
-    Shortcuts("Keyboard shortcuts"),
-    Downloads("Downloads"),
-    Tracking("Tracking"),
-    Backup("Backup & Restore"),
-    Advanced("Advanced & Diagnostics"),
-    About("About"),
+enum class SettingsSection(val label: String, val group: SettingsGroup) {
+    General("General", SettingsGroup.App),
+    Appearance("Appearance", SettingsGroup.App),
+    Shortcuts("Keyboard shortcuts", SettingsGroup.App),
+    Security("Security", SettingsGroup.App),
+    Library("Library", SettingsGroup.Content),
+    Reader("Reader", SettingsGroup.Content),
+    Downloads("Downloads", SettingsGroup.Content),
+    Tracking("Tracking", SettingsGroup.Content),
+    Backup("Backup & Restore", SettingsGroup.Data),
+    Advanced("Advanced & Diagnostics", SettingsGroup.Data),
+    About("About", SettingsGroup.None),
     ;
 
     val icon: ImageVector
@@ -163,6 +163,22 @@ enum class SettingsSection(val label: String) {
         Backup -> strings.settingsSectionBackup
         Advanced -> strings.settingsSectionAdvanced
         About -> strings.aboutTitle
+    }
+}
+
+/** Visible groups in the Settings sidebar (0.3.0 IA). [None] sections render after a divider. */
+enum class SettingsGroup {
+    App,
+    Content,
+    Data,
+    None,
+    ;
+
+    fun localized(strings: DesktopStrings): String? = when (this) {
+        App -> strings.text(UiText.SettingsGroupApp)
+        Content -> strings.text(UiText.SettingsGroupContent)
+        Data -> strings.text(UiText.SettingsGroupData)
+        None -> null
     }
 }
 
@@ -299,7 +315,22 @@ fun SettingsScreen(
                         }
                         .testTag("settings-search"),
                 )
-                SettingsSection.entries.forEach { section ->
+                SettingsSection.entries.forEachIndexed { index, section ->
+                    if (index == 0 || SettingsSection.entries[index - 1].group != section.group) {
+                        val header = section.group.localized(strings)
+                        if (header != null) {
+                            Text(
+                                text = header,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier
+                                    .padding(start = 14.dp, top = if (index == 0) 4.dp else 16.dp, bottom = 4.dp)
+                                    .testTag("settings-group-${section.group.name}"),
+                            )
+                        } else {
+                            androidx.compose.material3.HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
+                        }
+                    }
                     val isSelected = searchQuery.isBlank() && section == selectedSection
                     Surface(
                         modifier = Modifier

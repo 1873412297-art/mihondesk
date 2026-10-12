@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
@@ -56,6 +55,7 @@ import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -876,6 +876,38 @@ fun ReaderScreen(
                 onDismiss = { showSettings = false },
             )
         }
+        // In-reader toast: the shell snackbar host is not part of the reader, so feedback lives here.
+        pageActionMessage?.let { message ->
+            LaunchedEffect(message) {
+                kotlinx.coroutines.delay(READER_TOAST_MILLIS)
+                pageActionMessage = null
+            }
+            androidx.compose.material3.Surface(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = if (overlayVisibility.chromeVisible) 128.dp else 32.dp)
+                    .widthIn(max = 560.dp)
+                    .semantics { liveRegion = androidx.compose.ui.semantics.LiveRegionMode.Polite }
+                    .testTag("reader-toast"),
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
+                color = MaterialTheme.colorScheme.inverseSurface,
+                contentColor = MaterialTheme.colorScheme.inverseOnSurface,
+                tonalElevation = 6.dp,
+            ) {
+                Row(
+                    modifier = Modifier.padding(start = 16.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(message, modifier = Modifier.weight(1f, fill = false))
+                    TextButton(
+                        onClick = { pageActionMessage = null },
+                        modifier = Modifier.testTag("reader-page-action-message-ok"),
+                    ) {
+                        Text(strings.dialogOk, color = MaterialTheme.colorScheme.inversePrimary)
+                    }
+                }
+            }
+        }
         if (!overlayVisibility.chromeVisible && pageIndicatorIndex != null && ready) {
             Surface(
                 modifier = Modifier
@@ -960,21 +992,6 @@ fun ReaderScreen(
             onOpenInBrowser = {
                 runPageAction(target) { handler, pageTarget ->
                     pageTarget.pageUrl?.let(handler::openInBrowser) ?: false
-                }
-            },
-        )
-    }
-    pageActionMessage?.let { message ->
-        AlertDialog(
-            onDismissRequest = { pageActionMessage = null },
-            title = { Text(strings.text(UiText.PageAction)) },
-            text = { Text(message) },
-            confirmButton = {
-                TextButton(
-                    onClick = { pageActionMessage = null },
-                    modifier = Modifier.testTag("reader-page-action-message-ok"),
-                ) {
-                    Text(strings.dialogOk)
                 }
             },
         )
@@ -1180,3 +1197,5 @@ private const val CHROME_HIDE_DELAY_MILLIS = 2_500L
 private const val READER_PAGE_INDICATOR_MILLIS = 1_000L
 private const val READER_PAGE_INDICATOR_FADE_MILLIS = 250
 private val TOP_REVEAL_HEIGHT = 24.dp
+
+private const val READER_TOAST_MILLIS = 4_000L

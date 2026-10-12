@@ -36,6 +36,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import mihon.desktop.i18n.LocalStrings
 import mihon.desktop.i18n.UiText
@@ -419,7 +421,13 @@ fun DesktopShell(
                     if (snackbarHostState != null) {
                         SnackbarHost(
                             hostState = snackbarHostState,
-                            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp),
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .padding(bottom = 16.dp)
+                                .widthIn(max = 560.dp)
+                                .semantics {
+                                    liveRegion = androidx.compose.ui.semantics.LiveRegionMode.Polite
+                                },
                         )
                     }
                 }
@@ -900,7 +908,15 @@ private fun DesktopRail(
     val selected = railSelected
     Surface(
         modifier = Modifier.fillMaxHeight()
-            .width(if (expanded) RAIL_EXPANDED_WIDTH else RAIL_COLLAPSED_WIDTH)
+            .width(
+                androidx.compose.animation.core.animateDpAsState(
+                    targetValue = if (expanded) RAIL_EXPANDED_WIDTH else RAIL_COLLAPSED_WIDTH,
+                    animationSpec = androidx.compose.animation.core.tween(
+                        if (mihon.desktop.platform.WindowsReducedMotion.prefersReducedMotion) 0 else 200,
+                    ),
+                    label = "rail-width",
+                ).value,
+            )
             .testTag(DESKTOP_NAVIGATION_RAIL_TEST_TAG),
         tonalElevation = tonalElevation,
     ) {
