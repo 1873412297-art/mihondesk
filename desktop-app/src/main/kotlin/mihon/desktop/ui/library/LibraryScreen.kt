@@ -71,11 +71,15 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import mihon.desktop.category.DesktopCategory
 import mihon.desktop.category.SYSTEM_ALL_CATEGORY
+import mihon.desktop.i18n.DesktopStrings
 import mihon.desktop.i18n.LocalStrings
 import mihon.desktop.i18n.UiText
 import mihon.desktop.i18n.chapterCountLabel
@@ -1081,6 +1085,25 @@ private fun LibraryContent(
     }
 }
 
+/**
+ * In selection mode a card toggles membership instead of opening the manga, so expose that
+ * state to screen readers; otherwise Narrator/NVDA only hear "button" with no checked state.
+ */
+private fun Modifier.librarySelectionSemantics(
+    isSelectionMode: Boolean,
+    isSelected: Boolean,
+    strings: DesktopStrings,
+): Modifier = if (!isSelectionMode) {
+    this
+} else {
+    semantics {
+        selected = isSelected
+        stateDescription = strings.text(
+            if (isSelected) UiText.LibraryItemSelected else UiText.LibraryItemNotSelected,
+        )
+    }
+}
+
 // 1. Comfortable Card: cover-led desktop card with readable metadata
 @Composable
 private fun ComfortableMangaCard(
@@ -1104,6 +1127,7 @@ private fun ComfortableMangaCard(
             .fillMaxWidth()
             .testTag("library-item-${manga.id}")
             .clickable(role = Role.Button, onClick = onClick)
+            .librarySelectionSemantics(isSelectionMode, isSelected, strings)
             .focusable(),
         color = containerColor,
         tonalElevation = if (isSelected) 4.dp else 1.dp,
@@ -1209,7 +1233,8 @@ private fun CompactMangaCard(
             .fillMaxWidth()
             .aspectRatio(0.7f)
             .testTag("library-item-${manga.id}")
-            .clickable(role = Role.Button, onClick = onClick),
+            .clickable(role = Role.Button, onClick = onClick)
+            .librarySelectionSemantics(isSelectionMode, isSelected, LocalStrings.current),
         shape = RoundedCornerShape(10.dp),
         tonalElevation = if (isSelected) 6.dp else 2.dp,
     ) {
@@ -1310,7 +1335,8 @@ private fun CoverOnlyMangaCard(
             .fillMaxWidth()
             .aspectRatio(0.68f)
             .testTag("library-item-${manga.id}")
-            .clickable(role = Role.Button, onClick = onClick),
+            .clickable(role = Role.Button, onClick = onClick)
+            .librarySelectionSemantics(isSelectionMode, isSelected, LocalStrings.current),
         shape = RoundedCornerShape(8.dp),
         tonalElevation = if (isSelected) 6.dp else 1.dp,
     ) {
@@ -1416,7 +1442,8 @@ private fun ListMangaItem(
         modifier = Modifier
             .fillMaxWidth()
             .testTag("library-item-${manga.id}")
-            .clickable(role = Role.Button, onClick = onClick),
+            .clickable(role = Role.Button, onClick = onClick)
+            .librarySelectionSemantics(isSelectionMode, isSelected, strings),
         shape = RoundedCornerShape(8.dp),
         color = containerColor,
         tonalElevation = if (isSelected) 3.dp else 1.dp,

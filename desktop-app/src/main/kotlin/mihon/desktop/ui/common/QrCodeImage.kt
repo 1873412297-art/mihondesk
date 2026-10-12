@@ -18,6 +18,9 @@ import com.google.zxing.MultiFormatWriter
 import com.google.zxing.common.BitMatrix
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import mihon.desktop.i18n.LocalStrings
+import mihon.desktop.i18n.UiText
+import mihon.desktop.i18n.text
 import org.jetbrains.skia.Image as SkiaImage
 
 /**
@@ -84,7 +87,7 @@ fun QrCodeImage(
         bitmap?.let {
             Image(
                 bitmap = it,
-                contentDescription = "Pairing QR code",
+                contentDescription = LocalStrings.current.text(UiText.PairingQrCode),
                 modifier = Modifier.size(sizeInDp),
             )
         }

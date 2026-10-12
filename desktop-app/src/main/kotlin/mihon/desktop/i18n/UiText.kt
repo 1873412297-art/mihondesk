@@ -583,6 +583,11 @@ enum class UiText(val english: String, val simplified: String, val traditional: 
         "迁移快照：{0}（{1} KB）",
         "遷移快照：{0}（{1} KB）",
     ),
+    ReaderPageSlider("Page", "页码", "頁碼"),
+    ReaderPagePosition("Page {0} of {1}", "第 {0} 页，共 {1} 页", "第 {0} 頁，共 {1} 頁"),
+    LibraryItemSelected("Selected", "已选中", "已選取"),
+    LibraryItemNotSelected("Not selected", "未选中", "未選取"),
+    PairingQrCode("Pairing QR code", "配对二维码", "配對 QR 碼"),
 }
 
 private val placeholderPattern = Regex("\\{(\\d+)\\}")

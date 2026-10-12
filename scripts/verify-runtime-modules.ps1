@@ -18,7 +18,8 @@ if (-not $moduleMatch.Success) {
 $modules = $moduleMatch.Groups[1].Value -split '\s+' | Where-Object { $_ }
 
 # Modules the application actually reaches: jdk.httpserver backs the WebView broker,
-# java.net.http backs jsoup, jdk.dynalink backs the script engines.
+# java.net.http backs jsoup, jdk.dynalink backs the script engines, jdk.accessibility carries
+# the Java Access Bridge that exposes the UI to Windows screen readers.
 $required = @(
     'java.base',
     'java.desktop',
@@ -30,7 +31,8 @@ $required = @(
     'jdk.unsupported',
     'jdk.httpserver',
     'java.net.http',
-    'jdk.dynalink'
+    'jdk.dynalink',
+    'jdk.accessibility'
 )
 $missing = @($required | Where-Object { $_ -notin $modules })
 if ($missing.Count -gt 0) {

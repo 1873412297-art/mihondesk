@@ -52,6 +52,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import mihon.desktop.download.DesktopDownload
@@ -377,7 +378,8 @@ private fun DownloadCard(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.Top,
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
+                    // Read title and chapter as one item instead of two unrelated text nodes.
+                    Column(modifier = Modifier.weight(1f).semantics(mergeDescendants = true) {}) {
                         Text(
                             text = download.mangaTitle,
                             style = MaterialTheme.typography.titleMedium,

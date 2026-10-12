@@ -26,9 +26,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import mihon.desktop.i18n.LocalStrings
+import mihon.desktop.i18n.UiText
+import mihon.desktop.i18n.text
 
 @Composable
 internal fun ReaderChapterNavigator(
@@ -100,7 +105,18 @@ internal fun ReaderChapterNavigator(
                                 },
                                 valueRange = 1f..totalPages.toFloat(),
                                 steps = (totalPages - 2).coerceAtLeast(0),
-                                modifier = Modifier.fillMaxWidth().testTag("reader-scrubber-slider"),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .semantics {
+                                        // The raw float value means nothing to a screen reader.
+                                        contentDescription = strings.text(UiText.ReaderPageSlider)
+                                        stateDescription = strings.text(
+                                            UiText.ReaderPagePosition,
+                                            currentPage,
+                                            totalPages,
+                                        )
+                                    }
+                                    .testTag("reader-scrubber-slider"),
                             )
                         }
                     }

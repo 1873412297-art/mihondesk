@@ -216,7 +216,9 @@ compose.desktop {
             licenseFile.set(rootProject.file("LICENSE"))
             // Every module here must be reachable at runtime: jdeps on the packaged app jar reports
             // jdk.httpserver (WebView broker), java.net.http (jsoup) and jdk.dynalink (script engines)
-            // beyond the base set. Missing any of them fails only in the packaged build.
+            // beyond the base set. jdk.accessibility carries the Java Access Bridge so Windows screen
+            // readers (Narrator, NVDA) can reach the Compose semantics tree. Missing any of them fails
+            // only in the packaged build.
             modules(
                 "java.desktop",
                 "java.logging",
@@ -227,6 +229,7 @@ compose.desktop {
                 "jdk.httpserver",
                 "java.net.http",
                 "jdk.dynalink",
+                "jdk.accessibility",
             )
 
             windows {
