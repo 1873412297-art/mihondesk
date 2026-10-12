@@ -139,6 +139,76 @@ class AppUpdateDownloadTest {
     }
 
     @Test
+    fun `interrupted download keeps verified prefix and resumes with a range request`(): Unit = runBlocking {
+        val target = root.resolve("update.exe")
+        val sized = asset.copy(size = bytes.size.toLong())
+        val failing = DesktopAppUpdateService(
+            downloadStream = {
+                object : java.io.InputStream() {
+                    private var served = 0
+                    override fun read(): Int = throw UnsupportedOperationException()
+                    override fun read(b: ByteArray, off: Int, len: Int): Int {
+                        if (served >= 6) throw java.io.IOException("connection reset")
+                        System.arraycopy(bytes, 0, b, off, 6)
+                        served = 6
+                        return 6
+                    }
+                }
+            },
+        )
+        failing.downloadAsset(sized, target, hash) shouldBe false
+        val partial = DesktopAppUpdateService.partialFile(target, hash)
+        Files.size(partial) shouldBe 6L
+        Files.exists(target) shouldBe false
+
+        var requestedOffset = -1L
+        val resuming = DesktopAppUpdateService(
+            downloadStream = { error("full download must not be used when the range is honoured") },
+            resumeStream = { _, offset ->
+                requestedOffset = offset
+                ByteArrayInputStream(bytes.copyOfRange(offset.toInt(), bytes.size))
+            },
+        )
+        resuming.downloadAsset(sized, target, hash) shouldBe true
+        requestedOffset shouldBe 6L
+        Files.readAllBytes(target).contentEquals(bytes) shouldBe true
+        Files.exists(partial) shouldBe false
+    }
+
+    @Test
+    fun `ignored range restarts from zero and corrupt prefix is discarded`(): Unit = runBlocking {
+        val target = root.resolve("update.exe")
+        val sized = asset.copy(size = bytes.size.toLong())
+        val partial = DesktopAppUpdateService.partialFile(target, hash)
+        Files.writeString(partial, "garbage")
+        DesktopAppUpdateService(
+            downloadStream = { ByteArrayInputStream(bytes) },
+            resumeStream = { _, _ -> null },
+        ).downloadAsset(sized, target, hash) shouldBe true
+        Files.readAllBytes(target).contentEquals(bytes) shouldBe true
+
+        Files.delete(target)
+        Files.writeString(partial, "garbage")
+        DesktopAppUpdateService(
+            downloadStream = { error("unused") },
+            resumeStream = { _, offset -> ByteArrayInputStream(bytes.copyOfRange(offset.toInt(), bytes.size)) },
+        ).downloadAsset(sized, target, hash) shouldBe false
+        Files.list(root).use { it.count() } shouldBe 0L
+    }
+
+    @Test
+    fun `GitHub rate limits report a retry delay`(): Unit = runBlocking {
+        val headers = mapOf("x-ratelimit-remaining" to "0", "x-ratelimit-reset" to "1300")
+        DesktopAppUpdateService.rateLimitRetryAfterSeconds(403, headers::get, nowEpochSeconds = 1000) shouldBe 300L
+        DesktopAppUpdateService.rateLimitRetryAfterSeconds(429, mapOf("retry-after" to "42")::get) shouldBe 42L
+        DesktopAppUpdateService.rateLimitRetryAfterSeconds(403, { null }) shouldBe null
+        DesktopAppUpdateService.rateLimitRetryAfterSeconds(200, headers::get) shouldBe null
+        val failed = DesktopAppUpdateService(fetchText = { throw UpdateRateLimitedException(120) })
+            .checkForUpdates().shouldBeInstanceOf<UpdateCheckResult.CheckFailed>()
+        failed.retryAfterSeconds shouldBe 120L
+    }
+
+    @Test
     fun `invalid stable versions fail instead of reporting current`(): Unit = runBlocking {
         for (tag in listOf("", "broken", "v0.3.0-beta.1")) {
             DesktopAppUpdateService(fetchText = { """{"tag_name":"$tag"}""" })

@@ -66,7 +66,16 @@ fun AppUpdateCard(
                 AppUpdatePhase.PreparingUpdate -> UiText.AppUpdatePreparingInstall
                 AppUpdatePhase.Exiting -> UiText.AppUpdateExiting
             }
-            status?.let { Text(strings.text(it), Modifier.testTag("app-update-status")) }
+            val retryAfter = state.retryAfterSeconds
+            if (state.phase == AppUpdatePhase.Failed && retryAfter != null) {
+                Text(
+                    strings.text(UiText.AppUpdateRateLimited, ((retryAfter + 59) / 60).coerceAtLeast(1)),
+                    Modifier.testTag("app-update-status"),
+                    color = MaterialTheme.colorScheme.error,
+                )
+            } else {
+                status?.let { Text(strings.text(it), Modifier.testTag("app-update-status")) }
+            }
             state.release?.let { release ->
                 Text(strings.text(UiText.AppUpdateAvailable, release.release.version))
                 if (release.release.releaseNotes.isNotBlank()) {

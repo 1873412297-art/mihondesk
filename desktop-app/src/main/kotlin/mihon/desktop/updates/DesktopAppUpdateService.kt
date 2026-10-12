@@ -44,8 +44,12 @@ sealed interface UpdateCheckResult {
     ) : UpdateCheckResult
 
     data class UpToDate(val currentVersion: String) : UpdateCheckResult
-    data class CheckFailed(val message: String) : UpdateCheckResult
+    data class CheckFailed(val message: String, val retryAfterSeconds: Long? = null) : UpdateCheckResult
 }
+
+/** GitHub refused the request because the anonymous API quota is exhausted. */
+class UpdateRateLimitedException(val retryAfterSeconds: Long) :
+    java.io.IOException("GitHub rate limit reached; retry after $retryAfterSeconds s")
 
 class DesktopAppUpdateService(
     val currentVersion: String = CURRENT_VERSION,
@@ -53,6 +57,8 @@ class DesktopAppUpdateService(
     val repository: String = DEFAULT_REPO,
     private val fetchText: suspend (String) -> String = ::defaultFetchText,
     private val downloadStream: suspend (String) -> InputStream = ::defaultDownloadStream,
+    /** Reopens a download URL at a byte offset; null when the server does not honour the Range request. */
+    private val resumeStream: suspend (String, Long) -> InputStream? = ::defaultResumeStream,
 ) {
     suspend fun checkForUpdates(): UpdateCheckResult = withContext(Dispatchers.IO) {
         try {
@@ -76,6 +82,8 @@ class DesktopAppUpdateService(
             }
         } catch (e: CancellationException) {
             throw e
+        } catch (e: UpdateRateLimitedException) {
+            UpdateCheckResult.CheckFailed(e.message ?: "Rate limited", e.retryAfterSeconds)
         } catch (e: Exception) {
             UpdateCheckResult.CheckFailed(e.message ?: "Failed to check for updates")
         }
@@ -89,14 +97,44 @@ class DesktopAppUpdateService(
         onPublishing: suspend () -> Unit = {},
     ): Boolean = withContext(Dispatchers.IO) {
         if (expectedSha256 == null || !SHA256.matches(expectedSha256)) return@withContext false
-        var tempFile: Path? = null
+        // The partial file is keyed by the verified checksum, so bytes from another release never mix in.
+        val tempFile: Path = partialFile(destination, expectedSha256)
+        var keepPartial = false
+        var streaming = false
+        var received = 0L
         try {
-            tempFile = Files.createTempFile(destination.toAbsolutePath().parent, ".mihon-update-", ".download")
             val digest = MessageDigest.getInstance("SHA-256")
-            var received = 0L
             var reported = 0L
-            downloadStream(asset.downloadUrl).use { input ->
-                Files.newOutputStream(tempFile).use { output ->
+            val existing = if (Files.isRegularFile(tempFile)) Files.size(tempFile) else 0L
+            val resumed = if (existing > 0 && asset.size > 0 && existing < asset.size) {
+                resumeStream(asset.downloadUrl, existing)
+            } else {
+                null
+            }
+            val append = resumed != null
+            if (append) {
+                Files.newInputStream(tempFile).use { previous ->
+                    val buffer = ByteArray(64 * 1024)
+                    while (true) {
+                        val count = previous.read(buffer)
+                        if (count < 0) break
+                        digest.update(buffer, 0, count)
+                    }
+                }
+                received = existing
+            }
+            streaming = true
+            (resumed ?: downloadStream(asset.downloadUrl)).use { input ->
+                val options = if (append) {
+                    arrayOf(java.nio.file.StandardOpenOption.APPEND)
+                } else {
+                    arrayOf(
+                        java.nio.file.StandardOpenOption.CREATE,
+                        java.nio.file.StandardOpenOption.TRUNCATE_EXISTING,
+                        java.nio.file.StandardOpenOption.WRITE,
+                    )
+                }
+                Files.newOutputStream(tempFile, *options).use { output ->
                     val buffer = ByteArray(64 * 1024)
                     while (true) {
                         currentCoroutineContext().ensureActive()
@@ -114,6 +152,7 @@ class DesktopAppUpdateService(
                     }
                 }
             }
+            streaming = false
             require(asset.size <= 0 || received == asset.size) { "Download size mismatch" }
             require(
                 digest.digest().joinToString("") {
@@ -147,10 +186,15 @@ class DesktopAppUpdateService(
             true
         } catch (e: CancellationException) {
             throw e
+        } catch (e: java.io.IOException) {
+            // A dropped connection keeps the verified-so-far prefix so the next attempt can resume with Range.
+            keepPartial = streaming && asset.size > 0 &&
+                runCatching { Files.size(tempFile) in 1 until asset.size }.getOrDefault(false)
+            false
         } catch (_: Exception) {
             false
         } finally {
-            tempFile?.let { Files.deleteIfExists(it) }
+            if (!keepPartial) runCatching { Files.deleteIfExists(tempFile) }
         }
     }
 
@@ -182,6 +226,32 @@ class DesktopAppUpdateService(
 
         private val json = Json { ignoreUnknownKeys = true }
         private val SHA256 = Regex("[a-fA-F0-9]{64}")
+
+        /** Stable sibling path used to resume an interrupted download of the same verified package. */
+        fun partialFile(destination: Path, expectedSha256: String): Path {
+            val absolute = destination.toAbsolutePath()
+            return absolute.resolveSibling(
+                ".${absolute.fileName}.${expectedSha256.take(16).lowercase()}.partial",
+            )
+        }
+
+        /**
+         * Seconds to wait before GitHub accepts another request, or null when [status] is not a rate limit.
+         * GitHub answers 403 or 429 and sends either `retry-after` or an exhausted quota with its reset epoch.
+         */
+        fun rateLimitRetryAfterSeconds(
+            status: Int,
+            header: (String) -> String?,
+            nowEpochSeconds: Long = System.currentTimeMillis() / 1000,
+        ): Long? {
+            if (status != 403 && status != 429) return null
+            header("retry-after")?.trim()?.toLongOrNull()?.let { return it.coerceAtLeast(1) }
+            val remaining = header("x-ratelimit-remaining")?.trim()
+            val reset = header("x-ratelimit-reset")?.trim()?.toLongOrNull()
+            if (remaining == "0" && reset != null) return (reset - nowEpochSeconds).coerceAtLeast(1)
+            if (remaining == "0" || status == 429) return 60
+            return null
+        }
 
         fun parseReleaseJson(jsonText: String): AppReleaseInfo {
             val element = json.parseToJsonElement(jsonText).jsonObject
@@ -264,6 +334,9 @@ class DesktopAppUpdateService(
             connection.connectTimeout = 10000
             connection.readTimeout = 10000
             try {
+                rateLimitRetryAfterSeconds(connection.responseCode, connection::getHeaderField)?.let {
+                    throw UpdateRateLimitedException(it)
+                }
                 return connection.inputStream.use { input ->
                     val bytes = input.readNBytes(2 * 1024 * 1024 + 1)
                     require(bytes.size <= 2 * 1024 * 1024) { "Release metadata too large" }
@@ -292,6 +365,33 @@ class DesktopAppUpdateService(
             } catch (error: Exception) {
                 connection.disconnect()
                 throw error
+            }
+        }
+
+        private fun defaultResumeStream(url: String, offset: Long): InputStream? {
+            val connection = java.net.URI(url).toURL().openConnection() as java.net.HttpURLConnection
+            connection.setRequestProperty("User-Agent", "mihondesk/$CURRENT_VERSION")
+            connection.setRequestProperty("Range", "bytes=$offset-")
+            connection.connectTimeout = 15000
+            connection.readTimeout = 30000
+            return try {
+                val range = connection.getHeaderField("Content-Range").orEmpty()
+                if (connection.responseCode != 206 || !range.startsWith("bytes $offset-")) {
+                    connection.disconnect()
+                    return null
+                }
+                object : java.io.FilterInputStream(connection.inputStream) {
+                    override fun close() {
+                        try {
+                            super.close()
+                        } finally {
+                            connection.disconnect()
+                        }
+                    }
+                }
+            } catch (error: Exception) {
+                connection.disconnect()
+                null
             }
         }
     }

@@ -44,6 +44,11 @@ enum class UiText(val english: String, val simplified: String, val traditional: 
         "检查或校验更新失败，请检查网络和保存位置后重试。",
         "檢查或驗證更新失敗，請檢查網路與儲存位置後重試。",
     ),
+    AppUpdateRateLimited(
+        "GitHub is limiting update checks right now. Try again in about {0} min.",
+        "GitHub 暂时限制了更新检查，请约 {0} 分钟后重试。",
+        "GitHub 暫時限制了更新檢查，請約 {0} 分鐘後重試。",
+    ),
     AppUpdateUnsupported(
         "No matching Windows package is available. Visit the release page.",
         "此版本暂无匹配的 Windows 更新包，请查看发布页面。",

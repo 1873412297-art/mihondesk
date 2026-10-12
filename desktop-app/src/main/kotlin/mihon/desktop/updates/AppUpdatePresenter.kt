@@ -36,6 +36,8 @@ data class AppUpdateState(
     val verifiedSha256: String? = null,
     val installFailed: Boolean = false,
     val previousOutcome: AppUpdateOutcome? = null,
+    /** Set when GitHub rate-limited the last request; seconds until a retry is accepted. */
+    val retryAfterSeconds: Long? = null,
 ) {
     val busy: Boolean get() = phase in
         setOf(
@@ -69,7 +71,8 @@ class AppUpdatePresenter(
                 mutableState.value = when (val result = service.checkForUpdates()) {
                     is UpdateCheckResult.UpdateAvailable -> AppUpdateState(AppUpdatePhase.Available, result)
                     is UpdateCheckResult.UpToDate -> AppUpdateState(AppUpdatePhase.Current)
-                    is UpdateCheckResult.CheckFailed -> AppUpdateState(AppUpdatePhase.Failed)
+                    is UpdateCheckResult.CheckFailed ->
+                        AppUpdateState(AppUpdatePhase.Failed, retryAfterSeconds = result.retryAfterSeconds)
                 }
             } catch (_: CancellationException) {
                 mutableState.value = AppUpdateState(AppUpdatePhase.Cancelled)
@@ -109,6 +112,11 @@ class AppUpdatePresenter(
                 )
             } catch (_: CancellationException) {
                 mutableState.value = state.value.copy(phase = AppUpdatePhase.Cancelled)
+            } catch (e: UpdateRateLimitedException) {
+                mutableState.value = state.value.copy(
+                    phase = AppUpdatePhase.Failed,
+                    retryAfterSeconds = e.retryAfterSeconds,
+                )
             } catch (_: Exception) {
                 mutableState.value = state.value.copy(phase = AppUpdatePhase.Failed)
             }
