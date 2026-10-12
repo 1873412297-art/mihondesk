@@ -1,18 +1,15 @@
 package mihon.desktop.ui
 
 import mihon.desktop.i18n.DesktopStrings
+import mihon.desktop.platform.SharedTrayIcon
 import java.awt.EventQueue
 import java.awt.GraphicsEnvironment
-import java.awt.Image
 import java.awt.MenuItem
 import java.awt.PopupMenu
 import java.awt.SystemTray
 import java.awt.TrayIcon
-import java.awt.image.BufferedImage
-import javax.imageio.ImageIO
 
 class DesktopTray(
-    private val appIcon: Image? = loadAppImage(),
     private val stringsProvider: () -> DesktopStrings,
     private val onShow: () -> Unit,
     private val onQuit: () -> Unit,
@@ -39,7 +36,6 @@ class DesktopTray(
             synchronized(this) {
                 if (trayIcon != null) return@invokeLater
                 try {
-                    val icon = appIcon ?: BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB)
                     val strings = stringsProvider()
                     val popup = PopupMenu().apply {
                         val showItem = MenuItem(strings.trayShow).apply {
@@ -53,12 +49,10 @@ class DesktopTray(
                         add(quitItem)
                     }
 
-                    val newTrayIcon = TrayIcon(icon, strings.appName, popup).apply {
-                        isImageAutoSize = true
-                        addActionListener { onShow() }
-                    }
-                    SystemTray.getSystemTray().add(newTrayIcon)
-                    trayIcon = newTrayIcon
+                    // Reuse the process icon the notification services already show instead of adding a second one.
+                    val sharedIcon = SharedTrayIcon.acquire() ?: return@invokeLater
+                    SharedTrayIcon.configure(strings.appName, popup, onShow)
+                    trayIcon = sharedIcon
                 } catch (_: Throwable) {
                     // Ignored if system tray installation fails
                 }
@@ -85,28 +79,15 @@ class DesktopTray(
     fun dispose() {
         EventQueue.invokeLater {
             synchronized(this) {
-                val icon = trayIcon ?: return@invokeLater
-                try {
-                    SystemTray.getSystemTray().remove(icon)
-                } catch (_: Throwable) {
-                } finally {
-                    trayIcon = null
-                }
+                if (trayIcon == null) return@invokeLater
+                // The icon is shared with the notification services, so only detach the menu and click action.
+                SharedTrayIcon.configure("mihondesk", popup = null, onAction = null)
+                trayIcon = null
             }
         }
     }
 
     companion object {
-        fun loadAppImage(): Image? {
-            return try {
-                val stream = DesktopTray::class.java.getResourceAsStream("/icon.png")
-                    ?: Thread.currentThread().contextClassLoader?.getResourceAsStream("icon.png")
-                stream?.use { ImageIO.read(it) }
-            } catch (_: Throwable) {
-                null
-            }
-        }
-
         fun shouldStayInBackground(
             enabled: Boolean,
             traySupported: Boolean,

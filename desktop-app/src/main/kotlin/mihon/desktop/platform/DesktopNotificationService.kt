@@ -3,11 +3,8 @@ package mihon.desktop.platform
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import java.awt.Image
-import java.awt.SystemTray
 import java.awt.TrayIcon
 import java.awt.TrayIcon.MessageType
-import java.awt.image.BufferedImage
 
 enum class NotificationType {
     INFO,
@@ -37,22 +34,8 @@ class DesktopNotificationService(
     }
 
     private fun initTray() {
-        try {
-            if (SystemTray.isSupported()) {
-                val tray = SystemTray.getSystemTray()
-                val image: Image = runCatching {
-                    DesktopNotificationService::class.java.getResourceAsStream("/icon.png")?.use {
-                        javax.imageio.ImageIO.read(it)
-                    }
-                }.getOrNull() ?: BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB)
-                val icon = TrayIcon(image, "mihondesk")
-                icon.isImageAutoSize = true
-                tray.add(icon)
-                trayIcon = icon
-            }
-        } catch (_: Throwable) {
-            trayIcon = null
-        }
+        // Shared with the other notification service and the background tray: one icon per process.
+        trayIcon = SharedTrayIcon.acquire()
     }
 
     fun notify(

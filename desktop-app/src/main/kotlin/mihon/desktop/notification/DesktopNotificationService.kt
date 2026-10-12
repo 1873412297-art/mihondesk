@@ -10,11 +10,8 @@ import mihon.desktop.i18n.EnglishStrings
 import mihon.desktop.i18n.UiText
 import mihon.desktop.i18n.text
 import mihon.desktop.i18n.title
-import java.awt.GraphicsEnvironment
-import java.awt.Image
-import java.awt.SystemTray
+import mihon.desktop.platform.SharedTrayIcon
 import java.awt.TrayIcon
-import java.awt.image.BufferedImage
 
 data class DesktopNotificationItem(
     val id: Long = System.currentTimeMillis(),
@@ -54,22 +51,8 @@ class WindowsDesktopNotificationService(
     }
 
     private fun initTray() {
-        if (!GraphicsEnvironment.isHeadless() && SystemTray.isSupported()) {
-            try {
-                val tray = SystemTray.getSystemTray()
-                val image: Image = runCatching {
-                    WindowsDesktopNotificationService::class.java.getResourceAsStream("/icon.png")?.use {
-                        javax.imageio.ImageIO.read(it)
-                    }
-                }.getOrNull() ?: BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB)
-                val icon = TrayIcon(image, "mihondesk")
-                icon.isImageAutoSize = true
-                tray.add(icon)
-                trayIcon = icon
-            } catch (_: Exception) {
-                // Ignore if unable to add system tray icon (e.g. in certain restricted headless CI environments)
-            }
-        }
+        // Shared with the other notification service and the background tray: one icon per process.
+        trayIcon = SharedTrayIcon.acquire()
     }
 
     override fun notifyDownloadComplete(mangaTitle: String, chapterName: String) {
