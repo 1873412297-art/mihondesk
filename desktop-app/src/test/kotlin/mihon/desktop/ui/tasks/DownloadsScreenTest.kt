@@ -4,6 +4,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -77,7 +79,9 @@ class DownloadsScreenTest {
             }
         }
 
-        onNodeWithText("Chainsaw Man").assertExists()
+        // Shown once in the manga group header and once on the chapter card.
+        onAllNodesWithText("Chainsaw Man").assertCountEquals(2)
+        onNodeWithTag("download-group-1").assertExists()
         onNodeWithText("Chapter 150").assertExists()
         onNodeWithText("Downloading").assertExists()
         onNodeWithText("1 active items • 2.5 MB/s").assertExists()

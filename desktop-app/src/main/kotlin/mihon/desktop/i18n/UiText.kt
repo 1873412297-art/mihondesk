@@ -150,6 +150,8 @@ enum class UiText(val english: String, val simplified: String, val traditional: 
     DownloadPathSaveFailed("Could not save the location. Please retry.", "下载位置保存失败，请重试。", "下載位置儲存失敗，請重試。"),
     RetryAllFailed("Retry all failed ({0})", "重试全部失败（{0}）", "重試全部失敗（{0}）"),
     DownloadQueueCount("{0} downloads", "共 {0} 个下载任务", "共 {0} 個下載工作"),
+    DownloadGroupCollapse("Hide chapters of {0}", "收起《{0}》的章节", "收起《{0}》的章節"),
+    DownloadGroupExpand("Show chapters of {0}", "展开《{0}》的章节", "展開《{0}》的章節"),
     DownloadsNoMatches("No matching downloads", "没有符合条件的下载任务", "沒有符合條件的下載工作"),
     ErrorDetails("Error details", "错误详情", "錯誤詳情"),
     HideErrorDetails("Hide details", "收起详情", "收起詳情"),

@@ -1,5 +1,6 @@
 package mihon.desktop.ui.tasks
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -52,14 +53,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import mihon.desktop.download.DesktopDownload
 import mihon.desktop.download.DownloadStatus
 import mihon.desktop.download.classifyDownloadFailure
 import mihon.desktop.i18n.LocalStrings
 import mihon.desktop.i18n.UiText
+import mihon.desktop.i18n.chapterCountLabel
 import mihon.desktop.i18n.text
 import mihon.desktop.ui.common.DesktopTooltipBox
 import mihon.desktop.ui.common.DownloadIndicator
@@ -105,6 +109,7 @@ fun DownloadsScreen(
     val strings = LocalStrings.current
     var query by rememberSaveable { mutableStateOf("") }
     var selectedStatus by rememberSaveable { mutableStateOf<DownloadStatus?>(null) }
+    var collapsedMangaIds by remember { mutableStateOf(emptySet<Long>()) }
     val failedCount = queue.count { it.status == DownloadStatus.ERROR }
     val counts = queue.groupingBy { it.displayStatus(isRunning) }.eachCount()
     val visible = queue.filter { item ->
@@ -316,27 +321,45 @@ fun DownloadsScreen(
                 }
             } else {
                 val indexMap = remember(queue) { queue.withIndex().associate { it.value.chapterId to it.index } }
+                val groups = remember(visible) { groupDownloadsByManga(visible) }
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    items(visible, key = { it.chapterId }) { item ->
-                        val queueIndex = indexMap[item.chapterId] ?: -1
-                        val canMoveUp = queueIndex > 0
-                        val canMoveDown = queueIndex in 0 until queue.lastIndex
-                        DownloadCard(
-                            download = item,
-                            isRunning = isRunning,
-                            canMoveUp = canMoveUp,
-                            canMoveDown = canMoveDown,
-                            onPause = { onPause(item.chapterId) },
-                            onResume = { onResume(item.chapterId) },
-                            onMoveUp = { onMoveUp(item.chapterId) },
-                            onMoveDown = { onMoveDown(item.chapterId) },
-                            onCancel = { onCancel(item.chapterId) },
-                            onRetry = { onRetry(item.chapterId) },
-                            onRead = { onReadChapter(item.mangaId, item.chapterId) },
-                        )
+                    groups.forEach { group ->
+                        val expanded = group.mangaId !in collapsedMangaIds
+                        item(key = "manga-${group.mangaId}") {
+                            DownloadGroupHeader(
+                                group = group,
+                                expanded = expanded,
+                                onToggle = {
+                                    collapsedMangaIds = if (expanded) {
+                                        collapsedMangaIds + group.mangaId
+                                    } else {
+                                        collapsedMangaIds - group.mangaId
+                                    }
+                                },
+                            )
+                        }
+                        if (!expanded) return@forEach
+                        items(group.items, key = { it.chapterId }) { item ->
+                            val queueIndex = indexMap[item.chapterId] ?: -1
+                            val canMoveUp = queueIndex > 0
+                            val canMoveDown = queueIndex in 0 until queue.lastIndex
+                            DownloadCard(
+                                download = item,
+                                isRunning = isRunning,
+                                canMoveUp = canMoveUp,
+                                canMoveDown = canMoveDown,
+                                onPause = { onPause(item.chapterId) },
+                                onResume = { onResume(item.chapterId) },
+                                onMoveUp = { onMoveUp(item.chapterId) },
+                                onMoveDown = { onMoveDown(item.chapterId) },
+                                onCancel = { onCancel(item.chapterId) },
+                                onRetry = { onRetry(item.chapterId) },
+                                onRead = { onReadChapter(item.mangaId, item.chapterId) },
+                            )
+                        }
                     }
                 }
             }
@@ -722,6 +745,46 @@ private fun DownloadCard(
                     },
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun DownloadGroupHeader(group: DownloadGroup, expanded: Boolean, onToggle: () -> Unit) {
+    val strings = LocalStrings.current
+    val toggleLabel = strings.text(
+        if (expanded) UiText.DownloadGroupCollapse else UiText.DownloadGroupExpand,
+        group.mangaTitle,
+    )
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(role = Role.Button, onClickLabel = toggleLabel, onClick = onToggle)
+            .padding(horizontal = 4.dp, vertical = 4.dp)
+            .testTag("download-group-${group.mangaId}"),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Icon(
+            imageVector = if (expanded) Icons.Rounded.KeyboardArrowUp else Icons.Rounded.KeyboardArrowDown,
+            contentDescription = toggleLabel,
+            modifier = Modifier.size(20.dp),
+        )
+        Text(
+            text = group.mangaTitle,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = false),
+        )
+        Text(
+            text = strings.chapterCountLabel(group.items.size.toLong()),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        if (group.failedCount > 0) {
+            StatusBadge(DownloadStatus.ERROR, isRunning = true)
         }
     }
 }

@@ -8,8 +8,10 @@ import androidx.compose.ui.graphics.asSkiaBitmap
 import androidx.compose.ui.platform.ClipboardManager
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -145,7 +147,9 @@ class DownloadExperienceTest {
             }
         }
         onNodeWithTag("download-filter-ERROR").performClick()
-        onNodeWithText("Failed book").assertExists()
+        // Shown once in the manga group header and once on the chapter card.
+        onAllNodesWithText("Failed book").assertCountEquals(2)
+        onNodeWithTag("download-group-1").assertExists()
         onNodeWithText("Waiting book").assertDoesNotExist()
         onNodeWithTag("downloads-search").performTextInput("unmatched")
         onNodeWithText("没有符合条件的下载任务").assertExists()

@@ -40,6 +40,8 @@ import mihon.desktop.ui.library.LibraryScreen
 import mihon.desktop.ui.library.LibraryUiState
 import mihon.desktop.ui.library.MangaDetailActions
 import mihon.desktop.ui.library.MangaDetailUiState
+import mihon.desktop.ui.tasks.DownloadsNavBadge
+import mihon.desktop.ui.tasks.downloadsNavBadge
 
 internal const val DESKTOP_MAIN_HEADLINE_TEST_TAG = "desktop-main-headline"
 internal const val DESKTOP_NAVIGATION_RAIL_TEST_TAG = "desktop-navigation-rail"
@@ -54,6 +56,7 @@ fun DesktopShell(
     var isCookieManagerOpen by remember { mutableStateOf(false) }
     val primary = DesktopDestination.entries.take(5)
     val secondary = DesktopDestination.entries.drop(5)
+    val downloadsBadge = remember(state.downloadsQueue) { downloadsNavBadge(state.downloadsQueue) }
     val snackbarHostState = LocalSnackbarHostState.current
 
     Surface(modifier = Modifier.fillMaxSize()) {
@@ -74,11 +77,7 @@ fun DesktopShell(
                                 selected = state.selected,
                                 onDestinationSelected = actions.onDestinationSelected,
                                 alwaysShowLabel = true,
-                                badgeCount = if (destination == DesktopDestination.Updates) {
-                                    state.updatesUnreadCount
-                                } else {
-                                    0
-                                },
+                                badge = navBadgeFor(destination, state.updatesUnreadCount, downloadsBadge),
                             )
                         }
                     }
@@ -90,11 +89,7 @@ fun DesktopShell(
                                 selected = state.selected,
                                 onDestinationSelected = actions.onDestinationSelected,
                                 alwaysShowLabel = false,
-                                badgeCount = if (destination == DesktopDestination.Updates) {
-                                    state.updatesUnreadCount
-                                } else {
-                                    0
-                                },
+                                badge = navBadgeFor(destination, state.updatesUnreadCount, downloadsBadge),
                             )
                         }
                         if (actions.onLockNow != null) {
@@ -778,13 +773,29 @@ fun DesktopShell(
     DesktopShell(state = state, actions = actions)
 }
 
+/** Count shown on a navigation item; [error] badges use the error colour, others the primary colour. */
+internal data class NavItemBadge(val count: Int, val error: Boolean, val testTag: String)
+
+internal fun navBadgeFor(
+    destination: DesktopDestination,
+    updatesUnreadCount: Int,
+    downloadsBadge: DownloadsNavBadge?,
+): NavItemBadge? = when (destination) {
+    DesktopDestination.Updates -> updatesUnreadCount.takeIf { it > 0 }
+        ?.let { NavItemBadge(it, error = true, testTag = "updates-unread-badge") }
+    DesktopDestination.Downloads ->
+        downloadsBadge
+            ?.let { NavItemBadge(it.count, error = it.failed, testTag = "downloads-nav-badge") }
+    else -> null
+}
+
 @Composable
 private fun DestinationItem(
     destination: DesktopDestination,
     selected: DesktopDestination,
     onDestinationSelected: (DesktopDestination) -> Unit,
     alwaysShowLabel: Boolean = false,
-    badgeCount: Int = 0,
+    badge: NavItemBadge? = null,
 ) {
     val strings = LocalStrings.current
     DesktopTooltipBox(text = strings.destinationLabel(destination)) {
@@ -792,14 +803,17 @@ private fun DestinationItem(
             selected = destination == selected,
             onClick = { onDestinationSelected(destination) },
             icon = {
-                if (badgeCount > 0) {
+                if (badge != null) {
                     androidx.compose.material3.BadgedBox(
                         badge = {
+                            val colors = androidx.compose.material3.MaterialTheme.colorScheme
                             androidx.compose.material3.Badge(
-                                modifier = Modifier.testTag("updates-unread-badge"),
+                                modifier = Modifier.testTag(badge.testTag),
+                                containerColor = if (badge.error) colors.error else colors.primary,
+                                contentColor = if (badge.error) colors.onError else colors.onPrimary,
                             ) {
                                 Text(
-                                    badgeCount.toString(),
+                                    badge.count.toString(),
                                     style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
                                 )
                             }
