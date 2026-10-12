@@ -34,6 +34,7 @@ import androidx.compose.material.icons.rounded.CollectionsBookmark
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.FilterList
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.AlertDialog
@@ -69,6 +70,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.isCtrlPressed
+import androidx.compose.ui.input.pointer.isMetaPressed
 import androidx.compose.ui.input.pointer.isShiftPressed
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
@@ -424,35 +427,99 @@ private fun LibraryPane(
                     }
                 }
             }
-            if (failedCovers.isNotEmpty() && onRepairBrokenCovers != null) {
+            // An empty library keeps the import actions visible; once it has titles they move into ⋮.
+            val libraryIsEmpty = !state.loading && state.items.isEmpty() && !state.filterState.hasActiveFilters &&
+                state.query.isBlank()
+            if (libraryIsEmpty) {
                 OutlinedButton(
-                    onClick = onRepairBrokenCovers,
-                    enabled = !isRepairingCovers,
-                    modifier = Modifier.testTag("library-repair-covers-button"),
+                    onClick = onImportBackup,
+                    modifier = Modifier.testTag("library-import-backup"),
                 ) {
-                    if (isRepairingCovers) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(16.dp),
-                            strokeWidth = 2.dp,
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(strings.coverRepairRunning)
-                    } else {
-                        Text(strings.coverRepairAction(failedCovers.size))
-                    }
+                    Text(strings.libraryImportBackup)
+                }
+                OutlinedButton(
+                    onClick = onImportLocal,
+                    modifier = Modifier.testTag("library-import-local"),
+                ) {
+                    Text(strings.libraryImportLocal)
                 }
             }
-            OutlinedButton(
-                onClick = onImportBackup,
-                modifier = Modifier.testTag("library-import-backup"),
-            ) {
-                Text(strings.libraryImportBackup)
-            }
-            OutlinedButton(
-                onClick = onImportLocal,
-                modifier = Modifier.testTag("library-import-local"),
-            ) {
-                Text(strings.libraryImportLocal)
+            var overflowExpanded by remember { mutableStateOf(false) }
+            Box {
+                DesktopTooltipBox(text = strings.text(UiText.MoreOptions)) {
+                    IconButton(
+                        onClick = { overflowExpanded = true },
+                        modifier = Modifier.testTag("library-overflow"),
+                    ) {
+                        BadgedBox(
+                            badge = {
+                                if (failedCovers.isNotEmpty() && onRepairBrokenCovers != null) {
+                                    Badge { Text(failedCovers.size.toString()) }
+                                }
+                            },
+                        ) {
+                            Icon(Icons.Rounded.MoreVert, contentDescription = strings.text(UiText.MoreOptions))
+                        }
+                    }
+                }
+                DropdownMenu(expanded = overflowExpanded, onDismissRequest = { overflowExpanded = false }) {
+                    DropdownMenuItem(
+                        text = { Text(strings.libraryOpenRandom) },
+                        leadingIcon = { Icon(Icons.Rounded.Shuffle, contentDescription = null) },
+                        enabled = state.items.isNotEmpty(),
+                        onClick = {
+                            overflowExpanded = false
+                            onOpenRandomManga()
+                        },
+                        modifier = Modifier.testTag("library-open-random"),
+                    )
+                    DropdownMenuItem(
+                        text = { Text(strings.libraryBatchSelect) },
+                        enabled = state.items.isNotEmpty(),
+                        onClick = {
+                            overflowExpanded = false
+                            onToggleSelectionMode(!state.selectionState.isSelectionMode)
+                        },
+                        modifier = Modifier.testTag("library-toggle-selection"),
+                    )
+                    if (failedCovers.isNotEmpty() && onRepairBrokenCovers != null) {
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    if (isRepairingCovers) {
+                                        strings.coverRepairRunning
+                                    } else {
+                                        strings.coverRepairAction(failedCovers.size)
+                                    },
+                                )
+                            },
+                            enabled = !isRepairingCovers,
+                            onClick = {
+                                overflowExpanded = false
+                                onRepairBrokenCovers()
+                            },
+                            modifier = Modifier.testTag("library-repair-covers-button"),
+                        )
+                    }
+                    if (!libraryIsEmpty) {
+                        DropdownMenuItem(
+                            text = { Text(strings.libraryImportBackup) },
+                            onClick = {
+                                overflowExpanded = false
+                                onImportBackup()
+                            },
+                            modifier = Modifier.testTag("library-import-backup"),
+                        )
+                        DropdownMenuItem(
+                            text = { Text(strings.libraryImportLocal) },
+                            onClick = {
+                                overflowExpanded = false
+                                onImportLocal()
+                            },
+                            modifier = Modifier.testTag("library-import-local"),
+                        )
+                    }
+                }
             }
         }
         val displayModeControls: @Composable () -> Unit = {
@@ -518,27 +585,6 @@ private fun LibraryPane(
                         }
                     }
 
-                    DesktopTooltipBox(text = strings.libraryBatchSelect) {
-                        FilterChip(
-                            selected = state.selectionState.isSelectionMode,
-                            onClick = { onToggleSelectionMode(!state.selectionState.isSelectionMode) },
-                            label = { Text(strings.libraryBatchSelect) },
-                            modifier = Modifier.testTag("library-toggle-selection"),
-                        )
-                    }
-
-                    DesktopTooltipBox(text = strings.libraryOpenRandom) {
-                        IconButton(
-                            onClick = onOpenRandomManga,
-                            enabled = state.items.isNotEmpty(),
-                            modifier = Modifier.testTag("library-open-random"),
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.Shuffle,
-                                contentDescription = strings.libraryOpenRandom,
-                            )
-                        }
-                    }
                 }
             }
         }
@@ -720,7 +766,15 @@ private fun LibraryPane(
             // Manga Content Grid / List
             LibraryContent(
                 state = state,
-                onMangaSelected = onMangaSelected,
+                // Desktop convention: Ctrl/Shift+click starts or extends a selection without a mode switch.
+                onMangaSelected = { id ->
+                    val modifiers = windowInfo.keyboardModifiers
+                    if (modifiers.isCtrlPressed || modifiers.isMetaPressed || modifiers.isShiftPressed) {
+                        toggleWithRange(id)
+                    } else {
+                        onMangaSelected(id)
+                    }
+                },
                 onToggleMangaSelection = toggleWithRange,
                 onRetry = onRetry,
                 onClearFilters = onClearFilters,

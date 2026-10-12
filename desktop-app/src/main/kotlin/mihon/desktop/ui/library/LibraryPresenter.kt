@@ -1279,7 +1279,8 @@ class LibraryPresenter(
             val set = current.selectedMangaIds
             val updated = if (set.contains(mangaId)) set - mangaId else set + mangaId
             current.copy(
-                isSelectionMode = updated.isNotEmpty() || current.isSelectionMode,
+                // Deselecting the last title leaves selection mode: there is no persistent mode toggle any more.
+                isSelectionMode = updated.isNotEmpty(),
                 selectedMangaIds = updated,
             )
         }

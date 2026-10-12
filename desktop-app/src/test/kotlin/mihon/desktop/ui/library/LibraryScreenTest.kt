@@ -120,15 +120,13 @@ class LibraryScreenTest {
 
         val rootBounds = onNodeWithTag("library-screen").fetchSemanticsNode().boundsInRoot
         listOf(
-            "library-import-backup",
-            "library-import-local",
+            "library-overflow",
             "display-mode-ComfortableGrid",
             "display-mode-CompactGrid",
             "display-mode-CoverOnly",
             "display-mode-List",
             "library-display-options",
             "library-filter-sort-button",
-            "library-toggle-selection",
             "library-manage-categories-button",
             "library-search",
         ).forEach { tag ->
