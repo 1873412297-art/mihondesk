@@ -69,6 +69,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.isShiftPressed
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
@@ -697,11 +698,29 @@ private fun LibraryPane(
                 singleLine = true,
             )
 
+            // Shift+click in selection mode adds every title between the last clicked one and this one.
+            val windowInfo = androidx.compose.ui.platform.LocalWindowInfo.current
+            var selectionAnchorId by remember { mutableStateOf<Long?>(null) }
+            androidx.compose.runtime.LaunchedEffect(state.selectionState.isSelectionMode) {
+                if (!state.selectionState.isSelectionMode) selectionAnchorId = null
+            }
+            val toggleWithRange: (Long) -> Unit = { id ->
+                if (windowInfo.keyboardModifiers.isShiftPressed) {
+                    val selected = state.selectionState.selectedMangaIds
+                    chapterRangeSelection(state.items.map { it.id }, selectionAnchorId, id, selected)
+                        .minus(selected)
+                        .forEach(onToggleMangaSelection)
+                } else {
+                    onToggleMangaSelection(id)
+                }
+                selectionAnchorId = id
+            }
+
             // Manga Content Grid / List
             LibraryContent(
                 state = state,
                 onMangaSelected = onMangaSelected,
-                onToggleMangaSelection = onToggleMangaSelection,
+                onToggleMangaSelection = toggleWithRange,
                 onRetry = onRetry,
                 onClearFilters = onClearFilters,
                 onImportBackup = onImportBackup,
