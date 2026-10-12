@@ -216,6 +216,11 @@ fun ReaderScreen(
         hideGeneration++
     }
 
+    /** The single F11 toggle; the reader setting picks OS fullscreen or a borderless window. */
+    fun toggleImmersive() {
+        if (settings.immersiveBorderless) onBorderless() else onFullscreen()
+    }
+
     fun applySettings(updated: DesktopReaderSettings) {
         settings = updated
         settingsStore?.save(updated)
@@ -467,7 +472,7 @@ fun ReaderScreen(
             }
             is ReaderInputCommand.ZoomBy -> applyZoom(command, session.state.value.viewport)
             ReaderInputCommand.PageActions -> openPageActions()
-            ReaderInputCommand.Fullscreen -> onFullscreen()
+            ReaderInputCommand.Fullscreen -> toggleImmersive()
             ReaderInputCommand.Borderless -> onBorderless()
             ReaderInputCommand.Escape -> {
                 if (onEscape()) closeAndThen(onBack)
@@ -813,8 +818,7 @@ fun ReaderScreen(
                     state.pages.getOrNull(state.selectedIndex)?.id?.let { session.retry(it) } ?: onRetryChapter()
                 }
             },
-            onFullscreen = onFullscreen,
-            onBorderless = onBorderless,
+            onFullscreen = ::toggleImmersive,
             onOpenSettings = { showSettings = true },
             onColorFilter = { applySettings(settings.copy(colorFilter = it)) },
             onBackgroundColor = { applySettings(settings.copy(backgroundColor = it)) },
@@ -859,6 +863,18 @@ fun ReaderScreen(
         ) {
             overlayVisibility = reduceReaderOverlayVisibility(overlayVisibility, ReaderOverlayEvent.PointerAtEdge)
             hideGeneration++
+        }
+        androidx.compose.animation.AnimatedVisibility(
+            visible = showSettings,
+            modifier = Modifier.align(Alignment.CenterEnd),
+            enter = androidx.compose.animation.slideInHorizontally { it } + androidx.compose.animation.fadeIn(),
+            exit = androidx.compose.animation.slideOutHorizontally { it } + androidx.compose.animation.fadeOut(),
+        ) {
+            ReaderSettingsPanel(
+                settings = settings,
+                onChange = ::applySettings,
+                onDismiss = { showSettings = false },
+            )
         }
         if (!overlayVisibility.chromeVisible && pageIndicatorIndex != null && ready) {
             Surface(
@@ -960,16 +976,6 @@ fun ReaderScreen(
                 ) {
                     Text(strings.dialogOk)
                 }
-            },
-        )
-    }
-    if (showSettings) {
-        ReaderSettingsDialog(
-            settings = settings,
-            onDismiss = { showSettings = false },
-            onSave = {
-                applySettings(it)
-                showSettings = false
             },
         )
     }

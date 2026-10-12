@@ -47,14 +47,13 @@ class ReaderChromeParityTest {
         onNodeWithTag("reader-current-page").assertTextContains("3")
         onNodeWithTag("reader-total-pages").assertTextContains("12")
 
-        onNodeWithTag("reader-fullscreen").assertDoesNotExist()
+        onNodeWithTag("reader-fullscreen").assertIsDisplayed()
+        onNodeWithTag("reader-zoom-reset").assertIsDisplayed()
         onNodeWithTag("reader-borderless").assertDoesNotExist()
         onNodeWithTag("reader-shortcuts-btn").assertDoesNotExist()
         onNodeWithTag("reader-page-actions").assertDoesNotExist()
 
         onNodeWithTag("reader-overflow").performClick()
-        onNodeWithTag("reader-fullscreen").assertIsDisplayed()
-        onNodeWithTag("reader-borderless").assertIsDisplayed()
         onNodeWithTag("reader-shortcuts-btn").assertIsDisplayed()
         onNodeWithTag("reader-page-actions").assertIsDisplayed()
     }

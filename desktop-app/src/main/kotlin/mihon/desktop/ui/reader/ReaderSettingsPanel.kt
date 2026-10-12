@@ -5,11 +5,22 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Surface
+import androidx.compose.ui.semantics.paneTitle
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -46,78 +57,77 @@ private enum class ReaderSettingsPage {
     FILTER,
 }
 
-@Composable
-internal fun ReaderSettingsDialog(
-    settings: DesktopReaderSettings,
-    onDismiss: () -> Unit,
-    onSave: (DesktopReaderSettings) -> Unit,
-) {
-    ReaderSettingsPanel(settings, onSave, onDismiss)
-}
+internal val READER_SETTINGS_PANEL_WIDTH = 360.dp
 
+/**
+ * Non-modal side panel: every change is applied (and persisted) immediately so the page behind
+ * shows the result while adjusting. There is no draft, save or cancel; Reset restores defaults.
+ */
 @Composable
 internal fun ReaderSettingsPanel(
     settings: DesktopReaderSettings,
-    onSave: (DesktopReaderSettings) -> Unit,
+    onChange: (DesktopReaderSettings) -> Unit,
     onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val strings = LocalStrings.current
-    var draft by remember(settings) { mutableStateOf(settings) }
     var page by remember { mutableStateOf(ReaderSettingsPage.READING) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(strings.readerSettingsDialogTitle) },
-        text = {
+    Surface(
+        modifier = modifier
+            .width(READER_SETTINGS_PANEL_WIDTH)
+            .fillMaxHeight()
+            .testTag("reader-settings-panel")
+            .semantics { paneTitle = strings.readerSettingsDialogTitle },
+        tonalElevation = 3.dp,
+        shadowElevation = 8.dp,
+        shape = RoundedCornerShape(topStart = 12.dp, bottomStart = 12.dp),
+    ) {
+        Column(modifier = Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    strings.readerSettingsDialogTitle,
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.weight(1f),
+                )
+                IconButton(onClick = onDismiss, modifier = Modifier.testTag("reader-settings-close")) {
+                    Icon(Icons.Rounded.Close, contentDescription = strings.dialogClose)
+                }
+            }
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                SettingsTab(
+                    strings.readerSettingsTabReading,
+                    "reader-settings-tab-reading",
+                    page == ReaderSettingsPage.READING,
+                ) { page = ReaderSettingsPage.READING }
+                SettingsTab(
+                    strings.readerSettingsTabGeneral,
+                    "reader-settings-tab-general",
+                    page == ReaderSettingsPage.GENERAL,
+                ) { page = ReaderSettingsPage.GENERAL }
+                SettingsTab(
+                    strings.readerSettingsTabFilter,
+                    "reader-settings-tab-filter",
+                    page == ReaderSettingsPage.FILTER,
+                ) { page = ReaderSettingsPage.FILTER }
+            }
             Column(
-                modifier = Modifier.fillMaxWidth().widthIn(max = 720.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    SettingsTab(
-                        strings.readerSettingsTabReading,
-                        "reader-settings-tab-reading",
-                        page == ReaderSettingsPage.READING,
-                    ) { page = ReaderSettingsPage.READING }
-                    SettingsTab(
-                        strings.readerSettingsTabGeneral,
-                        "reader-settings-tab-general",
-                        page == ReaderSettingsPage.GENERAL,
-                    ) { page = ReaderSettingsPage.GENERAL }
-                    SettingsTab(
-                        strings.readerSettingsTabFilter,
-                        "reader-settings-tab-filter",
-                        page == ReaderSettingsPage.FILTER,
-                    ) { page = ReaderSettingsPage.FILTER }
-                }
-                Column(
-                    modifier = Modifier.fillMaxWidth().heightIn(max = 520.dp).verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    when (page) {
-                        ReaderSettingsPage.READING -> ReadingSettingsPage(draft) { draft = it }
-                        ReaderSettingsPage.GENERAL -> GeneralSettingsPage(draft) { draft = it }
-                        ReaderSettingsPage.FILTER -> FilterSettingsPage(draft) { draft = it }
-                    }
+                when (page) {
+                    ReaderSettingsPage.READING -> ReadingSettingsPage(settings, onChange)
+                    ReaderSettingsPage.GENERAL -> GeneralSettingsPage(settings, onChange)
+                    ReaderSettingsPage.FILTER -> FilterSettingsPage(settings, onChange)
                 }
             }
-        },
-        confirmButton = {
-            TextButton(onClick = { onSave(draft) }, modifier = Modifier.testTag("reader-settings-save")) {
-                Text(strings.categorySave)
-            }
-        },
-        dismissButton = {
-            Row {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                 TextButton(
-                    onClick = { draft = DesktopReaderSettings() },
+                    onClick = { onChange(DesktopReaderSettings()) },
                     modifier = Modifier.testTag("reader-settings-reset"),
                 ) { Text(strings.libraryFilterReset) }
-                TextButton(onClick = onDismiss, modifier = Modifier.testTag("reader-settings-cancel")) {
-                    Text(strings.dialogCancel)
-                }
             }
-        },
-    )
+        }
+    }
 }
 
 @Composable
@@ -193,6 +203,13 @@ private fun ReadingSettingsPage(settings: DesktopReaderSettings, onChange: (Desk
 @Composable
 private fun GeneralSettingsPage(settings: DesktopReaderSettings, onChange: (DesktopReaderSettings) -> Unit) {
     val strings = LocalStrings.current
+    SettingCheckBox(
+        "reader-setting-immersive-borderless",
+        settings.immersiveBorderless,
+        strings.text(UiText.ReaderImmersiveBorderless),
+    ) {
+        onChange(settings.copy(immersiveBorderless = it))
+    }
     Text(strings.readerClickRegions, style = MaterialTheme.typography.titleSmall)
     ClickActionMenu(strings.readerRegionLeft, "reader-setting-left-action", settings.clickRegions.leftAction) {
         onChange(settings.copy(clickRegions = settings.clickRegions.copy(leftAction = it)))

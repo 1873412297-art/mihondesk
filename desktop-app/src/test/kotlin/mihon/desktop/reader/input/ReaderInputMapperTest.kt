@@ -40,7 +40,7 @@ class ReaderInputMapperTest {
         mapper.mapKey(ReaderInputKey.F, ReaderInputContext(ReadingMode.SINGLE_LTR)).action shouldBe
             ReaderInputCommand.Fullscreen
         mapper.mapKey(ReaderInputKey.B, ReaderInputContext(ReadingMode.SINGLE_LTR)).action shouldBe
-            ReaderInputCommand.Borderless
+            ReaderInputCommand.Fullscreen
         mapper.mapKey(ReaderInputKey.ESCAPE, ReaderInputContext(ReadingMode.SINGLE_LTR)).action shouldBe
             ReaderInputCommand.Escape
         mapper.mapKey(ReaderInputKey.F11, ReaderInputContext(ReadingMode.SINGLE_LTR)).action shouldBe

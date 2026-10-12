@@ -60,6 +60,8 @@ data class DesktopReaderSettings(
     val pageTransition: ReaderPageTransition = ReaderPageTransition.NONE,
     val dualPageSplit: mihon.reader.layout.DualPageSplit = mihon.reader.layout.DualPageSplit.WIDE,
     val dualPageRotateToFit: Boolean = false,
+    /** What the single F11 "immersive" toggle does: true = borderless window, false = OS fullscreen. */
+    val immersiveBorderless: Boolean = false,
 ) {
     fun toCoreSettings(): ReaderSettings = ReaderSettings(
         mode = mode,
@@ -137,6 +139,8 @@ class DesktopReaderSettingsStore(private val preferences: DesktopPreferenceStore
             colorFilter = enumOrDefault(preferences.property(COLOR_FILTER), defaults.colorFilter),
             backgroundColor = enumOrDefault(preferences.property(BG_COLOR), defaults.backgroundColor),
             cropBorders = preferences.property(CROP_BORDERS)?.toBooleanStrictOrNull() ?: defaults.cropBorders,
+            immersiveBorderless = preferences.property(IMMERSIVE_BORDERLESS)?.toBooleanStrictOrNull()
+                ?: defaults.immersiveBorderless,
             cropBordersWebtoon = preferences.property(CROP_BORDERS_WEBTOON)?.toBooleanStrictOrNull()
                 ?: defaults.cropBordersWebtoon,
             webtoonMaxWidth = preferences.property(WEBTOON_MAX_WIDTH)?.toIntOrNull() ?: defaults.webtoonMaxWidth,
@@ -189,6 +193,7 @@ class DesktopReaderSettingsStore(private val preferences: DesktopPreferenceStore
             setProperty(BG_COLOR, settings.backgroundColor.name)
             setProperty(CROP_BORDERS, settings.cropBorders.toString())
             setProperty(CROP_BORDERS_WEBTOON, settings.cropBordersWebtoon.toString())
+            setProperty(IMMERSIVE_BORDERLESS, settings.immersiveBorderless.toString())
             setProperty(WEBTOON_MAX_WIDTH, settings.webtoonMaxWidth.toString())
             setProperty(WEBTOON_SIDE_PADDING, settings.webtoonSidePadding.toString())
             setProperty(ALWAYS_SHOW_CHAPTER_TRANSITION, settings.alwaysShowChapterTransition.toString())
@@ -252,6 +257,7 @@ class DesktopReaderSettingsStore(private val preferences: DesktopPreferenceStore
         const val BG_COLOR = "reader.v1.background-color"
         const val CROP_BORDERS = "reader.v1.crop-borders"
         const val CROP_BORDERS_WEBTOON = "reader.v1.crop-borders-webtoon"
+        const val IMMERSIVE_BORDERLESS = "reader.v1.immersive-borderless"
         const val WEBTOON_MAX_WIDTH = "reader.v1.webtoon-max-width"
         const val WEBTOON_SIDE_PADDING = "reader.v1.webtoon-side-padding"
         const val ALWAYS_SHOW_CHAPTER_TRANSITION = "reader.v1.always-show-chapter-transition"

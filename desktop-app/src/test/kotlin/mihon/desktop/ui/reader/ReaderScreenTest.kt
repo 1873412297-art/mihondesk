@@ -83,12 +83,8 @@ class ReaderScreenTest {
         onNodeWithTag("reader-scale-menu").performClick()
         onNodeWithTag("reader-scale-FIT_HEIGHT").performClick()
         onNodeWithTag("reader-crop-toggle").performClick()
-        onNodeWithTag("reader-overflow").performClick()
         onNodeWithTag("reader-zoom-in").performClick()
-        onNodeWithTag("reader-overflow").performClick()
         onNodeWithTag("reader-fullscreen").performClick()
-        onNodeWithTag("reader-overflow").performClick()
-        onNodeWithTag("reader-borderless").performClick()
         onNodeWithTag("reader-overflow").performClick()
         onNodeWithTag("reader-shortcuts-btn").assertIsDisplayed()
         onNodeWithTag("reader-scrubber-slider").assertIsDisplayed()
@@ -101,7 +97,7 @@ class ReaderScreenTest {
         store.load().scaleMode shouldBe ScaleMode.FIT_HEIGHT
         store.load().cropBorders shouldBe true
         fullscreen shouldBe 1
-        borderless shouldBe 1
+        borderless shouldBe 0
     }
 
     @Test
@@ -136,7 +132,7 @@ class ReaderScreenTest {
         onNodeWithTag("reader-setting-filter").assertIsDisplayed()
         onNodeWithTag("reader-setting-bg").assertExists()
         onNodeWithTag("reader-settings-reset").performClick()
-        onNodeWithTag("reader-settings-save").performClick()
+        onNodeWithTag("reader-settings-close").performClick()
 
         store.load() shouldBe DesktopReaderSettings()
         session.actions shouldContain ReaderAction.ChangeMode(ReadingMode.SINGLE_LTR)
@@ -178,22 +174,22 @@ class ReaderScreenTest {
     }
 
     @Test
-    fun `settings cancel discards the draft without changing session or persistence`() = runComposeUiTest(
+    fun `settings panel applies changes immediately and stays open`() = runComposeUiTest(
         testTimeout = UI_TEST_TIMEOUT,
     ) {
         val session = FakeReaderSession(ready())
         val store = settingsStore()
-        val before = store.load()
         setReaderScreen(session, store)
 
         onNodeWithTag("reader-settings").performClick()
         onNodeWithTag("reader-setting-mode").performClick()
         onNodeWithTag("reader-setting-mode-DUAL_RTL").performClick()
-        onNodeWithTag("reader-settings-cancel").performClick()
 
-        store.load() shouldBe before
-        session.actions.filterIsInstance<ReaderAction.ChangeMode>().none { it.mode == ReadingMode.DUAL_RTL } shouldBe
-            true
+        onNodeWithTag("reader-settings-panel").assertExists()
+        store.load().mode shouldBe ReadingMode.DUAL_RTL
+        session.actions shouldContain ReaderAction.ChangeMode(ReadingMode.DUAL_RTL)
+        onNodeWithTag("reader-settings-close").performClick()
+        onNodeWithTag("reader-settings-panel").assertDoesNotExist()
     }
 
     @Test
@@ -433,7 +429,7 @@ class ReaderScreenTest {
         onNodeWithTag("reader-setting-dimming")
             .performSemanticsAction(SemanticsActions.SetProgress) { it(50f) }
 
-        onNodeWithTag("reader-settings-save").performClick()
+        onNodeWithTag("reader-settings-close").performClick()
 
         val saved = store.load()
         saved.customHue shouldBe 120

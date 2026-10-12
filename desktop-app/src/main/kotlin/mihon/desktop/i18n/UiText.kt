@@ -500,6 +500,12 @@ enum class UiText(val english: String, val simplified: String, val traditional: 
     KeyboardShortcuts("Keyboard Shortcuts", "快捷键速查", "快速鍵速查"),
     ShortcutSwitchDestination("Switch Destination (1-8)", "切换主导航 (1-8)", "切換主導航 (1-8)"),
     ShortcutFocusSearch("Focus Search Bar", "聚焦搜索框", "聚焦搜尋框"),
+    ReaderImmersiveBorderless(
+        "F11 uses a borderless window instead of fullscreen",
+        "F11 使用无边框窗口（而非全屏）",
+        "F11 使用無邊框視窗（而非全螢幕）",
+    ),
+    ReaderImmersive("Fullscreen (F11)", "全屏 (F11)", "全螢幕 (F11)"),
     ShortcutToggleNavigationRail("Collapse / expand navigation", "折叠/展开导航栏", "摺疊/展開導覽列"),
     ShortcutRefreshPage("Refresh Page", "刷新当前页", "重新整理當前頁"),
     ShortcutBack("Back", "后退", "返回"),

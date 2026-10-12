@@ -6,6 +6,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,11 +22,13 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.FormatListBulleted
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.BookmarkBorder
 import androidx.compose.material.icons.rounded.Fullscreen
 import androidx.compose.material.icons.rounded.Keyboard
 import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.rounded.Remove
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
@@ -92,7 +95,6 @@ internal fun ReaderChrome(
     onZoom: (Float) -> Unit,
     onRetry: () -> Unit,
     onFullscreen: () -> Unit,
-    onBorderless: () -> Unit,
     onOpenSettings: () -> Unit,
     onColorFilter: (ReaderColorFilter) -> Unit = {},
     onBackgroundColor: (ReaderBackgroundColor) -> Unit = {},
@@ -165,7 +167,15 @@ internal fun ReaderChrome(
                         )
                         Text(
                             chapterTitle,
-                            modifier = Modifier.testTag("reader-chapter"),
+                            modifier = Modifier
+                                .then(
+                                    if (chapterCatalog.isNotEmpty()) {
+                                        Modifier.clickable { isChapterDrawerOpen = true }
+                                    } else {
+                                        Modifier
+                                    },
+                                )
+                                .testTag("reader-chapter"),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             style = MaterialTheme.typography.bodySmall,
@@ -178,6 +188,17 @@ internal fun ReaderChrome(
                             modifier = Modifier.testTag("reader-manga-details"),
                         ) {
                             Text(strings.readerMangaDetails)
+                        }
+                    }
+                    if (chapterCatalog.isNotEmpty()) {
+                        IconButton(
+                            onClick = { isChapterDrawerOpen = true },
+                            modifier = Modifier.testTag("reader-chapter-list-button"),
+                        ) {
+                            Icon(
+                                Icons.AutoMirrored.Rounded.FormatListBulleted,
+                                contentDescription = strings.readerChapterList,
+                            )
                         }
                     }
                     IconButton(
@@ -208,16 +229,6 @@ internal fun ReaderChrome(
                                 },
                                 modifier = Modifier.testTag("reader-page-actions"),
                             )
-                            if (chapterCatalog.isNotEmpty()) {
-                                DropdownMenuItem(
-                                    text = { Text(strings.readerChapterList) },
-                                    onClick = {
-                                        overflowExpanded = false
-                                        isChapterDrawerOpen = true
-                                    },
-                                    modifier = Modifier.testTag("reader-chapter-list-button"),
-                                )
-                            }
                             DropdownMenuItem(
                                 text = { Text(strings.readerShortcutsHelp) },
                                 onClick = {
@@ -226,47 +237,6 @@ internal fun ReaderChrome(
                                 },
                                 leadingIcon = { Icon(Icons.Rounded.Keyboard, contentDescription = null) },
                                 modifier = Modifier.testTag("reader-shortcuts-btn"),
-                            )
-                            DropdownMenuItem(
-                                text = { Text(strings.readerFullscreen) },
-                                onClick = {
-                                    overflowExpanded = false
-                                    onFullscreen()
-                                },
-                                leadingIcon = { Icon(Icons.Rounded.Fullscreen, contentDescription = null) },
-                                modifier = Modifier.testTag("reader-fullscreen"),
-                            )
-                            DropdownMenuItem(
-                                text = { Text(strings.readerBorderless) },
-                                onClick = {
-                                    overflowExpanded = false
-                                    onBorderless()
-                                },
-                                modifier = Modifier.testTag("reader-borderless"),
-                            )
-                            DropdownMenuItem(
-                                text = { Text(strings.text(UiText.ZoomOut)) },
-                                onClick = {
-                                    overflowExpanded = false
-                                    onZoom(state.zoom - 0.25f)
-                                },
-                                modifier = Modifier.testTag("reader-zoom-out"),
-                            )
-                            DropdownMenuItem(
-                                text = { Text(strings.text(UiText.ResetZoom, (state.zoom * 100).toInt())) },
-                                onClick = {
-                                    overflowExpanded = false
-                                    onZoom(1f)
-                                },
-                                modifier = Modifier.testTag("reader-zoom-reset"),
-                            )
-                            DropdownMenuItem(
-                                text = { Text(strings.text(UiText.ZoomIn)) },
-                                onClick = {
-                                    overflowExpanded = false
-                                    onZoom(state.zoom + 0.25f)
-                                },
-                                modifier = Modifier.testTag("reader-zoom-in"),
                             )
                             if (state.mode.isDualPage) {
                                 DropdownMenuItem(
@@ -355,6 +325,27 @@ internal fun ReaderChrome(
                         ) {
                             Text(strings.readerCropToggle(cropActive))
                         }
+                        IconButton(
+                            onClick = { onZoom(state.zoom - 0.25f) },
+                            modifier = Modifier.testTag("reader-zoom-out"),
+                        ) {
+                            Icon(Icons.Rounded.Remove, contentDescription = strings.text(UiText.ZoomOut))
+                        }
+                        TextButton(
+                            onClick = { onZoom(1f) },
+                            modifier = Modifier.testTag("reader-zoom-reset"),
+                        ) {
+                            Text("${(state.zoom * 100).toInt()}%")
+                        }
+                        IconButton(
+                            onClick = { onZoom(state.zoom + 0.25f) },
+                            modifier = Modifier.testTag("reader-zoom-in"),
+                        ) {
+                            Icon(Icons.Rounded.Add, contentDescription = strings.text(UiText.ZoomIn))
+                        }
+                        IconButton(onClick = onFullscreen, modifier = Modifier.testTag("reader-fullscreen")) {
+                            Icon(Icons.Rounded.Fullscreen, contentDescription = strings.text(UiText.ReaderImmersive))
+                        }
                         IconButton(onClick = onOpenSettings, modifier = Modifier.testTag("reader-settings")) {
                             Icon(Icons.Rounded.Settings, contentDescription = strings.settingsTitle)
                         }
@@ -426,328 +417,6 @@ private fun ScaleModeMenu(current: ScaleMode, onSelected: (ScaleMode) -> Unit) {
 }
 
 @Composable
-private fun LegacyReaderSettingsDialog(
-    settings: DesktopReaderSettings,
-    onDismiss: () -> Unit,
-    onSave: (DesktopReaderSettings) -> Unit,
-) {
-    val strings = LocalStrings.current
-    var draft by remember(settings) { mutableStateOf(settings) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(strings.readerSettingsDialogTitle) },
-        text = {
-            Column(
-                modifier = Modifier.verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Text(strings.readerClickRegions, style = MaterialTheme.typography.titleSmall)
-                ClickActionMenu(strings.readerRegionLeft, "reader-setting-left-action", draft.clickRegions.leftAction) {
-                    draft = draft.copy(clickRegions = draft.clickRegions.copy(leftAction = it))
-                }
-                ClickActionMenu(
-                    strings.readerRegionCenter,
-                    "reader-setting-center-action",
-                    draft.clickRegions.centerAction,
-                ) {
-                    draft = draft.copy(clickRegions = draft.clickRegions.copy(centerAction = it))
-                }
-                ClickActionMenu(
-                    strings.readerRegionRight,
-                    "reader-setting-right-action",
-                    draft.clickRegions.rightAction,
-                ) {
-                    draft = draft.copy(clickRegions = draft.clickRegions.copy(rightAction = it))
-                }
-                Text(strings.readerLeftBoundary(draft.clickRegions.leftEndPercent))
-                Slider(
-                    value = draft.clickRegions.leftEndPercent.toFloat(),
-                    onValueChange = { value ->
-                        val left = value.toInt().coerceIn(1, draft.clickRegions.centerEndPercent - 1)
-                        draft = draft.copy(clickRegions = draft.clickRegions.copy(leftEndPercent = left))
-                    },
-                    valueRange = 1f..98f,
-                    modifier = Modifier.testTag("reader-setting-left-boundary"),
-                )
-                Text(strings.readerCenterBoundary(draft.clickRegions.centerEndPercent))
-                Slider(
-                    value = draft.clickRegions.centerEndPercent.toFloat(),
-                    onValueChange = { value ->
-                        val center = value.toInt().coerceIn(draft.clickRegions.leftEndPercent + 1, 99)
-                        draft = draft.copy(clickRegions = draft.clickRegions.copy(centerEndPercent = center))
-                    },
-                    valueRange = 2f..99f,
-                    modifier = Modifier.testTag("reader-setting-center-boundary"),
-                )
-                WheelMenu(draft.wheelBehavior) { draft = draft.copy(wheelBehavior = it) }
-                SettingModeMenu(draft.mode) { draft = draft.copy(mode = it) }
-                SettingScaleMenu(draft.scaleMode) { draft = draft.copy(scaleMode = it) }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(
-                        checked = draft.coverOffset,
-                        onCheckedChange = { draft = draft.copy(coverOffset = it) },
-                        modifier = Modifier.testTag("reader-setting-cover"),
-                    )
-                    Text(strings.readerReserveCover)
-                }
-                Text(strings.settingsSectionAppearance, style = MaterialTheme.typography.titleSmall)
-                SettingColorFilterMenu(draft.colorFilter) { draft = draft.copy(colorFilter = it) }
-                SettingBackgroundColorMenu(draft.backgroundColor) { draft = draft.copy(backgroundColor = it) }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(
-                        checked = draft.cropBorders,
-                        onCheckedChange = { draft = draft.copy(cropBorders = it) },
-                        modifier = Modifier.testTag("reader-setting-crop-paged"),
-                    )
-                    Text(strings.readerCropBordersPaged)
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(
-                        checked = draft.cropBordersWebtoon,
-                        onCheckedChange = { draft = draft.copy(cropBordersWebtoon = it) },
-                        modifier = Modifier.testTag("reader-setting-crop-webtoon"),
-                    )
-                    Text(strings.readerCropBordersWebtoon)
-                }
-                Text(strings.readerWebtoonLayout, style = MaterialTheme.typography.titleSmall)
-                Text(
-                    text = if (draft.webtoonMaxWidth == 0) {
-                        strings.readerWebtoonWidthFull
-                    } else {
-                        strings.readerWebtoonWidthDp(draft.webtoonMaxWidth)
-                    },
-                )
-                Slider(
-                    value = draft.webtoonMaxWidth.toFloat(),
-                    onValueChange = { draft = draft.copy(webtoonMaxWidth = it.toInt()) },
-                    valueRange = 0f..1600f,
-                    modifier = Modifier.testTag("reader-setting-webtoon-max-width"),
-                )
-                Text(strings.readerWebtoonSidePaddingPercent(draft.webtoonSidePadding))
-                Slider(
-                    value = draft.webtoonSidePadding.toFloat(),
-                    onValueChange = { draft = draft.copy(webtoonSidePadding = it.toInt()) },
-                    valueRange = 0f..30f,
-                    modifier = Modifier.testTag("reader-setting-webtoon-side-padding"),
-                )
-                Text(strings.readerChapterTransitions, style = MaterialTheme.typography.titleSmall)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(
-                        checked = draft.alwaysShowChapterTransition,
-                        onCheckedChange = { draft = draft.copy(alwaysShowChapterTransition = it) },
-                        modifier = Modifier.testTag("reader-setting-always-show-transition"),
-                    )
-                    Text(strings.readerAlwaysShowChapterTransition)
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(
-                        checked = draft.skipReadChapters,
-                        onCheckedChange = { draft = draft.copy(skipReadChapters = it) },
-                        modifier = Modifier.testTag("reader-setting-skip-read"),
-                    )
-                    Text(strings.readerSkipReadChapters)
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(
-                        checked = draft.skipFilteredChapters,
-                        onCheckedChange = { draft = draft.copy(skipFilteredChapters = it) },
-                        modifier = Modifier.testTag("reader-setting-skip-filtered"),
-                    )
-                    Text(strings.readerSkipFilteredChapters)
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(
-                        checked = draft.skipDuplicateChapters,
-                        onCheckedChange = { draft = draft.copy(skipDuplicateChapters = it) },
-                        modifier = Modifier.testTag("reader-setting-skip-duplicate"),
-                    )
-                    Text(strings.readerSkipDuplicateChapters)
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = { onSave(draft) },
-                modifier = Modifier.testTag("reader-settings-save"),
-            ) { Text(strings.categorySave) }
-        },
-        dismissButton = {
-            Row {
-                TextButton(
-                    onClick = { draft = DesktopReaderSettings() },
-                    modifier = Modifier.testTag("reader-settings-reset"),
-                ) { Text(strings.libraryFilterReset) }
-                TextButton(onClick = onDismiss, modifier = Modifier.testTag("reader-settings-cancel")) {
-                    Text(strings.dialogCancel)
-                }
-            }
-        },
-    )
-}
-
-@Composable
-private fun ClickActionMenu(
-    label: String,
-    tag: String,
-    current: ReaderClickAction,
-    onSelected: (ReaderClickAction) -> Unit,
-) {
-    val strings = LocalStrings.current
-    var expanded by remember { mutableStateOf(false) }
-    Box {
-        TextButton(onClick = { expanded = true }, modifier = Modifier.testTag(tag)) {
-            Text("$label: ${strings.readerActionLabel(current)}")
-        }
-        DropdownMenu(expanded, { expanded = false }) {
-            ReaderClickAction.entries.forEach { action ->
-                DropdownMenuItem(
-                    text = { Text(strings.readerActionLabel(action)) },
-                    onClick = {
-                        expanded = false
-                        onSelected(action)
-                    },
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun WheelMenu(current: ReaderWheelBehavior, onSelected: (ReaderWheelBehavior) -> Unit) {
-    val strings = LocalStrings.current
-    var expanded by remember { mutableStateOf(false) }
-    Box {
-        TextButton(onClick = { expanded = true }, modifier = Modifier.testTag("reader-setting-wheel")) {
-            Text(strings.readerWheelLabel(current))
-        }
-        DropdownMenu(expanded, { expanded = false }) {
-            ReaderWheelBehavior.entries.forEach { value ->
-                DropdownMenuItem(
-                    text = { Text(strings.readerWheelLabel(value)) },
-                    onClick = {
-                        expanded = false
-                        onSelected(value)
-                    },
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun SettingModeMenu(current: ReadingMode, onSelected: (ReadingMode) -> Unit) {
-    val strings = LocalStrings.current
-    var expanded by remember { mutableStateOf(false) }
-    Box {
-        TextButton(onClick = { expanded = true }, modifier = Modifier.testTag("reader-setting-mode")) {
-            Text("${strings.settingsDefaultReadingMode}: ${strings.readerModeLabel(current)}")
-        }
-        DropdownMenu(expanded, { expanded = false }) {
-            ReadingMode.entries.forEach { value ->
-                DropdownMenuItem(
-                    text = { Text(strings.readerModeLabel(value)) },
-                    onClick = {
-                        expanded = false
-                        onSelected(value)
-                    },
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun SettingScaleMenu(current: ScaleMode, onSelected: (ScaleMode) -> Unit) {
-    val strings = LocalStrings.current
-    var expanded by remember { mutableStateOf(false) }
-    Box {
-        TextButton(onClick = { expanded = true }, modifier = Modifier.testTag("reader-setting-scale")) {
-            Text("${strings.settingsDefaultScaleMode}: ${strings.readerScaleLabel(current)}")
-        }
-        DropdownMenu(expanded, { expanded = false }) {
-            ScaleMode.entries.forEach { value ->
-                DropdownMenuItem(
-                    text = { Text(strings.readerScaleLabel(value)) },
-                    onClick = {
-                        expanded = false
-                        onSelected(value)
-                    },
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun ColorFilterMenu(current: ReaderColorFilter, onSelected: (ReaderColorFilter) -> Unit) {
-    val strings = LocalStrings.current
-    var expanded by remember { mutableStateOf(false) }
-    Box {
-        TextButton(onClick = { expanded = true }, modifier = Modifier.testTag("reader-filter-menu")) {
-            Text("${strings.readerColorFilter}: ${strings.readerFilterLabel(current)}")
-        }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            ReaderColorFilter.entries.forEach { filter ->
-                DropdownMenuItem(
-                    text = { Text(strings.readerFilterLabel(filter)) },
-                    onClick = {
-                        expanded = false
-                        onSelected(filter)
-                    },
-                    modifier = Modifier.testTag("reader-filter-${filter.name}"),
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun SettingColorFilterMenu(current: ReaderColorFilter, onSelected: (ReaderColorFilter) -> Unit) {
-    val strings = LocalStrings.current
-    var expanded by remember { mutableStateOf(false) }
-    Box {
-        TextButton(onClick = { expanded = true }, modifier = Modifier.testTag("reader-setting-filter")) {
-            Text("${strings.readerColorFilter}: ${strings.readerFilterLabel(current)}")
-        }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            ReaderColorFilter.entries.forEach { filter ->
-                DropdownMenuItem(
-                    text = { Text(strings.readerFilterLabel(filter)) },
-                    onClick = {
-                        expanded = false
-                        onSelected(filter)
-                    },
-                    modifier = Modifier.testTag("reader-setting-filter-${filter.name}"),
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun SettingBackgroundColorMenu(current: ReaderBackgroundColor, onSelected: (ReaderBackgroundColor) -> Unit) {
-    val strings = LocalStrings.current
-    var expanded by remember { mutableStateOf(false) }
-    Box {
-        TextButton(onClick = { expanded = true }, modifier = Modifier.testTag("reader-setting-bg")) {
-            Text("${strings.readerBackgroundColor}: ${strings.readerBackgroundLabel(current)}")
-        }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            ReaderBackgroundColor.entries.forEach { bg ->
-                DropdownMenuItem(
-                    text = { Text(strings.readerBackgroundLabel(bg)) },
-                    onClick = {
-                        expanded = false
-                        onSelected(bg)
-                    },
-                    modifier = Modifier.testTag("reader-setting-bg-${bg.name}"),
-                )
-            }
-        }
-    }
-}
-
-@Composable
 internal fun ReaderShortcutsDialog(
     onDismiss: () -> Unit,
     bindings: KeyBindingMap<ReaderShortcutAction> = DesktopKeyBindings.defaultReader,
@@ -803,7 +472,6 @@ internal fun ReaderShortcutsDialog(
                     ReaderShortcutAction.ZOOM_OUT,
                     ReaderShortcutAction.RESET_ZOOM,
                     ReaderShortcutAction.FULLSCREEN,
-                    ReaderShortcutAction.BORDERLESS,
                     ReaderShortcutAction.EXIT,
                 ).forEach { row(it) }
 

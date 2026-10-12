@@ -28,7 +28,7 @@ class ReaderSettingsPanelTest {
                 Box(Modifier.requiredSize(800.dp, 600.dp)) {
                     ReaderSettingsPanel(
                         settings = initial,
-                        onSave = { savedSettings = it },
+                        onChange = { savedSettings = it },
                         onDismiss = {},
                     )
                 }
@@ -43,8 +43,6 @@ class ReaderSettingsPanelTest {
         onNodeWithTag("reader-setting-transition-SLIDE").assertIsDisplayed()
         onNodeWithTag("reader-setting-transition-SLIDE").performClick()
 
-        // Save
-        onNodeWithTag("reader-settings-save").performClick()
         savedSettings?.pageTransition shouldBe ReaderPageTransition.SLIDE
     }
 
@@ -58,7 +56,7 @@ class ReaderSettingsPanelTest {
                 Box(Modifier.requiredSize(800.dp, 600.dp)) {
                     ReaderSettingsPanel(
                         settings = initial,
-                        onSave = { savedSettings = it },
+                        onChange = { savedSettings = it },
                         onDismiss = {},
                     )
                 }
@@ -67,7 +65,6 @@ class ReaderSettingsPanelTest {
 
         onNodeWithTag("reader-setting-transition").performClick()
         onNodeWithTag("reader-setting-transition-FADE").performClick()
-        onNodeWithTag("reader-settings-save").performClick()
         savedSettings?.pageTransition shouldBe ReaderPageTransition.FADE
     }
 }

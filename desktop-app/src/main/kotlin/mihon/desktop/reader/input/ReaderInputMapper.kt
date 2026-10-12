@@ -213,8 +213,8 @@ class ReaderInputMapper(private val nowMillis: () -> Long = System::currentTimeM
         ReaderInputKey.PLUS -> ReaderShortcutAction.ZOOM_IN
         ReaderInputKey.MINUS -> ReaderShortcutAction.ZOOM_OUT
         ReaderInputKey.ZERO -> ReaderShortcutAction.RESET_ZOOM
-        ReaderInputKey.F, ReaderInputKey.F11 -> ReaderShortcutAction.FULLSCREEN
-        ReaderInputKey.B -> ReaderShortcutAction.BORDERLESS
+        // B was the separate borderless toggle; since 0.3.0 it is an alias of the single immersive toggle.
+        ReaderInputKey.F, ReaderInputKey.F11, ReaderInputKey.B -> ReaderShortcutAction.FULLSCREEN
         ReaderInputKey.ESCAPE -> ReaderShortcutAction.EXIT
         ReaderInputKey.X -> ReaderShortcutAction.PAGE_ACTIONS
         ReaderInputKey.P, ReaderInputKey.LEFT_BRACKET -> ReaderShortcutAction.PREVIOUS_CHAPTER

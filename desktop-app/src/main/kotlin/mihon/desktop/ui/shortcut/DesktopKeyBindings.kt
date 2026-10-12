@@ -285,7 +285,8 @@ fun ReaderShortcutAction.defaultChords(): List<KeyChord> = when (this) {
     ReaderShortcutAction.ZOOM_OUT -> listOf(chord(Key.Minus), chord(Key.NumPadSubtract))
     ReaderShortcutAction.RESET_ZOOM -> listOf(chord(Key.Zero))
     ReaderShortcutAction.FULLSCREEN -> listOf(chord(Key.F), chord(Key.F11))
-    ReaderShortcutAction.BORDERLESS -> listOf(chord(Key.B))
+    // 0.3.0: F11/F is the one immersive toggle; borderless stays bindable but has no default key.
+    ReaderShortcutAction.BORDERLESS -> emptyList()
     ReaderShortcutAction.EXIT -> listOf(chord(Key.Escape))
     ReaderShortcutAction.PAGE_ACTIONS -> listOf(chord(Key.X))
     ReaderShortcutAction.PREVIOUS_CHAPTER -> listOf(chord(Key.P), chord(Key.LeftBracket))
