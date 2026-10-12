@@ -24,6 +24,14 @@ enum class ReaderInputKey {
     B,
     ESCAPE,
     X,
+    UP,
+    DOWN,
+    N,
+    P,
+    LEFT_BRACKET,
+    RIGHT_BRACKET,
+    M,
+    V,
 }
 enum class ReaderInputFocus { READER, TEXT, MENU }
 enum class ReaderSideButton { BACK, FORWARD }
@@ -54,7 +62,14 @@ sealed interface ReaderInputCommand {
     data object Fullscreen : ReaderInputCommand
     data object Borderless : ReaderInputCommand
     data object Escape : ReaderInputCommand
+    data object PreviousChapter : ReaderInputCommand
+    data object NextChapter : ReaderInputCommand
+    data object ToggleBookmark : ReaderInputCommand
+    data object CycleReadingMode : ReaderInputCommand
 }
+
+/** The reading mode the reader switches to when the mode key (V) is pressed: the next one, wrapping around. */
+fun ReadingMode.nextForShortcut(): ReadingMode = ReadingMode.entries[(ordinal + 1) % ReadingMode.entries.size]
 
 data class ReaderInputResult(val action: ReaderInputCommand?) {
     val consumed get() = action != null
@@ -73,8 +88,8 @@ class ReaderInputMapper(private val nowMillis: () -> Long = System::currentTimeM
             ReaderInputKey.LEFT, ReaderInputKey.A -> if (context.mode.isRightToLeft) next else previous
             ReaderInputKey.RIGHT, ReaderInputKey.D -> if (context.mode.isRightToLeft) previous else next
             ReaderInputKey.SPACE -> if (context.shift) previous else next
-            ReaderInputKey.PAGE_UP -> previous
-            ReaderInputKey.PAGE_DOWN -> next
+            ReaderInputKey.PAGE_UP, ReaderInputKey.UP -> previous
+            ReaderInputKey.PAGE_DOWN, ReaderInputKey.DOWN -> next
             ReaderInputKey.HOME -> ReaderInputCommand.Core(ReaderAction.SelectPage(0))
             ReaderInputKey.END -> ReaderInputCommand.Core(ReaderAction.SelectPage(context.pageCount - 1))
             ReaderInputKey.PLUS -> ReaderInputCommand.ZoomBy(1.1f, CENTER)
@@ -85,6 +100,10 @@ class ReaderInputMapper(private val nowMillis: () -> Long = System::currentTimeM
             ReaderInputKey.B -> ReaderInputCommand.Borderless
             ReaderInputKey.ESCAPE -> ReaderInputCommand.Escape
             ReaderInputKey.X -> ReaderInputCommand.PageActions
+            ReaderInputKey.P, ReaderInputKey.LEFT_BRACKET -> ReaderInputCommand.PreviousChapter
+            ReaderInputKey.N, ReaderInputKey.RIGHT_BRACKET -> ReaderInputCommand.NextChapter
+            ReaderInputKey.M -> ReaderInputCommand.ToggleBookmark
+            ReaderInputKey.V -> ReaderInputCommand.CycleReadingMode
         }
         return ReaderInputResult(action)
     }

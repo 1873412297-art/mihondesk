@@ -769,9 +769,12 @@ internal fun ReaderShortcutsDialog(onDismiss: () -> Unit) {
             ) {
                 ShortcutSectionHeader(strings.text(UiText.Navigation))
                 ShortcutItemRow(strings.text(UiText.ArrowKeys), strings.text(UiText.PreviousNextPage))
-                ShortcutItemRow("PageUp / PageDown", strings.text(UiText.ScrollFlipPage))
+                ShortcutItemRow("PageUp / PageDown, ↑ / ↓", strings.text(UiText.ScrollFlipPage))
                 ShortcutItemRow("Home / End", strings.text(UiText.FirstLastPage))
                 ShortcutItemRow(strings.text(UiText.MouseBackForward), strings.text(UiText.PreviousNextPage))
+                ShortcutItemRow("P / N, [ / ]", strings.text(UiText.PreviousNextChapterShortcut))
+                ShortcutItemRow("M", strings.text(UiText.ToggleChapterBookmarkShortcut))
+                ShortcutItemRow("V", strings.text(UiText.CycleReadingModeShortcut))
 
                 ShortcutSectionHeader(strings.text(UiText.ZoomWindow))
                 ShortcutItemRow("+ / −", strings.text(UiText.ZoomInOut))

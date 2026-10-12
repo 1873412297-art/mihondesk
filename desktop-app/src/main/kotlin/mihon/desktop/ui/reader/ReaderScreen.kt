@@ -84,6 +84,7 @@ import mihon.desktop.reader.input.ReaderInputContext
 import mihon.desktop.reader.input.ReaderInputKey
 import mihon.desktop.reader.input.ReaderInputMapper
 import mihon.desktop.reader.input.ReaderSideButton
+import mihon.desktop.reader.input.nextForShortcut
 import mihon.reader.model.PageDescriptor
 import mihon.reader.model.PageId
 import mihon.reader.model.ReaderErrorCode
@@ -437,6 +438,25 @@ fun ReaderScreen(
         applyZoom(command, viewport)
     }
 
+    fun openChapter(direction: ReaderChapterTransitionDirection) {
+        if (settings.alwaysShowChapterTransition) {
+            pendingExternalChapterDirection = direction
+            chapterTransition = buildChapterTransition(direction)
+        } else {
+            navigateExternalChapter(direction)
+        }
+    }
+
+    /** Keyboard chapter jumps are silently ignored at the first/last chapter, like the disabled chrome buttons. */
+    fun requestChapter(direction: ReaderChapterTransitionDirection) {
+        val current = session.state.value
+        val available = when (direction) {
+            ReaderChapterTransitionDirection.PREVIOUS -> current.hasPreviousChapter || hasPreviousChapter
+            ReaderChapterTransitionDirection.NEXT -> current.hasNextChapter || hasNextChapter
+        }
+        if (available) openChapter(direction)
+    }
+
     fun handleInput(command: ReaderInputCommand) {
         when (command) {
             is ReaderInputCommand.Core -> {
@@ -450,6 +470,10 @@ fun ReaderScreen(
             ReaderInputCommand.Escape -> {
                 if (onEscape()) closeAndThen(onBack)
             }
+            ReaderInputCommand.PreviousChapter -> requestChapter(ReaderChapterTransitionDirection.PREVIOUS)
+            ReaderInputCommand.NextChapter -> requestChapter(ReaderChapterTransitionDirection.NEXT)
+            ReaderInputCommand.ToggleBookmark -> toggleChapterBookmark()
+            ReaderInputCommand.CycleReadingMode -> applySettings(settings.copy(mode = settings.mode.nextForShortcut()))
         }
     }
 
@@ -808,22 +832,8 @@ fun ReaderScreen(
                 dispatchCore(ReaderAction.Next)
                 markReadingInput()
             },
-            onPreviousChapter = {
-                if (settings.alwaysShowChapterTransition) {
-                    pendingExternalChapterDirection = ReaderChapterTransitionDirection.PREVIOUS
-                    chapterTransition = buildChapterTransition(ReaderChapterTransitionDirection.PREVIOUS)
-                } else {
-                    navigateExternalChapter(ReaderChapterTransitionDirection.PREVIOUS)
-                }
-            },
-            onNextChapter = {
-                if (settings.alwaysShowChapterTransition) {
-                    pendingExternalChapterDirection = ReaderChapterTransitionDirection.NEXT
-                    chapterTransition = buildChapterTransition(ReaderChapterTransitionDirection.NEXT)
-                } else {
-                    navigateExternalChapter(ReaderChapterTransitionDirection.NEXT)
-                }
-            },
+            onPreviousChapter = { openChapter(ReaderChapterTransitionDirection.PREVIOUS) },
+            onNextChapter = { openChapter(ReaderChapterTransitionDirection.NEXT) },
             hasPreviousChapter = hasPreviousChapter,
             hasNextChapter = hasNextChapter,
             bookmarked = bookmarked,
@@ -988,6 +998,14 @@ private fun KeyEvent.toReaderInputKey(): ReaderInputKey? = when (key) {
     Key.B -> ReaderInputKey.B
     Key.Escape -> ReaderInputKey.ESCAPE
     Key.X -> ReaderInputKey.X
+    Key.DirectionUp -> ReaderInputKey.UP
+    Key.DirectionDown -> ReaderInputKey.DOWN
+    Key.N -> ReaderInputKey.N
+    Key.P -> ReaderInputKey.P
+    Key.LeftBracket -> ReaderInputKey.LEFT_BRACKET
+    Key.RightBracket -> ReaderInputKey.RIGHT_BRACKET
+    Key.M -> ReaderInputKey.M
+    Key.V -> ReaderInputKey.V
     else -> null
 }
 

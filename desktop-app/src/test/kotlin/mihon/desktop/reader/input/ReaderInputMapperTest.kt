@@ -53,6 +53,35 @@ class ReaderInputMapperTest {
         ).consumed shouldBe false
     }
 
+    @Test fun `default reader keys cover arrows, chapter jumps, bookmark and mode switch`() {
+        val mapper = ReaderInputMapper()
+        val ltr = ReaderInputContext(ReadingMode.SINGLE_LTR)
+        val rtl = ReaderInputContext(ReadingMode.SINGLE_RTL)
+        listOf(ltr, rtl, ReaderInputContext(ReadingMode.WEBTOON)).forEach { context ->
+            mapper.mapKey(ReaderInputKey.UP, context).action shouldBe ReaderInputCommand.Core(ReaderAction.Previous)
+            mapper.mapKey(ReaderInputKey.DOWN, context).action shouldBe ReaderInputCommand.Core(ReaderAction.Next)
+        }
+        listOf(ReaderInputKey.P, ReaderInputKey.LEFT_BRACKET).forEach { key ->
+            mapper.mapKey(key, ltr).action shouldBe ReaderInputCommand.PreviousChapter
+            mapper.mapKey(key, rtl).action shouldBe ReaderInputCommand.PreviousChapter
+        }
+        listOf(ReaderInputKey.N, ReaderInputKey.RIGHT_BRACKET).forEach { key ->
+            mapper.mapKey(key, ltr).action shouldBe ReaderInputCommand.NextChapter
+        }
+        mapper.mapKey(ReaderInputKey.M, ltr).action shouldBe ReaderInputCommand.ToggleBookmark
+        mapper.mapKey(ReaderInputKey.V, ltr).action shouldBe ReaderInputCommand.CycleReadingMode
+        mapper.mapKey(ReaderInputKey.N, ltr.copy(ctrl = true)).consumed shouldBe false
+        mapper.mapKey(ReaderInputKey.M, ltr.copy(focus = ReaderInputFocus.TEXT)).consumed shouldBe false
+    }
+
+    @Test fun `mode shortcut visits every reading mode and wraps around`() {
+        val visited = generateSequence(ReadingMode.SINGLE_LTR) { it.nextForShortcut() }
+            .take(ReadingMode.entries.size + 1)
+            .toList()
+        visited.dropLast(1).toSet() shouldBe ReadingMode.entries.toSet()
+        visited.last() shouldBe ReadingMode.SINGLE_LTR
+    }
+
     @Test fun `space navigation follows desktop convention while preserving explicit page keys`() {
         val mapper = ReaderInputMapper()
         val ltr = ReaderInputContext(ReadingMode.SINGLE_LTR)
