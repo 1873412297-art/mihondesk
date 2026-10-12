@@ -379,7 +379,9 @@ fun DesktopShell(
                                             state.settingsInitialSection
                                         },
                                         aboutContent = {
-                                            mihon.desktop.ui.settings.AboutScreen(updateContent = actions.appUpdateContent)
+                                            mihon.desktop.ui.settings.AboutScreen(
+                                                updateContent = actions.appUpdateContent,
+                                            )
                                         },
                                     )
                                 }

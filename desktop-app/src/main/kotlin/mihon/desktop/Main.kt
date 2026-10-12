@@ -55,9 +55,23 @@ fun main(args: Array<String>) {
         DesktopProfileLock.acquire(profile.root).use {
             // Close the race with an updater creating the guard after our initial check.
             PortableUpdateGuard.requireAllowed(executableDirectory, parsedCommand, System.getenv())
-            startupLanguage = runCatching {
-                DesktopPreferenceStore(profile.root.resolve("preferences.properties")).load().language
-            }.getOrDefault(AppLanguage.System)
+            val startupPreferences = runCatching {
+                DesktopPreferenceStore(profile.root.resolve("preferences.properties")).load()
+            }.getOrNull()
+            startupLanguage = startupPreferences?.language ?: AppLanguage.System
+            if (parsedCommand == DesktopCommand.LaunchUi && startupPreferences != null) {
+                val store = DesktopPreferenceStore(profile.root.resolve("preferences.properties"))
+                if (mihon.desktop.ui.splash.FirstRunSplash.shouldShow(store)) {
+                    // Phase 0 of the first-run splash: static mark before the heavy runtime init.
+                    mihon.desktop.ui.splash.FirstRunSplash.showBootWindow(
+                        dark = when (startupPreferences.themeMode) {
+                            mihon.desktop.preferences.ThemeMode.Dark -> true
+                            mihon.desktop.preferences.ThemeMode.Light -> false
+                            mihon.desktop.preferences.ThemeMode.System -> windowsAppsUseDarkTheme()
+                        },
+                    )
+                }
+            }
             val runtime = DesktopRuntimeFactory.create(args, System.getenv(), executableDirectory)
             executeDesktopRuntime(
                 runtime = runtime,
@@ -106,6 +120,7 @@ fun main(args: Array<String>) {
         }
         if (e is PortableUpdatePendingException) 75 else 1
     }
+    mihon.desktop.ui.splash.FirstRunSplash.closeBootWindow()
     DesktopLogger.info("Main", "Exiting mihondesk with exit code: $exitCode")
     DesktopLogger.close()
     exitProcess(exitCode)
@@ -153,3 +168,12 @@ internal fun executeDesktopRuntime(
         else -> runCommand(activeRuntime, command)
     }
 }
+
+private fun windowsAppsUseDarkTheme(): Boolean = runCatching {
+    if (!System.getProperty("os.name").orEmpty().startsWith("Windows", ignoreCase = true)) return false
+    com.sun.jna.platform.win32.Advapi32Util.registryGetIntValue(
+        com.sun.jna.platform.win32.WinReg.HKEY_CURRENT_USER,
+        "Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
+        "AppsUseLightTheme",
+    ) == 0
+}.getOrDefault(false)

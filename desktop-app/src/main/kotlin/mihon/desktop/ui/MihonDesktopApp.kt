@@ -136,6 +136,9 @@ fun ApplicationScope.MihonDesktopApp(
 ) {
     var preferences by remember { mutableStateOf(runtime.preferences.load()) }
     var showOnboarding by remember { mutableStateOf(!preferences.onboardingCompleted) }
+    var showFirstRunSplash by remember {
+        mutableStateOf(mihon.desktop.ui.splash.FirstRunSplash.shouldShow(runtime.preferences))
+    }
     var pendingExportPath by remember { mutableStateOf<java.nio.file.Path?>(null) }
     var pendingImportPath by remember { mutableStateOf<java.nio.file.Path?>(null) }
     val appLockController = remember(runtime.preferences) {
@@ -1741,7 +1744,7 @@ fun ApplicationScope.MihonDesktopApp(
                                         onDismiss = { pendingImportPath = null },
                                     )
                                 }
-                                if (showOnboarding) {
+                                if (showOnboarding && !showFirstRunSplash) {
                                     OnboardingDialog(
                                         preferences = preferences,
                                         repositories = runtime.extensionStoreService.getRepositories(),
@@ -1882,6 +1885,16 @@ fun ApplicationScope.MihonDesktopApp(
                                         bindings = remember { keyBindingStore.load().global },
                                     )
                                 }
+                            }
+                            if (showFirstRunSplash) {
+                                mihon.desktop.ui.splash.FirstRunSplashOverlay(
+                                    dark = resolveDarkTheme(preferences.themeMode),
+                                    reducedMotion = mihon.desktop.platform.WindowsReducedMotion.prefersReducedMotion,
+                                    onFinished = {
+                                        mihon.desktop.ui.splash.FirstRunSplash.markShown(runtime.preferences)
+                                        showFirstRunSplash = false
+                                    },
+                                )
                             }
                         }
                     }
