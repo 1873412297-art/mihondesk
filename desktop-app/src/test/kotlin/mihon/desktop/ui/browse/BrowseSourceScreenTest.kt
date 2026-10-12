@@ -5,9 +5,12 @@ import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performMouseInput
+import androidx.compose.ui.test.rightClick
 import androidx.compose.ui.test.v2.runComposeUiTest
 import androidx.compose.ui.unit.dp
 import io.kotest.matchers.shouldBe
@@ -70,6 +73,60 @@ class BrowseSourceScreenTest {
         onNodeWithText("网站已封锁访问。", substring = true).assertIsDisplayed()
         onNodeWithText("vapi.ezmanga.org · HTTP 403", substring = true).assertIsDisplayed()
         onNodeWithTag("source-open-webpage").assertIsDisplayed()
+    }
+
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun `hovering a cover reveals the library toggle and right-click offers the same action`() = runComposeUiTest {
+        val toggled = mutableListOf<String>()
+        setContent {
+            BrowseSourceScreen(
+                state = BrowseSourceUiState(
+                    source = testSource,
+                    mangas = listOf(SManga(url = "/one", title = "One"), SManga(url = "/two", title = "Two")),
+                    inLibraryUrls = setOf("/two"),
+                ),
+                onBack = {},
+                onModeChange = {},
+                onQueryChange = {},
+                onSearch = {},
+                onPageChange = {},
+                onMangaSelected = {},
+                onToggleLibrary = { toggled += it.url },
+            )
+        }
+        onNodeWithTag("browse-library-toggle-/one").assertDoesNotExist()
+        onNodeWithTag("manga-card-/one").performMouseInput { moveTo(center) }
+        waitForIdle()
+        onNodeWithTag("browse-library-toggle-/one").assertIsDisplayed().performClick()
+        toggled shouldBe listOf("/one")
+
+        onNodeWithTag("manga-card-/two").performMouseInput { rightClick(center) }
+        waitForIdle()
+        onNodeWithText("Remove from Library").assertIsDisplayed().performClick()
+        toggled shouldBe listOf("/one", "/two")
+    }
+
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun `pending library request keeps the toggle visible and disabled`() = runComposeUiTest {
+        setContent {
+            BrowseSourceScreen(
+                state = BrowseSourceUiState(
+                    source = testSource,
+                    mangas = listOf(SManga(url = "/one", title = "One")),
+                    libraryPendingUrls = setOf("/one"),
+                ),
+                onBack = {},
+                onModeChange = {},
+                onQueryChange = {},
+                onSearch = {},
+                onPageChange = {},
+                onMangaSelected = {},
+                onToggleLibrary = {},
+            )
+        }
+        onNodeWithTag("browse-library-toggle-/one").assertIsDisplayed().assertIsNotEnabled()
     }
 
     private val testSource = SourceDescriptor(

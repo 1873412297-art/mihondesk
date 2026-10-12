@@ -307,6 +307,45 @@ fun BrowseContentView(
                 loadSourcePage(request.mode, request.page, request.query, request.filters, request.append)
             }
 
+            val cardStrings = mihon.desktop.i18n.LocalStrings.current
+            fun toggleCardLibrary(manga: SManga) {
+                if (manga.url in sourceUiState.libraryPendingUrls) return
+                val adding = manga.url !in sourceUiState.inLibraryUrls
+                sourceUiState = sourceUiState.copy(libraryPendingUrls = sourceUiState.libraryPendingUrls + manga.url)
+                scope.launch {
+                    val outcome = try {
+                        if (adding) {
+                            runtime.onlineMangaSyncService.addOrUpdateOnlineManga(nav.source.id, manga)
+                        } else {
+                            runtime.onlineMangaSyncService.removeFromLibrary(nav.source.id, manga.url)
+                        }
+                        null
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (e: Exception) {
+                        e
+                    }
+                    val urls = sourceUiState.inLibraryUrls
+                    sourceUiState = sourceUiState.copy(
+                        libraryPendingUrls = sourceUiState.libraryPendingUrls - manga.url,
+                        inLibraryUrls = when {
+                            outcome != null -> urls
+                            adding -> urls + manga.url
+                            else -> urls - manga.url
+                        },
+                    )
+                    val message = when {
+                        outcome != null -> cardStrings.text(
+                            UiText.BrowseLibraryActionFailed,
+                            outcome.message ?: outcome::class.simpleName.orEmpty(),
+                        )
+                        adding -> cardStrings.text(UiText.BrowseAddToLibraryDone, manga.title)
+                        else -> cardStrings.text(UiText.BrowseRemoveFromLibraryDone, manga.title)
+                    }
+                    snackbarHostState?.showSnackbar(message)
+                }
+            }
+
             LaunchedEffect(nav.source.id) {
                 val filters = runtime.sourceManager.loadFilterList(nav.source.id)
                 if (filters.isNotEmpty()) {
@@ -350,6 +389,7 @@ fun BrowseContentView(
                 onMangaSelected = { manga ->
                     navState = BrowseNavigationState.MangaDetail(nav.source, manga)
                 },
+                onToggleLibrary = ::toggleCardLibrary,
                 onRetry = ::retrySourcePage,
                 onOpenFilters = {
                     sourceUiState = sourceUiState.copy(isFilterDialogOpen = true)
