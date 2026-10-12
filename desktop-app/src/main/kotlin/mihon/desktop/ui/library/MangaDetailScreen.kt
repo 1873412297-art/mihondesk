@@ -77,6 +77,7 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.isShiftPressed
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -211,6 +212,10 @@ fun MangaDetailScreen(
                 }
                 var selectedChapterIds by androidx.compose.runtime.remember {
                     androidx.compose.runtime.mutableStateOf(emptySet<Long>())
+                }
+                // Last chapter toggled by a plain click; Shift+click selects everything between it and the target.
+                var selectionAnchorId by androidx.compose.runtime.remember {
+                    androidx.compose.runtime.mutableStateOf<Long?>(null)
                 }
 
                 val displayedChapterItems = androidx.compose.runtime.remember(chapterItems, chapterSearchQuery) {
@@ -1012,6 +1017,19 @@ fun MangaDetailScreen(
                                             } else {
                                                 selectedChapterIds + item.chapter.id
                                             }
+                                            selectionAnchorId = item.chapter.id
+                                        },
+                                        onRangeSelect = {
+                                            isSelectionMode = true
+                                            selectedChapterIds = chapterRangeSelection(
+                                                displayedChapterItems
+                                                    .filterIsInstance<ChapterListItem.Chapter>()
+                                                    .map { it.chapter.id },
+                                                selectionAnchorId,
+                                                item.chapter.id,
+                                                selectedChapterIds,
+                                            )
+                                            selectionAnchorId = item.chapter.id
                                         },
                                         onReadChapter = {
                                             if (isSelectionMode) {
@@ -1020,6 +1038,7 @@ fun MangaDetailScreen(
                                                 } else {
                                                     selectedChapterIds + it
                                                 }
+                                                selectionAnchorId = it
                                             } else {
                                                 onReadChapter(it)
                                             }
@@ -1317,6 +1336,7 @@ private fun ChapterRow(
     isSelectionMode: Boolean = false,
     isSelected: Boolean = false,
     onToggleSelection: () -> Unit = {},
+    onRangeSelect: () -> Unit = onToggleSelection,
     onReadChapter: (Long) -> Unit,
     onToggleBookmark: () -> Unit,
     onToggleRead: () -> Unit,
@@ -1327,6 +1347,8 @@ private fun ChapterRow(
 ) {
     val strings = mihon.desktop.i18n.LocalStrings.current
     var menuExpanded by remember { mutableStateOf(false) }
+    val windowInfo = androidx.compose.ui.platform.LocalWindowInfo.current
+    val shiftHeld: () -> Boolean = { windowInfo.keyboardModifiers.isShiftPressed }
     val chapterDateFormatter = remember(strings) {
         java.time.format.DateTimeFormatter
             .ofLocalizedDate(java.time.format.FormatStyle.MEDIUM)
@@ -1345,10 +1367,10 @@ private fun ChapterRow(
             .clip(MaterialTheme.shapes.medium)
             .onSecondaryClick { menuExpanded = true }
             .clickable {
-                if (isSelectionMode) {
-                    onToggleSelection()
-                } else {
-                    onReadChapter(chapter.id)
+                when {
+                    shiftHeld() -> onRangeSelect()
+                    isSelectionMode -> onToggleSelection()
+                    else -> onReadChapter(chapter.id)
                 }
             }
             .semantics(mergeDescendants = true) {},
@@ -1363,7 +1385,7 @@ private fun ChapterRow(
             if (isSelectionMode) {
                 Checkbox(
                     checked = isSelected,
-                    onCheckedChange = { onToggleSelection() },
+                    onCheckedChange = { if (shiftHeld()) onRangeSelect() else onToggleSelection() },
                     modifier = Modifier.testTag("chapter-select-${chapter.id}"),
                 )
             }
