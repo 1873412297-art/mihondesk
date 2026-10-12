@@ -242,6 +242,7 @@ fun DesktopShell(
                                 onDuplicateDismiss = actions.onDuplicateDismiss,
                                 onOpenChapterInWebView = actions.onOpenChapterInWebView,
                                 onOpenRandomManga = actions.onOpenRandomManga,
+                                onContinueReading = actions.onContinueReading,
                                 sourceNameFor = state.sourceNameFor,
                                 sourceBaseUrlFor = state.sourceBaseUrlFor,
                             )
@@ -533,6 +534,7 @@ fun DesktopShell(
     appLockController: DesktopAppLockController? = null,
     onLockNow: (() -> Unit)? = null,
     onPairPhoneSync: (() -> Unit)? = null,
+    onContinueReading: ((Long) -> Unit)? = null,
     settingsInitialSection: mihon.desktop.ui.settings.SettingsSection? = null,
 ) {
     val state = DesktopShellState(
@@ -672,6 +674,7 @@ fun DesktopShell(
         onPreferencesChanged,
         onLockNow,
         onPairPhoneSync,
+        onContinueReading,
     ) {
         DesktopShellActions(
             onDestinationSelected = onDestinationSelected,
@@ -769,6 +772,7 @@ fun DesktopShell(
             onPreferencesChanged = onPreferencesChanged,
             onLockNow = onLockNow,
             onPairPhoneSync = onPairPhoneSync,
+            onContinueReading = onContinueReading,
         )
     }
     DesktopShell(state = state, actions = actions)

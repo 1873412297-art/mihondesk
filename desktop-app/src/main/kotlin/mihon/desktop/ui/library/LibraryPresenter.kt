@@ -29,6 +29,7 @@ import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import mihon.desktop.category.DesktopCategory
@@ -1141,6 +1142,19 @@ class LibraryPresenter(
 
     fun setQuery(value: String) {
         query.value = value
+    }
+
+    /**
+     * Opens the next chapter of [mangaId] straight from the library: resolves it off the UI thread
+     * with [nextChapterToRead] and hands its id to [openChapter]; does nothing for a manga without chapters.
+     */
+    fun continueReading(mangaId: Long, openChapter: (Long) -> Unit) {
+        presenterScope.launch {
+            val chapterId = runCatching {
+                withContext(Dispatchers.IO) { nextChapterToRead(repository.chapterSnapshot(mangaId))?.id }
+            }.getOrNull()
+            if (chapterId != null) openChapter(chapterId)
+        }
     }
 
     fun selectManga(id: Long?) {

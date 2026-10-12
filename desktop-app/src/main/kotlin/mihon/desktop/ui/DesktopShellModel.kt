@@ -190,4 +190,5 @@ data class DesktopShellActions(
     val onPreferencesChanged: ((DesktopPreferences) -> Unit)? = null,
     val onLockNow: (() -> Unit)? = null,
     val onPairPhoneSync: (() -> Unit)? = null,
+    val onContinueReading: ((Long) -> Unit)? = null,
 )

@@ -1148,6 +1148,11 @@ fun ApplicationScope.MihonDesktopApp(
                                         onReadChapter = { chapterId ->
                                             navigator.navigate(DesktopDestination.Reader(chapterId))
                                         },
+                                        onContinueReading = { mangaId ->
+                                            libraryPresenter.continueReading(mangaId) { chapterId ->
+                                                navigator.navigate(DesktopDestination.Reader(chapterId))
+                                            }
+                                        },
                                         onMangaDetailRetry = libraryPresenter::retryDetail,
                                         onImportBackup = startImportBackup,
                                         onImportLocal = startImportLocal,

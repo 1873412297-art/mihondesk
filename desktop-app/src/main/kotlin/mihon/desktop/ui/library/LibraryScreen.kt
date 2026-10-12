@@ -183,6 +183,7 @@ fun LibraryScreen(
     onDuplicateDismiss: () -> Unit = {},
     onOpenChapterInWebView: ((Long) -> Unit)? = null,
     onOpenRandomManga: () -> Unit = {},
+    onContinueReading: ((Long) -> Unit)? = null,
     sourceNameFor: (Long) -> String = { "Source #$it" },
     sourceBaseUrlFor: (Long) -> String? = { null },
 ) {
@@ -253,6 +254,7 @@ fun LibraryScreen(
                     onBatchDownload = onBatchDownload,
                     onBatchRemoveFromLibrary = onBatchRemoveFromLibrary,
                     onOpenRandomManga = onOpenRandomManga,
+                    onContinueReading = onContinueReading,
                     sourceBaseUrlFor = sourceBaseUrlFor,
                     modifier = Modifier.weight(0.55f).fillMaxHeight().testTag("library-grid-pane"),
                 )
@@ -321,6 +323,7 @@ fun LibraryScreen(
                 onBatchDownload = onBatchDownload,
                 onBatchRemoveFromLibrary = onBatchRemoveFromLibrary,
                 onOpenRandomManga = onOpenRandomManga,
+                onContinueReading = onContinueReading,
                 sourceBaseUrlFor = sourceBaseUrlFor,
                 modifier = Modifier.fillMaxSize().testTag("library-grid-pane"),
             )
@@ -389,6 +392,7 @@ private fun LibraryPane(
     isRepairingCovers: Boolean = false,
     onRepairBrokenCovers: (() -> Unit)? = null,
     onOpenRandomManga: () -> Unit = {},
+    onContinueReading: ((Long) -> Unit)? = null,
     sourceBaseUrlFor: (Long) -> String? = { null },
     modifier: Modifier,
 ) {
@@ -704,6 +708,7 @@ private fun LibraryPane(
                 onImportLocal = onImportLocal,
                 onPairPhoneSync = onPairPhoneSync,
                 sourceBaseUrlFor = sourceBaseUrlFor,
+                onContinueReading = onContinueReading,
                 onMangaToggleRead = { id, read ->
                     onToggleSelectionMode(false)
                     onToggleMangaSelection(id)
@@ -831,6 +836,7 @@ private fun LibraryMangaContextMenu(
     expanded: Boolean,
     onDismissRequest: () -> Unit,
     onOpenDetails: () -> Unit,
+    onResumeReading: (() -> Unit)? = null,
     onToggleRead: () -> Unit,
     onDownload: () -> Unit,
     onEditCategories: () -> Unit,
@@ -849,6 +855,15 @@ private fun LibraryMangaContextMenu(
                 onOpenDetails()
             },
         )
+        if (onResumeReading != null && manga.chapterCount > 0) {
+            DropdownMenuItem(
+                text = { Text(strings.text(UiText.ContextResumeReading)) },
+                onClick = {
+                    onDismissRequest()
+                    onResumeReading()
+                },
+            )
+        }
         DropdownMenuItem(
             text = {
                 Text(
@@ -899,6 +914,7 @@ private fun LibraryContent(
     onImportLocal: () -> Unit = {},
     onPairPhoneSync: (() -> Unit)? = null,
     sourceBaseUrlFor: (Long) -> String? = { null },
+    onContinueReading: ((Long) -> Unit)? = null,
     onMangaToggleRead: (Long, Boolean) -> Unit = { _, _ -> },
     onMangaDownload: (Long) -> Unit = {},
     onMangaEditCategories: (Long) -> Unit = {},
@@ -953,11 +969,18 @@ private fun LibraryContent(
                                         }
                                     },
                                 )
+                                ContinueReadingButton(
+                                    manga = manga,
+                                    isSelectionMode = state.selectionState.isSelectionMode,
+                                    onContinueReading = onContinueReading,
+                                    modifier = Modifier.align(Alignment.TopStart).padding(6.dp),
+                                )
                                 LibraryMangaContextMenu(
                                     manga = manga,
                                     expanded = showContextMenu,
                                     onDismissRequest = { showContextMenu = false },
                                     onOpenDetails = { onMangaSelected(manga.id) },
+                                    onResumeReading = onContinueReading?.let { open -> { open(manga.id) } },
                                     onToggleRead = { onMangaToggleRead(manga.id, manga.unreadCount > 0) },
                                     onDownload = { onMangaDownload(manga.id) },
                                     onEditCategories = { onMangaEditCategories(manga.id) },
@@ -1000,11 +1023,18 @@ private fun LibraryContent(
                                         }
                                     },
                                 )
+                                ContinueReadingButton(
+                                    manga = manga,
+                                    isSelectionMode = state.selectionState.isSelectionMode,
+                                    onContinueReading = onContinueReading,
+                                    modifier = Modifier.align(Alignment.TopStart).padding(6.dp),
+                                )
                                 LibraryMangaContextMenu(
                                     manga = manga,
                                     expanded = showContextMenu,
                                     onDismissRequest = { showContextMenu = false },
                                     onOpenDetails = { onMangaSelected(manga.id) },
+                                    onResumeReading = onContinueReading?.let { open -> { open(manga.id) } },
                                     onToggleRead = { onMangaToggleRead(manga.id, manga.unreadCount > 0) },
                                     onDownload = { onMangaDownload(manga.id) },
                                     onEditCategories = { onMangaEditCategories(manga.id) },
@@ -1047,11 +1077,18 @@ private fun LibraryContent(
                                         }
                                     },
                                 )
+                                ContinueReadingButton(
+                                    manga = manga,
+                                    isSelectionMode = state.selectionState.isSelectionMode,
+                                    onContinueReading = onContinueReading,
+                                    modifier = Modifier.align(Alignment.TopStart).padding(6.dp),
+                                )
                                 LibraryMangaContextMenu(
                                     manga = manga,
                                     expanded = showContextMenu,
                                     onDismissRequest = { showContextMenu = false },
                                     onOpenDetails = { onMangaSelected(manga.id) },
+                                    onResumeReading = onContinueReading?.let { open -> { open(manga.id) } },
                                     onToggleRead = { onMangaToggleRead(manga.id, manga.unreadCount > 0) },
                                     onDownload = { onMangaDownload(manga.id) },
                                     onEditCategories = { onMangaEditCategories(manga.id) },
@@ -1090,6 +1127,7 @@ private fun LibraryContent(
                                     expanded = showContextMenu,
                                     onDismissRequest = { showContextMenu = false },
                                     onOpenDetails = { onMangaSelected(manga.id) },
+                                    onResumeReading = onContinueReading?.let { open -> { open(manga.id) } },
                                     onToggleRead = { onMangaToggleRead(manga.id, manga.unreadCount > 0) },
                                     onDownload = { onMangaDownload(manga.id) },
                                     onEditCategories = { onMangaEditCategories(manga.id) },

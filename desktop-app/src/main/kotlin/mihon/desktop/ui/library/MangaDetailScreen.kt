@@ -237,14 +237,7 @@ fun MangaDetailScreen(
                 }
 
                 val nextChapterToRead = androidx.compose.runtime.remember(state.chapters) {
-                    if (state.chapters.isEmpty()) {
-                        null
-                    } else {
-                        val sortedAscending = state.chapters.sortedWith(
-                            compareBy<LibraryChapter> { it.chapterNumber }.thenBy { it.sourceOrder },
-                        )
-                        sortedAscending.firstOrNull { !it.read } ?: sortedAscending.lastOrNull()
-                    }
+                    nextChapterToRead(state.chapters)
                 }
 
                 val fabText = androidx.compose.runtime.remember(nextChapterToRead, state.chapters) {
