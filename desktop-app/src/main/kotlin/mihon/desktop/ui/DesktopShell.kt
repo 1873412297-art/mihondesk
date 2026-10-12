@@ -180,6 +180,7 @@ fun DesktopShell(
                                 onDetailRetry = actions.onMangaDetailRetry,
                                 onImportBackup = actions.onImportBackup,
                                 onImportLocal = actions.onImportLocal,
+                                onPairPhoneSync = actions.onPairPhoneSync,
                                 onRetry = actions.onLibraryRetry,
                                 onCategorySelected = actions.onCategorySelected,
                                 onManageCategories = actions.onManageCategories,
@@ -326,6 +327,7 @@ fun DesktopShell(
                                     databaseCleaner = state.databaseCleaner,
                                     downloadCategories = state.libraryState.categories,
                                     appLockController = state.appLockController,
+                                    initialSection = state.settingsInitialSection,
                                 )
                             } else {
                                 Text(
@@ -530,6 +532,8 @@ fun DesktopShell(
     databaseCleaner: mihon.desktop.library.repository.LibraryDatabaseCleaner? = null,
     appLockController: DesktopAppLockController? = null,
     onLockNow: (() -> Unit)? = null,
+    onPairPhoneSync: (() -> Unit)? = null,
+    settingsInitialSection: mihon.desktop.ui.settings.SettingsSection? = null,
 ) {
     val state = DesktopShellState(
         selected = selected,
@@ -575,6 +579,7 @@ fun DesktopShell(
         appLockController = appLockController,
         sourceNameFor = sourceNameFor,
         sourceBaseUrlFor = sourceBaseUrlFor,
+        settingsInitialSection = settingsInitialSection,
     )
     val actions = remember(
         onDestinationSelected,
@@ -666,6 +671,7 @@ fun DesktopShell(
         onExportBackup,
         onPreferencesChanged,
         onLockNow,
+        onPairPhoneSync,
     ) {
         DesktopShellActions(
             onDestinationSelected = onDestinationSelected,
@@ -762,6 +768,7 @@ fun DesktopShell(
             onOpenOnboarding = onOpenOnboarding,
             onPreferencesChanged = onPreferencesChanged,
             onLockNow = onLockNow,
+            onPairPhoneSync = onPairPhoneSync,
         )
     }
     DesktopShell(state = state, actions = actions)

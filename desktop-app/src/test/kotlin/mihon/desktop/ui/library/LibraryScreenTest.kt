@@ -156,6 +156,50 @@ class LibraryScreenTest {
     }
 
     @Test
+    fun `empty database shows start action cards wired to import restore and pairing`() = runComposeUiTest {
+        var backupClicks = 0
+        var localClicks = 0
+        var pairClicks = 0
+        setContent {
+            MaterialTheme {
+                Box(modifier = Modifier.requiredSize(1000.dp, 900.dp)) {
+                    LibraryScreen(
+                        state = LibraryUiState(loading = false),
+                        onQueryChange = {},
+                        onMangaSelected = {},
+                        onImportBackup = { backupClicks++ },
+                        onImportLocal = { localClicks++ },
+                        onPairPhoneSync = { pairClicks++ },
+                    )
+                }
+            }
+        }
+
+        onNodeWithTag("library-empty-start-actions").assertExists()
+        onNodeWithTag("library-empty-start-import-local").performClick()
+        onNodeWithTag("library-empty-start-restore-backup").performClick()
+        onNodeWithTag("library-empty-start-pair-phone").performClick()
+        localClicks shouldBe 1
+        backupClicks shouldBe 1
+        pairClicks shouldBe 1
+    }
+
+    @Test
+    fun `empty database hides pairing card when the host cannot open sync settings`() = runComposeUiTest {
+        setLibraryContent(LibraryUiState(loading = false))
+
+        onNodeWithTag("library-empty-start-import-local").assertExists()
+        onNodeWithTag("library-empty-start-pair-phone").assertDoesNotExist()
+    }
+
+    @Test
+    fun `filtered empty library does not show first-run start actions`() = runComposeUiTest {
+        setLibraryContent(LibraryUiState(loading = false, query = "missing"))
+
+        onNodeWithTag("library-empty-start-actions").assertDoesNotExist()
+    }
+
+    @Test
     fun `empty search result is distinct from an empty database`() = runComposeUiTest {
         setLibraryContent(LibraryUiState(loading = false, query = "missing"))
 

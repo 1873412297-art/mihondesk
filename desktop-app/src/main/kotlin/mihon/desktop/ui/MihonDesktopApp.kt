@@ -97,6 +97,7 @@ import mihon.desktop.ui.library.MangaDetailActions
 import mihon.desktop.ui.library.chapterDisplayLabel
 import mihon.desktop.ui.library.withDownloadProgress
 import mihon.desktop.ui.onboarding.OnboardingDialog
+import mihon.desktop.ui.onboarding.StartAction
 import mihon.desktop.ui.reader.DecodedReaderPage
 import mihon.desktop.ui.reader.LibraryChapterBookmarkStore
 import mihon.desktop.ui.reader.ReaderChapterTransitionChapter
@@ -549,6 +550,33 @@ fun ApplicationScope.MihonDesktopApp(
 
     val currentLanguageStrings = remember(preferences.language) {
         mihon.desktop.i18n.DesktopStrings.resolve(preferences.language)
+    }
+    // Entry points shared by the library header, the empty bookshelf and onboarding's
+    // "where to start" step, so every surface runs the exact same import / restore / pairing flow.
+    val startImportBackup: () -> Unit = {
+        mihon.desktop.ui.library.chooseAndroidBackup(
+            currentLanguageStrings.libraryImportBackup,
+        )?.let {
+            pendingImportPath = it
+        }
+    }
+    val startImportLocal: () -> Unit = {
+        presenterScope.launch {
+            importState = ImportActionState.Running
+            importState = importActions.chooseAndImportLocal()
+        }
+    }
+    var settingsSectionRequest by remember {
+        mutableStateOf<mihon.desktop.ui.settings.SettingsSection?>(null)
+    }
+    LaunchedEffect(navigator.current) {
+        // A section request only applies to the navigation that made it.
+        if (navigator.current != DesktopDestination.Settings) settingsSectionRequest = null
+    }
+    val startPairPhoneSync: () -> Unit = {
+        // Phone pairing (QR code) lives in Settings > Backup & Restore next to the sync server.
+        settingsSectionRequest = mihon.desktop.ui.settings.SettingsSection.Backup
+        navigator.navigate(DesktopDestination.Settings)
     }
     val destination = navigator.current
     val windowTitle = remember(destination, mangaDetailState, currentLanguageStrings) {
@@ -1121,19 +1149,10 @@ fun ApplicationScope.MihonDesktopApp(
                                             navigator.navigate(DesktopDestination.Reader(chapterId))
                                         },
                                         onMangaDetailRetry = libraryPresenter::retryDetail,
-                                        onImportBackup = {
-                                            mihon.desktop.ui.library.chooseAndroidBackup(
-                                                strings.libraryImportBackup,
-                                            )?.let {
-                                                pendingImportPath = it
-                                            }
-                                        },
-                                        onImportLocal = {
-                                            presenterScope.launch {
-                                                importState = ImportActionState.Running
-                                                importState = importActions.chooseAndImportLocal()
-                                            }
-                                        },
+                                        onImportBackup = startImportBackup,
+                                        onImportLocal = startImportLocal,
+                                        onPairPhoneSync = startPairPhoneSync,
+                                        settingsInitialSection = settingsSectionRequest,
                                         onLibraryRetry = libraryPresenter::retry,
                                         onCategorySelected = libraryPresenter::selectCategory,
                                         onManageCategories = { isManageCategoriesDialogOpen = true },
@@ -1691,6 +1710,18 @@ fun ApplicationScope.MihonDesktopApp(
                                                     it.copy(onboardingCompleted = true)
                                                 }
                                             navigator.navigate(DesktopDestination.Browse)
+                                        },
+                                        onStartAction = { action ->
+                                            showOnboarding = false
+                                            preferences =
+                                                runtime.preferences.updatePreferences {
+                                                    it.copy(onboardingCompleted = true)
+                                                }
+                                            when (action) {
+                                                StartAction.ImportLocal -> startImportLocal()
+                                                StartAction.RestoreBackup -> startImportBackup()
+                                                StartAction.PairPhone -> startPairPhoneSync()
+                                            }
                                         },
                                     )
                                 }

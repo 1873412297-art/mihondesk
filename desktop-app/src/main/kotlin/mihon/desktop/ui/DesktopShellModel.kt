@@ -81,6 +81,8 @@ data class DesktopShellState(
     val appLockController: DesktopAppLockController? = null,
     val sourceNameFor: (Long) -> String = { "Source #$it" },
     val sourceBaseUrlFor: (Long) -> String? = { null },
+    /** Section the settings screen should open on; null keeps its own default. */
+    val settingsInitialSection: mihon.desktop.ui.settings.SettingsSection? = null,
 )
 
 @Immutable
@@ -187,4 +189,5 @@ data class DesktopShellActions(
     val onOpenOnboarding: () -> Unit = {},
     val onPreferencesChanged: ((DesktopPreferences) -> Unit)? = null,
     val onLockNow: (() -> Unit)? = null,
+    val onPairPhoneSync: (() -> Unit)? = null,
 )

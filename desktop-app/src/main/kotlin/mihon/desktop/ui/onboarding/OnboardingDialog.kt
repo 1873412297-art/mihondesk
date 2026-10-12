@@ -34,6 +34,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import mihon.desktop.i18n.AppLanguage
 import mihon.desktop.i18n.LocalStrings
+import mihon.desktop.i18n.UiText
+import mihon.desktop.i18n.text
 import mihon.desktop.preferences.DesktopPreferences
 import mihon.desktop.preferences.ThemeMode
 import java.io.File
@@ -48,9 +50,13 @@ fun OnboardingDialog(
     onUpdatePreferences: (DesktopPreferences) -> Unit,
     onFinish: () -> Unit,
     onGoToBrowse: () -> Unit,
+    onStartAction: ((StartAction) -> Unit)? = null,
+    startActions: List<StartAction> = StartAction.entries,
 ) {
     val strings = LocalStrings.current
     var currentStep by remember { mutableStateOf(1) }
+    // The skippable "where to start" step only appears when the host can run those actions.
+    val totalSteps = if (onStartAction != null && startActions.isNotEmpty()) 4 else 3
     var repoUrlInput by remember { mutableStateOf("") }
 
     AlertDialog(
@@ -64,10 +70,11 @@ fun OnboardingDialog(
                     fontWeight = FontWeight.Bold,
                 )
                 Text(
-                    text = "$currentStep/3: " + when (currentStep) {
+                    text = "$currentStep/$totalSteps: " + when (currentStep) {
                         1 -> strings.onboardingStepLanguageAndTheme
                         2 -> strings.onboardingStepRepo
-                        else -> strings.onboardingStepBackup
+                        3 -> strings.onboardingStepBackup
+                        else -> strings.text(UiText.StartWhereTitle)
                     },
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.primary,
@@ -105,12 +112,15 @@ fun OnboardingDialog(
                         preferences = preferences,
                         onUpdatePreferences = onUpdatePreferences,
                     )
+                    4 -> if (onStartAction != null) {
+                        StepWhereToStart(actions = startActions, onAction = onStartAction)
+                    }
                 }
             }
         },
         confirmButton = {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (currentStep < 3) {
+                if (currentStep < totalSteps) {
                     Button(
                         onClick = { currentStep++ },
                         modifier = Modifier.testTag("onboarding-next-btn"),
@@ -141,7 +151,9 @@ fun OnboardingDialog(
                     onClick = onFinish,
                     modifier = Modifier.testTag("onboarding-skip-btn"),
                 ) {
-                    Text(strings.onboardingBtnSkip)
+                    Text(
+                        if (currentStep == 4) strings.text(UiText.StartSkipStep) else strings.onboardingBtnSkip,
+                    )
                 }
             }
         },
@@ -321,6 +333,29 @@ private fun StepRepositories(
         ) {
             Text(strings.onboardingGoToBrowse)
         }
+    }
+}
+
+@Composable
+private fun StepWhereToStart(
+    actions: List<StartAction>,
+    onAction: (StartAction) -> Unit,
+) {
+    val strings = LocalStrings.current
+    Column(
+        modifier = Modifier.fillMaxWidth().testTag("onboarding-step-4"),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text(
+            text = strings.text(UiText.StartWhereDescription),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        StartActionCards(
+            onAction = onAction,
+            testTagPrefix = "onboarding",
+            actions = actions,
+        )
     }
 }
 

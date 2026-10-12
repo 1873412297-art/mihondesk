@@ -177,6 +177,7 @@ fun SettingsScreen(
     downloadCategories: List<mihon.desktop.category.DesktopCategory> = emptyList(),
     appLockController: DesktopAppLockController? = null,
     backgroundScheduler: mihon.desktop.platform.WindowsBackgroundScheduler? = null,
+    initialSection: SettingsSection? = null,
     modifier: Modifier = Modifier,
 ) {
     val backgroundScope = rememberCoroutineScope()
@@ -198,7 +199,7 @@ fun SettingsScreen(
     val securityController = remember(preferenceStore, appLockController) {
         appLockController ?: DesktopAppLockController(preferenceStore)
     }
-    var selectedSection by remember { mutableStateOf(SettingsSection.General) }
+    var selectedSection by remember(initialSection) { mutableStateOf(initialSection ?: SettingsSection.General) }
     var searchQuery by remember { mutableStateOf("") }
     val searchableEntries = remember(strings) { buildSearchableSettings(strings) }
     val matchingResults = remember(searchQuery, searchableEntries) {

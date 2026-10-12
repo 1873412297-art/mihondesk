@@ -92,6 +92,8 @@ import mihon.desktop.ui.common.MangaCover
 import mihon.desktop.ui.common.coverHeaders
 import mihon.desktop.ui.common.onSecondaryClick
 import mihon.desktop.ui.common.trackTextInputFocus
+import mihon.desktop.ui.onboarding.StartAction
+import mihon.desktop.ui.onboarding.StartActionCards
 
 @Composable
 fun LibraryScreen(
@@ -105,6 +107,7 @@ fun LibraryScreen(
     onDetailRetry: () -> Unit = {},
     onImportBackup: () -> Unit,
     onImportLocal: () -> Unit,
+    onPairPhoneSync: (() -> Unit)? = null,
     onRetry: () -> Unit = {},
     onCategorySelected: (Long) -> Unit = {},
     onManageCategories: () -> Unit = {},
@@ -223,6 +226,7 @@ fun LibraryScreen(
                     onMangaSelected = onMangaSelected,
                     onImportBackup = onImportBackup,
                     onImportLocal = onImportLocal,
+                    onPairPhoneSync = onPairPhoneSync,
                     onUpdateLibrary = onUpdateLibrary,
                     isUpdatingLibrary = isUpdatingLibrary,
                     isRepairingCovers = isRepairingCovers,
@@ -290,6 +294,7 @@ fun LibraryScreen(
                 onMangaSelected = onMangaSelected,
                 onImportBackup = onImportBackup,
                 onImportLocal = onImportLocal,
+                onPairPhoneSync = onPairPhoneSync,
                 onUpdateLibrary = onUpdateLibrary,
                 isUpdatingLibrary = isUpdatingLibrary,
                 isRepairingCovers = isRepairingCovers,
@@ -361,6 +366,7 @@ private fun LibraryPane(
     onMangaSelected: (Long) -> Unit,
     onImportBackup: () -> Unit,
     onImportLocal: () -> Unit,
+    onPairPhoneSync: (() -> Unit)?,
     onRetry: () -> Unit,
     onCategorySelected: (Long) -> Unit,
     onManageCategories: () -> Unit,
@@ -694,6 +700,9 @@ private fun LibraryPane(
                 onToggleMangaSelection = onToggleMangaSelection,
                 onRetry = onRetry,
                 onClearFilters = onClearFilters,
+                onImportBackup = onImportBackup,
+                onImportLocal = onImportLocal,
+                onPairPhoneSync = onPairPhoneSync,
                 sourceBaseUrlFor = sourceBaseUrlFor,
                 onMangaToggleRead = { id, read ->
                     onToggleSelectionMode(false)
@@ -886,6 +895,9 @@ private fun LibraryContent(
     onToggleMangaSelection: (Long) -> Unit,
     onRetry: () -> Unit,
     onClearFilters: () -> Unit,
+    onImportBackup: () -> Unit = {},
+    onImportLocal: () -> Unit = {},
+    onPairPhoneSync: (() -> Unit)? = null,
     sourceBaseUrlFor: (Long) -> String? = { null },
     onMangaToggleRead: (Long, Boolean) -> Unit = { _, _ -> },
     onMangaDownload: (Long) -> Unit = {},
@@ -898,7 +910,14 @@ private fun LibraryContent(
             CircularProgressIndicator(modifier = Modifier.testTag("library-loading"))
         }
         state.errorMessage != null -> ErrorState(state.errorMessage, onRetry, modifier)
-        state.items.isEmpty() -> EmptyState(state, onClearFilters, modifier)
+        state.items.isEmpty() -> EmptyState(
+            state = state,
+            onClearFilters = onClearFilters,
+            onImportBackup = onImportBackup,
+            onImportLocal = onImportLocal,
+            onPairPhoneSync = onPairPhoneSync,
+            modifier = modifier,
+        )
         else -> BoxWithConstraints(modifier = modifier) {
             when (state.displayMode) {
                 LibraryDisplayMode.ComfortableGrid -> {
@@ -1590,7 +1609,14 @@ private fun BatchCategorySelectionDialog(
 }
 
 @Composable
-private fun EmptyState(state: LibraryUiState, onClearFilters: () -> Unit, modifier: Modifier) {
+private fun EmptyState(
+    state: LibraryUiState,
+    onClearFilters: () -> Unit,
+    onImportBackup: () -> Unit,
+    onImportLocal: () -> Unit,
+    onPairPhoneSync: (() -> Unit)?,
+    modifier: Modifier,
+) {
     val strings = LocalStrings.current
     val query = state.query
     val filtered =
@@ -1625,6 +1651,20 @@ private fun EmptyState(state: LibraryUiState, onClearFilters: () -> Unit, modifi
                     strings.libraryEmptySubtitle,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodyMedium,
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                // First-run bookshelf: offer the same three entry points as onboarding, wired to the
+                // existing import / restore flows and to the sync pairing settings.
+                StartActionCards(
+                    onAction = { action ->
+                        when (action) {
+                            StartAction.ImportLocal -> onImportLocal()
+                            StartAction.RestoreBackup -> onImportBackup()
+                            StartAction.PairPhone -> onPairPhoneSync?.invoke()
+                        }
+                    },
+                    testTagPrefix = "library-empty",
+                    actions = StartAction.entries.filter { it != StartAction.PairPhone || onPairPhoneSync != null },
                 )
             } else {
                 Text(
