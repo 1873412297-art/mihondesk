@@ -1,5 +1,8 @@
+@file:OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+
 package mihon.desktop.ui
 
+import androidx.compose.foundation.draganddrop.dragAndDropTarget
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,6 +31,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.awt.ComposeWindow
+import androidx.compose.ui.draganddrop.DragAndDropEvent
+import androidx.compose.ui.draganddrop.DragAndDropTarget
+import androidx.compose.ui.draganddrop.DragData
+import androidx.compose.ui.draganddrop.dragData
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.input.key.Key
@@ -362,6 +369,32 @@ fun ApplicationScope.MihonDesktopApp(
     var pendingMissingSources by remember { mutableStateOf<List<MissingSourceInfo>?>(null) }
     var isInstallingMissingBatch by remember { mutableStateOf(false) }
 
+    // Files forwarded by a second launch or dropped onto the library share one import path.
+    val openExternalFile: (java.nio.file.Path) -> Unit = { path ->
+        presenterScope.launch {
+            // External files stay behind the app lock, exactly like the in-app import actions.
+            appLockController.isLocked.first { !it }
+            val kind = if (java.nio.file.Files.isDirectory(path)) {
+                ForwardedFileKind.LocalArchive
+            } else {
+                ForwardedFileKind.of(path)
+            }
+            when (kind) {
+                // Same flow as Library > Import backup: the user confirms restore options first.
+                ForwardedFileKind.AndroidBackup -> pendingImportPath = path
+                ForwardedFileKind.LocalArchive -> if (importState != ImportActionState.Running) {
+                    importState = ImportActionState.Running
+                    importState = importController.importLocal(path)
+                }
+                ForwardedFileKind.Unsupported ->
+                    mihon.desktop.logging.DesktopLogger.warn(
+                        "SingleInstance",
+                        "Ignoring unsupported external file",
+                    )
+            }
+        }
+    }
+
     // A second launch (Start Menu, tray-hidden instance, file double-click) is forwarded here.
     val windowReady = composeWindow != null
     LaunchedEffect(instanceRequests, windowReady) {
@@ -369,23 +402,7 @@ fun ApplicationScope.MihonDesktopApp(
         instanceRequests.collect { request ->
             showMainWindow(fromAnotherProcess = true)
             val path = (request as? SingleInstanceRequest.Open)?.path ?: return@collect
-            presenterScope.launch {
-                // Forwarded files stay behind the app lock, exactly like the in-app import actions.
-                appLockController.isLocked.first { !it }
-                when (ForwardedFileKind.of(path)) {
-                    // Same flow as Library > Import backup: the user confirms restore options first.
-                    ForwardedFileKind.AndroidBackup -> pendingImportPath = path
-                    ForwardedFileKind.LocalArchive -> if (importState != ImportActionState.Running) {
-                        importState = ImportActionState.Running
-                        importState = importController.importLocal(path)
-                    }
-                    ForwardedFileKind.Unsupported ->
-                        mihon.desktop.logging.DesktopLogger.warn(
-                            "SingleInstance",
-                            "Ignoring forwarded unsupported file",
-                        )
-                }
-            }
+            openExternalFile(path)
         }
     }
 
@@ -675,6 +692,19 @@ fun ApplicationScope.MihonDesktopApp(
                 composeWindow = window
                 window.minimumSize = java.awt.Dimension(960, 640)
             }
+            val darkTitleBar = resolveDarkTheme(preferences.themeMode)
+            LaunchedEffect(window, darkTitleBar) {
+                mihon.desktop.platform.WindowsTitleBar.apply(window, darkTitleBar)
+            }
+            val libraryDropTarget = remember {
+                object : DragAndDropTarget {
+                    override fun onDrop(event: DragAndDropEvent): Boolean {
+                        val files = droppedFiles(event)
+                        files.forEach(openExternalFile)
+                        return files.isNotEmpty()
+                    }
+                }
+            }
             MihonDesktopTheme(
                 themeMode = preferences.themeMode,
                 appTheme = preferences.appTheme,
@@ -697,7 +727,14 @@ fun ApplicationScope.MihonDesktopApp(
                                         appLockController.recordActivity()
                                     }
                                 }
-                            },
+                            }.dragAndDropTarget(
+                                // Backups (.tachibk), CBZ/ZIP archives and manga folders can be dropped on the library.
+                                shouldStartDragAndDrop = { event ->
+                                    navigator.current == DesktopDestination.Library &&
+                                        event.dragData() is DragData.FilesList
+                                },
+                                target = libraryDropTarget,
+                            ),
                         ) {
                             DesktopAppLockGate(
                                 isLocked = appLocked,
@@ -2009,5 +2046,13 @@ internal fun ImportStateDialog(state: ImportActionState, onDismiss: () -> Unit) 
             title = { Text(strings.importDialogFailedTitle) },
             text = { Text(state.message) },
         )
+    }
+}
+
+/** Local paths from a file drop; non-file URIs are ignored. */
+private fun droppedFiles(event: DragAndDropEvent): List<java.nio.file.Path> {
+    val data = event.dragData() as? DragData.FilesList ?: return emptyList()
+    return data.readFiles().mapNotNull { uri ->
+        runCatching { java.nio.file.Path.of(java.net.URI(uri)) }.getOrNull()
     }
 }

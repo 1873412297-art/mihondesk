@@ -14,11 +14,7 @@ fun MihonDesktopTheme(
     isAmoled: Boolean = false,
     content: @Composable () -> Unit,
 ) {
-    val dark = when (themeMode) {
-        ThemeMode.System -> isSystemInDarkTheme()
-        ThemeMode.Light -> false
-        ThemeMode.Dark -> true
-    }
+    val dark = resolveDarkTheme(themeMode)
     val baseScheme = ThemeRegistry.getColorScheme(appTheme)
     val colorScheme = baseScheme.getColorScheme(isDark = dark, isAmoled = isAmoled)
 
@@ -26,4 +22,12 @@ fun MihonDesktopTheme(
         colorScheme = colorScheme,
         content = content,
     )
+}
+
+/** Whether [themeMode] currently resolves to a dark scheme; shared by the theme and the native title bar. */
+@Composable
+fun resolveDarkTheme(themeMode: ThemeMode): Boolean = when (themeMode) {
+    ThemeMode.System -> isSystemInDarkTheme()
+    ThemeMode.Light -> false
+    ThemeMode.Dark -> true
 }
