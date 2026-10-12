@@ -335,8 +335,15 @@ enum class UiText(val english: String, val simplified: String, val traditional: 
     LockApp("Lock app", "锁定应用", "鎖定應用程式"),
     CollapseNavigation("Collapse navigation", "收起导航栏", "收合導覽列"),
     ExpandNavigation("Expand navigation", "展开导航栏", "展開導覽列"),
-    CompactDensity("Switch to compact density", "切换为紧凑密度", "切換為緊湊密度"),
-    StandardDensity("Switch to standard density", "切换为标准密度", "切換為標準密度"),
+    InterfaceDensity("Interface density", "界面密度", "介面密度"),
+    InterfaceDensityHint(
+        "Adjusts spacing, padding and row heights. Text size and the reader are not affected.",
+        "调整间距、内边距与行高，不影响文字大小与阅读器。",
+        "調整間距、內距與列高，不影響文字大小與閱讀器。",
+    ),
+    DensityStandard("Standard", "标准", "標準"),
+    DensityCompact("Compact", "紧凑", "緊湊"),
+    DensityPreview("Preview", "预览", "預覽"),
     SettingsMore("More", "更多", "更多"),
     LockEnabledHint(
         "App lock is on. A PIN is required to view your library.",

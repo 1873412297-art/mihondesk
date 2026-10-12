@@ -34,24 +34,79 @@ class DesktopShellTest {
         railSelectionFor(DesktopDestination.Stats) shouldBe DesktopDestination.Settings
         railSelectionFor(DesktopDestination.About) shouldBe DesktopDestination.Settings
         railSelectionFor(DesktopDestination.Library) shouldBe DesktopDestination.Library
-        mihon.desktop.ui.common.UiDensity.parse("compact") shouldBe mihon.desktop.ui.common.UiDensity.Compact
-        mihon.desktop.ui.common.UiDensity.parse(null) shouldBe mihon.desktop.ui.common.UiDensity.Standard
+        mihon.desktop.ui.common.ContentDensity.parse("compact") shouldBe mihon.desktop.ui.common.ContentDensity.Compact
+        mihon.desktop.ui.common.ContentDensity.parse(null) shouldBe mihon.desktop.ui.common.ContentDensity.Standard
+        mihon.desktop.ui.common.NavRailState.resolve(userCollapsed = false, narrow = true, overlayOpen = false) shouldBe
+            mihon.desktop.ui.common.NavRailState.Collapsed
+        mihon.desktop.ui.common.NavRailState.resolve(userCollapsed = false, narrow = true, overlayOpen = true) shouldBe
+            mihon.desktop.ui.common.NavRailState.OverlayExpanded
+        mihon.desktop.ui.common.NavRailState.resolve(userCollapsed = true, narrow = false, overlayOpen = false) shouldBe
+            mihon.desktop.ui.common.NavRailState.Collapsed
     }
 
     @OptIn(ExperimentalTestApi::class)
     @Test
-    fun `rail collapse and density toggles toggle the rail`() = runComposeUiTest {
+    fun `menu toggle collapses the wide rail and has no density button`() =
+        androidx.compose.ui.test.runDesktopComposeUiTest(width = 1400, height = 800) {
+            mihon.desktop.ui.common.DesktopLayoutPrefs.bind(null)
+            setContent {
+                Box(modifier = Modifier.requiredSize(1400.dp, 800.dp)) {
+                    DesktopShell(selected = DesktopDestination.Library, onDestinationSelected = {})
+                }
+            }
+            onNodeWithTag("desktop-density-toggle").assertDoesNotExist()
+            onNodeWithTag("desktop-rail-collapse").assertDoesNotExist()
+            val before = onNodeWithTag(DESKTOP_NAVIGATION_RAIL_TEST_TAG).getBoundsInRoot().width
+            onNodeWithTag(DESKTOP_RAIL_TOGGLE_TEST_TAG).performClick()
+            val collapsed = onNodeWithTag(DESKTOP_NAVIGATION_RAIL_TEST_TAG).getBoundsInRoot().width
+            assertTrue(collapsed < before, "collapsed rail must be narrower")
+            onNodeWithTag(DESKTOP_RAIL_TOGGLE_TEST_TAG).performClick()
+        }
+
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun `narrow window auto collapses the rail and expands as overlay`() = runComposeUiTest {
+        mihon.desktop.ui.common.DesktopLayoutPrefs.bind(null)
         setContent {
             Box(modifier = Modifier.requiredSize(1000.dp, 700.dp)) {
                 DesktopShell(selected = DesktopDestination.Library, onDestinationSelected = {})
             }
         }
-        val before = onNodeWithTag(DESKTOP_NAVIGATION_RAIL_TEST_TAG).getBoundsInRoot().width
-        onNodeWithTag(DESKTOP_RAIL_COLLAPSE_TEST_TAG).performClick()
-        val collapsed = onNodeWithTag(DESKTOP_NAVIGATION_RAIL_TEST_TAG).getBoundsInRoot().width
-        assertTrue(collapsed < before, "collapsed rail must be narrower")
-        onNodeWithTag(DESKTOP_DENSITY_TOGGLE_TEST_TAG).performClick()
-        onNodeWithTag(DESKTOP_DENSITY_TOGGLE_TEST_TAG).assertExists()
+        onNodeWithTag(DESKTOP_NAVIGATION_RAIL_TEST_TAG).getBoundsInRoot().width shouldBe RAIL_COLLAPSED_WIDTH
+        onNodeWithTag(DESKTOP_RAIL_SCRIM_TEST_TAG).assertDoesNotExist()
+        onNodeWithTag(DESKTOP_RAIL_TOGGLE_TEST_TAG).performClick()
+        onNodeWithTag(DESKTOP_RAIL_SCRIM_TEST_TAG).assertExists()
+        onNodeWithTag("rail-item-settings").assertExists()
+        onNodeWithTag(DESKTOP_RAIL_SCRIM_TEST_TAG).performClick()
+        onNodeWithTag(DESKTOP_RAIL_SCRIM_TEST_TAG).assertDoesNotExist()
+    }
+
+    @Test
+    fun `legacy ui density compact migrates to content density`() {
+        val dir = java.nio.file.Files.createTempDirectory("density-migrate")
+        val store = mihon.desktop.preferences.DesktopPreferenceStore(dir.resolve("prefs.properties"))
+        store.update { setProperty("ui.density", "Compact") }
+        mihon.desktop.ui.common.ContentDensity.load(store) shouldBe mihon.desktop.ui.common.ContentDensity.Compact
+        store.property(mihon.desktop.ui.common.ContentDensity.PREF_KEY) shouldBe "Compact"
+        store.property("ui.density") shouldBe null
+    }
+
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun `compact content density never changes LocalDensity so the reader is unaffected`() = runComposeUiTest {
+        var outer: androidx.compose.ui.unit.Density? = null
+        var inner: androidx.compose.ui.unit.Density? = null
+        var innerSpacing: mihon.desktop.ui.common.Spacing? = null
+        setContent {
+            outer = androidx.compose.ui.platform.LocalDensity.current
+            mihon.desktop.ui.common.ProvideContentDensity(mihon.desktop.ui.common.ContentDensity.Compact) {
+                inner = androidx.compose.ui.platform.LocalDensity.current
+                innerSpacing = mihon.desktop.ui.common.LocalSpacing.current
+            }
+        }
+        waitForIdle()
+        inner shouldBe outer
+        innerSpacing shouldBe mihon.desktop.ui.common.ContentDensity.Compact.spacing
     }
 
     @OptIn(ExperimentalTestApi::class)

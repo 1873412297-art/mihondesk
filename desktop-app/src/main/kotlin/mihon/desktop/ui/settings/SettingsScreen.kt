@@ -105,8 +105,11 @@ import mihon.desktop.security.MIN_PIN_LENGTH
 import mihon.desktop.track.DesktopTracker
 import mihon.desktop.track.DesktopTrackerManager
 import mihon.desktop.track.TrackerAuthType
+import mihon.desktop.ui.common.ContentDensity
+import mihon.desktop.ui.common.DesktopLayoutPrefs
 import mihon.desktop.ui.common.LocalSearchFocusRequester
 import mihon.desktop.ui.common.LocalSnackbarHostState
+import mihon.desktop.ui.common.LocalSpacing
 import mihon.desktop.ui.common.searchFocusRequester
 import mihon.desktop.ui.common.trackTextInputFocus
 import mihon.desktop.ui.shortcut.DesktopKeyBindingStore
@@ -693,6 +696,27 @@ private fun buildSearchableSettings(strings: DesktopStrings): List<SearchableSet
                 "暗色",
                 "夜间",
                 "主題",
+            ),
+        ),
+        SearchableSettingEntry(
+            id = "appearance-interface-density",
+            section = SettingsSection.Appearance,
+            title = strings.text(UiText.InterfaceDensity),
+            subtitle = "${strings.text(UiText.DensityStandard)}, ${strings.text(UiText.DensityCompact)}",
+            keywords = listOf(
+                "density",
+                "compact",
+                "standard",
+                "spacing",
+                "padding",
+                "interface",
+                "密度",
+                "紧凑",
+                "緊湊",
+                "间距",
+                "間距",
+                "界面",
+                "介面",
             ),
         ),
         SearchableSettingEntry(
@@ -1918,7 +1942,7 @@ private fun AppearanceSettingsPane(
 
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+        verticalArrangement = Arrangement.spacedBy(LocalSpacing.current.sectionGap),
     ) {
         Text(
             strings.settingsSectionAppearance,
@@ -1928,7 +1952,10 @@ private fun AppearanceSettingsPane(
 
         // 1. Theme Mode (System / Light / Dark)
         Card(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(
+                modifier = Modifier.padding(LocalSpacing.current.cardPadding),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
                 Text(strings.settingsThemeModeTitle, fontWeight = FontWeight.Bold)
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     listOf(
@@ -1962,10 +1989,12 @@ private fun AppearanceSettingsPane(
             }
         }
 
+        InterfaceDensityCard(preferenceStore)
+
         // 2. AMOLED Theme Switch
         Card(modifier = Modifier.fillMaxWidth()) {
             Row(
-                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                modifier = Modifier.fillMaxWidth().padding(LocalSpacing.current.cardPadding),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -1995,7 +2024,10 @@ private fun AppearanceSettingsPane(
 
         // 3. Theme Palette Grid Selector
         Card(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Column(
+                modifier = Modifier.padding(LocalSpacing.current.cardPadding),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
                 Text(strings.settingsAppThemeTitle, fontWeight = FontWeight.Bold)
 
                 val themes = DesktopAppTheme.entries
@@ -4357,3 +4389,67 @@ private fun parsePositiveLongSet(value: String): Set<Long> = value
     .mapNotNull { it.trim().toLongOrNull() }
     .filter { it > 0L }
     .toSet()
+
+internal const val CONTENT_DENSITY_PREVIEW_TEST_TAG = "content-density-preview"
+
+@Composable
+private fun InterfaceDensityCard(preferenceStore: DesktopPreferenceStore) {
+    val strings = LocalStrings.current
+    val current = DesktopLayoutPrefs.contentDensity
+    Card(modifier = Modifier.fillMaxWidth().testTag("appearance-interface-density")) {
+        Column(
+            modifier = Modifier.padding(LocalSpacing.current.cardPadding),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(strings.text(UiText.InterfaceDensity), fontWeight = FontWeight.Bold)
+            Text(
+                strings.text(UiText.InterfaceDensityHint),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                listOf(
+                    ContentDensity.Standard to strings.text(UiText.DensityStandard),
+                    ContentDensity.Compact to strings.text(UiText.DensityCompact),
+                ).forEach { (density, label) ->
+                    val tag = "content-density-button-${density.name}"
+                    if (density == current) {
+                        Button(onClick = {}, modifier = Modifier.testTag(tag)) { Text(label) }
+                    } else {
+                        OutlinedButton(
+                            onClick = { DesktopLayoutPrefs.updateContentDensity(preferenceStore, density) },
+                            modifier = Modifier.testTag(tag),
+                        ) { Text(label) }
+                    }
+                }
+            }
+            Text(strings.text(UiText.DensityPreview), style = MaterialTheme.typography.labelMedium)
+            val preview = current.spacing
+            Row(
+                modifier = Modifier.testTag(CONTENT_DENSITY_PREVIEW_TEST_TAG),
+                horizontalArrangement = Arrangement.spacedBy(preview.gridGap),
+            ) {
+                repeat(4) {
+                    androidx.compose.foundation.layout.Box(
+                        modifier = Modifier.width(48.dp).height(68.dp).background(
+                            MaterialTheme.colorScheme.secondaryContainer,
+                            androidx.compose.foundation.shape.RoundedCornerShape(6.dp),
+                        ),
+                    )
+                }
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(preview.listRowGap)) {
+                repeat(2) {
+                    androidx.compose.foundation.layout.Box(
+                        modifier = Modifier.fillMaxWidth(0.6f)
+                            .height(preview.listCoverHeight * 0.5f + preview.listRowPadding)
+                            .background(
+                                MaterialTheme.colorScheme.surfaceVariant,
+                                androidx.compose.foundation.shape.RoundedCornerShape(6.dp),
+                            ),
+                    )
+                }
+            }
+        }
+    }
+}

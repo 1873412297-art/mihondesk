@@ -89,6 +89,7 @@ import mihon.desktop.image.CoverFailureRegistry
 import mihon.desktop.library.model.LibraryManga
 import mihon.desktop.ui.common.DesktopTooltipBox
 import mihon.desktop.ui.common.LocalSearchFocusRequester
+import mihon.desktop.ui.common.LocalSpacing
 import mihon.desktop.ui.common.MangaCover
 import mihon.desktop.ui.common.coverHeaders
 import mihon.desktop.ui.common.onSecondaryClick
@@ -956,7 +957,7 @@ private fun LibraryContent(
         else -> BoxWithConstraints(modifier = modifier) {
             when (state.displayMode) {
                 LibraryDisplayMode.ComfortableGrid -> {
-                    val spacing = 16.dp
+                    val spacing = LocalSpacing.current.gridGap
                     val metrics = calculateLibraryGridMetrics(
                         mode = state.displayMode,
                         availableWidthDp = maxWidth.value,
@@ -968,7 +969,7 @@ private fun LibraryContent(
                         modifier = Modifier.fillMaxSize().testTag("library-view-comfortable"),
                         contentPadding = PaddingValues(bottom = 80.dp),
                         horizontalArrangement = Arrangement.spacedBy(spacing),
-                        verticalArrangement = Arrangement.spacedBy(18.dp),
+                        verticalArrangement = Arrangement.spacedBy(LocalSpacing.current.gridRowGap),
                     ) {
                         items(state.items, key = LibraryManga::id) { manga ->
                             var showContextMenu by remember { mutableStateOf(false) }
@@ -1010,7 +1011,7 @@ private fun LibraryContent(
                     }
                 }
                 LibraryDisplayMode.CompactGrid -> {
-                    val spacing = 12.dp
+                    val spacing = (12 * LocalSpacing.current.gridScale).dp
                     val metrics = calculateLibraryGridMetrics(
                         mode = state.displayMode,
                         availableWidthDp = maxWidth.value,
@@ -1064,7 +1065,7 @@ private fun LibraryContent(
                     }
                 }
                 LibraryDisplayMode.CoverOnly -> {
-                    val spacing = 10.dp
+                    val spacing = (10 * LocalSpacing.current.gridScale).dp
                     val metrics = calculateLibraryGridMetrics(
                         mode = state.displayMode,
                         availableWidthDp = maxWidth.value,
@@ -1121,7 +1122,7 @@ private fun LibraryContent(
                     LazyColumn(
                         modifier = Modifier.fillMaxSize().testTag("library-view-list"),
                         contentPadding = PaddingValues(bottom = 80.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(LocalSpacing.current.listRowGap),
                     ) {
                         items(state.items, key = LibraryManga::id) { manga ->
                             var showContextMenu by remember { mutableStateOf(false) }
@@ -1525,7 +1526,7 @@ private fun ListMangaItem(
         tonalElevation = if (isSelected) 3.dp else 1.dp,
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(10.dp),
+            modifier = Modifier.fillMaxWidth().padding(LocalSpacing.current.listRowPadding),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp),
         ) {
@@ -1545,8 +1546,8 @@ private fun ListMangaItem(
                 mangaId = manga.id,
                 contentDescription = manga.title,
                 modifier = Modifier
-                    .width(55.dp)
-                    .height(78.dp)
+                    .width(LocalSpacing.current.listCoverHeight * (55f / 78f))
+                    .height(LocalSpacing.current.listCoverHeight)
                     .clip(RoundedCornerShape(6.dp)),
                 headers = itemCoverHeaders,
             )

@@ -39,6 +39,9 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isAltPressed
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -641,6 +644,18 @@ fun ApplicationScope.MihonDesktopApp(
             undecorated = readerWindowMode == ReaderWindowMode.BORDERLESS,
             onPreviewKeyEvent = { event ->
                 appLockController.recordActivity()
+                if (!ShortcutCaptureState.active &&
+                    !textInputFocused.get() &&
+                    event.type == KeyEventType.KeyDown &&
+                    event.isCtrlPressed &&
+                    !event.isShiftPressed &&
+                    !event.isAltPressed &&
+                    event.key == Key.B &&
+                    navigator.current !is DesktopDestination.Reader
+                ) {
+                    mihon.desktop.ui.common.DesktopLayoutPrefs.requestRailToggle()
+                    return@Window true
+                }
                 val action = if (ShortcutCaptureState.active) {
                     null
                 } else {
