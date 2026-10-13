@@ -17,7 +17,16 @@ class DesktopPolicyProxySelector(
     override fun select(uri: URI?): List<Proxy> {
         val policy = policyProvider()
         return when (policy.proxyMode) {
-            DesktopProxyMode.SYSTEM -> defaultSelector?.select(uri) ?: listOf(Proxy.NO_PROXY)
+            // OkHttp tries proxies in order, so keep a direct route as the last resort when the
+            // system proxy is unreachable or refuses a host.
+            DesktopProxyMode.SYSTEM -> {
+                val system = defaultSelector?.select(uri).orEmpty()
+                if (system.isEmpty() || system.contains(Proxy.NO_PROXY)) {
+                    system.ifEmpty { listOf(Proxy.NO_PROXY) }
+                } else {
+                    system + Proxy.NO_PROXY
+                }
+            }
             DesktopProxyMode.DIRECT -> listOf(Proxy.NO_PROXY)
             DesktopProxyMode.HTTP -> listOf(
                 Proxy(

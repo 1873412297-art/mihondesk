@@ -129,18 +129,17 @@ object TachiyomiExtensionConverter {
                     jarEntries[name] = zip.getInputStream(entry).use { it.readBytes() }
                 } else if (iconBytes == null && (
                         name == "icon.png" || name == "icon.jpg" ||
-                            name.contains("mipmap-xxxhdpi/ic_launcher") ||
-                            name.contains("mipmap-xxhdpi/ic_launcher") ||
-                            name.contains("mipmap-xhdpi/ic_launcher") ||
-                            name.contains("mipmap-hdpi/ic_launcher") ||
-                            name.contains("mipmap-mdpi/ic_launcher") ||
-                            name.contains("drawable/ic_launcher") ||
                             name == "assets/icon.png"
                         )
                 ) {
                     iconBytes = zip.getInputStream(entry).use { it.readBytes() }
                 }
             }
+        }
+
+        if (iconBytes == null && manifestBytes != null) {
+            // Launcher icon via <application android:icon> + resources.arsc, falling back to res/ bitmaps.
+            iconBytes = ZipFile(sourceFile).use { ApkIconExtractor.extract(it) }
         }
 
         requireNotNull(manifestBytes) { "Package does not contain AndroidManifest.xml" }

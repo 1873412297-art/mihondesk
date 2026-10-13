@@ -111,6 +111,7 @@ fun BrowseContentView(
             onExtensionUpdatesAvailable = { count ->
                 runtime.notificationService?.notifyExtensionUpdatePending(count)
             },
+            iconFetcher = { url -> runtime.imageLoader.fetchBytes(url) },
         )
     }
     val browseState by presenter.state.collectAsState()

@@ -98,11 +98,14 @@ class DesktopImageLoader(
 
         // 3. Network URL
         if (uriStr.startsWith("http://", ignoreCase = true) || uriStr.startsWith("https://", ignoreCase = true)) {
-            val bitmap = loadFromNetwork(uriStr, request.headers, request)
-            if (bitmap != null) {
-                memoryCache[memKey] = bitmap
+            for (candidate in cdnMirrorCandidates(uriStr)) {
+                val bitmap = loadFromNetwork(candidate, request.headers, request)
+                if (bitmap != null) {
+                    memoryCache[memKey] = bitmap
+                    return@withContext bitmap
+                }
             }
-            return@withContext bitmap
+            return@withContext null
         }
 
         // 4. File URI or Path
@@ -375,6 +378,18 @@ class DesktopImageLoader(
     }
 
     fun getFromMemory(key: String): ImageBitmap? = memoryCache[key]
+
+    /**
+     * Downloads (or reads from the disk cache) the encoded bytes behind [url], trying GitHub CDN mirrors.
+     * Used to persist repo icons next to installed extensions.
+     */
+    suspend fun fetchBytes(url: String): ByteArray? = withContext(Dispatchers.IO) {
+        if (load(ImageRequest(uri = url)) == null) return@withContext null
+        cdnMirrorCandidates(url).firstNotNullOfOrNull { candidate ->
+            val file = diskCacheDir.resolve("${sha256(candidate)}.img")
+            if (Files.isRegularFile(file) && Files.size(file) > 0) Files.readAllBytes(file) else null
+        }
+    }
 
     fun putInMemory(key: String, bitmap: ImageBitmap) {
         memoryCache[key] = bitmap

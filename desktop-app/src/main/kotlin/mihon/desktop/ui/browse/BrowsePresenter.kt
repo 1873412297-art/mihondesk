@@ -53,7 +53,10 @@ class BrowsePresenter(
     private val scope: CoroutineScope,
     private val onExtensionUpdatesAvailable: (Int) -> Unit = {},
     private val stringsProvider: () -> DesktopStrings = { DesktopStrings.resolve(preferenceStore.load().language) },
+    private val iconFetcher: (suspend (String) -> ByteArray?)? = null,
 ) {
+    private var iconBackfillStarted = false
+
     companion object {
         const val PREF_KEY_PINNED_SOURCES = "browse.pinned_sources"
     }
@@ -239,6 +242,7 @@ class BrowsePresenter(
                         errorMessage = repoErrorMessage,
                     )
                 }
+                maybeBackfillIcons(successfulItems)
                 val pendingUpdates = countPendingExtensionUpdates(installed, available)
                 if (pendingUpdates > 0 && pendingUpdates != lastNotifiedPendingUpdates) {
                     onExtensionUpdatesAvailable(pendingUpdates)
@@ -253,6 +257,25 @@ class BrowsePresenter(
                         errorMessage = "Failed to refresh: ${e.message}",
                     )
                 }
+            }
+        }
+    }
+
+    /** Once per session: give already-installed extensions a saved icon.png (package first, then repo). */
+    private fun maybeBackfillIcons(storeItems: List<ExtensionStoreItem>) {
+        if (iconBackfillStarted) return
+        iconBackfillStarted = true
+        val iconUrls = storeItems.filter { it.iconUrl.isNotBlank() }.associate { it.pkg to it.iconUrl }
+        scope.launch {
+            val fixed = runCatching {
+                installer.backfillMissingIcons { ext ->
+                    val url = iconUrls[ext.pkg] ?: return@backfillMissingIcons null
+                    iconFetcher?.invoke(url)
+                }
+            }.getOrDefault(0)
+            if (fixed > 0) {
+                mihon.desktop.logging.DesktopLogger.info("BrowsePresenter", "Backfilled $fixed extension icons")
+                refreshInstalledAndSources()
             }
         }
     }

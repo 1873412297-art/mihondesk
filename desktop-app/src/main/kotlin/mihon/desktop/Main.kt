@@ -28,6 +28,10 @@ import java.nio.file.Path
 import kotlin.system.exitProcess
 
 fun main(args: Array<String>) {
+    // Must be set before the first ProxySelector.getDefault() so "System" proxy mode sees the OS proxy.
+    if (System.getProperty("java.net.useSystemProxies") == null) {
+        System.setProperty("java.net.useSystemProxies", "true")
+    }
     Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
         if (throwable !is CancellationException) {
             DesktopLogger.error("UncaughtException", "Uncaught exception on thread ${thread.name}", throwable)

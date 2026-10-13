@@ -42,7 +42,8 @@ class DesktopPolicyProxySelectorTest {
 
         val proxies = selector.select(targetUri)
         assertTrue(selectCalled)
-        assertEquals(listOf(upstreamProxy), proxies)
+        // A direct route is appended so an unreachable system proxy does not strand requests.
+        assertEquals(listOf(upstreamProxy, Proxy.NO_PROXY), proxies)
 
         selector.connectFailed(targetUri, upstreamProxy.address(), IOException("connect failed"))
         assertTrue(connectFailedCalled)
