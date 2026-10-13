@@ -2,6 +2,14 @@
 
 这里记录 mihondesk Windows 版的更新。安装包与完整发布说明见 [GitHub Releases](https://github.com/1873412297-art/mihondesk/releases)。继承自 Android 上游的历史日志保留在 [Mihon 更新日志](docs/upstream/MIHON_CHANGELOG.md)。
 
+## [0.3.7](https://github.com/1873412297-art/mihondesk/releases/tag/v0.3.7)
+
+- **界面与品牌**：Ink 暖纸配色与新图标、首次运行启动页、JBR 自定义标题栏、可折叠导航栏与界面密度、设置侧栏分组、可自定义快捷键；
+- **阅读器**：快捷键提示、缩放 HUD、延迟加载圈与单页重试；
+- **浏览页**：卡片式图源 / 扩展列表，真实扩展图标（从 APK 解析，已安装扩展自动补齐），图标经 CDN 镜像快速加载，「系统代理」读取 Windows 代理；
+- **修复**：文本框内 Backspace / Esc 不再触发后退；
+- 说明：0.3.0–0.3.6 为未发布的本地迭代版本，内容随本版一并发布。
+
 ## [0.2.22](https://github.com/1873412297-art/mihondesk/releases/tag/v0.2.22)
 
 - **交互基建**：全局快捷键层、真后退栈、Snackbar + Undo、右键菜单与 Tooltip 全覆盖、动态窗口标题；
