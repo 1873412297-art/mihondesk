@@ -3,7 +3,7 @@
 ## Requirements
 
 - Windows 10 22H2 or Windows 11 x64
-- JDK 21 or 23 selected as the Gradle runtime; the main application uses the Java 17 toolchain
+- JDK 21 or 23 selected as the Gradle runtime; the main application compiles to Java 17 bytecode and is packaged with a JetBrains Runtime 21 image (resolved by Gradle, or set `MIHON_JBR_HOME`)
 - Java 21 toolchain for the independent browser helper
 - PowerShell 7 or Windows PowerShell 5.1
 

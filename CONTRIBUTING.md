@@ -10,7 +10,7 @@
 
 ## 代码贡献
 
-向本仓库提交 Pull Request，并说明解决的问题、最终行为与验证方式。涉及较大功能或结构调整时，建议先通过 Issue 说明目标。参与讨论请遵守[行为准则](CODE_OF_CONDUCT.md)。
+向本仓库提交 Pull Request（由维护者 [@1873412297-art](https://github.com/1873412297-art) 审阅），并说明解决的问题、最终行为与验证方式。涉及较大功能或结构调整时，建议先通过 Issue 说明目标。参与讨论请遵守[行为准则](CODE_OF_CONDUCT.md)。
 
 Windows 相关模块主要包括：
 
@@ -22,7 +22,7 @@ Windows 相关模块主要包括：
 | `extension-sdk` / `extension-host` | 扩展契约、兼容层与隔离宿主 |
 | `desktop-webview-host` | 独立网页窗口与浏览器运行时 |
 
-请熟悉 Kotlin 与 Gradle；界面工作使用 Compose Desktop。构建使用仓库中的 Gradle Wrapper，Windows 安装包需要在 Windows 环境生成。主程序使用 Java 17 工具链，浏览器辅助进程使用独立 Java 21/JCEF 运行时。
+请熟悉 Kotlin 与 Gradle；界面工作使用 Compose Desktop。构建使用仓库中的 Gradle Wrapper，Windows 安装包需要在 Windows 环境生成。主程序以 Java 17 字节码编译，打包与运行使用 JetBrains Runtime 21（构建时由 Gradle 解析，可用 `MIHON_JBR_HOME` 指定）；浏览器辅助进程使用独立 Java 21/JCEF 运行时。
 
 在已经配置好本仓库构建环境的 PowerShell 中：
 

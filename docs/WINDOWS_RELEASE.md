@@ -12,7 +12,7 @@ mihondesk 是 AI 辅助开发的 Windows 漫画阅读器，基于 Mihon。当前
 | `mihon-build-info.properties` | 版本、源码提交和工作树状态 |
 | `SHA256SUMS.txt` | 文件摘要 |
 
-下载入口：[GitHub Releases](https://github.com/1873412297-art/mihondesk/releases/latest)。发行包内置 Java 17；网页辅助进程使用独立 Java 21/JCEF 运行时。
+下载入口：[GitHub Releases](https://github.com/1873412297-art/mihondesk/releases/latest)。发行包内置 JetBrains Runtime 21（JBR）；网页辅助进程使用独立 Java 21/JCEF 运行时。
 
 ## 数据与升级兼容
 
