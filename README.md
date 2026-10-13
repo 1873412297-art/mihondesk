@@ -32,7 +32,7 @@ AI 辅助开发的开源项目 · 基于 Mihon · Kotlin / Compose Desktop
 | **[EXE 安装包](https://github.com/1873412297-art/mihondesk/releases/download/v0.3.7/mihondesk-0.3.7.exe)** | 推荐使用，下载后按向导安装 |
 | [MSI 安装包](https://github.com/1873412297-art/mihondesk/releases/download/v0.3.7/mihondesk-0.3.7.msi) | 需要 MSI 安装方式时使用 |
 | [便携 ZIP](https://github.com/1873412297-art/mihondesk/releases/download/v0.3.7/mihondesk-0.3.7-windows-x64-portable.zip) | 完整解压到可写目录，运行其中的 `mihondesk.exe` |
-| [SHA-256 校验文件](https://github.com/1873412297-art/mihondesk/releases/download/v0.2.24/SHA256SUMS.txt) | 校验下载文件的完整性 |
+| [SHA-256 校验文件](https://github.com/1873412297-art/mihondesk/releases/download/v0.3.7/SHA256SUMS.txt) | 校验下载文件的完整性 |
 
 **首次使用**：发行包不预装在线图源或扩展仓库，请自行添加仓库或安装扩展。本地文件阅读无需安装图源。升级会保留已有书架、设置和阅读数据。
 
@@ -56,6 +56,18 @@ AI 辅助开发的开源项目 · 基于 Mihon · Kotlin / Compose Desktop
 2. **阅读本地文件**：使用本地导入入口选择漫画文件或图片目录。
 3. **阅读在线内容**：在浏览页安装扩展包，再选择图源。安装入口支持 `.mext`，也可尝试转换受支持的扩展 `.apk`。
 4. **保留阅读数据**：使用备份功能定期导出。备份不包含已下载的漫画图片。
+
+## 0.3.7 更新
+
+- **界面与品牌**：暖纸 + 赭墨（Ink）默认配色与新图标、首次运行启动页、JBR 自定义标题栏、可折叠导航栏（Ctrl+B）与界面密度、设置侧栏分组、可自定义键盘快捷键；
+- **阅读器**：控件显示快捷键提示、缩放 HUD 与页码播报、延迟加载圈（命中缓存不闪烁）与单页内联重试；
+- **浏览页**：图源 / 扩展改为卡片列表，固定改为星标、操作收进溢出菜单、语言分组可折叠；
+- **真实扩展图标**：安装时从 APK 解析启动图标（兼容资源混淆与自适应图标），已安装扩展启动后自动补齐；图标经 jsDelivr / raw GitHub 镜像加载并记住可用镜像，弱网下也能快速显示；
+- **网络**：「系统代理」模式现在读取 Windows 系统代理，代理不可达时回退直连；
+- **修复**：在搜索框等文本框中按 Backspace / Esc 不再触发「后退」；
+- 说明：0.3.0–0.3.6 为未发布的本地迭代版本，内容随本版一并发布（同版本号 MSI 会被 Windows Installer 拒绝覆盖）。
+
+详见[本版发布说明](https://github.com/1873412297-art/mihondesk/releases/tag/v0.3.7)和[更新日志](CHANGELOG.md)。
 
 ## 0.2.24 更新
 
