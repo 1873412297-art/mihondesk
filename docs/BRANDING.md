@@ -10,7 +10,7 @@ mihondesk 自 0.3.0 起使用与启动动画 v3 一致的“书本与墨滴”�
 | `desktop-app/src/main/resources/icon.png` | 512 × 512，应用窗口与通知使用 |
 | `desktop-app/src/main/resources/icon.ico` | 16、24、32、48、64、96、128、256 像素，Windows 可执行文件与快捷方式使用 |
 | `.github/assets/logo.png` | 与应用一致的 GitHub 标识 |
-| `.github/assets/banner.svg` / `banner.png` | 仓库首页横幅 |
+| `.github/assets/banner.png` | 1280 × 420，仓库首页横幅（暖纸 + 赭墨，splash v3 配色） |
 | `.github/assets/social-preview.png` | 1280 × 640，仓库分享预览图片 |
 
 ## 颜色与名称

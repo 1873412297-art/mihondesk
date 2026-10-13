@@ -8,11 +8,11 @@
 
 AI 辅助开发的开源项目 · 基于 Mihon · Kotlin / Compose Desktop
 
-![AI 辅助开发项目](https://img.shields.io/badge/AI-assisted%20development-1739B8)
+![AI 辅助开发项目](https://img.shields.io/badge/AI-assisted%20development-B0623B)
 
-[![最新版本](https://img.shields.io/github/v/release/1873412297-art/mihondesk?label=Release&color=0057d9)](https://github.com/1873412297-art/mihondesk/releases/latest)
-[![下载量](https://img.shields.io/github/downloads/1873412297-art/mihondesk/total?label=Downloads&color=0057d9)](https://github.com/1873412297-art/mihondesk/releases)
-![Windows x64](https://img.shields.io/badge/Windows-x64-0078d4)
+[![最新版本](https://img.shields.io/github/v/release/1873412297-art/mihondesk?label=Release&color=B0623B)](https://github.com/1873412297-art/mihondesk/releases/latest)
+[![下载量](https://img.shields.io/github/downloads/1873412297-art/mihondesk/total?label=Downloads&color=B0623B)](https://github.com/1873412297-art/mihondesk/releases)
+![Windows x64](https://img.shields.io/badge/Windows-x64-B0623B)
 [![Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-64748b)](LICENSE)
 
 **[下载 Windows 版](https://github.com/1873412297-art/mihondesk/releases/latest)** · [更新日志](CHANGELOG.md) · [使用说明](docs/WINDOWS_RELEASE.md) · [反馈问题](https://github.com/1873412297-art/mihondesk/issues/new/choose)
