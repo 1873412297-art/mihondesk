@@ -738,6 +738,8 @@ interface DesktopStrings {
     val browseRemoveRepository: String
     val browseSourceBrowse: String
     val browsePin: String
+    val browseMoreActions: String
+    val browsePinnedSection: String
     val browseUnpin: String
     val browseUpdate: String
     val browseDisable: String
@@ -1712,6 +1714,8 @@ object EnglishStrings : DesktopStrings {
     override val browseRemoveRepository = "Remove"
     override val browseSourceBrowse = "Browse"
     override val browsePin = "☆ Pin"
+    override val browseMoreActions = "More actions"
+    override val browsePinnedSection = "Pinned"
     override val browseUnpin = "★ Unpin"
     override val browseUpdate = "Update"
     override val browseDisable = "Disable"
@@ -2699,6 +2703,8 @@ object SimplifiedChineseStrings : DesktopStrings {
     override val browseRemoveRepository = "移除"
     override val browseSourceBrowse = "浏览"
     override val browsePin = "☆ 固定"
+    override val browseMoreActions = "更多操作"
+    override val browsePinnedSection = "已固定"
     override val browseUnpin = "★ 取消固定"
     override val browseUpdate = "更新"
     override val browseDisable = "停用"
@@ -3677,6 +3683,8 @@ object TraditionalChineseStrings : DesktopStrings {
     override val browseRemoveRepository = "移除"
     override val browseSourceBrowse = "瀏覽"
     override val browsePin = "☆ 固定"
+    override val browseMoreActions = "更多操作"
+    override val browsePinnedSection = "已釘選"
     override val browseUnpin = "★ 取消固定"
     override val browseUpdate = "更新"
     override val browseDisable = "停用"

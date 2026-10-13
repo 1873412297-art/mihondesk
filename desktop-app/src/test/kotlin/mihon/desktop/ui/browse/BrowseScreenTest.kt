@@ -187,11 +187,13 @@ class BrowseScreenTest {
             }
         }
 
-        onNodeWithTag("extension-trust-status-$pkg").assertTextContains("Trusted")
-        onNodeWithTag("trust-btn-$pkg").performClick()
-        trusted?.pkg shouldBe pkg
+        onNodeWithTag("extension-trust-status-$pkg", useUnmergedTree = true).assertTextContains("Trusted")
+        // Trust actions live in the overflow menu; a trusted extension only offers revoke.
+        onNodeWithTag("ext-overflow-$pkg").performClick()
+        onNodeWithTag("trust-btn-$pkg").assertDoesNotExist()
         onNodeWithTag("revoke-btn-$pkg").performClick()
         revoked?.pkg shouldBe pkg
+        trusted shouldBe null
     }
 
     @OptIn(ExperimentalTestApi::class)

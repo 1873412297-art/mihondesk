@@ -1,11 +1,16 @@
 package mihon.desktop.ui.browse
 
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.hoverable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -16,12 +21,24 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Block
+import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.DeleteOutline
+import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.FolderOpen
+import androidx.compose.material.icons.rounded.GppMaybe
 import androidx.compose.material.icons.rounded.Language
+import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.rounded.NewReleases
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.StarBorder
+import androidx.compose.material.icons.rounded.VerifiedUser
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
@@ -29,6 +46,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -36,6 +54,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
@@ -50,8 +69,11 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import mihon.desktop.extension.ExtensionStoreItem
 import mihon.desktop.extension.ExtensionTrustStatus
@@ -68,6 +90,7 @@ import mihon.desktop.i18n.trustStatusLabel
 import mihon.desktop.library.model.LibraryManga
 import mihon.desktop.navigation.DesktopBackHandler
 import mihon.desktop.ui.common.DesktopTooltipBox
+import mihon.desktop.ui.common.LocalSpacing
 import mihon.desktop.ui.common.onSecondaryClick
 import mihon.extension.model.SourceDescriptor
 import mihon.extension.source.model.SManga
@@ -688,12 +711,16 @@ private fun SourcesListView(
     onExtensionSelected: (InstalledExtension) -> Unit = {},
 ) {
     val strings = LocalStrings.current
+    val spacing = LocalSpacing.current
 
     val availableLanguages = remember(sources, hiddenIds) {
         sources.filterNot { hiddenIds.contains(it.id) }
             .map { it.lang.lowercase() }
             .distinct()
             .sorted()
+    }
+    val iconUris = remember(installedExtensions, availableExtensions) {
+        sourceIconUris(installedExtensions, availableExtensions)
     }
 
     val filteredSources =
@@ -733,6 +760,7 @@ private fun SourcesListView(
     val grouped = remember(otherSources) {
         otherSources.groupBy { it.lang.uppercase() }
     }
+    var collapsedLangs by remember { mutableStateOf(emptySet<String>()) }
 
     Column(modifier = Modifier.fillMaxSize()) {
         if (availableLanguages.size > 1) {
@@ -778,53 +806,59 @@ private fun SourcesListView(
                 )
             }
         } else {
-            LazyColumn(modifier = Modifier.fillMaxSize().testTag("sources-list")) {
-                // Pinned Section
+            LazyColumn(
+                modifier = Modifier.fillMaxSize().testTag("sources-list"),
+                verticalArrangement = Arrangement.spacedBy(spacing.listRowGap / 2),
+            ) {
                 if (pinnedSources.isNotEmpty()) {
-                    item {
-                        Text(
-                            text = strings.browsePin.replace("☆", "").trim(),
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(vertical = 8.dp),
+                    item(key = "hdr_pinned") {
+                        BrowseSectionHeader(
+                            title = strings.browsePinnedSection,
+                            count = pinnedSources.size,
+                            accent = true,
                         )
                     }
                     items(pinnedSources, key = { "pinned_${it.id}" }) { source ->
                         SourceListItem(
                             source = source,
                             isPinned = true,
+                            iconUri = iconUris[source.id],
+                            isNsfw = isSourceNsfw(source.id, installedExtensions, availableExtensions),
                             installedExtensions = installedExtensions,
                             onSourceSelected = onSourceSelected,
                             onTogglePin = onTogglePin,
                             onHide = { onHideSource(source.id) },
                             onExtensionSelected = onExtensionSelected,
                         )
-                        HorizontalDivider()
                     }
                 }
 
-                // All/Other Sources Grouped by Lang
                 grouped.forEach { (lang, langSources) ->
-                    item {
-                        Text(
-                            text = strings.browseSourceLanguage(lang),
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
+                    val collapsed = lang in collapsedLangs
+                    item(key = "hdr_$lang") {
+                        BrowseSectionHeader(
+                            title = strings.browseSourceLanguage(lang),
+                            count = langSources.size,
+                            collapsed = collapsed,
+                            onToggle = {
+                                collapsedLangs = if (collapsed) collapsedLangs - lang else collapsedLangs + lang
+                            },
                         )
                     }
-                    items(langSources, key = { it.id }) { source ->
-                        SourceListItem(
-                            source = source,
-                            isPinned = false,
-                            installedExtensions = installedExtensions,
-                            onSourceSelected = onSourceSelected,
-                            onTogglePin = onTogglePin,
-                            onHide = { onHideSource(source.id) },
-                            onExtensionSelected = onExtensionSelected,
-                        )
-                        HorizontalDivider()
+                    if (!collapsed) {
+                        items(langSources, key = { it.id }) { source ->
+                            SourceListItem(
+                                source = source,
+                                isPinned = false,
+                                iconUri = iconUris[source.id],
+                                isNsfw = isSourceNsfw(source.id, installedExtensions, availableExtensions),
+                                installedExtensions = installedExtensions,
+                                onSourceSelected = onSourceSelected,
+                                onTogglePin = onTogglePin,
+                                onHide = { onHideSource(source.id) },
+                                onExtensionSelected = onExtensionSelected,
+                            )
+                        }
                     }
                 }
             }
@@ -833,9 +867,99 @@ private fun SourcesListView(
 }
 
 @Composable
+private fun BrowseSectionHeader(
+    title: String,
+    count: Int,
+    accent: Boolean = false,
+    collapsed: Boolean? = null,
+    onToggle: (() -> Unit)? = null,
+    trailing: @Composable (() -> Unit)? = null,
+) {
+    val spacing = LocalSpacing.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = spacing.sectionGap / 2)
+            .clip(RoundedCornerShape(8.dp))
+            .then(if (onToggle != null) Modifier.clickable(onClick = onToggle) else Modifier)
+            .padding(horizontal = 4.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (collapsed != null) {
+            Icon(
+                imageVector = if (collapsed) Icons.Rounded.ChevronRight else Icons.Rounded.ExpandMore,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(18.dp),
+            )
+            Spacer(Modifier.width(4.dp))
+        }
+        Text(
+            text = title,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold,
+            color = if (accent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.width(6.dp))
+        Text(
+            text = count.toString(),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.outline,
+        )
+        Spacer(Modifier.weight(1f))
+        trailing?.invoke()
+    }
+}
+
+@Composable
+private fun BrowseItemCard(
+    modifier: Modifier = Modifier,
+    onClick: (() -> Unit)?,
+    onSecondaryClick: (() -> Unit)? = null,
+    interactionSource: MutableInteractionSource = remember { MutableInteractionSource() },
+    content: @Composable RowScope.() -> Unit,
+) {
+    val spacing = LocalSpacing.current
+    val hovered by interactionSource.collectIsHoveredAsState()
+    val container = if (hovered) {
+        MaterialTheme.colorScheme.surfaceContainerHigh
+    } else {
+        MaterialTheme.colorScheme.surfaceContainerLow
+    }
+    Surface(
+        color = container,
+        shape = RoundedCornerShape(12.dp),
+        modifier = modifier.fillMaxWidth(),
+    ) {
+        Row(
+            modifier = Modifier
+                .hoverable(interactionSource)
+                .then(
+                    if (onClick != null) {
+                        Modifier.clickable(
+                            interactionSource = interactionSource,
+                            indication = LocalIndication.current,
+                            onClick = onClick,
+                        )
+                    } else {
+                        Modifier
+                    },
+                )
+                .then(if (onSecondaryClick != null) Modifier.onSecondaryClick { onSecondaryClick() } else Modifier)
+                .padding(horizontal = spacing.listRowPadding + 2.dp, vertical = spacing.listRowPadding),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(spacing.listRowPadding + 4.dp),
+            content = content,
+        )
+    }
+}
+
+@Composable
 private fun SourceListItem(
     source: SourceDescriptor,
     isPinned: Boolean,
+    iconUri: String? = null,
+    isNsfw: Boolean = false,
     installedExtensions: List<InstalledExtension> = emptyList(),
     onSourceSelected: (SourceDescriptor, SourceListingMode) -> Unit,
     onTogglePin: (Long) -> Unit,
@@ -848,6 +972,8 @@ private fun SourceListItem(
     }
 
     var showContextMenu by remember { mutableStateOf(false) }
+    val interactionSource = remember { MutableInteractionSource() }
+    val hovered by interactionSource.collectIsHoveredAsState()
 
     val currentOnSourceSelected by rememberUpdatedState(onSourceSelected)
     val onPopularClick = remember(source.id) {
@@ -867,50 +993,100 @@ private fun SourceListItem(
             if (ext != null) currentOnExtensionSelected(ext)
         }
     }
+    val pinLabel = (if (isPinned) strings.browseUnpin else strings.browsePin).replace("☆", "").replace("★", "").trim()
 
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .testTag("source-item-${source.id}")
-            .clickable(onClick = onPopularClick)
-            .onSecondaryClick { showContextMenu = true }
-            .padding(vertical = 12.dp, horizontal = 8.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
+    BrowseItemCard(
+        modifier = Modifier.testTag("source-item-${source.id}"),
+        onClick = onPopularClick,
+        onSecondaryClick = { showContextMenu = true },
+        interactionSource = interactionSource,
     ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+        DesktopTooltipBox(text = strings.browseSourceId(source.id.toString())) {
+            ExtensionIcon(name = source.name, iconUri = iconUri, size = 48.dp)
+        }
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
                     text = source.name,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
                 )
-                val builtinBadge = when (source.id) {
-                    BundledLocalSource.ID -> strings.browseLocalBadge
-                    else -> null
+                if (source.id == BundledLocalSource.ID) {
+                    SmallBadge(strings.browseLocalBadge, BadgeTone.Primary)
                 }
-                if (builtinBadge != null) {
-                    Spacer(modifier = Modifier.width(6.dp))
+                if (isNsfw) SmallBadge("18+", BadgeTone.Danger)
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                SmallBadge(source.lang.uppercase())
+                val extName = associatedExtension?.manifest?.name
+                val secondary = listOfNotNull(
+                    extName?.takeIf { !it.equals(source.name, ignoreCase = true) },
+                    associatedExtension?.manifest?.version?.let { "v$it" },
+                ).joinToString(" · ")
+                if (secondary.isNotBlank()) {
                     Text(
-                        text = builtinBadge,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary,
+                        text = secondary,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
             }
-            Text(
-                text = "${strings.browseSourceLanguage(source.lang)} • ${strings.browseSourceId(source.id.toString())}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.outline,
-            )
         }
 
         Row(verticalAlignment = Alignment.CenterVertically) {
-            if (showContextMenu) {
-                DropdownMenu(
-                    expanded = true,
-                    onDismissRequest = { showContextMenu = false },
-                ) {
+            if (associatedExtension != null && hovered) {
+                DesktopTooltipBox(text = strings.extensionInfo) {
+                    IconButton(onClick = onExtClick, modifier = Modifier.testTag("source-ext-btn-${source.id}")) {
+                        Icon(
+                            imageVector = Icons.Rounded.Settings,
+                            contentDescription = strings.extensionInfo,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
+                }
+            }
+            if (source.supportsLatest) {
+                DesktopTooltipBox(text = strings.browseSourceLatest) {
+                    IconButton(onClick = onLatestClick, modifier = Modifier.testTag("latest-btn-${source.id}")) {
+                        Icon(
+                            imageVector = Icons.Rounded.NewReleases,
+                            contentDescription = strings.browseSourceLatest,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
+                }
+            }
+            DesktopTooltipBox(text = pinLabel) {
+                IconButton(onClick = onPinClick, modifier = Modifier.testTag("pin-btn-${source.id}")) {
+                    Icon(
+                        imageVector = if (isPinned) Icons.Rounded.Star else Icons.Rounded.StarBorder,
+                        contentDescription = pinLabel,
+                        tint = if (isPinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
+            }
+            Box {
+                DesktopTooltipBox(text = strings.browseMoreActions) {
+                    IconButton(onClick = {
+                        showContextMenu = true
+                    }, modifier = Modifier.testTag("source-overflow-${source.id}")) {
+                        Icon(
+                            imageVector = Icons.Rounded.MoreVert,
+                            contentDescription = strings.browseMoreActions,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
+                }
+                DropdownMenu(expanded = showContextMenu, onDismissRequest = { showContextMenu = false }) {
                     DropdownMenuItem(
                         text = { Text(strings.browseSourceBrowse) },
                         onClick = {
@@ -928,7 +1104,7 @@ private fun SourceListItem(
                         )
                     }
                     DropdownMenuItem(
-                        text = { Text(if (isPinned) strings.browseUnpin else strings.browsePin) },
+                        text = { Text(pinLabel) },
                         onClick = {
                             showContextMenu = false
                             onPinClick()
@@ -951,44 +1127,19 @@ private fun SourceListItem(
                             },
                         )
                     }
+                    HorizontalDivider()
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                strings.browseSourceId(source.id.toString()),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.outline,
+                            )
+                        },
+                        enabled = false,
+                        onClick = {},
+                    )
                 }
-            }
-
-            if (associatedExtension != null) {
-                DesktopTooltipBox(text = strings.extensionInfo) {
-                    IconButton(
-                        onClick = onExtClick,
-                        modifier = Modifier
-                            .padding(end = 4.dp)
-                            .testTag("source-ext-btn-${source.id}"),
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Settings,
-                            contentDescription = strings.extensionInfo,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(20.dp),
-                        )
-                    }
-                }
-            }
-            OutlinedButton(
-                onClick = onLatestClick,
-                enabled = source.supportsLatest,
-                modifier = Modifier.padding(end = 6.dp),
-            ) {
-                Text(strings.browseSourceLatest)
-            }
-            Button(
-                onClick = onPopularClick,
-                modifier = Modifier.padding(end = 6.dp),
-            ) {
-                Text(strings.browseSourceBrowse)
-            }
-            TextButton(
-                onClick = onPinClick,
-                modifier = Modifier.testTag("pin-btn-${source.id}"),
-            ) {
-                Text(if (isPinned) strings.browseUnpin else strings.browsePin)
             }
         }
     }
@@ -1008,6 +1159,7 @@ private fun ExtensionsListView(
     onRevokeExtension: (InstalledExtension) -> Unit,
 ) {
     val strings = LocalStrings.current
+    val spacing = LocalSpacing.current
     val effectivePendingUpdates = remember(pendingUpdates, state.showNsfw) {
         if (state.showNsfw) pendingUpdates else pendingUpdates.filter { !it.isNsfw }
     }
@@ -1024,60 +1176,54 @@ private fun ExtensionsListView(
                 item.lang.contains(state.searchQuery, ignoreCase = true)
         }
     }
+    var collapsedLangs by remember { mutableStateOf(emptySet<String>()) }
 
-    LazyColumn(modifier = Modifier.fillMaxSize().testTag("extensions-list")) {
-        // 1. Pending Updates Section
+    @Composable
+    fun ExtRow(item: ExtensionStoreItem, installed: InstalledExtension?) {
+        ExtensionItemRow(
+            item = item,
+            installed = installed,
+            trustStatus = trustStatuses[item.pkg],
+            isInstalling = state.isInstalling && state.installingPkg == item.pkg,
+            installEnabled = !state.isInstalling,
+            onRequestInstall = onRequestInstall,
+            onUninstallExtension = onUninstallExtension,
+            onToggleEnabled = onToggleEnabled,
+            onExtensionSelected = onExtensionSelected,
+            onTrustExtension = onTrustExtension,
+            onRevokeExtension = onRevokeExtension,
+        )
+    }
+
+    LazyColumn(
+        modifier = Modifier.fillMaxSize().testTag("extensions-list"),
+        verticalArrangement = Arrangement.spacedBy(spacing.listRowGap / 2),
+    ) {
         if (effectivePendingUpdates.isNotEmpty()) {
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = "${strings.browseUpdate} (${effectivePendingUpdates.size})",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                    Button(
-                        onClick = onUpdateAllPending,
-                        enabled = !state.isInstalling,
-                        modifier = Modifier.testTag("update-all-button"),
-                    ) {
-                        Text(strings.browseUpdateAll)
-                    }
-                }
+            item(key = "hdr_updates") {
+                BrowseSectionHeader(
+                    title = strings.browseUpdate,
+                    count = effectivePendingUpdates.size,
+                    accent = true,
+                    trailing = {
+                        FilledTonalButton(
+                            onClick = onUpdateAllPending,
+                            enabled = !state.isInstalling,
+                            modifier = Modifier.testTag("update-all-button"),
+                        ) {
+                            Text(strings.browseUpdateAll)
+                        }
+                    },
+                )
             }
             items(effectivePendingUpdates, key = { "update_${it.pkg}" }) { item ->
-                val installed = installedPkgMap[item.pkg]
-                ExtensionItemRow(
-                    item = item,
-                    installed = installed,
-                    trustStatus = trustStatuses[item.pkg],
-                    isInstalling = state.isInstalling && state.installingPkg == item.pkg,
-                    installEnabled = !state.isInstalling,
-                    onRequestInstall = onRequestInstall,
-                    onUninstallExtension = onUninstallExtension,
-                    onToggleEnabled = onToggleEnabled,
-                    onExtensionSelected = onExtensionSelected,
-                    onTrustExtension = onTrustExtension,
-                    onRevokeExtension = onRevokeExtension,
-                )
-                HorizontalDivider()
+                ExtRow(item, installedPkgMap[item.pkg])
             }
-            item { Spacer(modifier = Modifier.height(16.dp)) }
         }
 
-        // 2. Installed Extensions Section
         if (effectiveInstalled.isNotEmpty()) {
-            item {
-                Text(
-                    text = "${strings.browseInstalledBadge} (${effectiveInstalled.size})",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(vertical = 8.dp),
-                )
+            item(key = "hdr_installed") {
+                BrowseSectionHeader(title = strings.browseInstalledBadge, count = effectiveInstalled.size)
             }
             items(effectiveInstalled, key = { "installed_${it.pkg}" }) { installed ->
                 val availableMatch = state.availableExtensions.find { it.pkg == installed.pkg }
@@ -1087,37 +1233,18 @@ private fun ExtensionsListView(
                     version = installed.manifest.version,
                     versionCode = installed.manifest.versionCode,
                     lang = installed.manifest.lang,
+                    isNsfw = installed.manifest.isNsfw,
                     sources = installed.manifest.sources,
                 )
-                ExtensionItemRow(
-                    item = item,
-                    installed = installed,
-                    trustStatus = trustStatuses[item.pkg],
-                    isInstalling = state.isInstalling && state.installingPkg == item.pkg,
-                    installEnabled = !state.isInstalling,
-                    onRequestInstall = onRequestInstall,
-                    onUninstallExtension = onUninstallExtension,
-                    onToggleEnabled = onToggleEnabled,
-                    onExtensionSelected = onExtensionSelected,
-                    onTrustExtension = onTrustExtension,
-                    onRevokeExtension = onRevokeExtension,
-                )
-                HorizontalDivider()
+                ExtRow(item, installed)
             }
-            item { Spacer(modifier = Modifier.height(16.dp)) }
         }
 
-        // 3. Available Extensions (The Store)
         val notInstalled = filteredAvailable.filter { !installedPkgMap.containsKey(it.pkg) }
         val groupedAvailable = notInstalled.groupBy { it.lang.uppercase() }
 
-        item {
-            Text(
-                text = "${strings.browseTabExtensions} (${notInstalled.size})",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(vertical = 8.dp),
-            )
+        item(key = "hdr_available") {
+            BrowseSectionHeader(title = strings.browseTabExtensions, count = notInstalled.size)
         }
 
         if (notInstalled.isEmpty()) {
@@ -1130,35 +1257,24 @@ private fun ExtensionsListView(
                     },
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.outline,
-                    modifier = Modifier.padding(vertical = 12.dp),
+                    modifier = Modifier.padding(vertical = 12.dp, horizontal = 4.dp),
                 )
             }
         } else {
             groupedAvailable.forEach { (lang, items) ->
-                item {
-                    Text(
-                        text = "${strings.browseSourceLanguage(lang)} (${items.size})",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.secondary,
-                        modifier = Modifier.padding(top = 10.dp, bottom = 4.dp),
+                val collapsed = lang in collapsedLangs
+                item(key = "hdr_avail_$lang") {
+                    BrowseSectionHeader(
+                        title = strings.browseSourceLanguage(lang),
+                        count = items.size,
+                        collapsed = collapsed,
+                        onToggle = {
+                            collapsedLangs = if (collapsed) collapsedLangs - lang else collapsedLangs + lang
+                        },
                     )
                 }
-                items(items, key = { it.pkg }) { item ->
-                    ExtensionItemRow(
-                        item = item,
-                        installed = null,
-                        trustStatus = trustStatuses[item.pkg],
-                        isInstalling = state.isInstalling && state.installingPkg == item.pkg,
-                        installEnabled = !state.isInstalling,
-                        onRequestInstall = onRequestInstall,
-                        onUninstallExtension = onUninstallExtension,
-                        onToggleEnabled = onToggleEnabled,
-                        onExtensionSelected = onExtensionSelected,
-                        onTrustExtension = onTrustExtension,
-                        onRevokeExtension = onRevokeExtension,
-                    )
-                    HorizontalDivider()
+                if (!collapsed) {
+                    items(items, key = { it.pkg }) { item -> ExtRow(item, null) }
                 }
             }
         }
@@ -1180,86 +1296,130 @@ private fun ExtensionItemRow(
     onRevokeExtension: (InstalledExtension) -> Unit,
 ) {
     val strings = LocalStrings.current
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable(enabled = installed != null) { installed?.let(onExtensionSelected) }
-                .padding(vertical = 12.dp, horizontal = 8.dp)
-                .testTag("extension-item-${item.pkg}"),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = item.name,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "v${item.version}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                    if (item.isNsfw) {
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = "18+",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.error,
-                        )
-                    }
-                }
-                Text(
-                    text = "${item.pkg} • ${item.lang.uppercase()}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.outline,
+    var showMenu by remember { mutableStateOf(false) }
+    val displayTrustStatus = if (installed != null) {
+        trustStatus ?: installed.trustStatus
+    } else if (ExtensionTrustStore.normalizeFingerprint(item.signingKey).isNotBlank()) {
+        ExtensionTrustStatus.TRUSTED
+    } else {
+        ExtensionTrustStatus.UNKNOWN
+    }
+    val hasUpdate = installed != null && item.versionCode > installed.manifest.versionCode
+    val disabled = installed != null && !installed.isEnabled
+
+    BrowseItemCard(
+        modifier = Modifier.testTag("extension-item-${item.pkg}"),
+        onClick = installed?.let { { onExtensionSelected(it) } },
+        onSecondaryClick = if (installed != null) ({ showMenu = true }) else null,
+    ) {
+        DesktopTooltipBox(text = item.pkg) {
+            Box {
+                ExtensionIcon(
+                    name = item.name,
+                    iconUri = extensionIconUri(installed, item),
+                    size = 48.dp,
+                    dimmed = disabled,
                 )
+                if (hasUpdate) {
+                    Badge(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.align(
+                            Alignment.TopEnd,
+                        ).padding(1.dp).testTag("ext-update-badge-${item.pkg}"),
+                    )
+                }
+            }
+        }
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    text = item.name,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    color = if (disabled) MaterialTheme.colorScheme.outline else Color.Unspecified,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                if (item.isNsfw) SmallBadge("18+", BadgeTone.Danger)
+                if (installed != null) {
+                    SmallBadge(
+                        text = strings.trustStatusLabel(displayTrustStatus),
+                        tone = when (displayTrustStatus) {
+                            ExtensionTrustStatus.TRUSTED -> BadgeTone.Positive
+                            ExtensionTrustStatus.INVALID -> BadgeTone.Danger
+                            else -> BadgeTone.Neutral
+                        },
+                        textTag = "extension-trust-status-${item.pkg}",
+                    )
+                }
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                SmallBadge(item.lang.uppercase())
+                val version = if (hasUpdate) {
+                    "v${installed!!.manifest.version} → v${item.version}"
+                } else {
+                    "v${installed?.manifest?.version ?: item.version}"
+                }
                 val storeLabel = extensionStoreLabel(
                     item.storeName,
                     item.repoUrl.ifBlank { installed?.repoUrl.orEmpty() },
                 )
+                val secondary = buildList {
+                    add(version)
+                    if (item.sources.size > 1) {
+                        add(strings.text(UiText.ExtensionSources, item.sources.joinToString(", ") { it.name }))
+                    }
+                }.joinToString(" · ")
+                Text(
+                    text = secondary,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
                 if (storeLabel != null) {
+                    Text(
+                        text = "·",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.outline,
+                    )
                     Text(
                         text = strings.extensionStoreLabel(storeLabel),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.outline,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.testTag("extension-store-${item.pkg}"),
                     )
                 }
-                if (item.sources.isNotEmpty()) {
-                    Text(
-                        text = strings.text(UiText.ExtensionSources, item.sources.joinToString(", ") { it.name }),
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                }
             }
+        }
 
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (isInstalling) {
-                    CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
-                } else if (installed == null) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (isInstalling) {
+                CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+            } else if (installed == null) {
+                FilledTonalButton(
+                    onClick = { onRequestInstall(item) },
+                    modifier = Modifier.testTag("install-btn-${item.pkg}"),
+                    enabled = installEnabled,
+                ) {
+                    Text(strings.browseInstall)
+                }
+            } else {
+                if (hasUpdate) {
                     Button(
                         onClick = { onRequestInstall(item) },
-                        modifier = Modifier.testTag("install-btn-${item.pkg}"),
+                        modifier = Modifier.testTag("update-btn-${item.pkg}"),
                         enabled = installEnabled,
                     ) {
-                        Text(strings.browseInstall)
+                        Text(strings.browseUpdate)
                     }
-                } else {
-                    val hasUpdate = item.versionCode > installed.manifest.versionCode
-                    if (hasUpdate) {
-                        Button(
-                            onClick = { onRequestInstall(item) },
-                            modifier = Modifier.testTag("update-btn-${item.pkg}"),
-                            enabled = installEnabled,
-                        ) {
-                            Text(strings.browseUpdate)
-                        }
-                        Spacer(modifier = Modifier.width(8.dp))
-                    }
+                    Spacer(modifier = Modifier.width(4.dp))
+                }
+                DesktopTooltipBox(text = strings.extensionInfo) {
                     IconButton(
                         onClick = { onExtensionSelected(installed) },
                         modifier = Modifier.testTag("settings-btn-${item.pkg}"),
@@ -1271,59 +1431,86 @@ private fun ExtensionItemRow(
                             modifier = Modifier.size(20.dp),
                         )
                     }
-                    Spacer(modifier = Modifier.width(4.dp))
-                    OutlinedButton(
-                        onClick = { onToggleEnabled(item.pkg, !installed.isEnabled) },
-                        modifier = Modifier.testTag("toggle-btn-${item.pkg}"),
-                    ) {
-                        Text(if (installed.isEnabled) strings.browseDisable else strings.browseEnable)
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    TextButton(
-                        onClick = { onUninstallExtension(item.pkg) },
-                        modifier = Modifier.testTag("uninstall-btn-${item.pkg}"),
-                    ) {
-                        Text(strings.browseUninstall, color = MaterialTheme.colorScheme.error)
-                    }
                 }
-            }
-        }
-
-        val displayTrustStatus = if (installed != null) {
-            trustStatus ?: installed.trustStatus
-        } else if (ExtensionTrustStore.normalizeFingerprint(item.signingKey).isNotBlank()) {
-            ExtensionTrustStatus.TRUSTED
-        } else {
-            ExtensionTrustStatus.UNKNOWN
-        }
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = 8.dp, end = 8.dp, bottom = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = strings.trustStatusLabel(displayTrustStatus),
-                style = MaterialTheme.typography.bodySmall,
-                color = when (displayTrustStatus) {
-                    ExtensionTrustStatus.TRUSTED -> MaterialTheme.colorScheme.primary
-                    ExtensionTrustStatus.INVALID -> MaterialTheme.colorScheme.error
-                    else -> MaterialTheme.colorScheme.onSurfaceVariant
-                },
-                modifier = Modifier.testTag("extension-trust-status-${item.pkg}"),
-            )
-            if (installed != null) {
-                TextButton(
-                    onClick = { onTrustExtension(installed) },
-                    modifier = Modifier.testTag("trust-btn-${item.pkg}"),
-                ) {
-                    Text(strings.extensionTrust)
-                }
-                TextButton(
-                    onClick = { onRevokeExtension(installed) },
-                    modifier = Modifier.testTag("revoke-btn-${item.pkg}"),
-                ) {
-                    Text(strings.extensionRevoke)
+                Box {
+                    DesktopTooltipBox(text = strings.browseMoreActions) {
+                        IconButton(
+                            onClick = { showMenu = true },
+                            modifier = Modifier.testTag("ext-overflow-${item.pkg}"),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.MoreVert,
+                                contentDescription = strings.browseMoreActions,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+                    }
+                    DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                        if (displayTrustStatus == ExtensionTrustStatus.TRUSTED) {
+                            DropdownMenuItem(
+                                text = { Text(strings.extensionRevoke) },
+                                leadingIcon = { Icon(Icons.Rounded.GppMaybe, contentDescription = null) },
+                                modifier = Modifier.testTag("revoke-btn-${item.pkg}"),
+                                onClick = {
+                                    showMenu = false
+                                    onRevokeExtension(installed)
+                                },
+                            )
+                        } else {
+                            DropdownMenuItem(
+                                text = { Text(strings.extensionTrust) },
+                                leadingIcon = { Icon(Icons.Rounded.VerifiedUser, contentDescription = null) },
+                                modifier = Modifier.testTag("trust-btn-${item.pkg}"),
+                                onClick = {
+                                    showMenu = false
+                                    onTrustExtension(installed)
+                                },
+                            )
+                        }
+                        DropdownMenuItem(
+                            text = { Text(if (installed.isEnabled) strings.browseDisable else strings.browseEnable) },
+                            leadingIcon = {
+                                Icon(
+                                    if (installed.isEnabled) Icons.Rounded.Block else Icons.Rounded.CheckCircle,
+                                    contentDescription = null,
+                                )
+                            },
+                            modifier = Modifier.testTag("toggle-btn-${item.pkg}"),
+                            onClick = {
+                                showMenu = false
+                                onToggleEnabled(item.pkg, !installed.isEnabled)
+                            },
+                        )
+                        HorizontalDivider()
+                        DropdownMenuItem(
+                            text = { Text(strings.browseUninstall, color = MaterialTheme.colorScheme.error) },
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Rounded.DeleteOutline,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.error,
+                                )
+                            },
+                            modifier = Modifier.testTag("uninstall-btn-${item.pkg}"),
+                            onClick = {
+                                showMenu = false
+                                onUninstallExtension(item.pkg)
+                            },
+                        )
+                        HorizontalDivider()
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    item.pkg,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.outline,
+                                )
+                            },
+                            enabled = false,
+                            onClick = {},
+                        )
+                    }
                 }
             }
         }
