@@ -648,71 +648,81 @@ fun ApplicationScope.MihonDesktopApp(
             highContrast = mihon.desktop.platform.JbrTitleBar.isHighContrast,
         )
     }
+    // Plain keys (Backspace/Esc/?) are routed after the focused element so a text field that consumes
+    // them (deleting, typing) always wins; Ctrl/Alt/F-key chords stay global via the preview pass.
+    val onShellKey: (androidx.compose.ui.input.key.KeyEvent, Boolean) -> Boolean = shellKey@{ event, afterDispatch ->
+        if (!afterDispatch) appLockController.recordActivity()
+        val action = if (ShortcutCaptureState.active) {
+            null
+        } else {
+            val textActive = DesktopShortcutMatcher.isTextInputActive(textInputFocused.get())
+            val bindings = keyBindingStore.load().global
+            if (afterDispatch) {
+                DesktopShortcutMatcher.matchAfterDispatch(event, textActive, bindings)
+            } else {
+                DesktopShortcutMatcher.matchPreview(event, textActive, bindings)
+            }
+        }
+        if (action != null) {
+            when (action) {
+                ShellShortcutAction.NavigateDestination1 -> navigator.navigate(DesktopDestination.Library)
+                ShellShortcutAction.NavigateDestination2 -> navigator.navigate(DesktopDestination.Updates)
+                ShellShortcutAction.NavigateDestination3 -> navigator.navigate(DesktopDestination.History)
+                ShellShortcutAction.NavigateDestination4 -> navigator.navigate(DesktopDestination.Browse)
+                ShellShortcutAction.NavigateDestination5 -> navigator.navigate(DesktopDestination.Downloads)
+                ShellShortcutAction.NavigateDestination6 -> navigator.navigate(DesktopDestination.Stats)
+                ShellShortcutAction.NavigateDestination7 -> navigator.navigate(DesktopDestination.Settings)
+                ShellShortcutAction.NavigateDestination8 -> navigator.navigate(DesktopDestination.About)
+                ShellShortcutAction.FocusSearch -> {
+                    runCatching { searchFocusRequester.requestFocus() }
+                }
+                ShellShortcutAction.ToggleNavigationRail -> {
+                    if (navigator.current is DesktopDestination.Reader) return@shellKey false
+                    mihon.desktop.ui.common.DesktopLayoutPrefs.requestRailToggle()
+                }
+                ShellShortcutAction.RefreshCurrentPage -> {
+                    when (navigator.current) {
+                        DesktopDestination.Library, DesktopDestination.Updates -> {
+                            presenterScope.launch {
+                                runtime.libraryUpdateScheduler?.triggerUpdateNow()
+                            }
+                        }
+                        DesktopDestination.Stats -> {
+                            presenterScope.launch { statsService?.refresh() }
+                        }
+                        DesktopDestination.Downloads -> {
+                            runtime.downloader?.resume()
+                        }
+                        is DesktopDestination.MangaDetails -> {
+                            libraryPresenter.retryDetail()
+                        }
+                        else -> {}
+                    }
+                }
+                ShellShortcutAction.NavigateBack -> {
+                    if (showShortcutsHelp) {
+                        showShortcutsHelp = false
+                    } else {
+                        navigator.back()
+                    }
+                }
+                ShellShortcutAction.ShowShortcutsHelp -> {
+                    showShortcutsHelp = true
+                }
+            }
+            true
+        } else {
+            false
+        }
+    }
     run {
         Window(
             onCloseRequest = { closeApplication() },
             state = windowState,
             title = windowTitle,
             icon = appIcon,
-            onPreviewKeyEvent = { event ->
-                appLockController.recordActivity()
-                val action = if (ShortcutCaptureState.active) {
-                    null
-                } else {
-                    DesktopShortcutMatcher.matchAction(event, textInputFocused.get(), keyBindingStore.load().global)
-                }
-                if (action != null) {
-                    when (action) {
-                        ShellShortcutAction.NavigateDestination1 -> navigator.navigate(DesktopDestination.Library)
-                        ShellShortcutAction.NavigateDestination2 -> navigator.navigate(DesktopDestination.Updates)
-                        ShellShortcutAction.NavigateDestination3 -> navigator.navigate(DesktopDestination.History)
-                        ShellShortcutAction.NavigateDestination4 -> navigator.navigate(DesktopDestination.Browse)
-                        ShellShortcutAction.NavigateDestination5 -> navigator.navigate(DesktopDestination.Downloads)
-                        ShellShortcutAction.NavigateDestination6 -> navigator.navigate(DesktopDestination.Stats)
-                        ShellShortcutAction.NavigateDestination7 -> navigator.navigate(DesktopDestination.Settings)
-                        ShellShortcutAction.NavigateDestination8 -> navigator.navigate(DesktopDestination.About)
-                        ShellShortcutAction.FocusSearch -> {
-                            runCatching { searchFocusRequester.requestFocus() }
-                        }
-                        ShellShortcutAction.ToggleNavigationRail -> {
-                            if (navigator.current is DesktopDestination.Reader) return@Window false
-                            mihon.desktop.ui.common.DesktopLayoutPrefs.requestRailToggle()
-                        }
-                        ShellShortcutAction.RefreshCurrentPage -> {
-                            when (navigator.current) {
-                                DesktopDestination.Library, DesktopDestination.Updates -> {
-                                    presenterScope.launch {
-                                        runtime.libraryUpdateScheduler?.triggerUpdateNow()
-                                    }
-                                }
-                                DesktopDestination.Stats -> {
-                                    presenterScope.launch { statsService?.refresh() }
-                                }
-                                DesktopDestination.Downloads -> {
-                                    runtime.downloader?.resume()
-                                }
-                                is DesktopDestination.MangaDetails -> {
-                                    libraryPresenter.retryDetail()
-                                }
-                                else -> {}
-                            }
-                        }
-                        ShellShortcutAction.NavigateBack -> {
-                            if (showShortcutsHelp) {
-                                showShortcutsHelp = false
-                            } else {
-                                navigator.back()
-                            }
-                        }
-                        ShellShortcutAction.ShowShortcutsHelp -> {
-                            showShortcutsHelp = true
-                        }
-                    }
-                    true
-                } else {
-                    false
-                }
-            },
+            onPreviewKeyEvent = { event -> onShellKey(event, false) },
+            onKeyEvent = { event -> onShellKey(event, true) },
         ) {
             SideEffect {
                 composeWindow = window

@@ -72,6 +72,40 @@ object DesktopShortcutMatcher {
         )
     }
 
+    /** Keys a focused element may legitimately consume (typing, deleting, Esc): no Ctrl/Alt, not an F-key. */
+    fun isPlainKey(event: KeyEvent): Boolean =
+        isPlainKey(event.key, event.isCtrlPressed || event.isMetaPressed, event.isAltPressed)
+
+    fun isPlainKey(key: Key, ctrl: Boolean, alt: Boolean): Boolean =
+        !ctrl && !alt && key !in BindableKeys.functionKeys
+
+    /**
+     * Window preview pass: only modifier/function-key chords, which must work everywhere. Plain keys are
+     * deferred to [matchAfterDispatch] so whatever has focus (a text field deleting with Backspace) sees them first.
+     */
+    fun matchPreview(
+        event: KeyEvent,
+        isTextInputFocused: Boolean,
+        bindings: KeyBindingMap<ShellShortcutAction> = DesktopKeyBindings.defaultGlobal,
+    ): ShellShortcutAction? = if (isPlainKey(event)) null else matchAction(event, isTextInputFocused, bindings)
+
+    /** Window post-dispatch pass: plain keys nobody consumed, and never while a text field has focus. */
+    fun matchAfterDispatch(
+        event: KeyEvent,
+        isTextInputFocused: Boolean,
+        bindings: KeyBindingMap<ShellShortcutAction> = DesktopKeyBindings.defaultGlobal,
+    ): ShellShortcutAction? = if (!isPlainKey(event)) null else matchAction(event, isTextInputFocused, bindings)
+
+    /**
+     * True when a text field is focused: either one opted in via trackTextInputFocus, or Compose has an
+     * active IME session on the focused AWT component (every Compose text field opens one while focused).
+     */
+    fun isTextInputActive(trackedFocus: Boolean): Boolean = trackedFocus || awtTextInputActive()
+
+    private fun awtTextInputActive(): Boolean = runCatching {
+        java.awt.KeyboardFocusManager.getCurrentKeyboardFocusManager().focusOwner?.inputMethodRequests != null
+    }.getOrDefault(false)
+
     fun destinationForIndex(index: Int): DesktopDestination? =
         DesktopDestination.entries.getOrNull(index)
 }
