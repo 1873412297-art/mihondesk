@@ -57,6 +57,18 @@ class DesktopImageLoader(
     private val maxMemoryEntries: Int = 120,
 ) {
     private val networkSemaphore = Semaphore(6)
+
+    /** Icons/assets on GitHub CDNs: fail fast and fan out, separate from manga cover traffic. */
+    private val mirrorSemaphore = Semaphore(8)
+    private val mirrorClient: OkHttpClient by lazy {
+        client.newBuilder()
+            .connectTimeout(3, TimeUnit.SECONDS)
+            .readTimeout(6, TimeUnit.SECONDS)
+            .callTimeout(10, TimeUnit.SECONDS)
+            .retryOnConnectionFailure(false)
+            .build()
+    }
+    internal val mirrorHealth = MirrorHealth(diskCacheDir.resolve("mirror-health.properties"))
     private val memoryCache = Collections.synchronizedMap(
         object : LinkedHashMap<String, ImageBitmap>(maxMemoryEntries, 0.75f, true) {
             override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, ImageBitmap>?): Boolean {
@@ -98,12 +110,32 @@ class DesktopImageLoader(
 
         // 3. Network URL
         if (uriStr.startsWith("http://", ignoreCase = true) || uriStr.startsWith("https://", ignoreCase = true)) {
-            for (candidate in cdnMirrorCandidates(uriStr)) {
-                val bitmap = loadFromNetwork(candidate, request.headers, request)
+            val candidates = cdnMirrorCandidates(uriStr)
+            if (candidates.size == 1) {
+                val bitmap = loadFromNetwork(uriStr, request.headers, request)
+                if (bitmap != null) memoryCache[memKey] = bitmap
+                return@withContext bitmap
+            }
+            // Any mirror already on disk wins before touching the network.
+            for (candidate in candidates) {
+                val cached = diskCacheDir.resolve("${sha256(candidate)}.img")
+                if (Files.isRegularFile(cached) && Files.size(cached) > 0) {
+                    decodeFile(cached)?.let {
+                        memoryCache[memKey] = it
+                        return@withContext it
+                    }
+                }
+            }
+            for (candidate in mirrorHealth.order(candidates)) {
+                val host = runCatching { URI(candidate).host }.getOrNull().orEmpty()
+                var ioFailed = false
+                val bitmap = loadFromNetwork(candidate, request.headers, request, fast = true) { ioFailed = true }
                 if (bitmap != null) {
+                    mirrorHealth.recordSuccess(host)
                     memoryCache[memKey] = bitmap
                     return@withContext bitmap
                 }
+                if (ioFailed) mirrorHealth.recordFailure(host)
             }
             return@withContext null
         }
@@ -203,7 +235,12 @@ class DesktopImageLoader(
         url: String,
         customHeaders: Map<String, String>,
         request: ImageRequest? = null,
+        fast: Boolean = false,
+        onIoFailure: (() -> Unit)? = null,
     ): ImageBitmap? {
+        val maxAttempt = if (fast) 0 else 2
+        val semaphore = if (fast) mirrorSemaphore else networkSemaphore
+        val httpClient = if (fast) mirrorClient else client
         val hash = sha256(url)
         val diskFile = diskCacheDir.resolve("$hash.img")
 
@@ -215,22 +252,22 @@ class DesktopImageLoader(
         }
 
         val backoffs = listOf(300L, 900L)
-        for (attempt in 0..2) {
+        for (attempt in 0..maxAttempt) {
             if (attempt > 0) {
                 delay(backoffs[attempt - 1])
             }
             var shouldRetry = false
-            val bitmap = networkSemaphore.withPermit {
+            val bitmap = semaphore.withPermit {
                 try {
                     val reqBuilder = Request.Builder().url(url)
                     reqBuilder.header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) MihonW/1.0")
                     customHeaders.forEach { (k, v) -> reqBuilder.header(k, v) }
 
-                    client.newCall(reqBuilder.build()).execute().use { response ->
+                    httpClient.newCall(reqBuilder.build()).execute().use { response ->
                         if (!response.isSuccessful) {
                             val code = response.code
                             val retryable = shouldRetryCoverFetch(statusOrNull = code, ioFailure = false)
-                            if (retryable && attempt < 2) {
+                            if (retryable && attempt < maxAttempt) {
                                 debugLog("HTTP-$code $url (attempt $attempt, will retry)")
                                 shouldRetry = true
                                 return@withPermit null
@@ -267,11 +304,12 @@ class DesktopImageLoader(
                 } catch (c: CancellationException) {
                     throw c
                 } catch (e: IOException) {
-                    if (shouldRetryCoverFetch(statusOrNull = null, ioFailure = true) && attempt < 2) {
+                    if (shouldRetryCoverFetch(statusOrNull = null, ioFailure = true) && attempt < maxAttempt) {
                         debugLog("FETCH-FAIL $url ${e.javaClass.name}: ${e.message} (attempt $attempt, will retry)")
                         shouldRetry = true
                         return@withPermit null
                     }
+                    onIoFailure?.invoke()
                     debugLog("FETCH-FAIL $url ${e.javaClass.name}: ${e.message}")
                     return@withPermit null
                 } catch (e: Exception) {
