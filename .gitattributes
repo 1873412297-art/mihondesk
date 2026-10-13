@@ -25,3 +25,7 @@
 
 # Generated license bundle (excluded from GitHub language stats)
 desktop-app/packaging/licenses/CHROMIUM-CREDITS.html linguist-generated
+
+# Binary test fixtures must not be line-ending normalized
+*.apk binary
+*.mext binary
