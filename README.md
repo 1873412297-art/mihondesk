@@ -117,11 +117,13 @@ mihondesk 仍在持续开发，桌面端尚未覆盖 Mihon 的全部功能。当
 - [开发环境与构建](docs/windows-development.md)
 - [图标与品牌资源](docs/BRANDING.md)
 
-## 维护者与致谢
+## 作者
 
-- **维护者**：[@1873412297-art](https://github.com/1873412297-art)（Windows 移植、发行与 Issue 处理）。
-- **上游项目**：[Mihon](https://github.com/mihonapp/mihon) 及其前身 [Tachiyomi](https://github.com/tachiyomiorg)，以及 [Suwayomi-Server](https://github.com/Suwayomi/Suwayomi-Server)。上游代码的作者与贡献者保留其版权，见各上游仓库的贡献者列表；他们不是本仓库的维护者，请勿就 mihondesk 的问题打扰上游。
-- 本仓库页面右侧的 Contributors 列表由 GitHub 根据提交记录自动生成，无法手动编辑。
+[@1873412297-art](https://github.com/1873412297-art)
+
+## 致谢上游
+
+感谢 [Mihon](https://github.com/mihonapp/mihon)、[Tachiyomi](https://github.com/tachiyomiorg) 与 [Suwayomi-Server](https://github.com/Suwayomi/Suwayomi-Server) 及其贡献者。上游代码的版权归原作者所有；mihondesk 的问题请在本仓库反馈，不要提交到上游。
 
 ## 上游与许可
 

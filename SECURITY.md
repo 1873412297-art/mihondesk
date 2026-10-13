@@ -6,7 +6,7 @@
 
 ## 报告漏洞
 
-请不要在公开 Issue 中披露漏洞细节。请通过本仓库 **Security → Report a vulnerability** 私下报告；如该入口不可用，请先开一个不含细节的 Issue，请求维护者 [@1873412297-art](https://github.com/1873412297-art) 提供私下联系方式。
+请不要在公开 Issue 中披露漏洞细节。请通过本仓库 **Security → Report a vulnerability** 私下报告；如该入口不可用，请先开一个不含细节的 Issue，我会提供私下联系方式。
 
 报告时请附上 mihondesk 版本、Windows 版本、安装方式（EXE / MSI / 便携）、复现步骤和影响范围。
 
