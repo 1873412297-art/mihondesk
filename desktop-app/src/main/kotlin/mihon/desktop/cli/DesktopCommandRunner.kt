@@ -141,7 +141,9 @@ class DesktopCommandRunner(
     } catch (_: IOException) {
         writeRejected(command, "INPUT_IO", command.sourcePath())
         2
-    } catch (_: Throwable) {
+    } catch (error: Throwable) {
+        // Keep stdout a single JSON line, but leave the cause on stderr for CI evidence.
+        error.printStackTrace(System.err)
         writeFailure(command.commandName(), command.sourcePath())
         1
     }
