@@ -275,8 +275,8 @@ exit $process.ExitCode
     $runtimeRelease = Join-Path $repoRoot 'desktop-app\build\compose\binaries\main\app\mihondesk\runtime\release'
     $runtimeReleaseContents = Get-Content -Raw -LiteralPath $runtimeRelease
     $javaVersionMatch = [regex]::Match($runtimeReleaseContents, '(?m)^JAVA_VERSION="(?<version>[^"]+)"\r?$')
-    if (-not $javaVersionMatch.Success -or -not [regex]::IsMatch($javaVersionMatch.Groups['version'].Value, '^17(?:\.|$)')) {
-        throw 'Packaged reader runtime is not Java 17.'
+    if (-not $javaVersionMatch.Success -or -not [regex]::IsMatch($javaVersionMatch.Groups['version'].Value, '^21(?:\.|$)')) {
+        throw 'Packaged reader runtime is not Java 21 (JBR).'
     }
     $launcherSha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $launcher).Hash.ToLowerInvariant()
     [pscustomobject]@{
