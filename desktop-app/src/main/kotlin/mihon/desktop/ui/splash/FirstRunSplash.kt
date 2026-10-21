@@ -30,8 +30,6 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
@@ -79,8 +77,8 @@ internal data class SplashPalette(val bg: Color, val bg2: Color, val ink: Color,
 }
 
 /**
- * The approved splash v3 shown once per profile: the first launch after install (or after upgrading
- * to 0.3.0). Two phases: [showBootWindow] paints the static mark in plain AWT before the heavy runtime
+ * The approved splash v3: always on the first launch of a profile, and on every launch while the
+ * Appearance setting 'play splash on every launch' is on (the default). Two phases: [showBootWindow] paints the static mark in plain AWT before the heavy runtime
  * initialisation, then [FirstRunSplashOverlay] plays the animation over the first Compose frame and
  * closes the boot window so the hand-off is seamless. Never shown for tray restore, single-instance
  * re-activation, unlock or background commands.
@@ -93,7 +91,9 @@ object FirstRunSplash {
     private var bootWindow: JWindow? = null
 
     fun shouldShow(preferences: DesktopPreferenceStore): Boolean =
-        runCatching { preferences.property(SHOWN_KEY) == null }.getOrDefault(false)
+        runCatching {
+            preferences.property(SHOWN_KEY) == null || preferences.load().splashEveryLaunch
+        }.getOrDefault(false)
 
     fun markShown(preferences: DesktopPreferenceStore) {
         runCatching { preferences.update { setProperty(SHOWN_KEY, "true") } }
@@ -116,7 +116,8 @@ object FirstRunSplash {
                 window.contentPane = BootMark(palette)
                 window.setSize(BOOT_WINDOW_SIZE, BOOT_WINDOW_SIZE)
                 window.setLocationRelativeTo(null)
-                window.isAlwaysOnTop = false
+                // Stay visible above other apps while the runtime initialises; closed at the hand-off.
+                window.isAlwaysOnTop = true
                 window.isVisible = true
                 bootWindow = window
             }
@@ -243,7 +244,8 @@ fun FirstRunSplashOverlay(
             .focusRequester(focusRequester)
             .focusable()
             .onKeyEvent { event ->
-                if (event.key == Key.Escape) skip.complete(Unit)
+                // Esc or any other key skips.
+                skip.complete(Unit)
                 true
             }
             .semantics { contentDescription = "mihondesk" }

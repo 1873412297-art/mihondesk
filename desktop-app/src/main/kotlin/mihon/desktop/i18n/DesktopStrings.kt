@@ -398,6 +398,8 @@ interface DesktopStrings {
     val settingsAppThemeTitle: String
     val settingsThemeAmoledTitle: String
     val settingsThemeAmoledSubtitle: String
+    val settingsSplashEveryLaunchTitle: String
+    val settingsSplashEveryLaunchSubtitle: String
     fun appThemeName(theme: DesktopAppTheme): String
 
     // Settings - Reader
@@ -1273,6 +1275,10 @@ object EnglishStrings : DesktopStrings {
     override val settingsAppThemeTitle = "App Theme Palette"
     override val settingsThemeAmoledTitle = "Pure Black AMOLED Theme"
     override val settingsThemeAmoledSubtitle = "Use pure black (#000000) for background and surfaces in dark mode"
+    override val settingsSplashEveryLaunchTitle = "Play startup animation on every launch"
+    override val settingsSplashEveryLaunchSubtitle =
+        "Briefly shows the mihondesk mark at startup so you can tell the app started normally. " +
+            "Click or press any key to skip"
     override fun appThemeName(theme: DesktopAppTheme) = when (theme) {
         DesktopAppTheme.DEFAULT -> "MihonDesk Ink (Default)"
         DesktopAppTheme.MIHON_CLASSIC -> "Mihon Classic"
@@ -2260,6 +2266,8 @@ object SimplifiedChineseStrings : DesktopStrings {
     override val settingsAppThemeTitle = "应用主题配色"
     override val settingsThemeAmoledTitle = "纯黑 AMOLED 深色模式"
     override val settingsThemeAmoledSubtitle = "在深色模式下使用纯黑 (#000000) 背景与卡片表面"
+    override val settingsSplashEveryLaunchTitle = "每次启动播放开启动画"
+    override val settingsSplashEveryLaunchSubtitle = "启动时短暂显示 mihondesk 标志，便于确认应用已正常启动。单击或按任意键可跳过"
     override fun appThemeName(theme: DesktopAppTheme) = when (theme) {
         DesktopAppTheme.DEFAULT -> "墨韵纸色（默认）"
         DesktopAppTheme.MIHON_CLASSIC -> "Mihon 经典蓝绿"
@@ -3240,6 +3248,8 @@ object TraditionalChineseStrings : DesktopStrings {
     override val settingsAppThemeTitle = "應用程式主題配色"
     override val settingsThemeAmoledTitle = "純黑 AMOLED 深色模式"
     override val settingsThemeAmoledSubtitle = "在深色模式下使用純黑 (#000000) 背景與表面"
+    override val settingsSplashEveryLaunchTitle = "每次啟動播放開啟動畫"
+    override val settingsSplashEveryLaunchSubtitle = "啟動時短暫顯示 mihondesk 標誌，便於確認應用程式已正常啟動。按一下或按任意鍵可略過"
     override fun appThemeName(theme: DesktopAppTheme) = when (theme) {
         DesktopAppTheme.DEFAULT -> "墨韻紙色（預設）"
         DesktopAppTheme.MIHON_CLASSIC -> "Mihon 經典藍綠"

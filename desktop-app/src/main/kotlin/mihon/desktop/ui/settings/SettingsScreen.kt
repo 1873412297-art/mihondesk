@@ -764,6 +764,13 @@ private fun buildSearchableSettings(strings: DesktopStrings): List<SearchableSet
             keywords = listOf("amoled", "pure black", "oled", "black", "纯黑", "純黑", "极黑", "省电"),
         ),
         SearchableSettingEntry(
+            id = "appearance-splash-every-launch",
+            section = SettingsSection.Appearance,
+            title = strings.settingsSplashEveryLaunchTitle,
+            subtitle = strings.settingsSplashEveryLaunchSubtitle,
+            keywords = listOf("splash", "startup", "animation", "launch", "启动", "啟動", "动画", "動畫", "开屏", "開屏"),
+        ),
+        SearchableSettingEntry(
             id = "appearance-color-scheme",
             section = SettingsSection.Appearance,
             title = strings.settingsAppThemeTitle,
@@ -2055,6 +2062,37 @@ private fun AppearanceSettingsPane(
                         onPreferencesChanged?.invoke(updated)
                     },
                     modifier = Modifier.testTag("amoled-switch"),
+                )
+            }
+        }
+
+        // 2b. Startup splash on every launch
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(LocalSpacing.current.cardPadding),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(
+                    modifier = Modifier.weight(1f).padding(end = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Text(strings.settingsSplashEveryLaunchTitle, fontWeight = FontWeight.Bold)
+                    Text(
+                        strings.settingsSplashEveryLaunchSubtitle,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(
+                    checked = preferences.splashEveryLaunch,
+                    onCheckedChange = { isChecked ->
+                        val updated = preferenceStore.updatePreferences { it.copy(splashEveryLaunch = isChecked) }
+                        preferences = updated
+
+                        onPreferencesChanged?.invoke(updated)
+                    },
+                    modifier = Modifier.testTag("splash-every-launch-switch"),
                 )
             }
         }

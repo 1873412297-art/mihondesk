@@ -92,6 +92,8 @@ data class DesktopPreferences(
     /** Advanced: use the classic Windows caption instead of the custom title bar. */
     val useSystemTitleBar: Boolean = false,
     val onboardingCompleted: Boolean = false,
+    /** Appearance: play the startup splash on every launch, not only the first one. */
+    val splashEveryLaunch: Boolean = true,
     val showNsfwSources: Boolean = false,
     val hiddenSourceIds: Set<Long> = emptySet(),
     val globalSearchOnlyPinned: Boolean = false,
@@ -262,6 +264,7 @@ class DesktopPreferenceStore(private val file: Path) {
             useSystemTitleBar = properties.getProperty("window.use_system_title_bar")
                 ?.toBooleanStrictOrNull() ?: false,
             onboardingCompleted = properties.getProperty("onboarding.completed")?.toBooleanStrictOrNull() ?: false,
+            splashEveryLaunch = properties.getProperty("splash.every_launch")?.toBooleanStrictOrNull() ?: true,
             showNsfwSources = properties.firstBoolean("browse.show_nsfw", "show_nsfw") ?: false,
             hiddenSourceIds = properties.firstLongSet("browse.hidden_sources", "hidden_sources"),
             globalSearchOnlyPinned =
@@ -383,6 +386,7 @@ class DesktopPreferenceStore(private val file: Path) {
         properties.setProperty("sync.server_device_name", preferences.syncServerDeviceName)
         properties.setProperty("sync.server_selected_ip", preferences.syncServerSelectedIp)
         properties.setProperty("onboarding.completed", preferences.onboardingCompleted.toString())
+        properties.setProperty("splash.every_launch", preferences.splashEveryLaunch.toString())
         properties.setProperty("browse.show_nsfw", preferences.showNsfwSources.toString())
         properties.setProperty("browse.hidden_sources", preferences.hiddenSourceIds.encodeLongSet())
         properties.setProperty("browse.global_search_only_pinned", preferences.globalSearchOnlyPinned.toString())

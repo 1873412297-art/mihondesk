@@ -12,8 +12,17 @@ import java.nio.file.Files
 @OptIn(ExperimentalTestApi::class)
 class FirstRunSplashTest {
     @Test
-    fun `splash is shown once per profile`() {
+    fun `splash plays on every launch by default`() {
         val store = DesktopPreferenceStore(Files.createTempDirectory("splash").resolve("preferences.properties"))
+        store.load().splashEveryLaunch shouldBe true
+        FirstRunSplash.markShown(store)
+        FirstRunSplash.shouldShow(store) shouldBe true
+    }
+
+    @Test
+    fun `splash is shown once per profile when every-launch is off`() {
+        val store = DesktopPreferenceStore(Files.createTempDirectory("splash").resolve("preferences.properties"))
+        store.updatePreferences { it.copy(splashEveryLaunch = false) }
         FirstRunSplash.shouldShow(store) shouldBe true
         FirstRunSplash.markShown(store)
         FirstRunSplash.shouldShow(store) shouldBe false
