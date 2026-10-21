@@ -57,7 +57,7 @@ class SettingsScreenTest {
                 )
             }
         }
-        onNodeWithTag("settings-section-Advanced").performClick()
+        onNodeWithTag("settings-section-Advanced").performScrollTo().performClick()
         // The pane loads the source counts through withContext(Dispatchers.IO).
         waitUntil(timeoutMillis = 30_000) {
             onAllNodes(
@@ -104,7 +104,7 @@ class SettingsScreenTest {
                 SettingsScreen(preferenceStore = store, readerSettingsStore = DesktopReaderSettingsStore(store))
             }
         }
-        onNodeWithTag("settings-section-Backup").performClick()
+        onNodeWithTag("settings-section-Backup").performScrollTo().performClick()
         onNodeWithTag("backup-storage-input").performScrollTo().performTextReplacement("relative-folder")
         store.load().backupStoragePath shouldBe ""
         onNodeWithTag("backup-storage-save").performScrollTo().performClick()
@@ -229,7 +229,7 @@ class SettingsScreenTest {
         prefStore.load().themeMode shouldBe ThemeMode.Dark
 
         // Switch to Backup
-        onNodeWithTag("settings-section-Backup").performClick()
+        onNodeWithTag("settings-section-Backup").performScrollTo().performClick()
         onNodeWithText("Cross-Platform Backup Exchange").assertExists()
         onNodeWithTag("settings-export-backup-button").performClick()
         exportBackupClicked shouldBe true
@@ -237,7 +237,7 @@ class SettingsScreenTest {
         importBackupClicked shouldBe true
 
         // Switch to Advanced
-        onNodeWithTag("settings-section-Advanced").performClick()
+        onNodeWithTag("settings-section-Advanced").performScrollTo().performClick()
         onNodeWithText("Database & System Diagnostics").assertExists()
         onNodeWithTag("check-integrity-button").assertExists()
         onNodeWithTag("export-diagnostic-bundle-button").assertExists()
@@ -368,7 +368,7 @@ class SettingsScreenTest {
         prefStore.load().incognitoMode shouldBe true
 
         // Switch to Backup pane
-        onNodeWithTag("settings-section-Backup").performClick()
+        onNodeWithTag("settings-section-Backup").performScrollTo().performClick()
         onNodeWithTag("backup-interval-24").performScrollTo().performClick()
         prefStore.load().backupIntervalHours shouldBe 24
 
@@ -419,7 +419,7 @@ class SettingsScreenTest {
         prefStore.load().autoDownloadNewChapters shouldBe true
 
         // Switch to Advanced pane
-        onNodeWithTag("settings-section-Advanced").performClick()
+        onNodeWithTag("settings-section-Advanced").performScrollTo().performClick()
         onNodeWithTag("open-cookie-manager-button").performScrollTo().performClick()
         cookieManagerOpened shouldBe true
     }

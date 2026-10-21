@@ -1,5 +1,7 @@
 package mihon.desktop.ui
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -9,6 +11,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.input.key.KeyEvent
@@ -98,7 +101,8 @@ fun ApplicationScope.MainAppWindow(
         )
     }
     var host by remember { mutableStateOf<MainWindowHost?>(null) }
-    var handOff by remember { mutableStateOf<Boolean?>(null) }
+    // null while the boot splash animation plays; then whether the user skipped it.
+    val bootSplash = remember { mutableStateOf<Boolean?>(null) }
     val activeHost = host
     Window(
         onCloseRequest = { host?.onCloseRequest?.invoke() ?: onCloseDuringStartup() },
@@ -123,51 +127,56 @@ fun ApplicationScope.MainAppWindow(
             withFrameNanos {}
             StartupTrace.mark("first window frame")
         }
-        val skipped = handOff
-        if (runtime != null && skipped != null) {
-            MihonDesktopApp(
-                runtime,
-                instanceRequests,
-                startupHandoff = StartupHandoff(skipped) { StartupTrace.mark("app UI first frame") },
-                host = windowHost,
-            )
-        } else {
-            LaunchedEffect(window, dark) {
-                WindowsTitleBar.apply(window, dark)
-                customTitleBar?.let { JbrTitleBar.setDark(window, it, dark) }
-            }
-            val strings = remember(preferences.language) { DesktopStrings.resolve(preferences.language) }
-            MihonDesktopTheme(
-                themeMode = preferences.themeMode,
-                appTheme = preferences.appTheme,
-                isAmoled = preferences.themeDarkAmoled,
-                topBar = {
-                    val borderColor = MaterialTheme.colorScheme.outlineVariant
-                    LaunchedEffect(window, borderColor, customTitleBar) {
-                        WindowsTitleBar.applyBorderColor(
-                            window,
-                            if (customTitleBar != null) borderColor.toColorRef() else null,
-                        )
-                    }
-                    if (customTitleBar != null) {
-                        MihonTitleBar(
-                            frame = window,
-                            titleBar = customTitleBar,
-                            title = "mihondesk",
-                            icon = bootIcon,
-                            iconDescription = strings.titleBarSystemMenu,
-                        )
-                    }
-                },
-            ) {
-                StartupSplash(
-                    dark = dark,
-                    reducedMotion = WindowsReducedMotion.prefersReducedMotion,
-                    ready = runtime != null,
-                    animate = playSplash,
-                    fadeOut = false,
-                    onFinished = { handOff = it },
+        Box(Modifier.fillMaxSize()) {
+            // Compose the app as soon as the runtime exists, underneath the boot splash, so its
+            // first frame (library grid, covers, tray) is built while the splash animation plays.
+            if (runtime != null) {
+                val handoff = remember { StartupHandoff(bootSplash) { StartupTrace.mark("app UI first frame") } }
+                MihonDesktopApp(
+                    runtime,
+                    instanceRequests,
+                    startupHandoff = handoff,
+                    host = windowHost,
                 )
+            }
+            if (bootSplash.value == null) {
+                LaunchedEffect(window, dark) {
+                    WindowsTitleBar.apply(window, dark)
+                    customTitleBar?.let { JbrTitleBar.setDark(window, it, dark) }
+                }
+                val strings = remember(preferences.language) { DesktopStrings.resolve(preferences.language) }
+                MihonDesktopTheme(
+                    themeMode = preferences.themeMode,
+                    appTheme = preferences.appTheme,
+                    isAmoled = preferences.themeDarkAmoled,
+                    topBar = {
+                        val borderColor = MaterialTheme.colorScheme.outlineVariant
+                        LaunchedEffect(window, borderColor, customTitleBar) {
+                            WindowsTitleBar.applyBorderColor(
+                                window,
+                                if (customTitleBar != null) borderColor.toColorRef() else null,
+                            )
+                        }
+                        if (customTitleBar != null) {
+                            MihonTitleBar(
+                                frame = window,
+                                titleBar = customTitleBar,
+                                title = "mihondesk",
+                                icon = bootIcon,
+                                iconDescription = strings.titleBarSystemMenu,
+                            )
+                        }
+                    },
+                ) {
+                    StartupSplash(
+                        dark = dark,
+                        reducedMotion = WindowsReducedMotion.prefersReducedMotion,
+                        ready = runtime != null,
+                        animate = playSplash,
+                        fadeOut = false,
+                        onFinished = { bootSplash.value = it },
+                    )
+                }
             }
         }
     }

@@ -2,6 +2,7 @@ package mihon.desktop.image
 
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asSkiaBitmap
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -14,7 +15,11 @@ import mihon.reader.image.ImageFormatDetector
 import mihon.reader.image.ReaderImageFormat
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import org.jetbrains.skia.EncodedImageFormat
 import org.jetbrains.skia.Image
+import org.jetbrains.skia.Rect
+import org.jetbrains.skia.SamplingMode
+import org.jetbrains.skia.Surface
 import java.io.IOException
 import java.net.URI
 import java.nio.file.Files
@@ -25,6 +30,7 @@ import java.util.Collections
 import java.util.LinkedHashMap
 import java.util.concurrent.TimeUnit
 import java.util.zip.ZipFile
+import kotlin.math.roundToInt
 
 val LocalImageLoader = staticCompositionLocalOf<DesktopImageLoader?> { null }
 val LocalCustomCoverManager = staticCompositionLocalOf<CustomCoverManager?> { null }
@@ -35,6 +41,12 @@ data class ImageRequest(
     val localMangaPath: Path? = null,
     val headers: Map<String, String> = emptyMap(),
     val onHttpError: ((code: Int) -> Unit)? = null,
+    /**
+     * When set, the result is downscaled so its longest edge is at most this many pixels and the
+     * downscaled copy is persisted under [DesktopImageLoader.THUMBNAIL_DIR]. Grids use this so cold
+     * starts decode small thumbnails instead of full-size covers.
+     */
+    val maxThumbnailSize: Int? = null,
 )
 
 internal fun shouldRetryCoverFetch(statusOrNull: Int?, ioFailure: Boolean): Boolean {
@@ -82,16 +94,114 @@ class DesktopImageLoader(
     }
 
     suspend fun load(request: ImageRequest): ImageBitmap? = withContext(Dispatchers.IO) {
+        val maxSize = request.maxThumbnailSize
+        if (maxSize == null || maxSize <= 0) return@withContext loadFull(request)
+        thumbnailKey(request, maxSize)?.let { key ->
+            memoryCache["thumb_$key"]?.let { return@withContext it }
+            val file = thumbnailFile(key)
+            if (Files.isRegularFile(file) && Files.size(file) > 0) {
+                decodeFile(file)?.let {
+                    memoryCache["thumb_$key"] = it
+                    return@withContext it
+                }
+            }
+        }
+        val full = loadFull(request) ?: return@withContext null
+        val scaled = downscale(full, maxSize)
+        // Key is recomputed: a network load may just have created the source file it depends on.
+        thumbnailKey(request, maxSize)?.let { key ->
+            memoryCache["thumb_$key"] = scaled
+            writeThumbnail(thumbnailFile(key), scaled)
+        }
+        scaled
+    }
+
+    /**
+     * Cache identity for a thumbnail: the source plus its last-modified time, so replacing a cover
+     * (custom cover, re-downloaded network image, edited local file) invalidates the old thumbnail.
+     */
+    private fun thumbnailKey(request: ImageRequest, maxSize: Int): String? = try {
+        val custom = if (request.mangaId != null && customCoverManager != null) {
+            customCoverManager.getCustomCover(request.mangaId)
+        } else {
+            null
+        }
+        val uriStr = request.uri?.trim()
+        val source = when {
+            custom != null -> "custom:${request.mangaId}:${Files.getLastModifiedTime(custom).toMillis()}"
+            uriStr.isNullOrBlank() -> request.localMangaPath?.let { localSourceKey(it) }
+            uriStr.startsWith("http://", ignoreCase = true) || uriStr.startsWith("https://", ignoreCase = true) -> {
+                val disk = cdnMirrorCandidates(uriStr)
+                    .map { diskCacheDir.resolve("${sha256(it)}.img") }
+                    .firstOrNull { Files.isRegularFile(it) }
+                "net:$uriStr:${disk?.let { Files.getLastModifiedTime(it).toMillis() } ?: 0}"
+            }
+            else -> {
+                val path = if (uriStr.startsWith(
+                        "file://",
+                        ignoreCase = true,
+                    )
+                ) {
+                    Path.of(URI(uriStr))
+                } else {
+                    Path.of(uriStr)
+                }
+                localSourceKey(path)
+            }
+        }
+        source?.let { "$it@$maxSize" }
+    } catch (_: Exception) {
+        null
+    }
+
+    private fun localSourceKey(path: Path): String? =
+        if (Files.exists(path)) "file:${path.toAbsolutePath()}:${Files.getLastModifiedTime(path).toMillis()}" else null
+
+    private fun thumbnailFile(key: String): Path = diskCacheDir.resolve(THUMBNAIL_DIR).resolve("${sha256(key)}.jpg")
+
+    private fun downscale(bitmap: ImageBitmap, maxSize: Int): ImageBitmap {
+        val longest = maxOf(bitmap.width, bitmap.height)
+        if (longest <= maxSize) return bitmap
+        val scale = maxSize.toFloat() / longest
+        val w = (bitmap.width * scale).roundToInt().coerceAtLeast(1)
+        val h = (bitmap.height * scale).roundToInt().coerceAtLeast(1)
+        val source = Image.makeFromBitmap(bitmap.asSkiaBitmap())
+        val surface = Surface.makeRasterN32Premul(w, h)
+        surface.canvas.drawImageRect(
+            source,
+            Rect.makeWH(source.width.toFloat(), source.height.toFloat()),
+            Rect.makeWH(w.toFloat(), h.toFloat()),
+            SamplingMode.MITCHELL,
+            null,
+            true,
+        )
+        return surface.makeImageSnapshot().toComposeImageBitmap()
+    }
+
+    private fun writeThumbnail(target: Path, bitmap: ImageBitmap) {
+        try {
+            Files.createDirectories(target.parent)
+            val image = Image.makeFromBitmap(bitmap.asSkiaBitmap())
+            val data = image.encodeToData(EncodedImageFormat.JPEG, 88) ?: return
+            val tmp = Files.createTempFile(target.parent, "thumb-", ".tmp")
+            Files.write(tmp, data.bytes)
+            Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
+        } catch (_: Exception) {
+            // Thumbnail cache is best-effort.
+        }
+    }
+
+    private suspend fun loadFull(request: ImageRequest): ImageBitmap? {
         // 1. Check custom cover first if mangaId is present
         if (request.mangaId != null && customCoverManager != null) {
             val custom = customCoverManager.getCustomCover(request.mangaId)
             if (custom != null) {
                 val cacheKey = "custom_${request.mangaId}_${Files.getLastModifiedTime(custom).toMillis()}"
-                memoryCache[cacheKey]?.let { return@withContext it }
+                memoryCache[cacheKey]?.let { return it }
                 val bitmap = decodeFile(custom)
                 if (bitmap != null) {
                     memoryCache[cacheKey] = bitmap
-                    return@withContext bitmap
+                    return bitmap
                 }
             }
         }
@@ -100,13 +210,13 @@ class DesktopImageLoader(
         val uriStr = request.uri?.trim()
         if (uriStr.isNullOrBlank()) {
             if (request.localMangaPath != null) {
-                return@withContext loadFromLocalManga(request.localMangaPath)
+                return loadFromLocalManga(request.localMangaPath)
             }
-            return@withContext null
+            return null
         }
 
         val memKey = "uri_$uriStr"
-        memoryCache[memKey]?.let { return@withContext it }
+        memoryCache[memKey]?.let { return it }
 
         // 3. Network URL
         if (uriStr.startsWith("http://", ignoreCase = true) || uriStr.startsWith("https://", ignoreCase = true)) {
@@ -114,7 +224,7 @@ class DesktopImageLoader(
             if (candidates.size == 1) {
                 val bitmap = loadFromNetwork(uriStr, request.headers, request)
                 if (bitmap != null) memoryCache[memKey] = bitmap
-                return@withContext bitmap
+                return bitmap
             }
             // Any mirror already on disk wins before touching the network.
             for (candidate in candidates) {
@@ -122,7 +232,7 @@ class DesktopImageLoader(
                 if (Files.isRegularFile(cached) && Files.size(cached) > 0) {
                     decodeFile(cached)?.let {
                         memoryCache[memKey] = it
-                        return@withContext it
+                        return it
                     }
                 }
             }
@@ -133,11 +243,11 @@ class DesktopImageLoader(
                 if (bitmap != null) {
                     mirrorHealth.recordSuccess(host)
                     memoryCache[memKey] = bitmap
-                    return@withContext bitmap
+                    return bitmap
                 }
                 if (ioFailed) mirrorHealth.recordFailure(host)
             }
-            return@withContext null
+            return null
         }
 
         // 4. File URI or Path
@@ -156,14 +266,14 @@ class DesktopImageLoader(
             if (bitmap != null) {
                 memoryCache[memKey] = bitmap
             }
-            return@withContext bitmap
+            return bitmap
         }
 
         if (request.localMangaPath != null) {
-            return@withContext loadFromLocalManga(request.localMangaPath)
+            return loadFromLocalManga(request.localMangaPath)
         }
 
-        null
+        return null
     }
 
     private fun loadFromLocalPath(path: Path): ImageBitmap? {
@@ -466,7 +576,9 @@ class DesktopImageLoader(
         } catch (_: Exception) {}
     }
 
-    private companion object {
-        const val MAX_FALLBACK_BYTES = 64L * 1024L * 1024L
+    companion object {
+        /** Sub-directory of the disk cache holding downscaled grid thumbnails. */
+        const val THUMBNAIL_DIR = "thumbs"
+        private const val MAX_FALLBACK_BYTES = 64L * 1024L * 1024L
     }
 }

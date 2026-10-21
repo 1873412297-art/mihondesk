@@ -135,6 +135,7 @@ fun MangaCoverDialog(
                     }
 
                     MangaCover(
+                        thumbnailSize = null,
                         thumbnailUrl = thumbnailUrl,
                         mangaId = mangaId,
                         contentDescription = mangaTitle,

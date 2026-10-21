@@ -8,14 +8,58 @@ import java.net.InetAddress
 import java.net.NetworkInterface
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
+/**
+ * Owns the in-app sync HTTP server and its mDNS advertisement.
+ *
+ * Startup cost note: the HTTP server itself binds in ~0.3 s, but JmDNS creation + service
+ * registration (multicast probing/announcing) takes ~9 s on Windows and enumerating network
+ * interfaces takes ~1.5 s. Those steps only matter for LAN discovery, so they run on a dedicated
+ * background thread and never block [start]/[stop] callers.
+ */
 class DesktopSyncServerManager(
     private val storageDir: Path,
+    private val lanAddressProvider: () -> InetAddress = { getLanBindAddress() },
+    private val advertiserFactory: (InetAddress) -> Advertiser = { JmdnsAdvertiser(SyncServiceAdvertiser(it)) },
 ) : AutoCloseable {
+
+    /** Abstraction over the mDNS advertiser so startup behaviour can be tested without the network. */
+    interface Advertiser : AutoCloseable {
+        val isAdvertising: Boolean
+        fun start(port: Int, deviceName: String, token: String?)
+        fun updateAdvertisement(port: Int, deviceName: String, quickPairEnabled: Boolean, token: String?)
+    }
+
+    private class JmdnsAdvertiser(private val delegate: SyncServiceAdvertiser) : Advertiser {
+        override val isAdvertising: Boolean get() = delegate.isAdvertising
+        override fun start(port: Int, deviceName: String, token: String?) = delegate.start(port, deviceName, token)
+        override fun updateAdvertisement(port: Int, deviceName: String, quickPairEnabled: Boolean, token: String?) =
+            delegate.updateAdvertisement(port, deviceName, quickPairEnabled, token)
+        override fun close() = delegate.close()
+    }
 
     private var server: SyncServer? = null
     private var store: SqliteChangesetStore? = null
-    private var advertiser: SyncServiceAdvertiser? = null
+
+    // Only touched from [advertiserExecutor].
+    @Volatile private var advertiser: Advertiser? = null
+
+    @Volatile private var advertisementRequested = false
+
+    private val advertiserExecutor: ExecutorService = Executors.newSingleThreadExecutor { r ->
+        Thread(r, "mihon-sync-mdns").apply { isDaemon = true }
+    }
+
+    private fun runAdvertiserTask(task: () -> Unit) {
+        try {
+            advertiserExecutor.execute(task)
+        } catch (_: java.util.concurrent.RejectedExecutionException) {
+            // Manager closed; nothing to advertise.
+        }
+    }
 
     var lastError: String? = null
         private set
@@ -41,7 +85,7 @@ class DesktopSyncServerManager(
 
         if (server?.isRunning == true) {
             if (server?.port == port && server?.token == token) {
-                if (advertiser?.isAdvertising != true) {
+                if (!advertisementRequested) {
                     startAdvertisement(port, deviceName, quickPairEnabled, token)
                 } else {
                     updateAdvertisement(port, deviceName, quickPairEnabled, token)
@@ -85,56 +129,71 @@ class DesktopSyncServerManager(
     }
 
     /**
-     * Starts (or restarts) the mDNS advertisement.  Should be called after [start] succeeds.
-     *
+     * Starts (or restarts) the mDNS advertisement in the background. Should be called after [start] succeeds.
      * Advertising failures are non-fatal and are captured in [advertiserLastError].
-     *
-     * @param port           HTTP server port (must match what was passed to [start]).
-     * @param deviceName     Human-readable name shown in Android discovery UI.
-     * @param quickPairEnabled  When true the token is included in TXT for one-tap pairing.
-     * @param token          Auth token (used only when [quickPairEnabled] is true).
      */
-    @Synchronized
     fun startAdvertisement(port: Int, deviceName: String, quickPairEnabled: Boolean, token: String?) {
-        try {
-            val bindAddr = getLanBindAddress()
-            if (advertiser == null) {
-                advertiser = SyncServiceAdvertiser(bindAddr)
+        advertisementRequested = true
+        runAdvertiserTask {
+            try {
+                val begin = System.nanoTime()
+                val current = advertiser ?: advertiserFactory(lanAddressProvider()).also { advertiser = it }
+                val effectiveToken = if (quickPairEnabled) token else null
+                current.start(port = port, deviceName = effectiveName(deviceName), token = effectiveToken)
+                advertiserLastError = null
+                mihon.desktop.logging.DesktopLogger.info(
+                    "DesktopSyncServerManager",
+                    "mDNS advertisement ready after ${(System.nanoTime() - begin) / 1_000_000} ms",
+                )
+            } catch (e: Throwable) {
+                advertiserLastError = e.message ?: "Failed to start mDNS advertisement"
             }
-            val effectiveToken = if (quickPairEnabled) token else null
-            advertiser?.start(port = port, deviceName = effectiveName(deviceName), token = effectiveToken)
-        } catch (e: Throwable) {
-            advertiserLastError = e.message ?: "Failed to start mDNS advertisement"
         }
     }
 
-    /**
-     * Updates the running advertisement in place (e.g. when quick-pair toggle or device name changes).
-     * No-op if not advertising.
-     */
-    @Synchronized
+    /** Updates the running advertisement (e.g. quick-pair toggle or device name change). No-op if not advertising. */
     fun updateAdvertisement(port: Int, deviceName: String, quickPairEnabled: Boolean, token: String?) {
-        try {
-            advertiser?.updateAdvertisement(
-                port = port,
-                deviceName = effectiveName(deviceName),
-                quickPairEnabled = quickPairEnabled,
-                token = token,
-            )
-        } catch (e: Throwable) {
-            advertiserLastError = e.message ?: "Failed to update mDNS advertisement"
+        runAdvertiserTask {
+            try {
+                advertiser?.updateAdvertisement(
+                    port = port,
+                    deviceName = effectiveName(deviceName),
+                    quickPairEnabled = quickPairEnabled,
+                    token = token,
+                )
+            } catch (e: Throwable) {
+                advertiserLastError = e.message ?: "Failed to update mDNS advertisement"
+            }
         }
     }
 
     @Volatile var advertiserLastError: String? = null
         private set
 
-    @Synchronized
     fun stopAdvertisement() {
-        try {
-            advertiser?.close()
-        } catch (_: Throwable) {}
-        advertiser = null
+        advertisementRequested = false
+        runAdvertiserTask {
+            try {
+                advertiser?.close()
+            } catch (_: Throwable) {}
+            advertiser = null
+        }
+    }
+
+    /** Waits until queued advertisement work has finished (tests / shutdown). */
+    fun awaitAdvertisementIdle(timeoutMillis: Long): Boolean {
+        if (advertiserExecutor.isShutdown) {
+            return advertiserExecutor.awaitTermination(
+                timeoutMillis,
+                TimeUnit.MILLISECONDS,
+            )
+        }
+        return try {
+            advertiserExecutor.submit {}.get(timeoutMillis, TimeUnit.MILLISECONDS)
+            true
+        } catch (_: Throwable) {
+            false
+        }
     }
 
     @Synchronized
@@ -155,6 +214,9 @@ class DesktopSyncServerManager(
 
     override fun close() {
         stop()
+        // Give the mDNS goodbye a brief chance on shutdown without holding the app hostage.
+        advertiserExecutor.shutdown()
+        advertiserExecutor.awaitTermination(1, TimeUnit.SECONDS)
     }
 
     companion object {

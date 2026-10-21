@@ -28,6 +28,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.awt.ComposeWindow
@@ -1956,16 +1958,22 @@ fun ApplicationScope.MihonDesktopApp(
                                 mihon.desktop.platform.WindowsReducedMotion.prefersReducedMotion
                             if (handoff != null) {
                                 // Continue the startup window's splash on the same frame, then crossfade.
+                                // Until the boot splash above us finishes this layer is hidden; the app
+                                // UI underneath is already composed by the time it is revealed.
+                                LaunchedEffect(handoff) {
+                                    snapshotFlow { handoff.released }.first { it }
+                                    withFrameNanos {}
+                                    handoff.onVisible()
+                                }
                                 mihon.desktop.ui.splash.StartupSplash(
                                     dark = resolveDarkTheme(preferences.themeMode),
                                     reducedMotion = reducedMotionPreferred,
-                                    ready = true,
+                                    ready = handoff.released,
                                     resumeFrom = if (handoff.skipped) {
                                         mihon.desktop.ui.splash.SplashResume.Loading
                                     } else {
                                         mihon.desktop.ui.splash.SplashResume.FinalFrame
                                     },
-                                    onShown = handoff.onVisible,
                                     onFinished = {
                                         mihon.desktop.ui.splash.FirstRunSplash.markShown(runtime.preferences)
                                         pendingStartupHandoff = null

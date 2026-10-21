@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -110,8 +111,21 @@ enum class SplashResume {
     Loading,
 }
 
-/** Hand-off from the startup window: [onVisible] runs once the main window painted the splash. */
-class StartupHandoff(val skipped: Boolean, val onVisible: () -> Unit)
+/**
+ * Hands the startup window's splash over to the app UI.
+ *
+ * [bootSplash] is `null` while the boot splash animation is still playing and becomes the
+ * "skipped" flag once it finishes. The app UI is composed underneath the boot splash as soon as the
+ * runtime is ready, so the first real frame is already built when the splash crossfades away.
+ */
+class StartupHandoff(private val bootSplash: State<Boolean?>, val onVisible: () -> Unit) {
+    constructor(skipped: Boolean, onVisible: () -> Unit) : this(mutableStateOf<Boolean?>(skipped), onVisible)
+
+    /** True once the boot splash has finished and the app splash layer may start its crossfade. */
+    val released: Boolean get() = bootSplash.value != null
+
+    val skipped: Boolean get() = bootSplash.value == true
+}
 
 private val EnterEasing = CubicBezierEasing(0.22f, 0.8f, 0.3f, 1f)
 private val DropEasing = CubicBezierEasing(0.3f, 0.7f, 0.3f, 1f)
@@ -182,7 +196,8 @@ fun StartupSplash(
     var waiting by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
-        runCatching { focusRequester.requestFocus() }
+        // A splash composed underneath another splash must not steal its focus (Esc-to-skip).
+        if (currentReady || resumeFrom == null) runCatching { focusRequester.requestFocus() }
         // Let the frame reach the screen before anyone takes the previous window away.
         withFrameNanos {}
         withFrameNanos {}
@@ -222,6 +237,7 @@ fun StartupSplash(
             waiting = true
             snapshotFlow { currentReady }.first { it }
             waiting = false
+            runCatching { focusRequester.requestFocus() }
         }
         if (fadeOut) overlay.animateTo(0f, tween(if (reducedMotion) 0 else 400))
         onFinished(skipped)

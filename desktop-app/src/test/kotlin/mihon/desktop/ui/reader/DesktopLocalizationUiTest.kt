@@ -13,6 +13,7 @@ import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.isRoot
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -58,7 +59,7 @@ class DesktopLocalizationUiTest {
         onNodeWithText("Page actions").assertIsDisplayed()
         runOnIdle { language.value = AppLanguage.SimplifiedChinese }
         onNodeWithText("图片操作").assertIsDisplayed()
-        onNodeWithText("缩小").assertIsDisplayed()
+        onNodeWithContentDescription("缩小").assertIsDisplayed()
         onNodeWithText("Page actions").assertDoesNotExist()
         onNodeWithText("Source title stays unchanged").assertIsDisplayed()
         saveRendering("reader-menu-zh")

@@ -3,9 +3,7 @@ package mihon.desktop.ui.common
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -53,6 +51,9 @@ fun coverHeaders(baseUrl: String?, thumbnailUrl: String? = null): Map<String, St
     return if (referer != null) mapOf("Referer" to referer) else emptyMap()
 }
 
+/** Grid covers are decoded from (and cached as) thumbnails this size; enough for 2x HiDPI cards. */
+const val DEFAULT_COVER_THUMBNAIL_SIZE = 480
+
 @Composable
 fun MangaCover(
     thumbnailUrl: String?,
@@ -65,6 +66,8 @@ fun MangaCover(
     imageLoader: DesktopImageLoader? = LocalImageLoader.current,
     headers: Map<String, String> = emptyMap(),
     onCoverHttpError: ((Int) -> Unit)? = null,
+    /** Longest edge (px) of the cached thumbnail to load; null loads the full-size image. */
+    thumbnailSize: Int? = DEFAULT_COVER_THUMBNAIL_SIZE,
 ) {
     val fallbackHeaders = remember(thumbnailUrl) { coverHeaders(null, thumbnailUrl) }
     val effectiveHeaders = if (headers.isNotEmpty()) {
@@ -78,7 +81,7 @@ fun MangaCover(
     }
     var loading by remember(thumbnailUrl, mangaId, localMangaPath, effectiveHeaders) { mutableStateOf(true) }
 
-    LaunchedEffect(thumbnailUrl, mangaId, localMangaPath, imageLoader, effectiveHeaders) {
+    LaunchedEffect(thumbnailUrl, mangaId, localMangaPath, imageLoader, effectiveHeaders, thumbnailSize) {
         if (imageLoader == null) {
             loading = false
             return@LaunchedEffect
@@ -91,6 +94,7 @@ fun MangaCover(
                 localMangaPath = localMangaPath,
                 headers = effectiveHeaders,
                 onHttpError = currentOnCoverHttpError,
+                maxThumbnailSize = thumbnailSize,
             ),
         )
         bitmap = loaded
@@ -114,10 +118,8 @@ fun MangaCover(
                     )
                 }
                 loading -> {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(24.dp),
-                        strokeWidth = 2.dp,
-                    )
+                    // Static placeholder: no per-cover animation while a whole shelf loads.
+                    Box(modifier = Modifier.fillMaxSize().testTag("manga-cover-placeholder"))
                 }
                 else -> {
                     Text(
