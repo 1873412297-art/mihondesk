@@ -134,12 +134,16 @@ import androidx.compose.ui.window.WindowPlacement as ComposeWindowPlacement
 fun ApplicationScope.MihonDesktopApp(
     runtime: DesktopRuntime,
     instanceRequests: Flow<SingleInstanceRequest> = emptyFlow(),
+    startupHandoff: mihon.desktop.ui.splash.StartupHandoff? = null,
 ) {
     var preferences by remember { mutableStateOf(runtime.preferences.load()) }
     var showOnboarding by remember { mutableStateOf(!preferences.onboardingCompleted) }
     var showFirstRunSplash by remember {
-        mutableStateOf(mihon.desktop.ui.splash.FirstRunSplash.shouldShow(runtime.preferences))
+        mutableStateOf(
+            startupHandoff != null || mihon.desktop.ui.splash.FirstRunSplash.shouldShow(runtime.preferences),
+        )
     }
+    var pendingStartupHandoff by remember { mutableStateOf(startupHandoff) }
     var pendingExportPath by remember { mutableStateOf<java.nio.file.Path?>(null) }
     var pendingImportPath by remember { mutableStateOf<java.nio.file.Path?>(null) }
     val appLockController = remember(runtime.preferences) {
@@ -1937,14 +1941,37 @@ fun ApplicationScope.MihonDesktopApp(
                                 }
                             }
                             if (showFirstRunSplash) {
-                                mihon.desktop.ui.splash.FirstRunSplashOverlay(
-                                    dark = resolveDarkTheme(preferences.themeMode),
-                                    reducedMotion = mihon.desktop.platform.WindowsReducedMotion.prefersReducedMotion,
-                                    onFinished = {
-                                        mihon.desktop.ui.splash.FirstRunSplash.markShown(runtime.preferences)
-                                        showFirstRunSplash = false
-                                    },
-                                )
+                                val handoff = pendingStartupHandoff
+                                val reducedMotionPreferred =
+                                    mihon.desktop.platform.WindowsReducedMotion.prefersReducedMotion
+                                if (handoff != null) {
+                                    // Continue the startup window's splash on the same frame, then crossfade.
+                                    mihon.desktop.ui.splash.StartupSplash(
+                                        dark = resolveDarkTheme(preferences.themeMode),
+                                        reducedMotion = reducedMotionPreferred,
+                                        ready = true,
+                                        resumeFrom = if (handoff.skipped) {
+                                            mihon.desktop.ui.splash.SplashResume.Loading
+                                        } else {
+                                            mihon.desktop.ui.splash.SplashResume.FinalFrame
+                                        },
+                                        onShown = handoff.onVisible,
+                                        onFinished = {
+                                            mihon.desktop.ui.splash.FirstRunSplash.markShown(runtime.preferences)
+                                            pendingStartupHandoff = null
+                                            showFirstRunSplash = false
+                                        },
+                                    )
+                                } else {
+                                    mihon.desktop.ui.splash.FirstRunSplashOverlay(
+                                        dark = resolveDarkTheme(preferences.themeMode),
+                                        reducedMotion = reducedMotionPreferred,
+                                        onFinished = {
+                                            mihon.desktop.ui.splash.FirstRunSplash.markShown(runtime.preferences)
+                                            showFirstRunSplash = false
+                                        },
+                                    )
+                                }
                             }
                         }
                     }

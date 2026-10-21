@@ -1,5 +1,10 @@
 package mihon.desktop
 
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.window.application
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.BufferOverflow
@@ -22,9 +27,15 @@ import mihon.desktop.platform.SingleInstanceForwarding
 import mihon.desktop.platform.SingleInstanceRequest
 import mihon.desktop.platform.SingleInstanceServer
 import mihon.desktop.preferences.DesktopPreferenceStore
+import mihon.desktop.preferences.DesktopPreferences
 import mihon.desktop.ui.MihonDesktopApp
+import mihon.desktop.ui.splash.FirstRunSplash
+import mihon.desktop.ui.splash.StartupHandoff
+import mihon.desktop.ui.splash.StartupWindow
+import mihon.desktop.ui.splash.processUptimeMillis
 import java.io.PrintStream
 import java.nio.file.Path
+import kotlin.concurrent.thread
 import kotlin.system.exitProcess
 
 fun main(args: Array<String>) {
@@ -63,18 +74,13 @@ fun main(args: Array<String>) {
                 DesktopPreferenceStore(profile.root.resolve("preferences.properties")).load()
             }.getOrNull()
             startupLanguage = startupPreferences?.language ?: AppLanguage.System
-            if (parsedCommand == DesktopCommand.LaunchUi && startupPreferences != null) {
-                val store = DesktopPreferenceStore(profile.root.resolve("preferences.properties"))
-                if (mihon.desktop.ui.splash.FirstRunSplash.shouldShow(store)) {
-                    // Phase 0 of the first-run splash: static mark before the heavy runtime init.
-                    mihon.desktop.ui.splash.FirstRunSplash.showBootWindow(
-                        dark = when (startupPreferences.themeMode) {
-                            mihon.desktop.preferences.ThemeMode.Dark -> true
-                            mihon.desktop.preferences.ThemeMode.Light -> false
-                            mihon.desktop.preferences.ThemeMode.System -> windowsAppsUseDarkTheme()
-                        },
-                    )
-                }
+            if (parsedCommand == DesktopCommand.LaunchUi) {
+                return@use launchUiWithStartupWindow(
+                    args = args,
+                    executableDirectory = executableDirectory,
+                    profileRoot = profile.root,
+                    startupPreferences = startupPreferences,
+                )
             }
             val runtime = DesktopRuntimeFactory.create(args, System.getenv(), executableDirectory)
             executeDesktopRuntime(
@@ -124,7 +130,6 @@ fun main(args: Array<String>) {
         }
         if (e is PortableUpdatePendingException) 75 else 1
     }
-    mihon.desktop.ui.splash.FirstRunSplash.closeBootWindow()
     DesktopLogger.info("Main", "Exiting mihondesk with exit code: $exitCode")
     DesktopLogger.close()
     exitProcess(exitCode)
@@ -157,6 +162,89 @@ internal fun handleProfileInUse(
     DesktopLogger.warn("Main", "Profile in use; skipping startup")
     out.println("""{"command":"startup","status":"SKIPPED","category":"PROFILE_IN_USE"}""")
     return if (background) 0 else 75
+}
+
+/**
+ * Interactive launch: the main window frame with splash v3 opens immediately while the runtime
+ * (database, sync server, extension host...) is created on a background thread; the full app
+ * window takes over once the splash finished and the runtime is ready.
+ */
+private fun launchUiWithStartupWindow(
+    args: Array<String>,
+    executableDirectory: Path,
+    profileRoot: Path,
+    startupPreferences: DesktopPreferences?,
+): Int {
+    configureDesktopRendering()
+    // Requests may arrive before the UI subscribes; keep a small buffer of the newest ones.
+    val forwarded = Channel<SingleInstanceRequest>(16, BufferOverflow.DROP_OLDEST)
+    val server = runCatching {
+        SingleInstanceServer.start(profileRoot) { request ->
+            check(forwarded.trySend(request).isSuccess) { "UI is no longer accepting requests" }
+        }
+    }.onFailure {
+        DesktopLogger.warn("Main", "Single-instance listener unavailable: ${it.message}")
+    }.getOrNull()
+    val playSplash = startupPreferences != null &&
+        FirstRunSplash.shouldShow(DesktopPreferenceStore(profileRoot.resolve("preferences.properties")))
+    val runtimeResult = mutableStateOf<Result<DesktopRuntime>?>(null)
+    val initStart = System.nanoTime()
+    val initThread = thread(name = "mihon-runtime-init") {
+        val result = runCatching { DesktopRuntimeFactory.create(args, System.getenv(), executableDirectory) }
+        DesktopLogger.info(
+            "Startup",
+            "Runtime initialised in ${(System.nanoTime() - initStart) / 1_000_000} ms " +
+                "(${processUptimeMillis()} ms since process start)",
+        )
+        runtimeResult.value = result
+    }
+    var failure: Throwable? = null
+    try {
+        application(exitProcessOnExit = false) {
+            var handOff by remember { mutableStateOf<Boolean?>(null) }
+            var startupWindowOpen by remember { mutableStateOf(true) }
+            val result = runtimeResult.value
+            val runtime = result?.getOrNull()
+            if (result != null && result.isFailure) {
+                LaunchedEffect(result) {
+                    failure = result.exceptionOrNull()
+                    exitApplication()
+                }
+            } else {
+                if (startupWindowOpen) {
+                    StartupWindow(
+                        preferences = startupPreferences ?: DesktopPreferences(),
+                        playSplash = playSplash,
+                        ready = runtime != null,
+                        onHandOff = { skipped -> handOff = skipped },
+                        onCloseRequest = {
+                            DesktopLogger.info("Main", "Startup window closed before the app was ready")
+                            exitApplication()
+                        },
+                    )
+                }
+                val skipped = handOff
+                if (runtime != null && skipped != null) {
+                    MihonDesktopApp(
+                        runtime,
+                        forwarded.receiveAsFlow(),
+                        startupHandoff = StartupHandoff(skipped) {
+                            startupWindowOpen = false
+                            DesktopLogger.info("Startup", "Main window shown at ${processUptimeMillis()} ms")
+                        },
+                    )
+                }
+            }
+        }
+    } finally {
+        forwarded.close()
+        server?.close()
+        // A close during start-up waits for initialisation so the runtime shuts down cleanly.
+        initThread.join()
+        runtimeResult.value?.getOrNull()?.let { runCatching { it.close() } }
+    }
+    failure?.let { throw it }
+    return 0
 }
 
 internal fun executeDesktopRuntime(

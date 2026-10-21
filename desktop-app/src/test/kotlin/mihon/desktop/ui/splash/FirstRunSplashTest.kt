@@ -1,5 +1,7 @@
 package mihon.desktop.ui.splash
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
@@ -55,5 +57,42 @@ class FirstRunSplashTest {
             FirstRunSplashOverlay(dark = true, reducedMotion = true, onFinished = { finished++ })
         }
         waitUntil(timeoutMillis = 5_000) { finished == 1 }
+    }
+
+    @Test
+    fun `holds on the final frame until ready, then finishes`() = runComposeUiTest {
+        var finished = 0
+        var ready by androidx.compose.runtime.mutableStateOf(false)
+        setContent {
+            StartupSplash(dark = false, reducedMotion = true, ready = ready, onFinished = { finished++ })
+        }
+        waitUntil(timeoutMillis = 5_000) {
+            onAllNodes(
+                androidx.compose.ui.test.hasTestTag("startup-splash-progress"),
+            ).fetchSemanticsNodes().isNotEmpty()
+        }
+        finished shouldBe 0
+        ready = true
+        waitUntil(timeoutMillis = 5_000) { finished == 1 }
+    }
+
+    @Test
+    fun `skip before ready reports skipped and waits`() = runComposeUiTest {
+        var result: Boolean? = null
+        mainClock.autoAdvance = false
+        var ready by androidx.compose.runtime.mutableStateOf(false)
+        setContent {
+            StartupSplash(dark = true, reducedMotion = false, ready = ready, fadeOut = false, onFinished = {
+                result = it
+            })
+        }
+        mainClock.advanceTimeBy(300)
+        onNodeWithTag(FIRST_RUN_SPLASH_TEST_TAG).performClick()
+        mainClock.advanceTimeBy(3_000)
+        result shouldBe null
+        mainClock.autoAdvance = true
+        ready = true
+        waitUntil(timeoutMillis = 5_000) { result != null }
+        result shouldBe true
     }
 }

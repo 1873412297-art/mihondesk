@@ -11,10 +11,18 @@ import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -37,20 +45,10 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import mihon.desktop.logging.DesktopLogger
 import mihon.desktop.preferences.DesktopPreferenceStore
-import java.awt.BasicStroke
-import java.awt.EventQueue
-import java.awt.GradientPaint
-import java.awt.Graphics
-import java.awt.Graphics2D
-import java.awt.GraphicsEnvironment
-import java.awt.RenderingHints
-import java.awt.geom.Ellipse2D
-import java.awt.geom.Path2D
-import javax.swing.JComponent
-import javax.swing.JWindow
 
 const val FIRST_RUN_SPLASH_TEST_TAG = "first-run-splash"
 
@@ -77,18 +75,14 @@ internal data class SplashPalette(val bg: Color, val bg2: Color, val ink: Color,
 }
 
 /**
- * The approved splash v3: always on the first launch of a profile, and on every launch while the
- * Appearance setting 'play splash on every launch' is on (the default). Two phases: [showBootWindow] paints the static mark in plain AWT before the heavy runtime
- * initialisation, then [FirstRunSplashOverlay] plays the animation over the first Compose frame and
- * closes the boot window so the hand-off is seamless. Never shown for tray restore, single-instance
- * re-activation, unlock or background commands.
+ * Splash v3: always on the first launch of a profile, and on every launch while the Appearance
+ * setting "play splash on every launch" is on (the default). It is painted inside the real main
+ * window frame from the very first frame (see [StartupWindow]); slow runtime initialisation runs in
+ * the background and the splash crossfades into the library once both the animation and the
+ * runtime are done. Never shown for tray restore, single-instance re-activation or background commands.
  */
 object FirstRunSplash {
     const val SHOWN_KEY = "splash.v3.shown"
-    private const val BOOT_WINDOW_SIZE = 320
-
-    @Volatile
-    private var bootWindow: JWindow? = null
 
     fun shouldShow(preferences: DesktopPreferenceStore): Boolean =
         runCatching {
@@ -105,91 +99,24 @@ object FirstRunSplash {
         runCatching { preferences.update { remove(SHOWN_KEY) } }
             .onFailure { DesktopLogger.warn("Splash", "Could not reset splash state: ${it.message}") }
     }
-
-    /** Phase 0: a tiny undecorated AWT window with the static mark; safe to call from any thread. */
-    fun showBootWindow(dark: Boolean) {
-        if (GraphicsEnvironment.isHeadless()) return
-        runCatching {
-            EventQueue.invokeAndWait {
-                val palette = SplashPalette.of(dark)
-                val window = JWindow()
-                window.contentPane = BootMark(palette)
-                window.setSize(BOOT_WINDOW_SIZE, BOOT_WINDOW_SIZE)
-                window.setLocationRelativeTo(null)
-                // Stay visible above other apps while the runtime initialises; closed at the hand-off.
-                window.isAlwaysOnTop = true
-                window.isVisible = true
-                bootWindow = window
-            }
-        }.onFailure { DesktopLogger.warn("Splash", "Boot splash unavailable: ${it.message}") }
-    }
-
-    fun closeBootWindow() {
-        val window = bootWindow ?: return
-        bootWindow = null
-        EventQueue.invokeLater { window.dispose() }
-    }
-
-    private class BootMark(private val palette: SplashPalette) : JComponent() {
-        override fun paintComponent(g: Graphics) {
-            val g2 = g.create() as Graphics2D
-            try {
-                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
-                g2.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_PURE)
-                g2.paint = GradientPaint(0f, 0f, palette.bg.awt(), 0f, height.toFloat(), palette.bg2.awt())
-                g2.fillRect(0, 0, width, height)
-                val markSize = 132.0
-                g2.translate((width - markSize) / 2, (height - markSize) / 2)
-                listOf(leftPage(), rightPage()).forEach { page ->
-                    g2.color = palette.page.awt()
-                    g2.fill(page)
-                    g2.color = palette.ink.awt()
-                    g2.stroke = BasicStroke(2.2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)
-                    g2.draw(page)
-                }
-                g2.drawLine(66, 50, 66, 104)
-                g2.color = palette.accent.awt()
-                g2.fill(Ellipse2D.Double(58.0, 25.0, 16.0, 16.0))
-                g2.fill(
-                    Path2D.Double().apply {
-                        moveTo(66.0, 18.0)
-                        lineTo(58.4, 31.0)
-                        lineTo(73.6, 31.0)
-                        closePath()
-                    },
-                )
-            } finally {
-                g2.dispose()
-            }
-        }
-
-        private fun leftPage() = Path2D.Double().apply {
-            moveTo(66.0, 50.0)
-            curveTo(52.0, 42.0, 36.0, 42.0, 22.0, 46.0)
-            lineTo(22.0, 100.0)
-            curveTo(36.0, 96.0, 52.0, 96.0, 66.0, 104.0)
-            closePath()
-        }
-
-        private fun rightPage() = Path2D.Double().apply {
-            moveTo(66.0, 50.0)
-            curveTo(80.0, 42.0, 96.0, 42.0, 110.0, 46.0)
-            lineTo(110.0, 100.0)
-            curveTo(96.0, 96.0, 80.0, 96.0, 66.0, 104.0)
-            closePath()
-        }
-
-        private fun Color.awt() = java.awt.Color(red, green, blue, alpha)
-    }
 }
+
+/** Where a splash resumes when it is handed from the startup window to the main window. */
+enum class SplashResume {
+    /** The animation already played: show its final frame. */
+    FinalFrame,
+
+    /** The animation was skipped or disabled: show the minimal loading state. */
+    Loading,
+}
+
+/** Hand-off from the startup window: [onVisible] runs once the main window painted the splash. */
+class StartupHandoff(val skipped: Boolean, val onVisible: () -> Unit)
 
 private val EnterEasing = CubicBezierEasing(0.22f, 0.8f, 0.3f, 1f)
 private val DropEasing = CubicBezierEasing(0.3f, 0.7f, 0.3f, 1f)
 
-/**
- * Phase 1: the animated mark (1.1s fade+scale, ink drop from 0.7s for 0.9s, ~1.9s total, then a
- * 400ms fade). Click or Esc skips. With reduced motion the static mark is shown briefly instead.
- */
+/** In-app replay (onboarding): plays the animation, then fades out. */
 @Composable
 fun FirstRunSplashOverlay(
     dark: Boolean,
@@ -197,40 +124,107 @@ fun FirstRunSplashOverlay(
     onFinished: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    StartupSplash(
+        dark = dark,
+        reducedMotion = reducedMotion,
+        ready = true,
+        onFinished = { onFinished() },
+        modifier = modifier,
+    )
+}
+
+/**
+ * The animated mark (1.1s fade+scale, ink drop from 0.7s for 0.9s, ~1.9s total). Click or any key
+ * skips. While [ready] is false after the animation the final frame holds with a subtle progress
+ * ring (or just the ring when skipped). With reduced motion the static mark is shown instead.
+ * [fadeOut] crossfades the splash away (400ms) before [onFinished]; without it [onFinished] runs
+ * immediately so another window can take over the same frame.
+ */
+@Composable
+fun StartupSplash(
+    dark: Boolean,
+    reducedMotion: Boolean,
+    ready: Boolean,
+    onFinished: (skipped: Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+    animate: Boolean = true,
+    resumeFrom: SplashResume? = null,
+    fadeOut: Boolean = true,
+    onShown: () -> Unit = {},
+) {
     val palette = SplashPalette.of(dark)
-    val mark = remember { Animatable(if (reducedMotion) 1f else 0f) }
-    val drop = remember { Animatable(if (reducedMotion) 1f else 0f) }
-    val bloom = remember { Animatable(if (reducedMotion) 0.55f else 0f) }
+    val startsStatic = reducedMotion || resumeFrom == SplashResume.FinalFrame
+    val startsEmpty = resumeFrom == SplashResume.Loading || (resumeFrom == null && !animate)
+    val initialMark = if (startsEmpty) {
+        0f
+    } else if (startsStatic) {
+        1f
+    } else {
+        0f
+    }
+    val mark = remember { Animatable(initialMark) }
+    val drop = remember { Animatable(initialMark) }
+    val bloom = remember {
+        Animatable(
+            if (startsEmpty) {
+                0f
+            } else if (startsStatic) {
+                0.55f
+            } else {
+                0f
+            },
+        )
+    }
     val overlay = remember { Animatable(1f) }
     val skip = remember { kotlinx.coroutines.CompletableDeferred<Unit>() }
     val focusRequester = remember { FocusRequester() }
+    val currentReady by rememberUpdatedState(ready)
+    var waiting by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
-        // The Compose frame is up: hand off from the AWT boot window.
-        FirstRunSplash.closeBootWindow()
         runCatching { focusRequester.requestFocus() }
-        val play = launch {
-            if (reducedMotion) {
-                delay(600)
-            } else {
-                coroutineScope {
-                    launch {
-                        bloom.animateTo(1f, tween(720, easing = LinearEasing))
-                        bloom.animateTo(0.55f, tween(1080, easing = LinearEasing))
+        // Let the frame reach the screen before anyone takes the previous window away.
+        withFrameNanos {}
+        withFrameNanos {}
+        onShown()
+        var skipped = startsEmpty
+        if (resumeFrom == null && animate) {
+            val play = launch {
+                if (reducedMotion) {
+                    delay(600)
+                } else {
+                    coroutineScope {
+                        launch {
+                            bloom.animateTo(1f, tween(720, easing = LinearEasing))
+                            bloom.animateTo(0.55f, tween(1080, easing = LinearEasing))
+                        }
+                        launch { mark.animateTo(1f, tween(1100, delayMillis = 150, easing = EnterEasing)) }
+                        launch { drop.animateTo(1f, tween(900, delayMillis = 700, easing = DropEasing)) }
+                        delay(1900)
                     }
-                    launch { mark.animateTo(1f, tween(1100, delayMillis = 150, easing = EnterEasing)) }
-                    launch { drop.animateTo(1f, tween(900, delayMillis = 700, easing = DropEasing)) }
-                    delay(1900)
+                }
+            }
+            kotlinx.coroutines.selects.select {
+                play.onJoin {}
+                skip.onAwait { skipped = true }
+            }
+            play.cancel()
+            if (skipped && !currentReady) {
+                // Skipped before the app is ready: drop the mark for the minimal loading state.
+                coroutineScope {
+                    launch { mark.animateTo(0f, tween(if (reducedMotion) 0 else 150)) }
+                    launch { drop.animateTo(0f, tween(if (reducedMotion) 0 else 150)) }
+                    launch { bloom.animateTo(0f, tween(if (reducedMotion) 0 else 150)) }
                 }
             }
         }
-        kotlinx.coroutines.selects.select {
-            play.onJoin {}
-            skip.onAwait {}
+        if (!currentReady) {
+            waiting = true
+            snapshotFlow { currentReady }.first { it }
+            waiting = false
         }
-        play.cancel()
-        overlay.animateTo(0f, tween(if (reducedMotion) 0 else 400))
-        onFinished()
+        if (fadeOut) overlay.animateTo(0f, tween(if (reducedMotion) 0 else 400))
+        onFinished(skipped)
     }
 
     Box(
@@ -243,7 +237,7 @@ fun FirstRunSplashOverlay(
             }
             .focusRequester(focusRequester)
             .focusable()
-            .onKeyEvent { event ->
+            .onKeyEvent { _ ->
                 // Esc or any other key skips.
                 skip.complete(Unit)
                 true
@@ -275,6 +269,18 @@ fun FirstRunSplashOverlay(
                     drawPath(dropPath(unit), palette.accent, alpha = drop.value)
                 }
             }
+        }
+        if (waiting) {
+            CircularProgressIndicator(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 72.dp)
+                    .size(18.dp)
+                    .testTag("startup-splash-progress"),
+                color = palette.accent.copy(alpha = 0.7f),
+                trackColor = Color.Transparent,
+                strokeWidth = 2.dp,
+            )
         }
     }
 }
