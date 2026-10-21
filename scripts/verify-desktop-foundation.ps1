@@ -24,8 +24,8 @@ try {
         throw "Packaged Java runtime metadata did not contain JAVA_VERSION"
     }
     $javaVersion = $javaVersionMatch.Groups['version'].Value
-    if (-not [regex]::IsMatch($javaVersion, '^17(?:\.|$)')) {
-        throw "Packaged Java runtime must be Java 17, but JAVA_VERSION was $javaVersion"
+    if (-not [regex]::IsMatch($javaVersion, '^21(?:\.|$)')) {
+        throw "Packaged Java runtime must be Java 21 (JBR), but JAVA_VERSION was $javaVersion"
     }
     Write-Host "Packaged runtime JAVA_VERSION=$javaVersion"
 
