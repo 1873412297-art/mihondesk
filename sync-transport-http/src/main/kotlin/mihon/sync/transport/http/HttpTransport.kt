@@ -42,6 +42,7 @@ class HttpTransport(
                 )
                 HttpStatusCode.Conflict -> throw SyncCursorConflictException(
                     "Cursor conflict when pushing changeset (409): ${response.bodyAsText()}",
+                    expectedCursor = response.headers[EXPECTED_CURSOR_HEADER]?.toLongOrNull(),
                 )
                 else -> throw SyncProtocolException(
                     "Unexpected server response (${response.status.value}): ${response.bodyAsText()}",
@@ -139,3 +140,6 @@ class HttpTransport(
         }
     }
 }
+
+/** Mirrors the sync server's header naming the cursor it will accept next (see SyncServer). */
+internal const val EXPECTED_CURSOR_HEADER = "X-Expected-Cursor"

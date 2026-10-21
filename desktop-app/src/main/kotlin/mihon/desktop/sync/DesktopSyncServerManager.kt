@@ -24,6 +24,8 @@ class DesktopSyncServerManager(
     private val storageDir: Path,
     private val lanAddressProvider: () -> InetAddress = { getLanBindAddress() },
     private val advertiserFactory: (InetAddress) -> Advertiser = { JmdnsAdvertiser(SyncServiceAdvertiser(it)) },
+    /** Invoked for every changeset a device pushes, so the app can pull it right away. */
+    private val onChangesetAccepted: (deviceId: String) -> Unit = {},
 ) : AutoCloseable {
 
     /** Abstraction over the mDNS advertiser so startup behaviour can be tested without the network. */
@@ -107,6 +109,7 @@ class DesktopSyncServerManager(
                 port = port,
                 token = token,
                 store = changesetStore,
+                onChangesetAccepted = onChangesetAccepted,
             )
             srv.start(wait = false)
             server = srv

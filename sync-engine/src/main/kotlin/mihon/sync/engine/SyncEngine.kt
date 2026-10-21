@@ -43,8 +43,12 @@ class SyncEngine(
             } catch (conflict: SyncCursorConflictException) {
                 attempt++
                 if (attempt >= MAX_PUSH_ATTEMPTS) throw conflict
-                current = when (attempt) {
-                    1 -> changeset.copy(cursor = stateStore.getLastPushCursor() + 1)
+                // A server that names the cursor it accepts next is authoritative: our history may
+                // have diverged arbitrarily far (e.g. its changeset store was recreated).
+                val expected = conflict.expectedCursor?.takeIf { it > 0 && it != current.cursor }
+                current = when {
+                    expected != null -> changeset.copy(cursor = expected)
+                    attempt == 1 -> changeset.copy(cursor = stateStore.getLastPushCursor() + 1)
                     else -> changeset.copy(cursor = stateStore.nextCursor())
                 }
             }

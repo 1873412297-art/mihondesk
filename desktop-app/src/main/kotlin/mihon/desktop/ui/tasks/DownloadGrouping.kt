@@ -27,3 +27,16 @@ fun downloadsNavBadge(queue: List<DesktopDownload>): DownloadsNavBadge? {
     val pending = queue.count { it.status == DownloadStatus.QUEUED || it.status == DownloadStatus.DOWNLOADING }
     return if (pending > 0) DownloadsNavBadge(pending, failed = false) else null
 }
+
+/**
+ * Index a dragged row lands on: the row moves one slot once the pointer has travelled past half
+ * of a neighbour, clamped to the list. [itemExtentPx] is the row height including spacing.
+ */
+fun dragReorderTarget(fromIndex: Int, dragOffsetPx: Float, itemExtentPx: Float, lastIndex: Int): Int {
+    if (itemExtentPx <= 0f) return fromIndex
+    val steps = kotlin.math.round(dragOffsetPx / itemExtentPx).toInt()
+    return (fromIndex + steps).coerceIn(0, lastIndex.coerceAtLeast(0))
+}
+
+/** Bulk actions offered on a manga group header in the download queue. */
+enum class DownloadGroupAction { PAUSE, RESUME, RETRY, CANCEL, MOVE_TO_TOP }

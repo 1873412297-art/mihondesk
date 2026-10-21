@@ -65,6 +65,7 @@ class DesktopRuntime(
     val extensionUpdateChecker: mihon.desktop.extension.ExtensionUpdateChecker? = null,
     val backgroundScheduler: mihon.desktop.platform.WindowsBackgroundScheduler? = null,
     val webViews: mihon.desktop.webview.DesktopWebViewManager? = null,
+    val activityCenter: mihon.desktop.activity.ActivityCenter = mihon.desktop.activity.ActivityCenter(),
     val customCoverManager: mihon.desktop.image.CustomCoverManager =
         mihon.desktop.image.CustomCoverManager(directories.covers),
     val imageLoader: mihon.desktop.image.DesktopImageLoader =
@@ -114,6 +115,7 @@ class DesktopRuntime(
                     )
                 }
             },
+            activeMangaIds = { downloader?.queueState?.value?.mapTo(HashSet()) { it.mangaId }.orEmpty() },
         ),
     private val closeReaderSessions: suspend () -> Unit = readerFactory?.let { it::shutdown } ?: {},
     private val closeReaderServices: () -> Unit = readerFactory?.let { it::closeServices } ?: {},
@@ -495,13 +497,16 @@ object DesktopRuntimeFactory {
                 defaultBackupDir = backupDir,
                 scope = appScope,
             )
+            val activityCenter = mihon.desktop.activity.ActivityCenter()
             val syncScheduler = mihon.desktop.sync.DesktopSyncScheduler(
                 preferenceStore = preferences,
                 library = library,
                 scope = appScope,
+                activityCenter = activityCenter,
             )
             val syncServerManager = mihon.desktop.sync.DesktopSyncServerManager(
                 storageDir = directories.root.resolve("sync-server"),
+                onChangesetAccepted = syncScheduler::onRemoteChangeset,
             )
             val desktopNotificationService = mihon.desktop.platform.DesktopNotificationService(
                 enabledProvider = { preferences.load().desktopNotificationsEnabled },
@@ -528,6 +533,9 @@ object DesktopRuntimeFactory {
                 scope = appScope,
             )
             if (launchUi) trackSyncService.start(appScope)
+            if (launchUi) {
+                mihon.desktop.activity.bindActivitySources(activityCenter, appScope, downloader, libraryUpdateScheduler)
+            }
             val packagedExecutable = ProcessHandle.current().info().command().orElse(null)?.let(Path::of)
                 ?.takeIf { it.fileName.toString().lowercase() in setOf("mihondesk.exe", "mihonw.exe") }
             val backgroundScheduler = packagedExecutable?.let {
@@ -608,6 +616,7 @@ object DesktopRuntimeFactory {
                 extensionUpdateChecker = extensionUpdateChecker,
                 backgroundScheduler = backgroundScheduler,
                 webViews = webViews,
+                activityCenter = activityCenter,
                 extensionInstaller = extensionInstaller,
                 extensionStoreService = extensionStoreService,
                 processManager = processManager,

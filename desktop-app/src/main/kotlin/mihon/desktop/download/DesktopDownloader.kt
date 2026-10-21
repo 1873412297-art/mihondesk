@@ -670,6 +670,45 @@ class DesktopDownloader(
         return true
     }
 
+    /** Pauses every queued or downloading chapter of [mangaId]. Returns how many were paused. */
+    @Synchronized
+    fun pauseManga(mangaId: Long): Int = chapterIdsOf(mangaId) {
+        it.status == DownloadStatus.QUEUED || it.status == DownloadStatus.DOWNLOADING
+    }.count { pause(it) }
+
+    /** Resumes every paused chapter of [mangaId]. Returns how many were resumed. */
+    @Synchronized
+    fun resumeManga(
+        mangaId: Long,
+    ): Int = chapterIdsOf(mangaId) { it.status == DownloadStatus.PAUSED }.count { resume(it) }
+
+    /** Re-queues the failed chapters of [mangaId]. Returns how many were retried. */
+    @Synchronized
+    fun retryManga(mangaId: Long): Int {
+        val failed = chapterIdsOf(mangaId) { it.status == DownloadStatus.ERROR }
+        if (failed.isNotEmpty()) retryFailed { it.mangaId == mangaId }
+        return failed.size
+    }
+
+    /** Removes every chapter of [mangaId] from the queue (cleaning temporary files). */
+    @Synchronized
+    fun cancelManga(mangaId: Long): List<DesktopDownload> = chapterIdsOf(mangaId) { true }.mapNotNull { cancel(it) }
+
+    /** Moves all chapters of [mangaId] ahead of the rest of the queue, keeping their relative order. */
+    @Synchronized
+    fun moveMangaToTop(mangaId: Long): Boolean {
+        val list = _queueState.value
+        val (group, rest) = list.partition { it.mangaId == mangaId }
+        val reordered = group + rest
+        if (group.isEmpty() || reordered.map { it.chapterId } == list.map { it.chapterId }) return false
+        _queueState.value = reordered
+        persistQueue()
+        return true
+    }
+
+    private fun chapterIdsOf(mangaId: Long, filter: (DesktopDownload) -> Boolean): List<Long> =
+        _queueState.value.filter { it.mangaId == mangaId && filter(it) }.map { it.chapterId }
+
     @Synchronized
     fun restoreDownloads(items: List<DesktopDownload>) {
         if (items.isEmpty()) return

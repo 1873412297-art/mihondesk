@@ -54,6 +54,7 @@ class BrowsePresenter(
     private val onExtensionUpdatesAvailable: (Int) -> Unit = {},
     private val stringsProvider: () -> DesktopStrings = { DesktopStrings.resolve(preferenceStore.load().language) },
     private val iconFetcher: (suspend (String) -> ByteArray?)? = null,
+    private val activityCenter: mihon.desktop.activity.ActivityCenter? = null,
 ) {
     private var iconBackfillStarted = false
 
@@ -726,12 +727,21 @@ class BrowsePresenter(
                 errorMessage = null,
             )
         }
+        val activityId = "extension:$pkg"
+        activityCenter?.begin(activityId, mihon.desktop.activity.ActivityKind.EXTENSION_INSTALL, subject = name)
         val job = scope.launch(start = CoroutineStart.LAZY) {
             try {
                 action()
+                activityCenter?.succeed(activityId)
             } catch (cancelled: CancellationException) {
+                activityCenter?.remove(activityId)
                 throw cancelled
             } catch (failure: Exception) {
+                activityCenter?.fail(
+                    activityId,
+                    reason = failure.message ?: failure.javaClass.simpleName,
+                    retry = { startInstallation(pkg, name, phase, action) },
+                )
                 val reason = classifyInstallFailure(failure)
                 _state.update {
                     it.copy(

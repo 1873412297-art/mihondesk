@@ -171,6 +171,11 @@ data class DesktopShellActions(
     val onMoveDownDownload: (Long) -> Unit = {},
     val onRetryDownload: (Long) -> Unit = {},
     val onRetryAllFailedDownloads: () -> Unit = {},
+    val onDownloadGroupAction: (
+        mangaId: Long,
+        action: mihon.desktop.ui.tasks.DownloadGroupAction,
+    ) -> Unit = { _, _ -> },
+    val onReorderDownload: (fromIndex: Int, toIndex: Int) -> Unit = { _, _ -> },
     val onReadDownloadedChapter: (Long, Long) -> Unit = { _, chapterId -> onReadChapter(chapterId) },
     val onRepairBrokenCovers: (() -> Unit)? = null,
     val onCheckForUpdates: () -> Unit = {},

@@ -1,6 +1,7 @@
 package mihon.desktop.ui.tasks
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,8 +22,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DeleteSweep
 import androidx.compose.material.icons.rounded.DownloadDone
+import androidx.compose.material.icons.rounded.DragIndicator
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
+import androidx.compose.material.icons.rounded.KeyboardDoubleArrowUp
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
@@ -52,8 +55,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.pointer.PointerIcon
+import androidx.compose.ui.input.pointer.pointerHoverIcon
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -105,6 +113,8 @@ fun DownloadsScreen(
     recoveryMessage: String? = null,
     storageError: String? = null,
     onRetryAllFailed: () -> Unit = {},
+    onGroupAction: (mangaId: Long, action: DownloadGroupAction) -> Unit = { _, _ -> },
+    onReorder: (fromIndex: Int, toIndex: Int) -> Unit = { _, _ -> },
 ) {
     val strings = LocalStrings.current
     var query by rememberSaveable { mutableStateOf("") }
@@ -332,6 +342,8 @@ fun DownloadsScreen(
                             DownloadGroupHeader(
                                 group = group,
                                 expanded = expanded,
+                                isFirst = queue.firstOrNull()?.mangaId == group.mangaId,
+                                onAction = { action -> onGroupAction(group.mangaId, action) },
                                 onToggle = {
                                     collapsedMangaIds = if (expanded) {
                                         collapsedMangaIds + group.mangaId
@@ -346,19 +358,29 @@ fun DownloadsScreen(
                             val queueIndex = indexMap[item.chapterId] ?: -1
                             val canMoveUp = queueIndex > 0
                             val canMoveDown = queueIndex in 0 until queue.lastIndex
-                            DownloadCard(
-                                download = item,
-                                isRunning = isRunning,
-                                canMoveUp = canMoveUp,
-                                canMoveDown = canMoveDown,
-                                onPause = { onPause(item.chapterId) },
-                                onResume = { onResume(item.chapterId) },
-                                onMoveUp = { onMoveUp(item.chapterId) },
-                                onMoveDown = { onMoveDown(item.chapterId) },
-                                onCancel = { onCancel(item.chapterId) },
-                                onRetry = { onRetry(item.chapterId) },
-                                onRead = { onReadChapter(item.mangaId, item.chapterId) },
-                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                DownloadDragHandle(
+                                    chapterId = item.chapterId,
+                                    enabled = queueIndex >= 0 && queue.size > 1,
+                                    onDrop = { offsetPx, extentPx ->
+                                        val target = dragReorderTarget(queueIndex, offsetPx, extentPx, queue.lastIndex)
+                                        if (target != queueIndex) onReorder(queueIndex, target)
+                                    },
+                                )
+                                DownloadCard(
+                                    download = item,
+                                    isRunning = isRunning,
+                                    canMoveUp = canMoveUp,
+                                    canMoveDown = canMoveDown,
+                                    onPause = { onPause(item.chapterId) },
+                                    onResume = { onResume(item.chapterId) },
+                                    onMoveUp = { onMoveUp(item.chapterId) },
+                                    onMoveDown = { onMoveDown(item.chapterId) },
+                                    onCancel = { onCancel(item.chapterId) },
+                                    onRetry = { onRetry(item.chapterId) },
+                                    onRead = { onReadChapter(item.mangaId, item.chapterId) },
+                                )
+                            }
                         }
                     }
                 }
@@ -750,7 +772,13 @@ private fun DownloadCard(
 }
 
 @Composable
-private fun DownloadGroupHeader(group: DownloadGroup, expanded: Boolean, onToggle: () -> Unit) {
+private fun DownloadGroupHeader(
+    group: DownloadGroup,
+    expanded: Boolean,
+    isFirst: Boolean,
+    onAction: (DownloadGroupAction) -> Unit,
+    onToggle: () -> Unit,
+) {
     val strings = LocalStrings.current
     val toggleLabel = strings.text(
         if (expanded) UiText.DownloadGroupCollapse else UiText.DownloadGroupExpand,
@@ -786,6 +814,100 @@ private fun DownloadGroupHeader(group: DownloadGroup, expanded: Boolean, onToggl
         if (group.failedCount > 0) {
             StatusBadge(DownloadStatus.ERROR, isRunning = true)
         }
+        Spacer(Modifier.weight(1f))
+        val hasActive = group.items.any {
+            it.status == DownloadStatus.QUEUED || it.status == DownloadStatus.DOWNLOADING
+        }
+        val hasPaused = group.items.any { it.status == DownloadStatus.PAUSED }
+        if (hasActive) {
+            GroupActionButton(Icons.Rounded.Pause, strings.text(UiText.DownloadGroupPause), "pause", group.mangaId) {
+                onAction(DownloadGroupAction.PAUSE)
+            }
+        }
+        if (hasPaused) {
+            GroupActionButton(
+                Icons.Rounded.PlayArrow,
+                strings.text(UiText.DownloadGroupResume),
+                "resume",
+                group.mangaId,
+            ) { onAction(DownloadGroupAction.RESUME) }
+        }
+        if (group.failedCount > 0) {
+            GroupActionButton(Icons.Rounded.Refresh, strings.text(UiText.DownloadGroupRetry), "retry", group.mangaId) {
+                onAction(DownloadGroupAction.RETRY)
+            }
+        }
+        if (!isFirst) {
+            GroupActionButton(
+                Icons.Rounded.KeyboardDoubleArrowUp,
+                strings.text(UiText.DownloadGroupMoveTop),
+                "top",
+                group.mangaId,
+            ) { onAction(DownloadGroupAction.MOVE_TO_TOP) }
+        }
+        GroupActionButton(Icons.Rounded.Close, strings.text(UiText.DownloadGroupCancel), "cancel", group.mangaId) {
+            onAction(DownloadGroupAction.CANCEL)
+        }
+    }
+}
+
+@Composable
+private fun GroupActionButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    tag: String,
+    mangaId: Long,
+    onClick: () -> Unit,
+) {
+    DesktopTooltipBox(text = label) {
+        IconButton(onClick = onClick, modifier = Modifier.size(32.dp).testTag("download-group-$tag-$mangaId")) {
+            Icon(icon, contentDescription = label, modifier = Modifier.size(18.dp))
+        }
+    }
+}
+
+@Composable
+private fun DownloadDragHandle(chapterId: Long, enabled: Boolean, onDrop: (offsetPx: Float, extentPx: Float) -> Unit) {
+    val label = LocalStrings.current.text(UiText.DownloadDragHandle)
+    var offset by remember { mutableStateOf(0f) }
+    var extent by remember { mutableStateOf(0f) }
+    val spacingPx = with(androidx.compose.ui.platform.LocalDensity.current) { 10.dp.toPx() }
+    Box(
+        modifier = Modifier
+            .width(24.dp)
+            .height(48.dp)
+            .onGloballyPositioned { coords ->
+                // The card row is the parent; its height approximates one queue slot.
+                extent = (coords.parentLayoutCoordinates?.size?.height ?: coords.size.height).toFloat() + spacingPx
+            }
+            .then(
+                if (enabled) {
+                    Modifier
+                        .pointerHoverIcon(PointerIcon.Hand)
+                        .pointerInput(chapterId) {
+                            detectDragGestures(
+                                onDragStart = { offset = 0f },
+                                onDragEnd = { onDrop(offset, extent) },
+                                onDragCancel = { offset = 0f },
+                            ) { change, drag ->
+                                change.consume()
+                                offset += drag.y
+                            }
+                        }
+                } else {
+                    Modifier
+                },
+            )
+            .semantics { contentDescription = label }
+            .testTag("download-drag-$chapterId"),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            Icons.Rounded.DragIndicator,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (enabled) 0.8f else 0.3f),
+            modifier = Modifier.size(18.dp),
+        )
     }
 }
 

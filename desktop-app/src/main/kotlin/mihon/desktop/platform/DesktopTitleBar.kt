@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -17,6 +18,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -25,6 +28,8 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInParent
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
@@ -125,7 +130,10 @@ object JbrTitleBar {
  * Lets clicks on interactive caption content (the app icon) reach Compose, while every other
  * point stays native caption so Snap, Snap Layouts, drag and double-click-maximize keep working.
  */
-private fun Modifier.captionHitTest(titleBar: WindowDecorations.CustomTitleBar): Modifier =
+private fun Modifier.captionHitTest(
+    titleBar: WindowDecorations.CustomTitleBar,
+    interactiveBounds: () -> androidx.compose.ui.geometry.Rect = { androidx.compose.ui.geometry.Rect.Zero },
+): Modifier =
     pointerInput(titleBar) {
         val context = currentCoroutineContext()
         awaitPointerEventScope {
@@ -133,7 +141,10 @@ private fun Modifier.captionHitTest(titleBar: WindowDecorations.CustomTitleBar):
             while (context.isActive) {
                 val event = awaitPointerEvent(PointerEventPass.Main)
                 event.changes.forEach { change ->
-                    if (!change.isConsumed && !inUserControl) {
+                    // clickable() consumes only on release, so hover/press over title-bar actions must be
+                    // claimed by position or the native caption would swallow the click as a drag.
+                    val overAction = interactiveBounds().contains(change.position)
+                    if (!change.isConsumed && !inUserControl && !overAction) {
                         titleBar.forceHitTest(false)
                     } else {
                         if (event.type == PointerEventType.Press) inUserControl = true
@@ -152,15 +163,19 @@ fun MihonTitleBar(
     title: String,
     icon: Painter?,
     iconDescription: String,
+    actions: @Composable RowScope.() -> Unit = {},
 ) {
     val colors = MaterialTheme.colorScheme
+    var actionsBounds by androidx.compose.runtime.remember {
+        androidx.compose.runtime.mutableStateOf(androidx.compose.ui.geometry.Rect.Zero)
+    }
     val controlsWidth = titleBar.rightInset.takeIf { it > 0f }?.dp ?: FALLBACK_CONTROLS_WIDTH_DP.dp
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .height(DESKTOP_TITLE_BAR_HEIGHT_DP.dp)
             .background(colors.surface)
-            .captionHitTest(titleBar)
+            .captionHitTest(titleBar) { actionsBounds }
             .testTag("mihon-title-bar"),
     ) {
         Row(modifier = Modifier.fillMaxWidth().fillMaxHeight(), verticalAlignment = Alignment.CenterVertically) {
@@ -184,6 +199,10 @@ fun MihonTitleBar(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f).padding(end = 8.dp),
             )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.onGloballyPositioned { actionsBounds = it.boundsInParent() },
+            ) { actions() }
             Spacer(Modifier.width(controlsWidth))
         }
         // Bottom separator shares the outlineVariant token with the Windows 11 1px window border.

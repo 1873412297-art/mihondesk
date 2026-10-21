@@ -121,6 +121,7 @@ import mihon.desktop.ui.shortcut.DesktopShortcutMatcher
 import mihon.desktop.ui.shortcut.DesktopShortcutsDialog
 import mihon.desktop.ui.shortcut.ShellShortcutAction
 import mihon.desktop.ui.shortcut.ShortcutCaptureState
+import mihon.desktop.ui.tasks.DownloadGroupAction
 import mihon.desktop.ui.track.TrackingDialog
 import mihon.desktop.ui.upcoming.UpcomingPresenter
 import mihon.desktop.ui.upcoming.UpcomingScreen
@@ -784,6 +785,9 @@ fun ApplicationScope.MihonDesktopApp(
                         title = windowTitle,
                         icon = appIcon,
                         iconDescription = currentLanguageStrings.titleBarSystemMenu,
+                        actions = {
+                            mihon.desktop.activity.TitleBarActivityCenter(runtime.activityCenter, preferences.language)
+                        },
                     )
                 }
             },
@@ -1391,6 +1395,18 @@ fun ApplicationScope.MihonDesktopApp(
                                     onMoveDownDownload = { chapterId -> downloader?.moveDown(chapterId) },
                                     onRetryDownload = { downloader?.retry(it) },
                                     onRetryAllFailedDownloads = { downloader?.retryAllFailed() },
+                                    onDownloadGroupAction = { mangaId, action ->
+                                        downloader?.let { d ->
+                                            when (action) {
+                                                DownloadGroupAction.PAUSE -> d.pauseManga(mangaId)
+                                                DownloadGroupAction.RESUME -> d.resumeManga(mangaId)
+                                                DownloadGroupAction.RETRY -> d.retryManga(mangaId)
+                                                DownloadGroupAction.CANCEL -> d.cancelManga(mangaId)
+                                                DownloadGroupAction.MOVE_TO_TOP -> d.moveMangaToTop(mangaId)
+                                            }
+                                        }
+                                    },
+                                    onReorderDownload = { from, to -> downloader?.reorder(from, to) },
                                     onReadDownloadedChapter = { mangaId, chapterId ->
                                         libraryPresenter.openMangaDetail(mangaId)
                                         navigator.navigate(DesktopDestination.Reader(chapterId))

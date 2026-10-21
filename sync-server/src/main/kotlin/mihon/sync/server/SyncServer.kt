@@ -36,6 +36,8 @@ class SyncServer(
     val maxChangesetPayloadBytes: Long = 16L * 1024 * 1024,
     val additionalTokens: Set<String> = emptySet(),
     val maxRequestsPerMinute: Int = 120,
+    /** Called (on a server thread) after a changeset from [deviceId] was stored. Must not block. */
+    val onChangesetAccepted: (deviceId: String) -> Unit = {},
 ) {
     private var engine: EmbeddedServer<CIOApplicationEngine, CIOApplicationEngine.Configuration>? = null
 
@@ -55,6 +57,7 @@ class SyncServer(
                 maxChangesetPayloadBytes = maxChangesetPayloadBytes,
                 additionalTokens = additionalTokens,
                 maxRequestsPerMinute = maxRequestsPerMinute,
+                onChangesetAccepted = onChangesetAccepted,
             )
         }
         server.start(wait = wait)
@@ -77,6 +80,7 @@ class SyncServer(
             maxChangesetPayloadBytes: Long = 16L * 1024 * 1024,
             additionalTokens: Set<String> = emptySet(),
             maxRequestsPerMinute: Int = 120,
+            onChangesetAccepted: (deviceId: String) -> Unit = {},
         ) {
             routing {
                 syncServerRoutes(
@@ -88,6 +92,7 @@ class SyncServer(
                     maxChangesetPayloadBytes = maxChangesetPayloadBytes,
                     additionalTokens = additionalTokens,
                     maxRequestsPerMinute = maxRequestsPerMinute,
+                    onChangesetAccepted = onChangesetAccepted,
                 )
             }
         }
@@ -102,6 +107,7 @@ class SyncServer(
             maxChangesetPayloadBytes: Long = 16L * 1024 * 1024,
             additionalTokens: Set<String> = emptySet(),
             maxRequestsPerMinute: Int = 120,
+            onChangesetAccepted: (deviceId: String) -> Unit = {},
         ) {
             val allTokens = (setOf(token) + additionalTokens).filter { it.isNotBlank() }.toSet()
             val rateLimiter = FixedWindowRateLimiter(maxRequestsPerMinute, 60_000)
@@ -223,6 +229,7 @@ class SyncServer(
                             call.respond(HttpStatusCode.NoContent)
                             return@post
                         } else {
+                            call.response.header(EXPECTED_CURSOR_HEADER, (lastCursor + 1).toString())
                             call.respond(
                                 HttpStatusCode.Conflict,
                                 "Cursor ${changeset.cursor} already exists with different payload",
@@ -230,12 +237,14 @@ class SyncServer(
                             return@post
                         }
                     } else if (changeset.cursor < lastCursor) {
+                        call.response.header(EXPECTED_CURSOR_HEADER, (lastCursor + 1).toString())
                         call.respond(
                             HttpStatusCode.Conflict,
                             "Cursor ${changeset.cursor} is not monotonically increasing (current head: $lastCursor)",
                         )
                         return@post
                     } else if (changeset.cursor > lastCursor + 1) {
+                        call.response.header(EXPECTED_CURSOR_HEADER, (lastCursor + 1).toString())
                         call.respond(
                             HttpStatusCode.Conflict,
                             "Cursor gap detected: expected ${lastCursor + 1}, got ${changeset.cursor}",
@@ -269,6 +278,7 @@ class SyncServer(
                     // Ignore background cleanup failure
                 }
 
+                runCatching { onChangesetAccepted(changeset.deviceId) }
                 call.response.header("X-Cursor", changeset.cursor.toString())
                 call.respond(HttpStatusCode.NoContent)
             }
@@ -339,3 +349,6 @@ class SyncServer(
         }
     }
 }
+
+/** Response header on cursor conflicts naming the cursor the server accepts next for that device. */
+const val EXPECTED_CURSOR_HEADER = "X-Expected-Cursor"

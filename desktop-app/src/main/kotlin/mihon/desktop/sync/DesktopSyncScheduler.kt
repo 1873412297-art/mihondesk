@@ -10,6 +10,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import mihon.desktop.activity.ActivityCenter
+import mihon.desktop.activity.ActivityKind
+import mihon.desktop.activity.SYNC_ACTIVITY_ID
 import mihon.desktop.library.db.SqlDelightLibraryRepository
 import mihon.desktop.library.model.ImportCounts
 import mihon.desktop.library.model.ImportReportItemRecord
@@ -19,18 +22,37 @@ import mihon.desktop.library.model.ImportType
 import mihon.desktop.library.sync.SqlDelightSyncLocalRepository
 import mihon.desktop.library.sync.SqlDelightSyncStateStore
 import mihon.desktop.preferences.DesktopPreferenceStore
+import mihon.desktop.preferences.DesktopPreferences
 import mihon.sync.engine.SyncEngine
 import mihon.sync.engine.SyncReport
 import mihon.sync.transport.http.HttpTransport
 import java.util.UUID
+
+/**
+ * Automatic sync decision: always when local changes are waiting to be pushed (reading progress
+ * reaches other devices within a minute), otherwise once per configured interval to pull.
+ */
+fun shouldAutoSync(prefs: DesktopPreferences, now: Long, localDirty: Boolean): Boolean {
+    if (!prefs.syncEnabled) return false
+    if (!prefs.syncServerEnabled || prefs.syncServerToken.isBlank()) return false
+    if (localDirty) return true
+    if (prefs.syncIntervalMinutes <= 0) return false
+    return now - prefs.lastSyncEpochMillis >= prefs.syncIntervalMinutes.toLong() * 60_000L
+}
 
 class DesktopSyncScheduler(
     private val preferenceStore: DesktopPreferenceStore,
     private val library: SqlDelightLibraryRepository,
     private val scope: CoroutineScope,
     private val clock: () -> Long = System::currentTimeMillis,
+    private val activityCenter: ActivityCenter? = null,
+    /** Quiet period that coalesces bursts of [requestSync] calls (e.g. several remote pushes). */
+    private val requestDebounceMillis: Long = 3_000L,
+    /** Test seam; defaults to a real sync against the in-app server. */
+    private val runner: (suspend () -> SyncReport)? = null,
 ) {
     private var scheduledJob: Job? = null
+    private var requestJob: Job? = null
     private val syncMutex = Mutex()
 
     @Volatile
@@ -60,22 +82,86 @@ class DesktopSyncScheduler(
 
     suspend fun checkAndRunAutoSync(): SyncReport? = syncMutex.withLock {
         val prefs = preferenceStore.load()
-        if (!prefs.syncEnabled || prefs.syncIntervalMinutes <= 0) {
+        if (!prefs.syncEnabled || !prefs.syncServerEnabled || prefs.syncServerToken.isBlank()) {
             return@withLock null
         }
-        val isConfigured = prefs.syncServerEnabled && prefs.syncServerToken.isNotBlank()
-        if (!isConfigured) return@withLock null
-
-        val intervalMillis = prefs.syncIntervalMinutes.toLong() * 60_000L
-        val now = clock()
-        if (now - prefs.lastSyncEpochMillis >= intervalMillis) {
-            return@withLock performSyncLocked()
-        }
-        null
+        val dirty = runner == null && runCatching { hasLocalChanges(prefs) }.getOrDefault(false)
+        if (shouldAutoSync(prefs, clock(), dirty)) performTracked() else null
     }
 
     suspend fun syncNow(): SyncReport = syncMutex.withLock {
-        performSyncLocked()
+        performTracked()
+    }
+
+    /**
+     * Asks for a sync soon (debounced). Used when a paired device pushed changes to the in-app
+     * server, so they are pulled into this library right away instead of at the next interval.
+     */
+    fun requestSync() {
+        val prefs = preferenceStore.load()
+        if (!prefs.syncEnabled || !prefs.syncServerEnabled || prefs.syncServerToken.isBlank()) return
+        synchronized(this) {
+            requestJob?.cancel()
+            requestJob = scope.launch(Dispatchers.IO) {
+                delay(requestDebounceMillis)
+                try {
+                    syncNow()
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (e: Exception) {
+                    mihon.desktop.logging.DesktopLogger.warn("DesktopSyncScheduler", "Requested sync failed", e)
+                }
+            }
+        }
+    }
+
+    /** Called by the in-app server for every accepted changeset; ignores this device's own pushes. */
+    fun onRemoteChangeset(deviceId: String) {
+        if (deviceId == preferenceStore.load().syncDeviceId) return
+        requestSync()
+    }
+
+    private suspend fun hasLocalChanges(prefs: DesktopPreferences): Boolean =
+        withContext(Dispatchers.IO) {
+            // Never synced yet: the first sync follows the interval / manual trigger.
+            if (prefs.syncDeviceId.isBlank()) return@withContext false
+            val stateStore = SqlDelightSyncStateStore(library.database) { prefs.syncDeviceId }
+            val repository = SqlDelightSyncLocalRepository(library.database)
+            val watermark = stateStore.getLastPushWatermark()
+            !repository.exportDelta(watermark).isEmpty || repository.exportTombstones(watermark).isNotEmpty()
+        }
+
+    private suspend fun performTracked(): SyncReport {
+        val center = activityCenter
+        center?.begin(SYNC_ACTIVITY_ID, ActivityKind.SYNC, retry = { requestSyncNow() })
+        val report = try {
+            runner?.invoke() ?: performSyncLocked()
+        } catch (cancelled: CancellationException) {
+            center?.remove(SYNC_ACTIVITY_ID)
+            throw cancelled
+        } catch (e: Exception) {
+            center?.fail(SYNC_ACTIVITY_ID, e.message ?: e.javaClass.simpleName)
+            throw e
+        }
+        if (report.success) {
+            center?.succeed(SYNC_ACTIVITY_ID)
+        } else {
+            center?.fail(SYNC_ACTIVITY_ID, report.errorMessage ?: "Sync failed")
+        }
+        if (runner != null) lastReport = report
+        return report
+    }
+
+    private fun requestSyncNow() {
+        scope.launch(Dispatchers.IO) {
+            try {
+                syncNow()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (e: Exception) {
+                mihon.desktop.logging.DesktopLogger.warn("DesktopSyncScheduler", "Retried sync failed", e)
+            }
+        }
     }
 
     private suspend fun performSyncLocked(): SyncReport = withContext(Dispatchers.IO) {

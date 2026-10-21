@@ -14,4 +14,10 @@ import java.io.IOException
 class SyncCursorConflictException(
     message: String,
     cause: Throwable? = null,
+    /**
+     * The cursor the server will accept next for this device, when it reports one
+     * (`X-Expected-Cursor`). Lets clients whose cursor history diverged from the server realign
+     * instead of failing every push.
+     */
+    val expectedCursor: Long? = null,
 ) : IOException(message, cause)

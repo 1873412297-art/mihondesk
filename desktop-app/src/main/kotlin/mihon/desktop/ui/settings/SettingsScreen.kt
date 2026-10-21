@@ -4237,6 +4237,72 @@ private fun AdvancedSettingsPane(
                     }
                 }
 
+                var orphanPreview by remember { mutableStateOf<mihon.desktop.download.CleanReport?>(null) }
+                OutlinedButton(
+                    onClick = {
+                        if (downloadCacheCleaner != null) {
+                            scope.launch {
+                                isCleaning = true
+                                val preview = withContext(Dispatchers.IO) {
+                                    downloadCacheCleaner.deleteDownloadsNotInLibrary(dryRun = true)
+                                }
+                                isCleaning = false
+                                if (preview.deletedChaptersCount == 0) {
+                                    cleanerMessage = strings.text(UiText.DeleteOrphanDownloadsNone)
+                                } else {
+                                    orphanPreview = preview
+                                }
+                            }
+                        }
+                    },
+                    enabled = !isCleaning && downloadCacheCleaner != null,
+                    modifier = Modifier.testTag("clean-orphan-downloads-button"),
+                ) {
+                    Text(strings.text(UiText.DeleteOrphanDownloads))
+                }
+                orphanPreview?.let { preview ->
+                    androidx.compose.material3.AlertDialog(
+                        onDismissRequest = { orphanPreview = null },
+                        title = { Text(strings.text(UiText.DeleteOrphanDownloads)) },
+                        text = {
+                            Text(
+                                "${preview.deletedChaptersCount} · ${formatStorageSize(preview.freedBytes)}",
+                                modifier = Modifier.testTag("orphan-downloads-preview"),
+                            )
+                        },
+                        confirmButton = {
+                            androidx.compose.material3.TextButton(
+                                onClick = {
+                                    orphanPreview = null
+                                    val cleaner = downloadCacheCleaner ?: return@TextButton
+                                    scope.launch {
+                                        isCleaning = true
+                                        val report = withContext(Dispatchers.IO) {
+                                            cleaner.deleteDownloadsNotInLibrary()
+                                        }
+                                        downloadSizeBytes = withContext(Dispatchers.IO) {
+                                            cleaner.calculateDownloadSize()
+                                        }
+                                        isCleaning = false
+                                        cleanerMessage = strings.text(
+                                            UiText.DeleteOrphanDownloadsDone,
+                                            report.deletedChaptersCount.toString(),
+                                            formatStorageSize(report.freedBytes),
+                                        )
+                                        usageRefresh++
+                                    }
+                                },
+                                modifier = Modifier.testTag("orphan-downloads-confirm"),
+                            ) { Text(strings.text(UiText.ContextDelete)) }
+                        },
+                        dismissButton = {
+                            androidx.compose.material3.TextButton(onClick = { orphanPreview = null }) {
+                                Text(strings.text(UiText.AppUpdateCancel))
+                            }
+                        },
+                    )
+                }
+
                 cleanerMessage?.let { msg ->
                     Text(
                         text = msg,
