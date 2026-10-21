@@ -122,7 +122,24 @@ class DesktopRuntime(
     val appUpdateService: mihon.desktop.updates.DesktopAppUpdateService =
         mihon.desktop.updates.DesktopAppUpdateService(),
     val appUpdateInstaller: mihon.desktop.updates.AppUpdateInstaller? = null,
+    private val deferredServices: () -> Unit = {},
 ) : AutoCloseable {
+    private val deferredServicesStarted = java.util.concurrent.atomic.AtomicBoolean(false)
+
+    /**
+     * Starts the services that are not needed for the first interactive frame (sync server, sync and
+     * backup schedulers, extension update check, Windows background tasks, orphan cleanup) on a
+     * background thread. Called by the UI once it is interactive; safe to call more than once.
+     */
+    fun startDeferredServices() {
+        if (!deferredServicesStarted.compareAndSet(false, true)) return
+        Thread({
+            runCatching { StartupTrace.phase("deferred services") { deferredServices() } }
+                .onFailure {
+                    mihon.desktop.logging.DesktopLogger.error("DesktopRuntime", "Deferred startup failed", it)
+                }
+        }, "mihon-deferred-startup").apply { isDaemon = true }.start()
+    }
     private val shutdownLock = Any()
     private var shutdownResult: CompletableDeferred<Result<Unit>>? = null
     private val shutdownHooks = mutableListOf<suspend () -> Unit>()
@@ -276,12 +293,17 @@ object DesktopRuntimeFactory {
             mihon.desktop.logging.DesktopLogger.init(directories.logs)
         }
         mihon.desktop.logging.DesktopLogger.info("DesktopRuntime", "Initializing desktop runtime for command: $command")
-        val library = DesktopLibraryDatabaseFactory.open(directories.database.resolve("library.db"))
+        val launchUi = command == DesktopCommand.LaunchUi
+        val library = StartupTrace.phase("database open + migrations") {
+            DesktopLibraryDatabaseFactory.open(directories.database.resolve("library.db"))
+        }
         try {
             val backupImporter = AndroidBackupImporter(AndroidBackupCodec(), AndroidBackupValidator(), library)
             val localImporter = LocalMangaImporter(library)
             val localLibraryRoot = directories.root.resolve("media").resolve("local").toAbsolutePath().normalize()
-            cleanupOrphans(localImporter, localLibraryRoot)
+            // The UI shows the library straight from the local database; the orphan scan of the
+            // local-media folder runs after the first interactive frame.
+            if (!launchUi) cleanupOrphans(localImporter, localLibraryRoot)
             val preferences = DesktopPreferenceStore(directories.root.resolve("preferences.properties"))
             val notificationService = mihon.desktop.notification.WindowsDesktopNotificationService(
                 enabledProvider = { preferences.load().desktopNotificationsEnabled },
@@ -370,7 +392,9 @@ object DesktopRuntimeFactory {
                 preferenceStore = preferences,
                 policyProvider = { DesktopNetworkSettingsStore(preferences).load() },
             )
-            val installedExtensions = extensionInstaller.reconcileInstalledExtensions()
+            val installedExtensions = StartupTrace.phase("extension reconcile") {
+                extensionInstaller.reconcileInstalledExtensions()
+            }
             installedExtensions.filter { it.isEnabled }.forEach { ext ->
                 networkHelper.registerExtensionDomains(ext.pkg, ext.manifest.declaredDomains)
             }
@@ -503,40 +527,46 @@ object DesktopRuntimeFactory {
                 onUpdatesAvailable = { count -> notificationService.notifyExtensionUpdatePending(count) },
                 scope = appScope,
             )
-            if (command == DesktopCommand.LaunchUi) {
-                backupScheduler.start()
-                extensionUpdateChecker.start()
-                val currentPrefs = preferences.load()
-                if (currentPrefs.syncServerEnabled) {
-                    var token = currentPrefs.syncServerToken
-                    if (token.isBlank()) {
-                        token = DesktopPreferenceStore.generateSyncToken()
-                        preferences.updatePreferences { it.copy(syncServerToken = token) }
-                    }
-                    syncServerManager.start(
-                        port = currentPrefs.syncServerPort,
-                        token = token,
-                        deviceName = currentPrefs.syncServerDeviceName,
-                        quickPairEnabled = currentPrefs.syncServerQuickPair,
-                    )
-                }
-                syncScheduler.start()
-                trackSyncService.start(appScope)
-            }
+            if (launchUi) trackSyncService.start(appScope)
             val packagedExecutable = ProcessHandle.current().info().command().orElse(null)?.let(Path::of)
                 ?.takeIf { it.fileName.toString().lowercase() in setOf("mihondesk.exe", "mihonw.exe") }
             val backgroundScheduler = packagedExecutable?.let {
                 mihon.desktop.platform.WindowsBackgroundScheduler(it, directories.root)
             }
-            val launchPreferences = preferences.load()
-            if (command == DesktopCommand.LaunchUi && launchPreferences.backgroundTasksEnabled) {
-                val schedulePreferences = launchPreferences
-                runCatching {
-                    backgroundScheduler?.reconcile(
-                        true,
-                        schedulePreferences.libraryUpdateIntervalHours,
-                        schedulePreferences.backupIntervalHours,
-                    )
+            val deferredServices: () -> Unit = {
+                if (launchUi) {
+                    StartupTrace.phase("local orphan scan") { cleanupOrphans(localImporter, localLibraryRoot) }
+                    backupScheduler.start()
+                    extensionUpdateChecker.start()
+                    val currentPrefs = preferences.load()
+                    if (currentPrefs.syncServerEnabled) {
+                        StartupTrace.phase("sync server start") {
+                            var token = currentPrefs.syncServerToken
+                            if (token.isBlank()) {
+                                token = DesktopPreferenceStore.generateSyncToken()
+                                preferences.updatePreferences { it.copy(syncServerToken = token) }
+                            }
+                            syncServerManager.start(
+                                port = currentPrefs.syncServerPort,
+                                token = token,
+                                deviceName = currentPrefs.syncServerDeviceName,
+                                quickPairEnabled = currentPrefs.syncServerQuickPair,
+                            )
+                        }
+                    }
+                    syncScheduler.start()
+                    val launchPreferences = preferences.load()
+                    if (launchPreferences.backgroundTasksEnabled) {
+                        StartupTrace.phase("background task reconcile") {
+                            runCatching {
+                                backgroundScheduler?.reconcile(
+                                    true,
+                                    launchPreferences.libraryUpdateIntervalHours,
+                                    launchPreferences.backupIntervalHours,
+                                )
+                            }
+                        }
+                    }
                 }
             }
             return DesktopRuntime(
@@ -583,6 +613,7 @@ object DesktopRuntimeFactory {
                 processManager = processManager,
                 sourceManager = sourceManager,
                 onlineMangaSyncService = onlineMangaSyncService,
+                deferredServices = deferredServices,
                 closeReaderServices = {
                     mihon.desktop.logging.DesktopLogger.info("DesktopRuntime", "Shutting down desktop runtime services")
                     syncServerManager.stop()

@@ -1,10 +1,7 @@
 package mihon.desktop
 
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.window.application
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.BufferOverflow
@@ -28,11 +25,9 @@ import mihon.desktop.platform.SingleInstanceRequest
 import mihon.desktop.platform.SingleInstanceServer
 import mihon.desktop.preferences.DesktopPreferenceStore
 import mihon.desktop.preferences.DesktopPreferences
+import mihon.desktop.ui.MainAppWindow
 import mihon.desktop.ui.MihonDesktopApp
 import mihon.desktop.ui.splash.FirstRunSplash
-import mihon.desktop.ui.splash.StartupHandoff
-import mihon.desktop.ui.splash.StartupWindow
-import mihon.desktop.ui.splash.processUptimeMillis
 import java.io.PrintStream
 import java.nio.file.Path
 import kotlin.concurrent.thread
@@ -67,6 +62,7 @@ fun main(args: Array<String>) {
         val profile = DesktopProfileDirectories.resolve(args, System.getenv(), executableDirectory)
         DesktopLogger.init(profile.logs)
         DesktopLogger.info("Main", "Starting mihondesk with args: ${args.joinToString(" ")}")
+        StartupTrace.mark("main() entered (JVM started)")
         DesktopProfileLock.acquire(profile.root).use {
             // Close the race with an updater creating the guard after our initial check.
             PortableUpdateGuard.requireAllowed(executableDirectory, parsedCommand, System.getenv())
@@ -188,52 +184,34 @@ private fun launchUiWithStartupWindow(
     val playSplash = startupPreferences != null &&
         FirstRunSplash.shouldShow(DesktopPreferenceStore(profileRoot.resolve("preferences.properties")))
     val runtimeResult = mutableStateOf<Result<DesktopRuntime>?>(null)
-    val initStart = System.nanoTime()
     val initThread = thread(name = "mihon-runtime-init") {
-        val result = runCatching { DesktopRuntimeFactory.create(args, System.getenv(), executableDirectory) }
-        DesktopLogger.info(
-            "Startup",
-            "Runtime initialised in ${(System.nanoTime() - initStart) / 1_000_000} ms " +
-                "(${processUptimeMillis()} ms since process start)",
-        )
+        val result = runCatching {
+            StartupTrace.phase("runtime init") {
+                DesktopRuntimeFactory.create(args, System.getenv(), executableDirectory)
+            }
+        }
         runtimeResult.value = result
     }
     var failure: Throwable? = null
     try {
         application(exitProcessOnExit = false) {
-            var handOff by remember { mutableStateOf<Boolean?>(null) }
-            var startupWindowOpen by remember { mutableStateOf(true) }
             val result = runtimeResult.value
-            val runtime = result?.getOrNull()
             if (result != null && result.isFailure) {
                 LaunchedEffect(result) {
                     failure = result.exceptionOrNull()
                     exitApplication()
                 }
             } else {
-                if (startupWindowOpen) {
-                    StartupWindow(
-                        preferences = startupPreferences ?: DesktopPreferences(),
-                        playSplash = playSplash,
-                        ready = runtime != null,
-                        onHandOff = { skipped -> handOff = skipped },
-                        onCloseRequest = {
-                            DesktopLogger.info("Main", "Startup window closed before the app was ready")
-                            exitApplication()
-                        },
-                    )
-                }
-                val skipped = handOff
-                if (runtime != null && skipped != null) {
-                    MihonDesktopApp(
-                        runtime,
-                        forwarded.receiveAsFlow(),
-                        startupHandoff = StartupHandoff(skipped) {
-                            startupWindowOpen = false
-                            DesktopLogger.info("Startup", "Main window shown at ${processUptimeMillis()} ms")
-                        },
-                    )
-                }
+                MainAppWindow(
+                    preferences = startupPreferences ?: DesktopPreferences(),
+                    playSplash = playSplash,
+                    runtime = result?.getOrNull(),
+                    instanceRequests = forwarded.receiveAsFlow(),
+                    onCloseDuringStartup = {
+                        DesktopLogger.info("Main", "Window closed before the app was ready")
+                        exitApplication()
+                    },
+                )
             }
         }
     } finally {

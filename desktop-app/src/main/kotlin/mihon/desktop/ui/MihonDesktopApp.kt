@@ -135,6 +135,7 @@ fun ApplicationScope.MihonDesktopApp(
     runtime: DesktopRuntime,
     instanceRequests: Flow<SingleInstanceRequest> = emptyFlow(),
     startupHandoff: mihon.desktop.ui.splash.StartupHandoff? = null,
+    host: MainWindowHost? = null,
 ) {
     var preferences by remember { mutableStateOf(runtime.preferences.load()) }
     var showOnboarding by remember { mutableStateOf(!preferences.onboardingCompleted) }
@@ -144,6 +145,13 @@ fun ApplicationScope.MihonDesktopApp(
         )
     }
     var pendingStartupHandoff by remember { mutableStateOf(startupHandoff) }
+    LaunchedEffect(showFirstRunSplash) {
+        if (!showFirstRunSplash) {
+            mihon.desktop.StartupTrace.mark("interactive")
+            // Sync server, schedulers and scans start only once the library is usable.
+            runtime.startDeferredServices()
+        }
+    }
     var pendingExportPath by remember { mutableStateOf<java.nio.file.Path?>(null) }
     var pendingImportPath by remember { mutableStateOf<java.nio.file.Path?>(null) }
     val appLockController = remember(runtime.preferences) {
@@ -179,7 +187,7 @@ fun ApplicationScope.MihonDesktopApp(
     }
     var showShortcutsHelp by remember { mutableStateOf(false) }
     val keyBindingStore = remember(runtime.preferences) { DesktopKeyBindingStore(runtime.preferences) }
-    val windowState = rememberWindowState(
+    val windowState = host?.windowState ?: rememberWindowState(
         placement = if (savedPlacement.maximized) {
             ComposeWindowPlacement.Maximized
         } else {
@@ -253,6 +261,7 @@ fun ApplicationScope.MihonDesktopApp(
         }
     }
     val tray = remember {
+        mihon.desktop.StartupTrace.mark("tray created")
         DesktopTray(
             stringsProvider = { mihon.desktop.i18n.DesktopStrings.resolve(preferences.language) },
             onShow = { showMainWindow() },
@@ -719,7 +728,1276 @@ fun ApplicationScope.MihonDesktopApp(
             false
         }
     }
-    run {
+    val windowContent: @Composable androidx.compose.ui.window.FrameWindowScope.() -> Unit = {
+        SideEffect {
+            composeWindow = window
+            window.minimumSize = java.awt.Dimension(960, 640)
+        }
+        val darkTitleBar = resolveDarkTheme(preferences.themeMode)
+        // In the shared start-up window the caption was installed before the window was shown.
+        val customTitleBar = if (host != null) {
+            host.customTitleBar
+        } else {
+            remember(window) {
+                if (customTitleBarEnabled) {
+                    mihon.desktop.platform.JbrTitleBar.install(window, darkTitleBar)
+                } else {
+                    null
+                }
+            }
+        }
+        LaunchedEffect(window, darkTitleBar) {
+            mihon.desktop.platform.WindowsTitleBar.apply(window, darkTitleBar)
+            customTitleBar?.let { mihon.desktop.platform.JbrTitleBar.setDark(window, it, darkTitleBar) }
+        }
+        val libraryDropTarget = remember {
+            object : DragAndDropTarget {
+                override fun onDrop(event: DragAndDropEvent): Boolean {
+                    val files = droppedFiles(event)
+                    files.forEach(openExternalFile)
+                    return files.isNotEmpty()
+                }
+            }
+        }
+        MihonDesktopTheme(
+            themeMode = preferences.themeMode,
+            appTheme = preferences.appTheme,
+            isAmoled = preferences.themeDarkAmoled,
+            topBar = {
+                val borderColor = MaterialTheme.colorScheme.outlineVariant
+                LaunchedEffect(window, borderColor, customTitleBar) {
+                    mihon.desktop.platform.WindowsTitleBar.applyBorderColor(
+                        window,
+                        if (customTitleBar != null) borderColor.toColorRef() else null,
+                    )
+                }
+                val showCaption = mihon.desktop.platform.DesktopTitleBarPolicy.showCaptionStrip(
+                    customTitleBar = customTitleBar != null,
+                    borderlessOrFullscreen = readerWindowMode != ReaderWindowMode.NORMAL,
+                )
+                if (showCaption && customTitleBar != null) {
+                    mihon.desktop.platform.MihonTitleBar(
+                        frame = window,
+                        titleBar = customTitleBar,
+                        title = windowTitle,
+                        icon = appIcon,
+                        iconDescription = currentLanguageStrings.titleBarSystemMenu,
+                    )
+                }
+            },
+        ) {
+            mihon.desktop.i18n.ProvideDesktopStrings(preferences.language) {
+                androidx.compose.runtime.CompositionLocalProvider(
+                    mihon.desktop.image.LocalImageLoader provides runtime.imageLoader,
+                    mihon.desktop.image.LocalCustomCoverManager provides runtime.customCoverManager,
+                    LocalDesktopNavigator provides navigator,
+                    LocalSnackbarHostState provides snackbarHostState,
+                    LocalSearchFocusRequester provides searchFocusRequester,
+                    LocalTextInputTracker provides textInputTracker,
+                ) {
+                    Box(
+                        modifier = Modifier.fillMaxSize().pointerInput(appLockController) {
+                            awaitPointerEventScope {
+                                while (true) {
+                                    awaitPointerEvent(PointerEventPass.Initial)
+                                    appLockController.recordActivity()
+                                }
+                            }
+                        }.dragAndDropTarget(
+                            // Backups (.tachibk), CBZ/ZIP archives and manga folders can be dropped on the library.
+                            shouldStartDragAndDrop = { event ->
+                                navigator.current == DesktopDestination.Library &&
+                                    event.dragData() is DragData.FilesList
+                            },
+                            target = libraryDropTarget,
+                        ),
+                    ) {
+                        DesktopAppLockGate(
+                            isLocked = appLocked,
+                            onUnlock = { pin ->
+                                appLockController.unlock(pin) == UnlockResult.Success
+                            },
+                            onForgotPinConfirmed = appLockController::disableLock,
+                        ) {
+                            val strings = mihon.desktop.i18n.LocalStrings.current
+                            val destination = navigator.current
+                            LaunchedEffect(destination) {
+                                if (destination is DesktopDestination.Reader &&
+                                    readerWindowController.mode == ReaderWindowMode.NORMAL
+                                ) {
+                                    val savedReaderMode =
+                                        DesktopReaderSettingsStore(runtime.preferences).load().lastWindowMode
+                                    if (savedReaderMode != ReaderWindowMode.NORMAL) {
+                                        readerWindowController.restore(savedReaderMode, currentWindowPlacement())
+                                        applyReaderWindowMode(savedReaderMode)
+                                    }
+                                }
+                                if (destination != DesktopDestination.Library) {
+                                    isManageCategoriesDialogOpen = false
+                                    isEditMangaCategoriesDialogOpen = false
+                                }
+                            }
+                            if (destination is DesktopDestination.Reader) {
+                                val currentChapterId = destination.chapterId
+                                val filteredNavigationChapters = if (mangaDetailState.readerChapters.isNotEmpty()) {
+                                    mangaDetailState.readerChapters
+                                } else {
+                                    mangaDetailState.allChapters
+                                }
+                                val navigationChapters = readerNavigationChapters(
+                                    filteredNavigationChapters,
+                                    mangaDetailState.allChapters,
+                                    currentChapterId,
+                                )
+                                val readableChapters = remember(
+                                    navigationChapters,
+                                    mangaDetailState.readerAvailability,
+                                    currentChapterId,
+                                ) {
+                                    val available = if (mangaDetailState.readerAvailability.isEmpty()) {
+                                        navigationChapters
+                                    } else {
+                                        navigationChapters.filter {
+                                            mangaDetailState.readerAvailability[it.id] ==
+                                                ChapterReaderAvailability.Readable
+                                        }
+                                    }
+                                    if (mangaDetailState.readerChapters.isNotEmpty()) {
+                                        available
+                                    } else {
+                                        available.sortedWith(
+                                            compareBy<mihon.desktop.library.model.LibraryChapter> {
+                                                it.chapterNumber
+                                            }.thenBy { it.sourceOrder },
+                                        )
+                                    }
+                                }
+                                val currentChapterIdx = readableChapters.indexOfFirst { it.id == currentChapterId }
+                                val prevChapter = if (currentChapterIdx >
+                                    0
+                                ) {
+                                    readableChapters[currentChapterIdx - 1]
+                                } else {
+                                    null
+                                }
+                                val nextChapter = if (currentChapterIdx in 0 until readableChapters.size - 1) {
+                                    readableChapters[currentChapterIdx + 1]
+                                } else {
+                                    null
+                                }
+                                val sortedAllChapters = remember(navigationChapters) { navigationChapters }
+                                val transitionCatalog = remember(
+                                    sortedAllChapters,
+                                    mangaDetailState.readerAvailability,
+                                    mangaDetailState.downloadedChapterIds,
+                                    mangaDetailState.chapterSettings.displayMode,
+                                    strings,
+                                ) {
+                                    sortedAllChapters.map { chapter ->
+                                        ReaderChapterTransitionChapter(
+                                            id = chapter.id,
+                                            title = chapterDisplayLabel(
+                                                chapter,
+                                                mangaDetailState.chapterSettings.displayMode,
+                                                strings,
+                                            ),
+                                            chapterNumber = chapter.chapterNumber,
+                                            scanlator = chapter.scanlator,
+                                            downloaded = mangaDetailState.downloadedChapterIds.contains(chapter.id),
+                                            available = mangaDetailState.readerAvailability.isEmpty() ||
+                                                mangaDetailState.readerAvailability[chapter.id] ==
+                                                ChapterReaderAvailability.Readable,
+                                            read = chapter.read,
+                                        )
+                                    }
+                                }
+                                val transitionCurrent = transitionCatalog.firstOrNull { it.id == currentChapterId }
+                                val transitionPrevious = prevChapter?.let { prev ->
+                                    transitionCatalog.firstOrNull { it.id == prev.id }
+                                }
+                                val transitionNext = nextChapter?.let { next ->
+                                    transitionCatalog.firstOrNull { it.id == next.id }
+                                }
+                                val readerBookmarkStore: ReaderChapterBookmarkStore? = remember(
+                                    runtime.library,
+                                    mangaDetailState.manga?.id,
+                                ) {
+                                    mangaDetailState.manga?.id?.let { mangaId ->
+                                        LibraryChapterBookmarkStore(
+                                            findChapter = { chapterId ->
+                                                runtime.library.chapterSnapshot(mangaId)
+                                                    .firstOrNull { it.id == chapterId }
+                                            },
+                                            mutationPort = runtime.library,
+                                        )
+                                    }
+                                }
+
+                                val readerManga = mangaDetailState.manga?.takeIf { manga ->
+                                    mangaDetailState.allChapters.any {
+                                        it.id == destination.chapterId && it.mangaId == manga.id
+                                    }
+                                }
+                                fun leaveReader(afterClose: () -> Unit) {
+                                    val chapter = mangaDetailState.allChapters.firstOrNull {
+                                        it.id == destination.chapterId
+                                    }
+                                    val manga = readerManga
+                                    if (chapter != null && manga != null) {
+                                        presenterScope.launch {
+                                            val prefs = runtime.preferences.load()
+                                            if (!prefs.incognitoMode) {
+                                                runtime.trackSyncService?.onChapterRead(
+                                                    manga.id,
+                                                    chapter.chapterNumber,
+                                                )
+                                            }
+                                            if (prefs.downloadAhead > 0) {
+                                                runtime.downloader?.checkAndDownloadAhead(
+                                                    manga = manga,
+                                                    currentChapter = chapter,
+                                                    allChapters = mangaDetailState.chapters,
+                                                    count = prefs.downloadAhead,
+                                                )
+                                            }
+                                            if (prefs.deleteDownloadedRead && !prefs.incognitoMode) {
+                                                runtime.downloader?.deleteDownloadedChapter(manga, chapter)
+                                            }
+                                        }
+                                    }
+                                    transitionReaderWindow(ReaderWindowMode.NORMAL)
+                                    afterClose()
+                                }
+
+                                DesktopBackHandler {
+                                    if (handleReaderEscape()) {
+                                        leaveReader { navigator.pop() }
+                                    }
+                                    true
+                                }
+
+                                ReaderDestination(
+                                    destination = destination,
+                                    runtime = runtime,
+                                    mangaTitle = mangaDetailState.manga?.title ?: "Reader",
+                                    chapterTitle = mangaDetailState.allChapters.firstOrNull {
+                                        it.id == destination.chapterId
+                                    }?.let { chapter ->
+                                        chapterDisplayLabel(
+                                            chapter,
+                                            mangaDetailState.chapterSettings.displayMode,
+                                            strings,
+                                        )
+                                    } ?: strings.text(UiText.ChapterNumberLabel, destination.chapterId),
+                                    mangaId = readerManga?.id,
+                                    chapterCatalog = transitionCatalog,
+                                    previousChapter = transitionPrevious,
+                                    nextChapter = transitionNext,
+                                    currentChapter = transitionCurrent,
+                                    currentChapterDownloaded =
+                                    mangaDetailState.downloadedChapterIds.contains(currentChapterId),
+                                    bookmarkStore = readerBookmarkStore,
+                                    onBack = { leaveReader { navigator.back() } },
+                                    onOpenMangaDetails = {
+                                        readerManga?.let { manga ->
+                                            leaveReader {
+                                                libraryPresenter.openMangaDetail(manga.id)
+                                                navigator.navigate(DesktopDestination.MangaDetails(manga.id))
+                                            }
+                                        }
+                                    },
+                                    onPreviousChapter = {
+                                        if (prevChapter != null) {
+                                            navigator.navigate(DesktopDestination.Reader(prevChapter.id))
+                                        }
+                                    },
+                                    onNextChapter = {
+                                        if (nextChapter != null) {
+                                            navigator.navigate(DesktopDestination.Reader(nextChapter.id))
+                                        }
+                                    },
+                                    onChapterSelected = { chapterId ->
+                                        navigator.navigate(DesktopDestination.Reader(chapterId))
+                                    },
+                                    hasPreviousChapter = prevChapter != null,
+                                    hasNextChapter = nextChapter != null,
+                                    onFullscreen = {
+                                        val mode = readerWindowController.toggleFullscreen(currentWindowPlacement())
+                                        applyReaderWindowMode(mode)
+                                    },
+                                    onBorderless = {
+                                        val mode = readerWindowController.toggleBorderless(currentWindowPlacement())
+                                        applyReaderWindowMode(mode)
+                                    },
+                                    onEscape = ::handleReaderEscape,
+                                    foreground = !windowState.isMinimized,
+                                )
+                            } else {
+                                val upcomingContent: (@Composable () -> Unit)? = if (destination ==
+                                    DesktopDestination.Upcoming
+                                ) {
+                                    {
+                                        UpcomingScreen(
+                                            state = upcomingState,
+                                            onBack = { navigator.back() },
+                                            onPreviousMonth = upcomingPresenter::previousMonth,
+                                            onNextMonth = upcomingPresenter::nextMonth,
+                                            onSelectDate = upcomingPresenter::selectDate,
+                                            onOpenFilter = { upcomingPresenter.setFilterDialogOpen(true) },
+                                            onDismissFilter = { upcomingPresenter.setFilterDialogOpen(false) },
+                                            onCycleCategory = upcomingPresenter::cycleCategory,
+                                            onClearFilters = upcomingPresenter::clearFilters,
+                                            onOpenManga = { mangaId ->
+                                                navigator.navigate(DesktopDestination.Library)
+                                                libraryPresenter.selectManga(mangaId)
+                                            },
+                                            onRetry = upcomingPresenter::retry,
+                                        )
+                                    }
+                                } else {
+                                    null
+                                }
+                                val sharedMangaDetailActions = MangaDetailActions(
+                                    onReadChapter = { chapterId ->
+                                        navigator.navigate(DesktopDestination.Reader(chapterId))
+                                    },
+                                    onInstallMissingSource = { extItem ->
+                                        presenterScope.launch {
+                                            try {
+                                                runtime.extensionInstaller.downloadAndInstall(
+                                                    downloadUrl = extItem.downloadUrl,
+                                                    expectedSha256 = extItem.sha256,
+                                                    repoUrl = extItem.repoUrl,
+                                                    storeItem = extItem,
+                                                )
+                                                libraryPresenter.refreshDetails()
+                                            } catch (e: Exception) {
+                                                snackbarHostState.showSnackbar(
+                                                    formatNetworkErrorMessage(
+                                                        e.message ?: "Failed to install extension",
+                                                        strings,
+                                                    ),
+                                                )
+                                            }
+                                        }
+                                    },
+                                    onIgnoreMissingSource = {
+                                        val manga = mangaDetailState.manga
+                                        if (manga != null) {
+                                            libraryPresenter.ignoreMissingSource(manga.id)
+                                        }
+                                    },
+                                    onEditCategories = {
+                                        if (mangaDetailState.manga?.favorite == true) {
+                                            isEditMangaCategoriesDialogOpen = true
+                                        } else {
+                                            pendingMangaOrganizationAction = MangaOrganizationAction.Categories
+                                        }
+                                    },
+                                    onOpenTracking = {
+                                        if (mangaDetailState.manga?.favorite == true) {
+                                            isTrackingDialogOpen = true
+                                        } else {
+                                            pendingMangaOrganizationAction = MangaOrganizationAction.Tracking
+                                        }
+                                    },
+                                    onEditInfo = { libraryPresenter.setEditInfoDialogOpen(true) },
+                                    onDismissEditInfo = { libraryPresenter.setEditInfoDialogOpen(false) },
+                                    onSaveMangaInfo = libraryPresenter::updateSelectedMangaInfo,
+                                    onResetMangaInfo = libraryPresenter::resetSelectedMangaInfo,
+                                    onChapterFilterChange = libraryPresenter::setChapterFilter,
+                                    onChapterSortChange = libraryPresenter::setChapterSort,
+                                    onToggleBookmark = libraryPresenter::toggleChapterBookmark,
+                                    onToggleRead = libraryPresenter::toggleChapterRead,
+                                    onMarkPreviousRead = libraryPresenter::markPreviousChaptersRead,
+                                    onDownloadChapter = libraryPresenter::downloadChapter,
+                                    onDeleteDownload = { chapterId ->
+                                        libraryPresenter.deleteChapterDownload(chapterId)
+                                        presenterScope.launch {
+                                            val result = snackbarHostState.showSnackbar(
+                                                message = strings.text(UiText.DownloadDeleted),
+                                                actionLabel = strings.text(UiText.Undo),
+                                                duration = SnackbarDuration.Short,
+                                            )
+                                            if (result == SnackbarResult.ActionPerformed) {
+                                                libraryPresenter.downloadChapter(chapterId)
+                                            }
+                                        }
+                                    },
+                                    onDownloadBatch = { amount ->
+                                        if (amount == -1) {
+                                            libraryPresenter.downloadNextChapters(null, unreadOnly = false)
+                                        } else {
+                                            libraryPresenter.downloadNextChapters(amount, unreadOnly = true)
+                                        }
+                                    },
+                                    onBatchBookmarkChapters = libraryPresenter::batchBookmarkChapters,
+                                    onBatchMarkChaptersRead = libraryPresenter::batchMarkChaptersRead,
+                                    onBatchDownloadChapters = libraryPresenter::batchDownloadChapters,
+                                    onBatchDeleteDownloads = { chapterIds ->
+                                        libraryPresenter.batchDeleteChapterDownloads(chapterIds)
+                                        presenterScope.launch {
+                                            val result = snackbarHostState.showSnackbar(
+                                                message = strings.text(UiText.DownloadDeleted),
+                                                actionLabel = strings.text(UiText.Undo),
+                                                duration = SnackbarDuration.Short,
+                                            )
+                                            if (result == SnackbarResult.ActionPerformed) {
+                                                chapterIds.forEach { libraryPresenter.downloadChapter(it) }
+                                            }
+                                        }
+                                    },
+                                    onOpenChapterSettings = {
+                                        libraryPresenter.setChapterSettingsDialogOpen(true)
+                                    },
+                                    onDismissChapterSettings = {
+                                        libraryPresenter.setChapterSettingsDialogOpen(false)
+                                    },
+                                    onChapterDisplayModeChange = libraryPresenter::setChapterDisplayMode,
+                                    onExcludedScanlatorsChange = libraryPresenter::setExcludedScanlators,
+                                    onShowMissingChaptersChange = libraryPresenter::setShowMissingChapters,
+                                    onSetChapterSettingsAsDefault = libraryPresenter::setChapterSettingsAsDefault,
+                                    onResetChapterSettingsToDefault =
+                                    libraryPresenter::resetChapterSettingsToDefault,
+                                    onOpenReadingSettings = {
+                                        libraryPresenter.setReadingSettingsDialogOpen(true)
+                                    },
+                                    onDismissReadingSettings = {
+                                        libraryPresenter.setReadingSettingsDialogOpen(false)
+                                    },
+                                    onSaveReadingSettings = libraryPresenter::saveReadingSettingsOverride,
+                                    onClearReadingSettings = libraryPresenter::clearReadingSettingsOverride,
+                                    onCoverLoadFailed = libraryPresenter::onCoverLoadFailed,
+                                )
+                                DesktopShell(
+                                    appUpdateContent = {
+                                        mihon.desktop.ui.settings.AppUpdatePanel(
+                                            appUpdatePresenter,
+                                            runtime.appUpdateService,
+                                        )
+                                    },
+                                    selected = destination as? DesktopDestination ?: DesktopDestination.Library,
+                                    standaloneMangaDetails = destination is DesktopDestination.MangaDetails,
+                                    onDestinationSelected = { selectedDestination ->
+                                        navigator.navigate(selectedDestination)
+                                    },
+                                    libraryState = libraryState,
+                                    libraryBatchState = libraryBatchState,
+                                    mangaDetailState = mangaDetailState,
+                                    mangaDetailActions = sharedMangaDetailActions,
+                                    onToggleMangaLibrary = {
+                                        val manga = mangaDetailState.manga
+                                        if (manga != null) {
+                                            isMangaLibraryActionRunning = true
+                                            val wasFavorite = manga.favorite
+                                            libraryPresenter.setDetailFavorite(!wasFavorite) { updated ->
+                                                isMangaLibraryActionRunning = false
+                                                if (!updated) {
+                                                    presenterScope.launch {
+                                                        snackbarHostState.showSnackbar(
+                                                            "Unable to update library membership",
+                                                        )
+                                                    }
+                                                } else if (wasFavorite) {
+                                                    presenterScope.launch {
+                                                        val result = snackbarHostState.showSnackbar(
+                                                            message = strings.text(UiText.LibraryRemoved),
+                                                            actionLabel = strings.text(UiText.Undo),
+                                                            duration = SnackbarDuration.Short,
+                                                        )
+                                                        if (result == SnackbarResult.ActionPerformed) {
+                                                            libraryPresenter.setDetailFavorite(true)
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    },
+                                    onRefreshMangaSource = {
+                                        val manga = mangaDetailState.manga
+                                        if (manga != null && !isMangaSourceRefreshing) {
+                                            presenterScope.launch {
+                                                isMangaSourceRefreshing = true
+                                                try {
+                                                    val source = runtime.sourceManager.findSourceDescriptor(
+                                                        manga.sourceId,
+                                                    )
+                                                    if (source == null || source.isLocalSource()) {
+                                                        libraryPresenter.retryDetail()
+                                                    } else {
+                                                        runtime.onlineMangaSyncService.prepareOnlineMangaForReading(
+                                                            sourceId = manga.sourceId,
+                                                            manga = SManga(
+                                                                url = manga.url,
+                                                                title = manga.title,
+                                                                thumbnailUrl = manga.thumbnailUrl,
+                                                                initialized = false,
+                                                            ),
+                                                            forceRefresh = true,
+                                                        )
+                                                        libraryPresenter.retryDetail()
+                                                    }
+                                                } catch (error: Exception) {
+                                                    snackbarHostState.showSnackbar(
+                                                        formatNetworkErrorMessage(
+                                                            error.message ?: "Unable to refresh manga",
+                                                            strings,
+                                                        ),
+                                                    )
+                                                } finally {
+                                                    isMangaSourceRefreshing = false
+                                                }
+                                            }
+                                        }
+                                    },
+                                    isMangaLibraryActionRunning = isMangaLibraryActionRunning,
+                                    isMangaSourceRefreshing = isMangaSourceRefreshing,
+                                    onLibraryQueryChange = libraryPresenter::setQuery,
+                                    onMangaSelected = libraryPresenter::selectManga,
+                                    onBackFromMangaDetail = {
+                                        libraryPresenter.selectManga(null)
+                                        if (destination is DesktopDestination.MangaDetails) navigator.back()
+                                    },
+                                    onReadChapter = { chapterId ->
+                                        navigator.navigate(DesktopDestination.Reader(chapterId))
+                                    },
+                                    onContinueReading = { mangaId ->
+                                        libraryPresenter.continueReading(mangaId) { chapterId ->
+                                            navigator.navigate(DesktopDestination.Reader(chapterId))
+                                        }
+                                    },
+                                    onMangaDetailRetry = libraryPresenter::retryDetail,
+                                    onImportBackup = startImportBackup,
+                                    onImportLocal = startImportLocal,
+                                    onPairPhoneSync = startPairPhoneSync,
+                                    settingsInitialSection = settingsSectionRequest,
+                                    onLibraryRetry = libraryPresenter::retry,
+                                    onCategorySelected = libraryPresenter::selectCategory,
+                                    onManageCategories = { isManageCategoriesDialogOpen = true },
+                                    onEditMangaCategories = { isEditMangaCategoriesDialogOpen = true },
+                                    onDisplayModeChange = libraryPresenter::setDisplayMode,
+                                    onGridSizeChange = libraryPresenter::setGridSize,
+                                    onUnreadBadgeChange = libraryPresenter::setUnreadBadgeVisible,
+                                    onDownloadedBadgeChange = libraryPresenter::setDownloadedBadgeVisible,
+                                    onOpenFilterDialog = { libraryPresenter.setFilterDialogOpen(true) },
+                                    onCloseFilterDialog = { libraryPresenter.setFilterDialogOpen(false) },
+                                    onFilterChange = libraryPresenter::setFilterState,
+                                    onSortChange = libraryPresenter::setSortState,
+                                    onToggleSelectionMode = libraryPresenter::toggleSelectionMode,
+                                    onToggleMangaSelection = libraryPresenter::toggleMangaSelection,
+                                    onSelectAll = libraryPresenter::selectAll,
+                                    onDeselectAll = libraryPresenter::clearSelection,
+                                    onBatchChangeCategories = { libraryPresenter.setBatchCategoryDialogOpen(true) },
+                                    onBatchSetCategories = libraryPresenter::batchSetCategories,
+                                    onBatchCloseCategoryDialog = {
+                                        libraryPresenter.setBatchCategoryDialogOpen(false)
+                                    },
+                                    onBatchMarkRead = libraryPresenter::batchMarkRead,
+                                    onBatchDownload = libraryPresenter::batchDownload,
+                                    onBatchRemoveFromLibrary = {
+                                        val selectedIds = libraryState.selectionState.selectedMangaIds.toSet()
+                                        libraryPresenter.batchRemoveFromLibrary { removedIds ->
+                                            val toRestore = if (removedIds.isNotEmpty()) removedIds else selectedIds
+                                            presenterScope.launch {
+                                                val result = snackbarHostState.showSnackbar(
+                                                    message = strings.text(UiText.LibraryRemoved),
+                                                    actionLabel = strings.text(UiText.Undo),
+                                                    duration = SnackbarDuration.Short,
+                                                )
+                                                if (result == SnackbarResult.ActionPerformed) {
+                                                    libraryPresenter.restoreLibraryManga(toRestore)
+                                                }
+                                            }
+                                        }
+                                    },
+                                    downloadsQueue = downloadsQueue,
+                                    isDownloaderRunning = isDownloaderRunning,
+                                    downloadSpeedBytesPerSec = downloadSpeed,
+                                    downloadRecoveryMessage = downloadRecovery?.message,
+                                    downloadStorageError = downloadStorageError,
+                                    updatesUnreadCount = updatesUnreadCount,
+                                    onOpenRandomManga = {
+                                        val candidates = libraryState.items
+                                        val chosen = candidates.randomOrNull()
+                                        if (chosen != null) {
+                                            libraryPresenter.selectManga(chosen.id)
+                                        } else {
+                                            presenterScope.launch {
+                                                snackbarHostState.showSnackbar(
+                                                    strings.text(UiText.EmptyLibraryRandom),
+                                                )
+                                            }
+                                        }
+                                    },
+                                    onOpenChapterInWebView = { chapterId ->
+                                        val manga = mangaDetailState.manga ?: return@DesktopShell
+                                        val chapter =
+                                            mangaDetailState.allChapters.firstOrNull { it.id == chapterId }
+                                                ?: return@DesktopShell
+                                        val base = sourceBaseUrls[manga.sourceId]
+                                        val url = when {
+                                            chapter.url.startsWith("http") -> chapter.url
+                                            base != null -> base + chapter.url
+                                            else -> null
+                                        }
+                                        val source = runtime.sourceManager.findSourceDescriptor(manga.sourceId)
+                                        if (source == null || url == null) {
+                                            presenterScope.launch {
+                                                snackbarHostState.showSnackbar(
+                                                    strings.text(UiText.SourceWebPageUnavailable),
+                                                )
+                                            }
+                                        } else {
+                                            chapterWebViewRequest = source to url
+                                        }
+                                    },
+                                    onPauseAllDownloads = { downloader?.pause() },
+                                    onResumeAllDownloads = { downloader?.resume() },
+                                    onClearCompletedDownloads = {
+                                        val cleared = downloader?.clearCompleted() ?: emptyList()
+                                        if (cleared.isNotEmpty()) {
+                                            presenterScope.launch {
+                                                val result = snackbarHostState.showSnackbar(
+                                                    message = strings.text(UiText.CompletedDownloadsCleared),
+                                                    actionLabel = strings.text(UiText.Undo),
+                                                    duration = SnackbarDuration.Short,
+                                                )
+                                                if (result == SnackbarResult.ActionPerformed) {
+                                                    downloader?.restoreDownloads(cleared)
+                                                }
+                                            }
+                                        }
+                                    },
+                                    onCancelDownload = { chapterId ->
+                                        val cancelled = downloader?.cancel(chapterId)
+                                        if (cancelled != null) {
+                                            presenterScope.launch {
+                                                val result = snackbarHostState.showSnackbar(
+                                                    message = strings.text(UiText.DownloadCancelled),
+                                                    actionLabel = strings.text(UiText.Undo),
+                                                    duration = SnackbarDuration.Short,
+                                                )
+                                                if (result == SnackbarResult.ActionPerformed) {
+                                                    downloader.restoreDownloads(listOf(cancelled))
+                                                }
+                                            }
+                                        }
+                                    },
+                                    onPauseDownload = { chapterId -> downloader?.pause(chapterId) },
+                                    onResumeDownload = { chapterId -> downloader?.resume(chapterId) },
+                                    onMoveUpDownload = { chapterId -> downloader?.moveUp(chapterId) },
+                                    onMoveDownDownload = { chapterId -> downloader?.moveDown(chapterId) },
+                                    onRetryDownload = { downloader?.retry(it) },
+                                    onRetryAllFailedDownloads = { downloader?.retryAllFailed() },
+                                    onReadDownloadedChapter = { mangaId, chapterId ->
+                                        libraryPresenter.openMangaDetail(mangaId)
+                                        navigator.navigate(DesktopDestination.Reader(chapterId))
+                                    },
+                                    isUpdatingLibrary = isUpdatingLibrary,
+                                    isRepairingCovers = isRepairingCovers,
+                                    onRepairBrokenCovers = libraryPresenter::repairBrokenCovers,
+                                    lastUpdateResult = lastUpdateResult,
+                                    updateRunState = updateRunState,
+                                    updateProgress = updateProgress,
+                                    onCancelLibraryUpdate = { runtime.libraryUpdateScheduler?.cancelUpdate() },
+                                    updatedChapters = updatedChapters,
+                                    onCheckForUpdates = {
+                                        presenterScope.launch { runtime.libraryUpdateScheduler?.triggerUpdateNow() }
+                                    },
+                                    onMarkUpdatesChapterRead = { mangaId, chapterId ->
+                                        updatesRowOverrides = updatesRowOverrides +
+                                            (
+                                                chapterId to (updatesRowOverrides[chapterId] ?: UpdatesRowFlags())
+                                                    .copy(read = true)
+                                                )
+                                        libraryPresenter.markChapterRead(mangaId, chapterId)
+                                    },
+                                    onDownloadUpdatesChapter = { mangaId, chapterId ->
+                                        updatesRowOverrides = updatesRowOverrides +
+                                            (
+                                                chapterId to (updatesRowOverrides[chapterId] ?: UpdatesRowFlags())
+                                                    .copy(downloaded = true)
+                                                )
+                                        libraryPresenter.enqueueChapterDownload(mangaId, chapterId)
+                                    },
+                                    // Browse
+                                    browseContent = {
+                                        mihon.desktop.ui.browse.BrowseContentView(
+                                            runtime = runtime,
+                                            detailState = mangaDetailState,
+                                            detailActions = sharedMangaDetailActions,
+                                            onOpenMangaDetail = libraryPresenter::openMangaDetail,
+                                            onCloseMangaDetail = { libraryPresenter.selectManga(null) },
+                                            onRetryMangaDetail = libraryPresenter::retryDetail,
+                                        )
+                                    },
+                                    // History
+                                    historyGroups = historyState.groups,
+                                    historyQuery = historyState.query,
+                                    onHistoryQueryChange = { historyService?.setQuery(it) },
+                                    onDeleteHistoryItem = { chapterId ->
+                                        val item = historyState.groups.flatMap { it.items }.find {
+                                            it.chapterId ==
+                                                chapterId
+                                        }
+                                        historyService?.deleteItem(chapterId)
+                                        presenterScope.launch {
+                                            val result = snackbarHostState.showSnackbar(
+                                                message = strings.text(UiText.HistoryItemDeleted),
+                                                actionLabel = strings.text(UiText.Undo),
+                                                duration = SnackbarDuration.Short,
+                                            )
+                                            if (result == SnackbarResult.ActionPerformed && item != null) {
+                                                historyService?.restoreItem(item)
+                                            }
+                                        }
+                                    },
+                                    onClearAllHistory = { historyService?.clearAll() },
+                                    // Settings & Diagnostics
+                                    preferenceStore = runtime.preferences,
+                                    readerSettingsStore = remember {
+                                        DesktopReaderSettingsStore(runtime.preferences)
+                                    },
+                                    diagnosticService = runtime.diagnosticService,
+                                    trackerManager = runtime.trackerManager,
+                                    trackSyncService = runtime.trackSyncService,
+                                    backupScheduler = runtime.backupScheduler,
+                                    syncScheduler = runtime.syncScheduler,
+                                    syncServerManager = runtime.syncServerManager,
+                                    backgroundScheduler = runtime.backgroundScheduler,
+                                    updateScheduler = runtime.libraryUpdateScheduler,
+                                    cookieStore = runtime.cookieStore,
+                                    onUpdateLibrary = {
+                                        presenterScope.launch {
+                                            runtime.libraryUpdateScheduler?.triggerUpdateNow()
+                                        }
+                                    },
+                                    onEditInfo = { libraryPresenter.setEditInfoDialogOpen(true) },
+                                    onDismissEditInfo = { libraryPresenter.setEditInfoDialogOpen(false) },
+                                    onSaveMangaInfo = libraryPresenter::updateSelectedMangaInfo,
+                                    onResetMangaInfo = libraryPresenter::resetSelectedMangaInfo,
+                                    onChapterFilterChange = libraryPresenter::setChapterFilter,
+                                    onChapterSortChange = libraryPresenter::setChapterSort,
+                                    onToggleBookmark = libraryPresenter::toggleChapterBookmark,
+                                    onToggleRead = libraryPresenter::toggleChapterRead,
+                                    onMarkPreviousRead = libraryPresenter::markPreviousChaptersRead,
+                                    onDownloadChapter = libraryPresenter::downloadChapter,
+                                    onDeleteDownload = { chapterId ->
+                                        libraryPresenter.deleteChapterDownload(chapterId)
+                                        presenterScope.launch {
+                                            val result = snackbarHostState.showSnackbar(
+                                                message = strings.text(UiText.DownloadDeleted),
+                                                actionLabel = strings.text(UiText.Undo),
+                                                duration = SnackbarDuration.Short,
+                                            )
+                                            if (result == SnackbarResult.ActionPerformed) {
+                                                libraryPresenter.downloadChapter(chapterId)
+                                            }
+                                        }
+                                    },
+                                    onDownloadBatch = { amount ->
+                                        if (amount == -1) {
+                                            libraryPresenter.downloadNextChapters(null, unreadOnly = false)
+                                        } else {
+                                            libraryPresenter.downloadNextChapters(amount, unreadOnly = true)
+                                        }
+                                    },
+                                    onBatchBookmarkChapters = libraryPresenter::batchBookmarkChapters,
+                                    onBatchMarkChaptersRead = libraryPresenter::batchMarkChaptersRead,
+                                    onBatchDownloadChapters = libraryPresenter::batchDownloadChapters,
+                                    onBatchDeleteDownloads = { chapterIds ->
+                                        libraryPresenter.batchDeleteChapterDownloads(chapterIds)
+                                        presenterScope.launch {
+                                            val result = snackbarHostState.showSnackbar(
+                                                message = strings.text(UiText.DownloadDeleted),
+                                                actionLabel = strings.text(UiText.Undo),
+                                                duration = SnackbarDuration.Short,
+                                            )
+                                            if (result == SnackbarResult.ActionPerformed) {
+                                                chapterIds.forEach { libraryPresenter.downloadChapter(it) }
+                                            }
+                                        }
+                                    },
+                                    onOpenChapterSettings = {
+                                        libraryPresenter.setChapterSettingsDialogOpen(true)
+                                    },
+                                    onDismissChapterSettings = {
+                                        libraryPresenter.setChapterSettingsDialogOpen(false)
+                                    },
+                                    onChapterDisplayModeChange = libraryPresenter::setChapterDisplayMode,
+                                    onExcludedScanlatorsChange = libraryPresenter::setExcludedScanlators,
+                                    onShowMissingChaptersChange = libraryPresenter::setShowMissingChapters,
+                                    onSetChapterSettingsAsDefault = libraryPresenter::setChapterSettingsAsDefault,
+                                    onResetChapterSettingsToDefault =
+                                    libraryPresenter::resetChapterSettingsToDefault,
+                                    onDuplicateOpenManga = libraryPresenter::openDuplicateManga,
+                                    onDuplicateMigrate = libraryPresenter::migrateDuplicateTo,
+                                    onDuplicateAddAnyway = libraryPresenter::addDuplicateAnyway,
+                                    onDuplicateDismiss = libraryPresenter::dismissDuplicateDialog,
+                                    sourceNameFor = { sourceId ->
+                                        sourceNames[sourceId] ?: strings.text(UiText.SourceFallback, sourceId)
+                                    },
+                                    sourceBaseUrlFor = { sourceId -> sourceBaseUrls[sourceId] },
+                                    downloadCacheCleaner = runtime.downloadCacheCleaner,
+                                    downloadsDir = runtime.downloader?.diskProvider?.downloadsDir
+                                        ?: runtime.directories.root.resolve("media").resolve("downloads"),
+                                    diskCacheDir = runtime.directories.cache,
+                                    profileRoot = runtime.directories.root,
+                                    databaseCleaner =
+                                    runtime.library as? mihon.desktop.library.repository.LibraryDatabaseCleaner,
+                                    onOpenTracking = { isTrackingDialogOpen = true },
+                                    onExportBackup = {
+                                        presenterScope.launch {
+                                            val path =
+                                                mihon.desktop.ui.library.chooseExportBackup(
+                                                    strings.text(UiText.ExportBackup),
+                                                )
+                                                    ?: return@launch
+                                            pendingExportPath = path
+                                        }
+                                    },
+                                    onOpenOnboarding = {
+                                        // Replaying the first-run guide also replays splash v3 before it.
+                                        mihon.desktop.ui.splash.FirstRunSplash.reset(runtime.preferences)
+                                        showFirstRunSplash = true
+                                        showOnboarding = true
+                                    },
+                                    onPreferencesChanged = { updated ->
+                                        preferences = updated
+                                        appLockController.refresh()
+                                    },
+                                    // Phase 14: Stats & Incognito
+                                    statsData = statsData,
+                                    onRefreshStats = { presenterScope.launch { statsService?.refresh() } },
+                                    incognitoMode = preferences.incognitoMode,
+                                    onToggleIncognito = {
+                                        val updated = runtime.preferences.updatePreferences {
+                                            it.copy(incognitoMode = !it.incognitoMode)
+                                        }
+                                        preferences = updated
+                                    },
+                                    // Upcoming calendar (transient view opened from Updates)
+                                    isUpcomingOpen = destination == DesktopDestination.Upcoming,
+                                    upcomingContent = upcomingContent,
+                                    onOpenUpcoming = { navigator.navigate(DesktopDestination.Upcoming) },
+                                    onCloseUpcoming = { navigator.back() },
+                                    // App lock (desktop security)
+                                    appLockController = appLockController,
+                                    onLockNow = if (preferences.appLockEnabled) {
+                                        appLockController::lockNow
+                                    } else {
+                                        null
+                                    },
+                                )
+                                chapterWebViewRequest?.let { (webViewSource, webViewUrl) ->
+                                    mihon.desktop.ui.browse.SourceWebPageDialog(
+                                        runtime = runtime,
+                                        source = webViewSource,
+                                        urlOverride = webViewUrl,
+                                        onDismiss = { chapterWebViewRequest = null },
+                                        onRetry = { },
+                                    )
+                                }
+                                if (destination is DesktopDestination.MangaDetails) {
+                                    DesktopBackHandler {
+                                        libraryPresenter.selectManga(null)
+                                        navigator.pop()
+                                    }
+                                }
+                                if (destination == DesktopDestination.Upcoming) {
+                                    DesktopBackHandler {
+                                        navigator.pop()
+                                    }
+                                }
+                            }
+                            if (isManageCategoriesDialogOpen) {
+                                categoryService?.let { service ->
+                                    ManageCategoriesDialog(
+                                        categories = categories.sortedBy { it.order },
+                                        onDismiss = { isManageCategoriesDialogOpen = false },
+                                        onCreateCategory = service::createCategory,
+                                        onRenameCategory = service::renameCategory,
+                                        onDeleteCategory = { categoryId ->
+                                            if (libraryState.selectedCategoryId == categoryId) {
+                                                libraryPresenter.selectCategory(SYSTEM_ALL_CATEGORY.id)
+                                            }
+                                            service.deleteCategory(categoryId)
+                                        },
+                                        onMoveCategory = { category, newIndex ->
+                                            val ordered = categories.sortedBy { it.order }
+                                            val currentIndex = ordered.indexOfFirst { it.id == category.id }
+                                            if (currentIndex != -1 &&
+                                                newIndex in ordered.indices &&
+                                                currentIndex != newIndex
+                                            ) {
+                                                val reordered = ordered.toMutableList()
+                                                reordered.add(newIndex, reordered.removeAt(currentIndex))
+                                                reordered.forEachIndexed { index, item ->
+                                                    val newOrder = index.toLong()
+                                                    if (item.order != newOrder) {
+                                                        service.reorderCategory(item.id, newOrder)
+                                                    }
+                                                }
+                                            }
+                                        },
+                                    )
+                                }
+                            }
+                            val editManga = mangaDetailState.manga
+                            if (isEditMangaCategoriesDialogOpen && editManga != null) {
+                                categoryService?.let { service ->
+                                    EditMangaCategoriesDialog(
+                                        allCategories = categories.sortedBy { it.order },
+                                        assignedCategoryIds = editManga.categories.map { it.id }.toSet(),
+                                        onDismiss = { isEditMangaCategoriesDialogOpen = false },
+                                        onSave = { categoryIds ->
+                                            service.setMangaCategories(editManga.id, categoryIds)
+                                        },
+                                    )
+                                }
+                            }
+                            val currentTrackingManga = mangaDetailState.manga
+                            val trackerMgr = runtime.trackerManager
+                            if (isTrackingDialogOpen && currentTrackingManga != null && trackerMgr != null) {
+                                val tracksFlow = remember(currentTrackingManga.id) {
+                                    runtime.library.observeTracking(currentTrackingManga.id)
+                                }
+                                val tracksList by tracksFlow.collectAsState(initial = emptyList())
+                                val desktopTracks = tracksList.map { it.toDesktopTrackRecord() }
+
+                                TrackingDialog(
+                                    mangaTitle = currentTrackingManga.title,
+                                    trackers = trackerMgr.trackers,
+                                    currentTracks = desktopTracks,
+                                    onDismiss = { isTrackingDialogOpen = false },
+                                    onSaveTrack = { track ->
+                                        presenterScope.launch {
+                                            val tracker = trackerMgr.get(track.trackerId)
+                                            val local = track.copy(mangaId = currentTrackingManga.id)
+                                            val resolved = if (tracker != null && tracker.isLoggedIn) {
+                                                try {
+                                                    tracker.updateRemote(local)
+                                                } catch (_: Exception) {
+                                                    runtime.trackingQueue?.enqueue(local)
+                                                    local
+                                                }
+                                            } else {
+                                                runtime.trackingQueue?.enqueue(local)
+                                                local
+                                            }
+                                            // The insert upserts, so a track already bound to this
+                                            // manga and tracker keeps its row id.
+                                            runtime.library.insertTracking(resolved.toTrackingRecord())
+                                        }
+                                    },
+                                    onUnbindTrack = { trackerId ->
+                                        runtime.library.deleteTracking(currentTrackingManga.id, trackerId)
+                                    },
+                                    onSearchTrack = { tracker, query ->
+                                        tracker.search(query)
+                                    },
+                                )
+                            }
+                            pendingMangaOrganizationAction?.let { pendingAction ->
+                                AlertDialog(
+                                    onDismissRequest = { pendingMangaOrganizationAction = null },
+                                    confirmButton = {
+                                        TextButton(
+                                            onClick = {
+                                                pendingMangaOrganizationAction = null
+                                                libraryPresenter.setDetailFavorite(true) { added ->
+                                                    if (added) {
+                                                        when (pendingAction) {
+                                                            MangaOrganizationAction.Categories ->
+                                                                isEditMangaCategoriesDialogOpen = true
+                                                            MangaOrganizationAction.Tracking ->
+                                                                isTrackingDialogOpen =
+                                                                    true
+                                                        }
+                                                    } else {
+                                                        presenterScope.launch {
+                                                            snackbarHostState.showSnackbar(
+                                                                "Unable to add this manga to the library",
+                                                            )
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            modifier = Modifier.testTag("manga-organization-confirm"),
+                                        ) {
+                                            Text(strings.mangaDetailAddToLibrary)
+                                        }
+                                    },
+                                    dismissButton = {
+                                        TextButton(
+                                            onClick = { pendingMangaOrganizationAction = null },
+                                            modifier = Modifier.testTag("manga-organization-cancel"),
+                                        ) {
+                                            Text(strings.dialogCancel)
+                                        }
+                                    },
+                                    title = { Text(strings.mangaDetailAddToLibrary) },
+                                    text = {
+                                        Text(strings.mangaDetailOrganizationRequiresLibrary)
+                                    },
+                                    modifier = Modifier.testTag("manga-organization-confirmation"),
+                                )
+                            }
+                            ImportStateDialog(importState) { importState = ImportActionState.Idle }
+                            BackupRestoreDialog(backupRestoreState, {
+                                backupRestore.cancel()
+                            }, backupRestore::dismiss)
+                            pendingExportPath?.let { exportPath ->
+                                BackupOptionsDialog(
+                                    mode = BackupOptionsMode.Export,
+                                    onConfirm = { options ->
+                                        val target = exportPath
+                                        pendingExportPath = null
+                                        presenterScope.launch {
+                                            try {
+                                                withContext(Dispatchers.IO) {
+                                                    val backup =
+                                                        runtime.backupExporter.createBackup().filterByOptions(
+                                                            options,
+                                                        )
+                                                    mihon.desktop.library.backup.AndroidBackupCodec()
+                                                        .encode(backup, target)
+                                                }
+                                                snackbarHostState.showSnackbar(
+                                                    strings.backupExportSuccess(target.toString()),
+                                                )
+                                            } catch (e: Exception) {
+                                                snackbarHostState.showSnackbar(
+                                                    strings.backupExportFailed(e.message ?: ""),
+                                                )
+                                            }
+                                        }
+                                    },
+                                    onDismiss = { pendingExportPath = null },
+                                )
+                            }
+                            pendingImportPath?.let { importPath ->
+                                BackupOptionsDialog(
+                                    mode = BackupOptionsMode.Restore,
+                                    onConfirm = { options ->
+                                        val target = importPath
+                                        pendingImportPath = null
+                                        presenterScope.launch {
+                                            try {
+                                                val filteredPath = withContext(Dispatchers.IO) {
+                                                    val codec = mihon.desktop.library.backup.AndroidBackupCodec()
+                                                    val original = codec.decode(target)
+                                                    val filtered = original.filterByOptions(options)
+                                                    val tempPath =
+                                                        java.nio.file.Files.createTempFile(
+                                                            "restore-filtered-",
+                                                            ".tachibk",
+                                                        )
+                                                    tempPath.toFile().deleteOnExit()
+                                                    codec.encode(filtered, tempPath)
+                                                    tempPath
+                                                }
+                                                backupRestore.start(filteredPath)
+                                            } catch (e: Exception) {
+                                                snackbarHostState.showSnackbar(
+                                                    e.message ?: "Failed to process backup",
+                                                )
+                                            }
+                                        }
+                                    },
+                                    onDismiss = { pendingImportPath = null },
+                                )
+                            }
+                            if (showOnboarding && !showFirstRunSplash) {
+                                OnboardingDialog(
+                                    preferences = preferences,
+                                    repositories = runtime.extensionStoreService.getRepositories(),
+                                    onAddRepository = { repo ->
+                                        runtime.extensionStoreService.addRepository(repo)
+                                    },
+                                    onUpdatePreferences = { updated ->
+                                        preferences = runtime.preferences.updatePreferences { updated }
+                                        appLockController.refresh()
+                                    },
+                                    onFinish = {
+                                        showOnboarding = false
+                                        preferences =
+                                            runtime.preferences.updatePreferences {
+                                                it.copy(onboardingCompleted = true)
+                                            }
+                                    },
+                                    onGoToBrowse = {
+                                        showOnboarding = false
+                                        preferences =
+                                            runtime.preferences.updatePreferences {
+                                                it.copy(onboardingCompleted = true)
+                                            }
+                                        navigator.navigate(DesktopDestination.Browse)
+                                    },
+                                    onStartAction = { action ->
+                                        showOnboarding = false
+                                        preferences =
+                                            runtime.preferences.updatePreferences {
+                                                it.copy(onboardingCompleted = true)
+                                            }
+                                        when (action) {
+                                            StartAction.ImportLocal -> startImportLocal()
+                                            StartAction.RestoreBackup -> startImportBackup()
+                                            StartAction.PairPhone -> startPairPhoneSync()
+                                        }
+                                    },
+                                )
+                            }
+                            if (backupRestoreState is BackupRestoreState.Idle) {
+                                pendingMissingSources?.let { missingList ->
+                                    val installable = missingList.mapNotNull { it.extension }.distinctBy { it.pkg }
+                                    val missingMangaTotal = missingList.sumOf { it.mangaCount }
+                                    val unresolvedMangaCount = missingList.filter {
+                                        it.extension == null
+                                    }.sumOf { it.mangaCount }
+
+                                    AlertDialog(
+                                        onDismissRequest = {
+                                            if (!isInstallingMissingBatch) {
+                                                pendingMissingSources = null
+                                            }
+                                        },
+                                        modifier = Modifier.testTag("missing-source-dialog"),
+                                        title = {
+                                            Text(
+                                                strings.missingSourceDialogTitle(
+                                                    missingMangaTotal,
+                                                    installable.size,
+                                                ),
+                                            )
+                                        },
+                                        text = {
+                                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                if (installable.isNotEmpty()) {
+                                                    Text(installable.joinToString(", ") { it.name })
+                                                }
+                                                if (unresolvedMangaCount > 0) {
+                                                    Text(
+                                                        text = strings.missingSourceDialogNotFound(
+                                                            unresolvedMangaCount,
+                                                        ),
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    )
+                                                }
+                                                if (isInstallingMissingBatch) {
+                                                    Row(
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                                    ) {
+                                                        CircularProgressIndicator(modifier = Modifier.size(16.dp))
+                                                        Text(strings.missingSourceInstalling)
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        confirmButton = {
+                                            if (installable.isNotEmpty()) {
+                                                TextButton(
+                                                    onClick = {
+                                                        presenterScope.launch {
+                                                            isInstallingMissingBatch = true
+                                                            try {
+                                                                for (ext in installable) {
+                                                                    runtime.extensionInstaller.downloadAndInstall(
+                                                                        downloadUrl = ext.downloadUrl,
+                                                                        expectedSha256 = ext.sha256,
+                                                                        repoUrl = ext.repoUrl,
+                                                                        storeItem = ext,
+                                                                    )
+                                                                }
+                                                                libraryPresenter.refreshDetails()
+                                                            } catch (e: Exception) {
+                                                                snackbarHostState.showSnackbar(
+                                                                    e.message ?: "Failed to install extensions",
+                                                                )
+                                                            } finally {
+                                                                isInstallingMissingBatch = false
+                                                                pendingMissingSources = null
+                                                            }
+                                                        }
+                                                    },
+                                                    enabled = !isInstallingMissingBatch,
+                                                    modifier = Modifier.testTag(
+                                                        "missing-source-dialog-install-all",
+                                                    ),
+                                                ) {
+                                                    Text(strings.missingSourceDialogInstallAll)
+                                                }
+                                            }
+                                        },
+                                        dismissButton = {
+                                            TextButton(
+                                                onClick = { pendingMissingSources = null },
+                                                enabled = !isInstallingMissingBatch,
+                                                modifier = Modifier.testTag("missing-source-dialog-later"),
+                                            ) {
+                                                Text(strings.missingSourceDialogLater)
+                                            }
+                                        },
+                                    )
+                                }
+                            }
+                            if (showShortcutsHelp) {
+                                DesktopShortcutsDialog(
+                                    onDismiss = { showShortcutsHelp = false },
+                                    bindings = remember { keyBindingStore.load().global },
+                                )
+                            }
+                        }
+                        if (showFirstRunSplash) {
+                            val handoff = pendingStartupHandoff
+                            val reducedMotionPreferred =
+                                mihon.desktop.platform.WindowsReducedMotion.prefersReducedMotion
+                            if (handoff != null) {
+                                // Continue the startup window's splash on the same frame, then crossfade.
+                                mihon.desktop.ui.splash.StartupSplash(
+                                    dark = resolveDarkTheme(preferences.themeMode),
+                                    reducedMotion = reducedMotionPreferred,
+                                    ready = true,
+                                    resumeFrom = if (handoff.skipped) {
+                                        mihon.desktop.ui.splash.SplashResume.Loading
+                                    } else {
+                                        mihon.desktop.ui.splash.SplashResume.FinalFrame
+                                    },
+                                    onShown = handoff.onVisible,
+                                    onFinished = {
+                                        mihon.desktop.ui.splash.FirstRunSplash.markShown(runtime.preferences)
+                                        pendingStartupHandoff = null
+                                        showFirstRunSplash = false
+                                    },
+                                )
+                            } else {
+                                mihon.desktop.ui.splash.FirstRunSplashOverlay(
+                                    dark = resolveDarkTheme(preferences.themeMode),
+                                    reducedMotion = reducedMotionPreferred,
+                                    onFinished = {
+                                        mihon.desktop.ui.splash.FirstRunSplash.markShown(runtime.preferences)
+                                        showFirstRunSplash = false
+                                    },
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    if (host != null) {
+        SideEffect {
+            host.title = windowTitle
+            host.icon = appIcon
+            host.onCloseRequest = { closeApplication() }
+            host.onPreviewKeyEvent = { event -> onShellKey(event, false) }
+            host.onKeyEvent = { event -> onShellKey(event, true) }
+        }
+        host.frameScope.windowContent()
+    } else {
         Window(
             onCloseRequest = { closeApplication() },
             state = windowState,
@@ -728,1255 +2006,7 @@ fun ApplicationScope.MihonDesktopApp(
             onPreviewKeyEvent = { event -> onShellKey(event, false) },
             onKeyEvent = { event -> onShellKey(event, true) },
         ) {
-            SideEffect {
-                composeWindow = window
-                window.minimumSize = java.awt.Dimension(960, 640)
-            }
-            val darkTitleBar = resolveDarkTheme(preferences.themeMode)
-            val customTitleBar = remember(window) {
-                if (customTitleBarEnabled) mihon.desktop.platform.JbrTitleBar.install(window, darkTitleBar) else null
-            }
-            LaunchedEffect(window, darkTitleBar) {
-                mihon.desktop.platform.WindowsTitleBar.apply(window, darkTitleBar)
-                customTitleBar?.let { mihon.desktop.platform.JbrTitleBar.setDark(window, it, darkTitleBar) }
-            }
-            val libraryDropTarget = remember {
-                object : DragAndDropTarget {
-                    override fun onDrop(event: DragAndDropEvent): Boolean {
-                        val files = droppedFiles(event)
-                        files.forEach(openExternalFile)
-                        return files.isNotEmpty()
-                    }
-                }
-            }
-            MihonDesktopTheme(
-                themeMode = preferences.themeMode,
-                appTheme = preferences.appTheme,
-                isAmoled = preferences.themeDarkAmoled,
-                topBar = {
-                    val borderColor = MaterialTheme.colorScheme.outlineVariant
-                    LaunchedEffect(window, borderColor, customTitleBar) {
-                        mihon.desktop.platform.WindowsTitleBar.applyBorderColor(
-                            window,
-                            if (customTitleBar != null) borderColor.toColorRef() else null,
-                        )
-                    }
-                    val showCaption = mihon.desktop.platform.DesktopTitleBarPolicy.showCaptionStrip(
-                        customTitleBar = customTitleBar != null,
-                        borderlessOrFullscreen = readerWindowMode != ReaderWindowMode.NORMAL,
-                    )
-                    if (showCaption && customTitleBar != null) {
-                        mihon.desktop.platform.MihonTitleBar(
-                            frame = window,
-                            titleBar = customTitleBar,
-                            title = windowTitle,
-                            icon = appIcon,
-                            iconDescription = currentLanguageStrings.titleBarSystemMenu,
-                        )
-                    }
-                },
-            ) {
-                mihon.desktop.i18n.ProvideDesktopStrings(preferences.language) {
-                    androidx.compose.runtime.CompositionLocalProvider(
-                        mihon.desktop.image.LocalImageLoader provides runtime.imageLoader,
-                        mihon.desktop.image.LocalCustomCoverManager provides runtime.customCoverManager,
-                        LocalDesktopNavigator provides navigator,
-                        LocalSnackbarHostState provides snackbarHostState,
-                        LocalSearchFocusRequester provides searchFocusRequester,
-                        LocalTextInputTracker provides textInputTracker,
-                    ) {
-                        Box(
-                            modifier = Modifier.fillMaxSize().pointerInput(appLockController) {
-                                awaitPointerEventScope {
-                                    while (true) {
-                                        awaitPointerEvent(PointerEventPass.Initial)
-                                        appLockController.recordActivity()
-                                    }
-                                }
-                            }.dragAndDropTarget(
-                                // Backups (.tachibk), CBZ/ZIP archives and manga folders can be dropped on the library.
-                                shouldStartDragAndDrop = { event ->
-                                    navigator.current == DesktopDestination.Library &&
-                                        event.dragData() is DragData.FilesList
-                                },
-                                target = libraryDropTarget,
-                            ),
-                        ) {
-                            DesktopAppLockGate(
-                                isLocked = appLocked,
-                                onUnlock = { pin ->
-                                    appLockController.unlock(pin) == UnlockResult.Success
-                                },
-                                onForgotPinConfirmed = appLockController::disableLock,
-                            ) {
-                                val strings = mihon.desktop.i18n.LocalStrings.current
-                                val destination = navigator.current
-                                LaunchedEffect(destination) {
-                                    if (destination is DesktopDestination.Reader &&
-                                        readerWindowController.mode == ReaderWindowMode.NORMAL
-                                    ) {
-                                        val savedReaderMode =
-                                            DesktopReaderSettingsStore(runtime.preferences).load().lastWindowMode
-                                        if (savedReaderMode != ReaderWindowMode.NORMAL) {
-                                            readerWindowController.restore(savedReaderMode, currentWindowPlacement())
-                                            applyReaderWindowMode(savedReaderMode)
-                                        }
-                                    }
-                                    if (destination != DesktopDestination.Library) {
-                                        isManageCategoriesDialogOpen = false
-                                        isEditMangaCategoriesDialogOpen = false
-                                    }
-                                }
-                                if (destination is DesktopDestination.Reader) {
-                                    val currentChapterId = destination.chapterId
-                                    val filteredNavigationChapters = if (mangaDetailState.readerChapters.isNotEmpty()) {
-                                        mangaDetailState.readerChapters
-                                    } else {
-                                        mangaDetailState.allChapters
-                                    }
-                                    val navigationChapters = readerNavigationChapters(
-                                        filteredNavigationChapters,
-                                        mangaDetailState.allChapters,
-                                        currentChapterId,
-                                    )
-                                    val readableChapters = remember(
-                                        navigationChapters,
-                                        mangaDetailState.readerAvailability,
-                                        currentChapterId,
-                                    ) {
-                                        val available = if (mangaDetailState.readerAvailability.isEmpty()) {
-                                            navigationChapters
-                                        } else {
-                                            navigationChapters.filter {
-                                                mangaDetailState.readerAvailability[it.id] ==
-                                                    ChapterReaderAvailability.Readable
-                                            }
-                                        }
-                                        if (mangaDetailState.readerChapters.isNotEmpty()) {
-                                            available
-                                        } else {
-                                            available.sortedWith(
-                                                compareBy<mihon.desktop.library.model.LibraryChapter> {
-                                                    it.chapterNumber
-                                                }.thenBy { it.sourceOrder },
-                                            )
-                                        }
-                                    }
-                                    val currentChapterIdx = readableChapters.indexOfFirst { it.id == currentChapterId }
-                                    val prevChapter = if (currentChapterIdx >
-                                        0
-                                    ) {
-                                        readableChapters[currentChapterIdx - 1]
-                                    } else {
-                                        null
-                                    }
-                                    val nextChapter = if (currentChapterIdx in 0 until readableChapters.size - 1) {
-                                        readableChapters[currentChapterIdx + 1]
-                                    } else {
-                                        null
-                                    }
-                                    val sortedAllChapters = remember(navigationChapters) { navigationChapters }
-                                    val transitionCatalog = remember(
-                                        sortedAllChapters,
-                                        mangaDetailState.readerAvailability,
-                                        mangaDetailState.downloadedChapterIds,
-                                        mangaDetailState.chapterSettings.displayMode,
-                                        strings,
-                                    ) {
-                                        sortedAllChapters.map { chapter ->
-                                            ReaderChapterTransitionChapter(
-                                                id = chapter.id,
-                                                title = chapterDisplayLabel(
-                                                    chapter,
-                                                    mangaDetailState.chapterSettings.displayMode,
-                                                    strings,
-                                                ),
-                                                chapterNumber = chapter.chapterNumber,
-                                                scanlator = chapter.scanlator,
-                                                downloaded = mangaDetailState.downloadedChapterIds.contains(chapter.id),
-                                                available = mangaDetailState.readerAvailability.isEmpty() ||
-                                                    mangaDetailState.readerAvailability[chapter.id] ==
-                                                    ChapterReaderAvailability.Readable,
-                                                read = chapter.read,
-                                            )
-                                        }
-                                    }
-                                    val transitionCurrent = transitionCatalog.firstOrNull { it.id == currentChapterId }
-                                    val transitionPrevious = prevChapter?.let { prev ->
-                                        transitionCatalog.firstOrNull { it.id == prev.id }
-                                    }
-                                    val transitionNext = nextChapter?.let { next ->
-                                        transitionCatalog.firstOrNull { it.id == next.id }
-                                    }
-                                    val readerBookmarkStore: ReaderChapterBookmarkStore? = remember(
-                                        runtime.library,
-                                        mangaDetailState.manga?.id,
-                                    ) {
-                                        mangaDetailState.manga?.id?.let { mangaId ->
-                                            LibraryChapterBookmarkStore(
-                                                findChapter = { chapterId ->
-                                                    runtime.library.chapterSnapshot(mangaId)
-                                                        .firstOrNull { it.id == chapterId }
-                                                },
-                                                mutationPort = runtime.library,
-                                            )
-                                        }
-                                    }
-
-                                    val readerManga = mangaDetailState.manga?.takeIf { manga ->
-                                        mangaDetailState.allChapters.any {
-                                            it.id == destination.chapterId && it.mangaId == manga.id
-                                        }
-                                    }
-                                    fun leaveReader(afterClose: () -> Unit) {
-                                        val chapter = mangaDetailState.allChapters.firstOrNull {
-                                            it.id == destination.chapterId
-                                        }
-                                        val manga = readerManga
-                                        if (chapter != null && manga != null) {
-                                            presenterScope.launch {
-                                                val prefs = runtime.preferences.load()
-                                                if (!prefs.incognitoMode) {
-                                                    runtime.trackSyncService?.onChapterRead(
-                                                        manga.id,
-                                                        chapter.chapterNumber,
-                                                    )
-                                                }
-                                                if (prefs.downloadAhead > 0) {
-                                                    runtime.downloader?.checkAndDownloadAhead(
-                                                        manga = manga,
-                                                        currentChapter = chapter,
-                                                        allChapters = mangaDetailState.chapters,
-                                                        count = prefs.downloadAhead,
-                                                    )
-                                                }
-                                                if (prefs.deleteDownloadedRead && !prefs.incognitoMode) {
-                                                    runtime.downloader?.deleteDownloadedChapter(manga, chapter)
-                                                }
-                                            }
-                                        }
-                                        transitionReaderWindow(ReaderWindowMode.NORMAL)
-                                        afterClose()
-                                    }
-
-                                    DesktopBackHandler {
-                                        if (handleReaderEscape()) {
-                                            leaveReader { navigator.pop() }
-                                        }
-                                        true
-                                    }
-
-                                    ReaderDestination(
-                                        destination = destination,
-                                        runtime = runtime,
-                                        mangaTitle = mangaDetailState.manga?.title ?: "Reader",
-                                        chapterTitle = mangaDetailState.allChapters.firstOrNull {
-                                            it.id == destination.chapterId
-                                        }?.let { chapter ->
-                                            chapterDisplayLabel(
-                                                chapter,
-                                                mangaDetailState.chapterSettings.displayMode,
-                                                strings,
-                                            )
-                                        } ?: strings.text(UiText.ChapterNumberLabel, destination.chapterId),
-                                        mangaId = readerManga?.id,
-                                        chapterCatalog = transitionCatalog,
-                                        previousChapter = transitionPrevious,
-                                        nextChapter = transitionNext,
-                                        currentChapter = transitionCurrent,
-                                        currentChapterDownloaded =
-                                        mangaDetailState.downloadedChapterIds.contains(currentChapterId),
-                                        bookmarkStore = readerBookmarkStore,
-                                        onBack = { leaveReader { navigator.back() } },
-                                        onOpenMangaDetails = {
-                                            readerManga?.let { manga ->
-                                                leaveReader {
-                                                    libraryPresenter.openMangaDetail(manga.id)
-                                                    navigator.navigate(DesktopDestination.MangaDetails(manga.id))
-                                                }
-                                            }
-                                        },
-                                        onPreviousChapter = {
-                                            if (prevChapter != null) {
-                                                navigator.navigate(DesktopDestination.Reader(prevChapter.id))
-                                            }
-                                        },
-                                        onNextChapter = {
-                                            if (nextChapter != null) {
-                                                navigator.navigate(DesktopDestination.Reader(nextChapter.id))
-                                            }
-                                        },
-                                        onChapterSelected = { chapterId ->
-                                            navigator.navigate(DesktopDestination.Reader(chapterId))
-                                        },
-                                        hasPreviousChapter = prevChapter != null,
-                                        hasNextChapter = nextChapter != null,
-                                        onFullscreen = {
-                                            val mode = readerWindowController.toggleFullscreen(currentWindowPlacement())
-                                            applyReaderWindowMode(mode)
-                                        },
-                                        onBorderless = {
-                                            val mode = readerWindowController.toggleBorderless(currentWindowPlacement())
-                                            applyReaderWindowMode(mode)
-                                        },
-                                        onEscape = ::handleReaderEscape,
-                                        foreground = !windowState.isMinimized,
-                                    )
-                                } else {
-                                    val upcomingContent: (@Composable () -> Unit)? = if (destination ==
-                                        DesktopDestination.Upcoming
-                                    ) {
-                                        {
-                                            UpcomingScreen(
-                                                state = upcomingState,
-                                                onBack = { navigator.back() },
-                                                onPreviousMonth = upcomingPresenter::previousMonth,
-                                                onNextMonth = upcomingPresenter::nextMonth,
-                                                onSelectDate = upcomingPresenter::selectDate,
-                                                onOpenFilter = { upcomingPresenter.setFilterDialogOpen(true) },
-                                                onDismissFilter = { upcomingPresenter.setFilterDialogOpen(false) },
-                                                onCycleCategory = upcomingPresenter::cycleCategory,
-                                                onClearFilters = upcomingPresenter::clearFilters,
-                                                onOpenManga = { mangaId ->
-                                                    navigator.navigate(DesktopDestination.Library)
-                                                    libraryPresenter.selectManga(mangaId)
-                                                },
-                                                onRetry = upcomingPresenter::retry,
-                                            )
-                                        }
-                                    } else {
-                                        null
-                                    }
-                                    val sharedMangaDetailActions = MangaDetailActions(
-                                        onReadChapter = { chapterId ->
-                                            navigator.navigate(DesktopDestination.Reader(chapterId))
-                                        },
-                                        onInstallMissingSource = { extItem ->
-                                            presenterScope.launch {
-                                                try {
-                                                    runtime.extensionInstaller.downloadAndInstall(
-                                                        downloadUrl = extItem.downloadUrl,
-                                                        expectedSha256 = extItem.sha256,
-                                                        repoUrl = extItem.repoUrl,
-                                                        storeItem = extItem,
-                                                    )
-                                                    libraryPresenter.refreshDetails()
-                                                } catch (e: Exception) {
-                                                    snackbarHostState.showSnackbar(
-                                                        formatNetworkErrorMessage(
-                                                            e.message ?: "Failed to install extension",
-                                                            strings,
-                                                        ),
-                                                    )
-                                                }
-                                            }
-                                        },
-                                        onIgnoreMissingSource = {
-                                            val manga = mangaDetailState.manga
-                                            if (manga != null) {
-                                                libraryPresenter.ignoreMissingSource(manga.id)
-                                            }
-                                        },
-                                        onEditCategories = {
-                                            if (mangaDetailState.manga?.favorite == true) {
-                                                isEditMangaCategoriesDialogOpen = true
-                                            } else {
-                                                pendingMangaOrganizationAction = MangaOrganizationAction.Categories
-                                            }
-                                        },
-                                        onOpenTracking = {
-                                            if (mangaDetailState.manga?.favorite == true) {
-                                                isTrackingDialogOpen = true
-                                            } else {
-                                                pendingMangaOrganizationAction = MangaOrganizationAction.Tracking
-                                            }
-                                        },
-                                        onEditInfo = { libraryPresenter.setEditInfoDialogOpen(true) },
-                                        onDismissEditInfo = { libraryPresenter.setEditInfoDialogOpen(false) },
-                                        onSaveMangaInfo = libraryPresenter::updateSelectedMangaInfo,
-                                        onResetMangaInfo = libraryPresenter::resetSelectedMangaInfo,
-                                        onChapterFilterChange = libraryPresenter::setChapterFilter,
-                                        onChapterSortChange = libraryPresenter::setChapterSort,
-                                        onToggleBookmark = libraryPresenter::toggleChapterBookmark,
-                                        onToggleRead = libraryPresenter::toggleChapterRead,
-                                        onMarkPreviousRead = libraryPresenter::markPreviousChaptersRead,
-                                        onDownloadChapter = libraryPresenter::downloadChapter,
-                                        onDeleteDownload = { chapterId ->
-                                            libraryPresenter.deleteChapterDownload(chapterId)
-                                            presenterScope.launch {
-                                                val result = snackbarHostState.showSnackbar(
-                                                    message = strings.text(UiText.DownloadDeleted),
-                                                    actionLabel = strings.text(UiText.Undo),
-                                                    duration = SnackbarDuration.Short,
-                                                )
-                                                if (result == SnackbarResult.ActionPerformed) {
-                                                    libraryPresenter.downloadChapter(chapterId)
-                                                }
-                                            }
-                                        },
-                                        onDownloadBatch = { amount ->
-                                            if (amount == -1) {
-                                                libraryPresenter.downloadNextChapters(null, unreadOnly = false)
-                                            } else {
-                                                libraryPresenter.downloadNextChapters(amount, unreadOnly = true)
-                                            }
-                                        },
-                                        onBatchBookmarkChapters = libraryPresenter::batchBookmarkChapters,
-                                        onBatchMarkChaptersRead = libraryPresenter::batchMarkChaptersRead,
-                                        onBatchDownloadChapters = libraryPresenter::batchDownloadChapters,
-                                        onBatchDeleteDownloads = { chapterIds ->
-                                            libraryPresenter.batchDeleteChapterDownloads(chapterIds)
-                                            presenterScope.launch {
-                                                val result = snackbarHostState.showSnackbar(
-                                                    message = strings.text(UiText.DownloadDeleted),
-                                                    actionLabel = strings.text(UiText.Undo),
-                                                    duration = SnackbarDuration.Short,
-                                                )
-                                                if (result == SnackbarResult.ActionPerformed) {
-                                                    chapterIds.forEach { libraryPresenter.downloadChapter(it) }
-                                                }
-                                            }
-                                        },
-                                        onOpenChapterSettings = {
-                                            libraryPresenter.setChapterSettingsDialogOpen(true)
-                                        },
-                                        onDismissChapterSettings = {
-                                            libraryPresenter.setChapterSettingsDialogOpen(false)
-                                        },
-                                        onChapterDisplayModeChange = libraryPresenter::setChapterDisplayMode,
-                                        onExcludedScanlatorsChange = libraryPresenter::setExcludedScanlators,
-                                        onShowMissingChaptersChange = libraryPresenter::setShowMissingChapters,
-                                        onSetChapterSettingsAsDefault = libraryPresenter::setChapterSettingsAsDefault,
-                                        onResetChapterSettingsToDefault =
-                                        libraryPresenter::resetChapterSettingsToDefault,
-                                        onOpenReadingSettings = {
-                                            libraryPresenter.setReadingSettingsDialogOpen(true)
-                                        },
-                                        onDismissReadingSettings = {
-                                            libraryPresenter.setReadingSettingsDialogOpen(false)
-                                        },
-                                        onSaveReadingSettings = libraryPresenter::saveReadingSettingsOverride,
-                                        onClearReadingSettings = libraryPresenter::clearReadingSettingsOverride,
-                                        onCoverLoadFailed = libraryPresenter::onCoverLoadFailed,
-                                    )
-                                    DesktopShell(
-                                        appUpdateContent = {
-                                            mihon.desktop.ui.settings.AppUpdatePanel(
-                                                appUpdatePresenter,
-                                                runtime.appUpdateService,
-                                            )
-                                        },
-                                        selected = destination as? DesktopDestination ?: DesktopDestination.Library,
-                                        standaloneMangaDetails = destination is DesktopDestination.MangaDetails,
-                                        onDestinationSelected = { selectedDestination ->
-                                            navigator.navigate(selectedDestination)
-                                        },
-                                        libraryState = libraryState,
-                                        libraryBatchState = libraryBatchState,
-                                        mangaDetailState = mangaDetailState,
-                                        mangaDetailActions = sharedMangaDetailActions,
-                                        onToggleMangaLibrary = {
-                                            val manga = mangaDetailState.manga
-                                            if (manga != null) {
-                                                isMangaLibraryActionRunning = true
-                                                val wasFavorite = manga.favorite
-                                                libraryPresenter.setDetailFavorite(!wasFavorite) { updated ->
-                                                    isMangaLibraryActionRunning = false
-                                                    if (!updated) {
-                                                        presenterScope.launch {
-                                                            snackbarHostState.showSnackbar(
-                                                                "Unable to update library membership",
-                                                            )
-                                                        }
-                                                    } else if (wasFavorite) {
-                                                        presenterScope.launch {
-                                                            val result = snackbarHostState.showSnackbar(
-                                                                message = strings.text(UiText.LibraryRemoved),
-                                                                actionLabel = strings.text(UiText.Undo),
-                                                                duration = SnackbarDuration.Short,
-                                                            )
-                                                            if (result == SnackbarResult.ActionPerformed) {
-                                                                libraryPresenter.setDetailFavorite(true)
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        },
-                                        onRefreshMangaSource = {
-                                            val manga = mangaDetailState.manga
-                                            if (manga != null && !isMangaSourceRefreshing) {
-                                                presenterScope.launch {
-                                                    isMangaSourceRefreshing = true
-                                                    try {
-                                                        val source = runtime.sourceManager.findSourceDescriptor(
-                                                            manga.sourceId,
-                                                        )
-                                                        if (source == null || source.isLocalSource()) {
-                                                            libraryPresenter.retryDetail()
-                                                        } else {
-                                                            runtime.onlineMangaSyncService.prepareOnlineMangaForReading(
-                                                                sourceId = manga.sourceId,
-                                                                manga = SManga(
-                                                                    url = manga.url,
-                                                                    title = manga.title,
-                                                                    thumbnailUrl = manga.thumbnailUrl,
-                                                                    initialized = false,
-                                                                ),
-                                                                forceRefresh = true,
-                                                            )
-                                                            libraryPresenter.retryDetail()
-                                                        }
-                                                    } catch (error: Exception) {
-                                                        snackbarHostState.showSnackbar(
-                                                            formatNetworkErrorMessage(
-                                                                error.message ?: "Unable to refresh manga",
-                                                                strings,
-                                                            ),
-                                                        )
-                                                    } finally {
-                                                        isMangaSourceRefreshing = false
-                                                    }
-                                                }
-                                            }
-                                        },
-                                        isMangaLibraryActionRunning = isMangaLibraryActionRunning,
-                                        isMangaSourceRefreshing = isMangaSourceRefreshing,
-                                        onLibraryQueryChange = libraryPresenter::setQuery,
-                                        onMangaSelected = libraryPresenter::selectManga,
-                                        onBackFromMangaDetail = {
-                                            libraryPresenter.selectManga(null)
-                                            if (destination is DesktopDestination.MangaDetails) navigator.back()
-                                        },
-                                        onReadChapter = { chapterId ->
-                                            navigator.navigate(DesktopDestination.Reader(chapterId))
-                                        },
-                                        onContinueReading = { mangaId ->
-                                            libraryPresenter.continueReading(mangaId) { chapterId ->
-                                                navigator.navigate(DesktopDestination.Reader(chapterId))
-                                            }
-                                        },
-                                        onMangaDetailRetry = libraryPresenter::retryDetail,
-                                        onImportBackup = startImportBackup,
-                                        onImportLocal = startImportLocal,
-                                        onPairPhoneSync = startPairPhoneSync,
-                                        settingsInitialSection = settingsSectionRequest,
-                                        onLibraryRetry = libraryPresenter::retry,
-                                        onCategorySelected = libraryPresenter::selectCategory,
-                                        onManageCategories = { isManageCategoriesDialogOpen = true },
-                                        onEditMangaCategories = { isEditMangaCategoriesDialogOpen = true },
-                                        onDisplayModeChange = libraryPresenter::setDisplayMode,
-                                        onGridSizeChange = libraryPresenter::setGridSize,
-                                        onUnreadBadgeChange = libraryPresenter::setUnreadBadgeVisible,
-                                        onDownloadedBadgeChange = libraryPresenter::setDownloadedBadgeVisible,
-                                        onOpenFilterDialog = { libraryPresenter.setFilterDialogOpen(true) },
-                                        onCloseFilterDialog = { libraryPresenter.setFilterDialogOpen(false) },
-                                        onFilterChange = libraryPresenter::setFilterState,
-                                        onSortChange = libraryPresenter::setSortState,
-                                        onToggleSelectionMode = libraryPresenter::toggleSelectionMode,
-                                        onToggleMangaSelection = libraryPresenter::toggleMangaSelection,
-                                        onSelectAll = libraryPresenter::selectAll,
-                                        onDeselectAll = libraryPresenter::clearSelection,
-                                        onBatchChangeCategories = { libraryPresenter.setBatchCategoryDialogOpen(true) },
-                                        onBatchSetCategories = libraryPresenter::batchSetCategories,
-                                        onBatchCloseCategoryDialog = {
-                                            libraryPresenter.setBatchCategoryDialogOpen(false)
-                                        },
-                                        onBatchMarkRead = libraryPresenter::batchMarkRead,
-                                        onBatchDownload = libraryPresenter::batchDownload,
-                                        onBatchRemoveFromLibrary = {
-                                            val selectedIds = libraryState.selectionState.selectedMangaIds.toSet()
-                                            libraryPresenter.batchRemoveFromLibrary { removedIds ->
-                                                val toRestore = if (removedIds.isNotEmpty()) removedIds else selectedIds
-                                                presenterScope.launch {
-                                                    val result = snackbarHostState.showSnackbar(
-                                                        message = strings.text(UiText.LibraryRemoved),
-                                                        actionLabel = strings.text(UiText.Undo),
-                                                        duration = SnackbarDuration.Short,
-                                                    )
-                                                    if (result == SnackbarResult.ActionPerformed) {
-                                                        libraryPresenter.restoreLibraryManga(toRestore)
-                                                    }
-                                                }
-                                            }
-                                        },
-                                        downloadsQueue = downloadsQueue,
-                                        isDownloaderRunning = isDownloaderRunning,
-                                        downloadSpeedBytesPerSec = downloadSpeed,
-                                        downloadRecoveryMessage = downloadRecovery?.message,
-                                        downloadStorageError = downloadStorageError,
-                                        updatesUnreadCount = updatesUnreadCount,
-                                        onOpenRandomManga = {
-                                            val candidates = libraryState.items
-                                            val chosen = candidates.randomOrNull()
-                                            if (chosen != null) {
-                                                libraryPresenter.selectManga(chosen.id)
-                                            } else {
-                                                presenterScope.launch {
-                                                    snackbarHostState.showSnackbar(
-                                                        strings.text(UiText.EmptyLibraryRandom),
-                                                    )
-                                                }
-                                            }
-                                        },
-                                        onOpenChapterInWebView = { chapterId ->
-                                            val manga = mangaDetailState.manga ?: return@DesktopShell
-                                            val chapter =
-                                                mangaDetailState.allChapters.firstOrNull { it.id == chapterId }
-                                                    ?: return@DesktopShell
-                                            val base = sourceBaseUrls[manga.sourceId]
-                                            val url = when {
-                                                chapter.url.startsWith("http") -> chapter.url
-                                                base != null -> base + chapter.url
-                                                else -> null
-                                            }
-                                            val source = runtime.sourceManager.findSourceDescriptor(manga.sourceId)
-                                            if (source == null || url == null) {
-                                                presenterScope.launch {
-                                                    snackbarHostState.showSnackbar(
-                                                        strings.text(UiText.SourceWebPageUnavailable),
-                                                    )
-                                                }
-                                            } else {
-                                                chapterWebViewRequest = source to url
-                                            }
-                                        },
-                                        onPauseAllDownloads = { downloader?.pause() },
-                                        onResumeAllDownloads = { downloader?.resume() },
-                                        onClearCompletedDownloads = {
-                                            val cleared = downloader?.clearCompleted() ?: emptyList()
-                                            if (cleared.isNotEmpty()) {
-                                                presenterScope.launch {
-                                                    val result = snackbarHostState.showSnackbar(
-                                                        message = strings.text(UiText.CompletedDownloadsCleared),
-                                                        actionLabel = strings.text(UiText.Undo),
-                                                        duration = SnackbarDuration.Short,
-                                                    )
-                                                    if (result == SnackbarResult.ActionPerformed) {
-                                                        downloader?.restoreDownloads(cleared)
-                                                    }
-                                                }
-                                            }
-                                        },
-                                        onCancelDownload = { chapterId ->
-                                            val cancelled = downloader?.cancel(chapterId)
-                                            if (cancelled != null) {
-                                                presenterScope.launch {
-                                                    val result = snackbarHostState.showSnackbar(
-                                                        message = strings.text(UiText.DownloadCancelled),
-                                                        actionLabel = strings.text(UiText.Undo),
-                                                        duration = SnackbarDuration.Short,
-                                                    )
-                                                    if (result == SnackbarResult.ActionPerformed) {
-                                                        downloader.restoreDownloads(listOf(cancelled))
-                                                    }
-                                                }
-                                            }
-                                        },
-                                        onPauseDownload = { chapterId -> downloader?.pause(chapterId) },
-                                        onResumeDownload = { chapterId -> downloader?.resume(chapterId) },
-                                        onMoveUpDownload = { chapterId -> downloader?.moveUp(chapterId) },
-                                        onMoveDownDownload = { chapterId -> downloader?.moveDown(chapterId) },
-                                        onRetryDownload = { downloader?.retry(it) },
-                                        onRetryAllFailedDownloads = { downloader?.retryAllFailed() },
-                                        onReadDownloadedChapter = { mangaId, chapterId ->
-                                            libraryPresenter.openMangaDetail(mangaId)
-                                            navigator.navigate(DesktopDestination.Reader(chapterId))
-                                        },
-                                        isUpdatingLibrary = isUpdatingLibrary,
-                                        isRepairingCovers = isRepairingCovers,
-                                        onRepairBrokenCovers = libraryPresenter::repairBrokenCovers,
-                                        lastUpdateResult = lastUpdateResult,
-                                        updateRunState = updateRunState,
-                                        updateProgress = updateProgress,
-                                        onCancelLibraryUpdate = { runtime.libraryUpdateScheduler?.cancelUpdate() },
-                                        updatedChapters = updatedChapters,
-                                        onCheckForUpdates = {
-                                            presenterScope.launch { runtime.libraryUpdateScheduler?.triggerUpdateNow() }
-                                        },
-                                        onMarkUpdatesChapterRead = { mangaId, chapterId ->
-                                            updatesRowOverrides = updatesRowOverrides +
-                                                (
-                                                    chapterId to (updatesRowOverrides[chapterId] ?: UpdatesRowFlags())
-                                                        .copy(read = true)
-                                                    )
-                                            libraryPresenter.markChapterRead(mangaId, chapterId)
-                                        },
-                                        onDownloadUpdatesChapter = { mangaId, chapterId ->
-                                            updatesRowOverrides = updatesRowOverrides +
-                                                (
-                                                    chapterId to (updatesRowOverrides[chapterId] ?: UpdatesRowFlags())
-                                                        .copy(downloaded = true)
-                                                    )
-                                            libraryPresenter.enqueueChapterDownload(mangaId, chapterId)
-                                        },
-                                        // Browse
-                                        browseContent = {
-                                            mihon.desktop.ui.browse.BrowseContentView(
-                                                runtime = runtime,
-                                                detailState = mangaDetailState,
-                                                detailActions = sharedMangaDetailActions,
-                                                onOpenMangaDetail = libraryPresenter::openMangaDetail,
-                                                onCloseMangaDetail = { libraryPresenter.selectManga(null) },
-                                                onRetryMangaDetail = libraryPresenter::retryDetail,
-                                            )
-                                        },
-                                        // History
-                                        historyGroups = historyState.groups,
-                                        historyQuery = historyState.query,
-                                        onHistoryQueryChange = { historyService?.setQuery(it) },
-                                        onDeleteHistoryItem = { chapterId ->
-                                            val item = historyState.groups.flatMap { it.items }.find {
-                                                it.chapterId ==
-                                                    chapterId
-                                            }
-                                            historyService?.deleteItem(chapterId)
-                                            presenterScope.launch {
-                                                val result = snackbarHostState.showSnackbar(
-                                                    message = strings.text(UiText.HistoryItemDeleted),
-                                                    actionLabel = strings.text(UiText.Undo),
-                                                    duration = SnackbarDuration.Short,
-                                                )
-                                                if (result == SnackbarResult.ActionPerformed && item != null) {
-                                                    historyService?.restoreItem(item)
-                                                }
-                                            }
-                                        },
-                                        onClearAllHistory = { historyService?.clearAll() },
-                                        // Settings & Diagnostics
-                                        preferenceStore = runtime.preferences,
-                                        readerSettingsStore = remember {
-                                            DesktopReaderSettingsStore(runtime.preferences)
-                                        },
-                                        diagnosticService = runtime.diagnosticService,
-                                        trackerManager = runtime.trackerManager,
-                                        trackSyncService = runtime.trackSyncService,
-                                        backupScheduler = runtime.backupScheduler,
-                                        syncScheduler = runtime.syncScheduler,
-                                        syncServerManager = runtime.syncServerManager,
-                                        backgroundScheduler = runtime.backgroundScheduler,
-                                        updateScheduler = runtime.libraryUpdateScheduler,
-                                        cookieStore = runtime.cookieStore,
-                                        onUpdateLibrary = {
-                                            presenterScope.launch {
-                                                runtime.libraryUpdateScheduler?.triggerUpdateNow()
-                                            }
-                                        },
-                                        onEditInfo = { libraryPresenter.setEditInfoDialogOpen(true) },
-                                        onDismissEditInfo = { libraryPresenter.setEditInfoDialogOpen(false) },
-                                        onSaveMangaInfo = libraryPresenter::updateSelectedMangaInfo,
-                                        onResetMangaInfo = libraryPresenter::resetSelectedMangaInfo,
-                                        onChapterFilterChange = libraryPresenter::setChapterFilter,
-                                        onChapterSortChange = libraryPresenter::setChapterSort,
-                                        onToggleBookmark = libraryPresenter::toggleChapterBookmark,
-                                        onToggleRead = libraryPresenter::toggleChapterRead,
-                                        onMarkPreviousRead = libraryPresenter::markPreviousChaptersRead,
-                                        onDownloadChapter = libraryPresenter::downloadChapter,
-                                        onDeleteDownload = { chapterId ->
-                                            libraryPresenter.deleteChapterDownload(chapterId)
-                                            presenterScope.launch {
-                                                val result = snackbarHostState.showSnackbar(
-                                                    message = strings.text(UiText.DownloadDeleted),
-                                                    actionLabel = strings.text(UiText.Undo),
-                                                    duration = SnackbarDuration.Short,
-                                                )
-                                                if (result == SnackbarResult.ActionPerformed) {
-                                                    libraryPresenter.downloadChapter(chapterId)
-                                                }
-                                            }
-                                        },
-                                        onDownloadBatch = { amount ->
-                                            if (amount == -1) {
-                                                libraryPresenter.downloadNextChapters(null, unreadOnly = false)
-                                            } else {
-                                                libraryPresenter.downloadNextChapters(amount, unreadOnly = true)
-                                            }
-                                        },
-                                        onBatchBookmarkChapters = libraryPresenter::batchBookmarkChapters,
-                                        onBatchMarkChaptersRead = libraryPresenter::batchMarkChaptersRead,
-                                        onBatchDownloadChapters = libraryPresenter::batchDownloadChapters,
-                                        onBatchDeleteDownloads = { chapterIds ->
-                                            libraryPresenter.batchDeleteChapterDownloads(chapterIds)
-                                            presenterScope.launch {
-                                                val result = snackbarHostState.showSnackbar(
-                                                    message = strings.text(UiText.DownloadDeleted),
-                                                    actionLabel = strings.text(UiText.Undo),
-                                                    duration = SnackbarDuration.Short,
-                                                )
-                                                if (result == SnackbarResult.ActionPerformed) {
-                                                    chapterIds.forEach { libraryPresenter.downloadChapter(it) }
-                                                }
-                                            }
-                                        },
-                                        onOpenChapterSettings = {
-                                            libraryPresenter.setChapterSettingsDialogOpen(true)
-                                        },
-                                        onDismissChapterSettings = {
-                                            libraryPresenter.setChapterSettingsDialogOpen(false)
-                                        },
-                                        onChapterDisplayModeChange = libraryPresenter::setChapterDisplayMode,
-                                        onExcludedScanlatorsChange = libraryPresenter::setExcludedScanlators,
-                                        onShowMissingChaptersChange = libraryPresenter::setShowMissingChapters,
-                                        onSetChapterSettingsAsDefault = libraryPresenter::setChapterSettingsAsDefault,
-                                        onResetChapterSettingsToDefault =
-                                        libraryPresenter::resetChapterSettingsToDefault,
-                                        onDuplicateOpenManga = libraryPresenter::openDuplicateManga,
-                                        onDuplicateMigrate = libraryPresenter::migrateDuplicateTo,
-                                        onDuplicateAddAnyway = libraryPresenter::addDuplicateAnyway,
-                                        onDuplicateDismiss = libraryPresenter::dismissDuplicateDialog,
-                                        sourceNameFor = { sourceId ->
-                                            sourceNames[sourceId] ?: strings.text(UiText.SourceFallback, sourceId)
-                                        },
-                                        sourceBaseUrlFor = { sourceId -> sourceBaseUrls[sourceId] },
-                                        downloadCacheCleaner = runtime.downloadCacheCleaner,
-                                        downloadsDir = runtime.downloader?.diskProvider?.downloadsDir
-                                            ?: runtime.directories.root.resolve("media").resolve("downloads"),
-                                        diskCacheDir = runtime.directories.cache,
-                                        profileRoot = runtime.directories.root,
-                                        databaseCleaner =
-                                        runtime.library as? mihon.desktop.library.repository.LibraryDatabaseCleaner,
-                                        onOpenTracking = { isTrackingDialogOpen = true },
-                                        onExportBackup = {
-                                            presenterScope.launch {
-                                                val path =
-                                                    mihon.desktop.ui.library.chooseExportBackup(
-                                                        strings.text(UiText.ExportBackup),
-                                                    )
-                                                        ?: return@launch
-                                                pendingExportPath = path
-                                            }
-                                        },
-                                        onOpenOnboarding = {
-                                            // Replaying the first-run guide also replays splash v3 before it.
-                                            mihon.desktop.ui.splash.FirstRunSplash.reset(runtime.preferences)
-                                            showFirstRunSplash = true
-                                            showOnboarding = true
-                                        },
-                                        onPreferencesChanged = { updated ->
-                                            preferences = updated
-                                            appLockController.refresh()
-                                        },
-                                        // Phase 14: Stats & Incognito
-                                        statsData = statsData,
-                                        onRefreshStats = { presenterScope.launch { statsService?.refresh() } },
-                                        incognitoMode = preferences.incognitoMode,
-                                        onToggleIncognito = {
-                                            val updated = runtime.preferences.updatePreferences {
-                                                it.copy(incognitoMode = !it.incognitoMode)
-                                            }
-                                            preferences = updated
-                                        },
-                                        // Upcoming calendar (transient view opened from Updates)
-                                        isUpcomingOpen = destination == DesktopDestination.Upcoming,
-                                        upcomingContent = upcomingContent,
-                                        onOpenUpcoming = { navigator.navigate(DesktopDestination.Upcoming) },
-                                        onCloseUpcoming = { navigator.back() },
-                                        // App lock (desktop security)
-                                        appLockController = appLockController,
-                                        onLockNow = if (preferences.appLockEnabled) {
-                                            appLockController::lockNow
-                                        } else {
-                                            null
-                                        },
-                                    )
-                                    chapterWebViewRequest?.let { (webViewSource, webViewUrl) ->
-                                        mihon.desktop.ui.browse.SourceWebPageDialog(
-                                            runtime = runtime,
-                                            source = webViewSource,
-                                            urlOverride = webViewUrl,
-                                            onDismiss = { chapterWebViewRequest = null },
-                                            onRetry = { },
-                                        )
-                                    }
-                                    if (destination is DesktopDestination.MangaDetails) {
-                                        DesktopBackHandler {
-                                            libraryPresenter.selectManga(null)
-                                            navigator.pop()
-                                        }
-                                    }
-                                    if (destination == DesktopDestination.Upcoming) {
-                                        DesktopBackHandler {
-                                            navigator.pop()
-                                        }
-                                    }
-                                }
-                                if (isManageCategoriesDialogOpen) {
-                                    categoryService?.let { service ->
-                                        ManageCategoriesDialog(
-                                            categories = categories.sortedBy { it.order },
-                                            onDismiss = { isManageCategoriesDialogOpen = false },
-                                            onCreateCategory = service::createCategory,
-                                            onRenameCategory = service::renameCategory,
-                                            onDeleteCategory = { categoryId ->
-                                                if (libraryState.selectedCategoryId == categoryId) {
-                                                    libraryPresenter.selectCategory(SYSTEM_ALL_CATEGORY.id)
-                                                }
-                                                service.deleteCategory(categoryId)
-                                            },
-                                            onMoveCategory = { category, newIndex ->
-                                                val ordered = categories.sortedBy { it.order }
-                                                val currentIndex = ordered.indexOfFirst { it.id == category.id }
-                                                if (currentIndex != -1 &&
-                                                    newIndex in ordered.indices &&
-                                                    currentIndex != newIndex
-                                                ) {
-                                                    val reordered = ordered.toMutableList()
-                                                    reordered.add(newIndex, reordered.removeAt(currentIndex))
-                                                    reordered.forEachIndexed { index, item ->
-                                                        val newOrder = index.toLong()
-                                                        if (item.order != newOrder) {
-                                                            service.reorderCategory(item.id, newOrder)
-                                                        }
-                                                    }
-                                                }
-                                            },
-                                        )
-                                    }
-                                }
-                                val editManga = mangaDetailState.manga
-                                if (isEditMangaCategoriesDialogOpen && editManga != null) {
-                                    categoryService?.let { service ->
-                                        EditMangaCategoriesDialog(
-                                            allCategories = categories.sortedBy { it.order },
-                                            assignedCategoryIds = editManga.categories.map { it.id }.toSet(),
-                                            onDismiss = { isEditMangaCategoriesDialogOpen = false },
-                                            onSave = { categoryIds ->
-                                                service.setMangaCategories(editManga.id, categoryIds)
-                                            },
-                                        )
-                                    }
-                                }
-                                val currentTrackingManga = mangaDetailState.manga
-                                val trackerMgr = runtime.trackerManager
-                                if (isTrackingDialogOpen && currentTrackingManga != null && trackerMgr != null) {
-                                    val tracksFlow = remember(currentTrackingManga.id) {
-                                        runtime.library.observeTracking(currentTrackingManga.id)
-                                    }
-                                    val tracksList by tracksFlow.collectAsState(initial = emptyList())
-                                    val desktopTracks = tracksList.map { it.toDesktopTrackRecord() }
-
-                                    TrackingDialog(
-                                        mangaTitle = currentTrackingManga.title,
-                                        trackers = trackerMgr.trackers,
-                                        currentTracks = desktopTracks,
-                                        onDismiss = { isTrackingDialogOpen = false },
-                                        onSaveTrack = { track ->
-                                            presenterScope.launch {
-                                                val tracker = trackerMgr.get(track.trackerId)
-                                                val local = track.copy(mangaId = currentTrackingManga.id)
-                                                val resolved = if (tracker != null && tracker.isLoggedIn) {
-                                                    try {
-                                                        tracker.updateRemote(local)
-                                                    } catch (_: Exception) {
-                                                        runtime.trackingQueue?.enqueue(local)
-                                                        local
-                                                    }
-                                                } else {
-                                                    runtime.trackingQueue?.enqueue(local)
-                                                    local
-                                                }
-                                                // The insert upserts, so a track already bound to this
-                                                // manga and tracker keeps its row id.
-                                                runtime.library.insertTracking(resolved.toTrackingRecord())
-                                            }
-                                        },
-                                        onUnbindTrack = { trackerId ->
-                                            runtime.library.deleteTracking(currentTrackingManga.id, trackerId)
-                                        },
-                                        onSearchTrack = { tracker, query ->
-                                            tracker.search(query)
-                                        },
-                                    )
-                                }
-                                pendingMangaOrganizationAction?.let { pendingAction ->
-                                    AlertDialog(
-                                        onDismissRequest = { pendingMangaOrganizationAction = null },
-                                        confirmButton = {
-                                            TextButton(
-                                                onClick = {
-                                                    pendingMangaOrganizationAction = null
-                                                    libraryPresenter.setDetailFavorite(true) { added ->
-                                                        if (added) {
-                                                            when (pendingAction) {
-                                                                MangaOrganizationAction.Categories ->
-                                                                    isEditMangaCategoriesDialogOpen = true
-                                                                MangaOrganizationAction.Tracking ->
-                                                                    isTrackingDialogOpen =
-                                                                        true
-                                                            }
-                                                        } else {
-                                                            presenterScope.launch {
-                                                                snackbarHostState.showSnackbar(
-                                                                    "Unable to add this manga to the library",
-                                                                )
-                                                            }
-                                                        }
-                                                    }
-                                                },
-                                                modifier = Modifier.testTag("manga-organization-confirm"),
-                                            ) {
-                                                Text(strings.mangaDetailAddToLibrary)
-                                            }
-                                        },
-                                        dismissButton = {
-                                            TextButton(
-                                                onClick = { pendingMangaOrganizationAction = null },
-                                                modifier = Modifier.testTag("manga-organization-cancel"),
-                                            ) {
-                                                Text(strings.dialogCancel)
-                                            }
-                                        },
-                                        title = { Text(strings.mangaDetailAddToLibrary) },
-                                        text = {
-                                            Text(strings.mangaDetailOrganizationRequiresLibrary)
-                                        },
-                                        modifier = Modifier.testTag("manga-organization-confirmation"),
-                                    )
-                                }
-                                ImportStateDialog(importState) { importState = ImportActionState.Idle }
-                                BackupRestoreDialog(backupRestoreState, {
-                                    backupRestore.cancel()
-                                }, backupRestore::dismiss)
-                                pendingExportPath?.let { exportPath ->
-                                    BackupOptionsDialog(
-                                        mode = BackupOptionsMode.Export,
-                                        onConfirm = { options ->
-                                            val target = exportPath
-                                            pendingExportPath = null
-                                            presenterScope.launch {
-                                                try {
-                                                    withContext(Dispatchers.IO) {
-                                                        val backup =
-                                                            runtime.backupExporter.createBackup().filterByOptions(
-                                                                options,
-                                                            )
-                                                        mihon.desktop.library.backup.AndroidBackupCodec()
-                                                            .encode(backup, target)
-                                                    }
-                                                    snackbarHostState.showSnackbar(
-                                                        strings.backupExportSuccess(target.toString()),
-                                                    )
-                                                } catch (e: Exception) {
-                                                    snackbarHostState.showSnackbar(
-                                                        strings.backupExportFailed(e.message ?: ""),
-                                                    )
-                                                }
-                                            }
-                                        },
-                                        onDismiss = { pendingExportPath = null },
-                                    )
-                                }
-                                pendingImportPath?.let { importPath ->
-                                    BackupOptionsDialog(
-                                        mode = BackupOptionsMode.Restore,
-                                        onConfirm = { options ->
-                                            val target = importPath
-                                            pendingImportPath = null
-                                            presenterScope.launch {
-                                                try {
-                                                    val filteredPath = withContext(Dispatchers.IO) {
-                                                        val codec = mihon.desktop.library.backup.AndroidBackupCodec()
-                                                        val original = codec.decode(target)
-                                                        val filtered = original.filterByOptions(options)
-                                                        val tempPath =
-                                                            java.nio.file.Files.createTempFile(
-                                                                "restore-filtered-",
-                                                                ".tachibk",
-                                                            )
-                                                        tempPath.toFile().deleteOnExit()
-                                                        codec.encode(filtered, tempPath)
-                                                        tempPath
-                                                    }
-                                                    backupRestore.start(filteredPath)
-                                                } catch (e: Exception) {
-                                                    snackbarHostState.showSnackbar(
-                                                        e.message ?: "Failed to process backup",
-                                                    )
-                                                }
-                                            }
-                                        },
-                                        onDismiss = { pendingImportPath = null },
-                                    )
-                                }
-                                if (showOnboarding && !showFirstRunSplash) {
-                                    OnboardingDialog(
-                                        preferences = preferences,
-                                        repositories = runtime.extensionStoreService.getRepositories(),
-                                        onAddRepository = { repo ->
-                                            runtime.extensionStoreService.addRepository(repo)
-                                        },
-                                        onUpdatePreferences = { updated ->
-                                            preferences = runtime.preferences.updatePreferences { updated }
-                                            appLockController.refresh()
-                                        },
-                                        onFinish = {
-                                            showOnboarding = false
-                                            preferences =
-                                                runtime.preferences.updatePreferences {
-                                                    it.copy(onboardingCompleted = true)
-                                                }
-                                        },
-                                        onGoToBrowse = {
-                                            showOnboarding = false
-                                            preferences =
-                                                runtime.preferences.updatePreferences {
-                                                    it.copy(onboardingCompleted = true)
-                                                }
-                                            navigator.navigate(DesktopDestination.Browse)
-                                        },
-                                        onStartAction = { action ->
-                                            showOnboarding = false
-                                            preferences =
-                                                runtime.preferences.updatePreferences {
-                                                    it.copy(onboardingCompleted = true)
-                                                }
-                                            when (action) {
-                                                StartAction.ImportLocal -> startImportLocal()
-                                                StartAction.RestoreBackup -> startImportBackup()
-                                                StartAction.PairPhone -> startPairPhoneSync()
-                                            }
-                                        },
-                                    )
-                                }
-                                if (backupRestoreState is BackupRestoreState.Idle) {
-                                    pendingMissingSources?.let { missingList ->
-                                        val installable = missingList.mapNotNull { it.extension }.distinctBy { it.pkg }
-                                        val missingMangaTotal = missingList.sumOf { it.mangaCount }
-                                        val unresolvedMangaCount = missingList.filter {
-                                            it.extension == null
-                                        }.sumOf { it.mangaCount }
-
-                                        AlertDialog(
-                                            onDismissRequest = {
-                                                if (!isInstallingMissingBatch) {
-                                                    pendingMissingSources = null
-                                                }
-                                            },
-                                            modifier = Modifier.testTag("missing-source-dialog"),
-                                            title = {
-                                                Text(
-                                                    strings.missingSourceDialogTitle(
-                                                        missingMangaTotal,
-                                                        installable.size,
-                                                    ),
-                                                )
-                                            },
-                                            text = {
-                                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                                    if (installable.isNotEmpty()) {
-                                                        Text(installable.joinToString(", ") { it.name })
-                                                    }
-                                                    if (unresolvedMangaCount > 0) {
-                                                        Text(
-                                                            text = strings.missingSourceDialogNotFound(
-                                                                unresolvedMangaCount,
-                                                            ),
-                                                            style = MaterialTheme.typography.bodySmall,
-                                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                        )
-                                                    }
-                                                    if (isInstallingMissingBatch) {
-                                                        Row(
-                                                            verticalAlignment = Alignment.CenterVertically,
-                                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                                        ) {
-                                                            CircularProgressIndicator(modifier = Modifier.size(16.dp))
-                                                            Text(strings.missingSourceInstalling)
-                                                        }
-                                                    }
-                                                }
-                                            },
-                                            confirmButton = {
-                                                if (installable.isNotEmpty()) {
-                                                    TextButton(
-                                                        onClick = {
-                                                            presenterScope.launch {
-                                                                isInstallingMissingBatch = true
-                                                                try {
-                                                                    for (ext in installable) {
-                                                                        runtime.extensionInstaller.downloadAndInstall(
-                                                                            downloadUrl = ext.downloadUrl,
-                                                                            expectedSha256 = ext.sha256,
-                                                                            repoUrl = ext.repoUrl,
-                                                                            storeItem = ext,
-                                                                        )
-                                                                    }
-                                                                    libraryPresenter.refreshDetails()
-                                                                } catch (e: Exception) {
-                                                                    snackbarHostState.showSnackbar(
-                                                                        e.message ?: "Failed to install extensions",
-                                                                    )
-                                                                } finally {
-                                                                    isInstallingMissingBatch = false
-                                                                    pendingMissingSources = null
-                                                                }
-                                                            }
-                                                        },
-                                                        enabled = !isInstallingMissingBatch,
-                                                        modifier = Modifier.testTag(
-                                                            "missing-source-dialog-install-all",
-                                                        ),
-                                                    ) {
-                                                        Text(strings.missingSourceDialogInstallAll)
-                                                    }
-                                                }
-                                            },
-                                            dismissButton = {
-                                                TextButton(
-                                                    onClick = { pendingMissingSources = null },
-                                                    enabled = !isInstallingMissingBatch,
-                                                    modifier = Modifier.testTag("missing-source-dialog-later"),
-                                                ) {
-                                                    Text(strings.missingSourceDialogLater)
-                                                }
-                                            },
-                                        )
-                                    }
-                                }
-                                if (showShortcutsHelp) {
-                                    DesktopShortcutsDialog(
-                                        onDismiss = { showShortcutsHelp = false },
-                                        bindings = remember { keyBindingStore.load().global },
-                                    )
-                                }
-                            }
-                            if (showFirstRunSplash) {
-                                val handoff = pendingStartupHandoff
-                                val reducedMotionPreferred =
-                                    mihon.desktop.platform.WindowsReducedMotion.prefersReducedMotion
-                                if (handoff != null) {
-                                    // Continue the startup window's splash on the same frame, then crossfade.
-                                    mihon.desktop.ui.splash.StartupSplash(
-                                        dark = resolveDarkTheme(preferences.themeMode),
-                                        reducedMotion = reducedMotionPreferred,
-                                        ready = true,
-                                        resumeFrom = if (handoff.skipped) {
-                                            mihon.desktop.ui.splash.SplashResume.Loading
-                                        } else {
-                                            mihon.desktop.ui.splash.SplashResume.FinalFrame
-                                        },
-                                        onShown = handoff.onVisible,
-                                        onFinished = {
-                                            mihon.desktop.ui.splash.FirstRunSplash.markShown(runtime.preferences)
-                                            pendingStartupHandoff = null
-                                            showFirstRunSplash = false
-                                        },
-                                    )
-                                } else {
-                                    mihon.desktop.ui.splash.FirstRunSplashOverlay(
-                                        dark = resolveDarkTheme(preferences.themeMode),
-                                        reducedMotion = reducedMotionPreferred,
-                                        onFinished = {
-                                            mihon.desktop.ui.splash.FirstRunSplash.markShown(runtime.preferences)
-                                            showFirstRunSplash = false
-                                        },
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+            windowContent()
         }
     }
 }
