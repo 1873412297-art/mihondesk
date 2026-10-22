@@ -26,6 +26,7 @@ import mihon.desktop.library.model.LibraryManga
 import mihon.desktop.updates.DesktopAppUpdateService
 import mihon.reader.image.IntRect
 import mihon.reader.memory.ReaderMemoryMetrics
+import mihon.reader.model.ReaderErrorCode
 import mihon.reader.model.ReadingMode
 import mihon.reader.prefetch.PageLoadCoordinator
 import mihon.reader.session.ReaderAction
@@ -474,7 +475,14 @@ internal class PackagedReaderVerifier(
         check(chapters.size == ReadingMode.entries.size) { "fixture must map one chapter to each reading mode" }
         val session = factory.createSession()
         try {
-            chapters.zip(ReadingMode.entries).forEach { (chapter, mode) ->
+            // The committed RAR's only page is deliberately undecodable. Opening it publishes Ready and
+            // then, once the visible page decode fails, Failed(PAGE_DECODE_FAILED) — so waiting for a
+            // stable Ready on it raced the decoder and timed out intermittently on CI. Modes are
+            // exercised on the decodable chapters and the RAR chapter on its deterministic outcome.
+            val undecodable = chapters.single { assetLabel(it.name) == UNDECODABLE_SESSION_ASSET }
+            val decodable = chapters - undecodable
+            ReadingMode.entries.forEachIndexed { index, mode ->
+                val chapter = decodable[index % decodable.size]
                 session.open(chapter.id)
                 val ready = session.awaitReady(chapter.id)
                 check(ready.pages.size == pageCounts.getValue(chapter.id)) { "session/source page counts disagree" }
@@ -484,6 +492,12 @@ internal class PackagedReaderVerifier(
                         it.loadState is ReaderLoadState.Ready
                 }
             }
+            session.open(undecodable.id)
+            val failed = session.awaitState {
+                it.chapterId == undecodable.id &&
+                    (it.loadState as? ReaderLoadState.Failed)?.error?.code == ReaderErrorCode.PAGE_DECODE_FAILED
+            }
+            check(failed.pages.size == pageCounts.getValue(undecodable.id)) { "session/source page counts disagree" }
 
             val transition = chapters.single { it.name == TRANSITION_CHAPTER_NAME }
             session.open(transition.id)
@@ -794,6 +808,7 @@ private const val COMMITTED_SOURCE_PATH = ".superpowers/sdd/task-3-fixture-sourc
 private const val COMMITTED_SOURCE_SHA256 = "0197651b31b314f8ee97130efa7427813db8520c65a373a0edc48cda884b0317"
 private const val TARGET_CHAPTER_NAME = "01-directory"
 private const val TRANSITION_CHAPTER_NAME = "06-pages.epub"
+private const val UNDECODABLE_SESSION_ASSET = "cbr"
 private const val STANDALONE_CHAPTER_ID = 9_000_000_000L
 private const val EXTREME_TILE_SIZE = 1024
 private val EXPECTED_CHAPTER_NAMES = setOf(

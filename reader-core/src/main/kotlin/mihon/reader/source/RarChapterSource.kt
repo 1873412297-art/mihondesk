@@ -19,9 +19,16 @@ import com.github.junrar.volume.VolumeManager
 import kotlinx.coroutines.CancellationException
 import mihon.reader.model.PageDescriptor
 import mihon.reader.model.PageId
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import java.io.EOFException
+import java.io.FilterInputStream
+import java.io.InputStream
 import java.nio.ByteBuffer
 import java.nio.channels.FileChannel
+import java.nio.file.Files
+
+private const val MIN_BUFFER_BYTES = 32
 
 class RarChapterSource(
     asset: ReaderChapterAsset,
@@ -51,11 +58,48 @@ class RarChapterSource(
             }
             header ?: throw ReaderFailure.PageNotFound(wanted.logicalName)
             validateRarEntry(header)
-            val input = archive.getInputStream(header)
-            return boundedInput(input, header.fullUnpackSize) { archive.close() }
+            val input = extractSynchronously(archive, header)
+            archive.close()
+            return boundedInput(input, header.fullUnpackSize)
         } catch (error: Throwable) {
             archive.close()
             throw classifyRarFailure(error)
+        }
+    }
+
+    /**
+     * Extracts [header] on the calling thread. junrar's getInputStream pipes the entry from a
+     * background thread and swallows extraction failures (and trips PipedInputStream's
+     * thread-liveness checks when coroutines hop threads), which reached the decoder as silently
+     * truncated pages. Small pages are buffered; large ones spill to a temp file deleted on close.
+     */
+    private fun extractSynchronously(archive: Archive, header: FileHeader): InputStream {
+        val size = header.fullUnpackSize
+        if (size >
+            ReaderLimits.MAX_PAGE_BYTES
+        ) {
+            throw ReaderFailure.LimitExceeded("expanded page bytes", ReaderLimits.MAX_PAGE_BYTES, size)
+        }
+        if (size <= ReaderLimits.FULL_DECODE_MAX_BYTES) {
+            val buffer = ByteArrayOutputStream(size.toInt().coerceAtLeast(MIN_BUFFER_BYTES))
+            archive.extractFile(header, buffer)
+            return ByteArrayInputStream(buffer.toByteArray())
+        }
+        val spill = Files.createTempFile("mihon-rar-", ".page")
+        try {
+            Files.newOutputStream(spill).use { archive.extractFile(header, it) }
+        } catch (error: Throwable) {
+            Files.deleteIfExists(spill)
+            throw error
+        }
+        return object : FilterInputStream(Files.newInputStream(spill)) {
+            override fun close() {
+                try {
+                    super.close()
+                } finally {
+                    Files.deleteIfExists(spill)
+                }
+            }
         }
     }
 
