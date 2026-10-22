@@ -78,7 +78,13 @@ fun BrowseContentView(
 ) {
     val scope = rememberCoroutineScope()
     var navState by remember { mutableStateOf<BrowseNavigationState>(BrowseNavigationState.Home) }
-
+    val pendingBrowseRequest by BrowseRequests.pending.collectAsState()
+    LaunchedEffect(pendingBrowseRequest) {
+        pendingBrowseRequest?.let { request ->
+            navState = request
+            BrowseRequests.consume()
+        }
+    }
     mihon.desktop.navigation.DesktopBackHandler(enabled = navState != BrowseNavigationState.Home) {
         when (val current = navState) {
             is BrowseNavigationState.SourcePreferences -> {
@@ -116,6 +122,22 @@ fun BrowseContentView(
         )
     }
     val browseState by presenter.state.collectAsState()
+    val pendingInstall by BrowseRequests.pendingInstall.collectAsState()
+    LaunchedEffect(pendingInstall) {
+        pendingInstall?.let { item ->
+            BrowseRequests.consumeInstall()
+            presenter.installExtension(item)
+        }
+    }
+    val pendingMigration by BrowseRequests.pendingMigration.collectAsState()
+    LaunchedEffect(pendingMigration) {
+        pendingMigration?.let { source ->
+            BrowseRequests.consumeMigration()
+            navState = BrowseNavigationState.Home
+            presenter.setTab(BrowseTab.Migration)
+            presenter.selectMigrationSource(source)
+        }
+    }
 
     val importActions = remember(runtime) {
         val importController = LibraryImportController(

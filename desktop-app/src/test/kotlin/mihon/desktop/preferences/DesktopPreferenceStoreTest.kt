@@ -311,4 +311,12 @@ class DesktopPreferenceStoreTest {
         store.save(DesktopPreferences(splitTallImages = false))
         store.load().splitTallImages shouldBe false
     }
+
+    @Test
+    fun `library detail pane width persists`() {
+        val file = tempDir.resolve("detail-pane.properties")
+        DesktopPreferenceStore(file).save(DesktopPreferences(libraryDetailPaneWidth = 520))
+        DesktopPreferenceStore(file).load().libraryDetailPaneWidth shouldBe 520
+        DesktopPreferences().libraryDetailPaneWidth shouldBe 0
+    }
 }

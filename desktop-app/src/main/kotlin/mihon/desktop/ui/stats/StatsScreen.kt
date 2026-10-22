@@ -34,6 +34,7 @@ fun StatsScreen(
     data: DesktopStatsData,
     onRefresh: () -> Unit,
     modifier: Modifier = Modifier,
+    onOpenHistory: (() -> Unit)? = null,
 ) {
     val strings = LocalStrings.current
 
@@ -66,11 +67,21 @@ fun StatsScreen(
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold,
             )
-            Button(
-                onClick = onRefresh,
-                modifier = Modifier.testTag("stats-refresh-button"),
-            ) {
-                Text(strings.statsRefresh)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (onOpenHistory != null) {
+                    androidx.compose.material3.FilledTonalButton(
+                        onClick = onOpenHistory,
+                        modifier = Modifier.testTag("stats-open-history"),
+                    ) {
+                        Text(strings.destinationLabel(mihon.desktop.navigation.DesktopDestination.History))
+                    }
+                }
+                Button(
+                    onClick = onRefresh,
+                    modifier = Modifier.testTag("stats-refresh-button"),
+                ) {
+                    Text(strings.statsRefresh)
+                }
             }
         }
 

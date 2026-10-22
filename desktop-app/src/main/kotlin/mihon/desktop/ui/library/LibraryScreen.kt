@@ -3,6 +3,10 @@ package mihon.desktop.ui.library
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -25,7 +29,9 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -57,8 +63,8 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -70,9 +76,22 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.PointerIcon
+import androidx.compose.ui.input.pointer.PointerType
+import androidx.compose.ui.input.pointer.isBackPressed
 import androidx.compose.ui.input.pointer.isCtrlPressed
 import androidx.compose.ui.input.pointer.isMetaPressed
+import androidx.compose.ui.input.pointer.isPrimaryPressed
 import androidx.compose.ui.input.pointer.isShiftPressed
+import androidx.compose.ui.input.pointer.pointerHoverIcon
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
@@ -191,6 +210,9 @@ fun LibraryScreen(
     onContinueReading: ((Long) -> Unit)? = null,
     sourceNameFor: (Long) -> String = { "Source #$it" },
     sourceBaseUrlFor: (Long) -> String? = { null },
+    /** Remembered side-pane width in dp; 0 means the default share of the window. */
+    detailPaneWidthDp: Int = 0,
+    onDetailPaneWidthChange: (Int) -> Unit = {},
 ) {
     val resolvedMangaDetailActions = mangaDetailActions ?: MangaDetailActions(
         onReadChapter = onReadChapter,
@@ -221,49 +243,22 @@ fun LibraryScreen(
         onResetChapterSettingsToDefault = onResetChapterSettingsToDefault,
         onCoverLoadFailed = onCoverLoadFailed,
     )
+    val scrollStates = remember { LibraryScrollStates() }
     BoxWithConstraints(modifier = Modifier.fillMaxSize().testTag("library-screen")) {
         val selected = state.selectedMangaId != null
-        val wide = maxWidth >= 1100.dp
-        if (wide && selected && !standaloneDetails) {
-            Row(modifier = Modifier.fillMaxSize()) {
-                LibraryPane(
-                    state = state,
-                    onQueryChange = onQueryChange,
-                    onMangaSelected = onMangaSelected,
-                    onImportBackup = onImportBackup,
-                    onImportLocal = onImportLocal,
-                    onPairPhoneSync = onPairPhoneSync,
-                    onUpdateLibrary = onUpdateLibrary,
-                    isUpdatingLibrary = isUpdatingLibrary,
-                    isRepairingCovers = isRepairingCovers,
-                    onRepairBrokenCovers = onRepairBrokenCovers,
-                    onRetry = onRetry,
-                    onCategorySelected = onCategorySelected,
-                    onManageCategories = onManageCategories,
-                    onDisplayModeChange = onDisplayModeChange,
-                    onGridSizeChange = onGridSizeChange,
-                    onUnreadBadgeChange = onUnreadBadgeChange,
-                    onDownloadedBadgeChange = onDownloadedBadgeChange,
-                    onOpenFilterDialog = onOpenFilterDialog,
-                    onClearFilters = {
-                        onQueryChange("")
-                        onFilterChange(LibraryFilterState())
-                        onCategorySelected(SYSTEM_ALL_CATEGORY.id)
-                    },
-                    onToggleSelectionMode = onToggleSelectionMode,
-                    onToggleMangaSelection = onToggleMangaSelection,
-                    onSelectAll = onSelectAll,
-                    onDeselectAll = onDeselectAll,
-                    onBatchChangeCategories = onBatchChangeCategories,
-                    onBatchMarkRead = onBatchMarkRead,
-                    onBatchDownload = onBatchDownload,
-                    onBatchRemoveFromLibrary = onBatchRemoveFromLibrary,
-                    onOpenRandomManga = onOpenRandomManga,
-                    onContinueReading = onContinueReading,
-                    sourceBaseUrlFor = sourceBaseUrlFor,
-                    modifier = Modifier.weight(0.55f).fillMaxHeight().testTag("library-grid-pane"),
-                )
-                VerticalDivider()
+        val density = androidx.compose.ui.platform.LocalDensity.current
+        val defaultPane = maxWidth * DETAIL_PANE_DEFAULT_FRACTION
+        var rawPaneWidth by remember(detailPaneWidthDp) {
+            mutableStateOf(if (detailPaneWidthDp > 0) detailPaneWidthDp.dp else defaultPane)
+        }
+        val maxPane = (maxWidth * DETAIL_PANE_MAX_FRACTION).coerceAtLeast(DETAIL_PANE_MIN_WIDTH)
+        val paneWidth = rawPaneWidth.coerceIn(DETAIL_PANE_MIN_WIDTH, maxPane)
+        val gridWidth = maxWidth - paneWidth - DETAIL_PANE_GAP
+        // Side by side only while the grid still fits two columns; otherwise details open as a full page.
+        val sideBySide = selected && !standaloneDetails &&
+            gridFitsTwoColumns(state.displayMode, gridWidth, state.gridSize, LocalSpacing.current.gridGap)
+        androidx.compose.runtime.CompositionLocalProvider(LocalLibraryScrollStates provides scrollStates) {
+            if ((selected && !sideBySide) || standaloneDetails) {
                 MangaDetailScreen(
                     state = detailState,
                     sourceBaseUrl = detailState.manga?.sourceId?.let(sourceBaseUrlFor),
@@ -275,63 +270,97 @@ fun LibraryScreen(
                     isLibraryActionRunning = isMangaLibraryActionRunning,
                     isRefreshingSource = isMangaSourceRefreshing,
                     onOpenChapterInWebView = onOpenChapterInWebView,
-                    showBack = false,
-                    modifier = Modifier.weight(0.45f).fillMaxHeight(),
+                    showBack = true,
+                    modifier = Modifier.fillMaxSize().closeOnMouseBack(onBackFromDetail),
                 )
+            } else {
+                Row(modifier = Modifier.fillMaxSize().closeOnMouseBack(if (sideBySide) onBackFromDetail else null)) {
+                    LibraryPane(
+                        state = state,
+                        onQueryChange = onQueryChange,
+                        onMangaSelected = { id ->
+                            // Clicking the open book again closes its pane.
+                            if (sideBySide && id == state.selectedMangaId) onBackFromDetail() else onMangaSelected(id)
+                        },
+                        onImportBackup = onImportBackup,
+                        onImportLocal = onImportLocal,
+                        onPairPhoneSync = onPairPhoneSync,
+                        onUpdateLibrary = onUpdateLibrary,
+                        isUpdatingLibrary = isUpdatingLibrary,
+                        isRepairingCovers = isRepairingCovers,
+                        onRepairBrokenCovers = onRepairBrokenCovers,
+                        onRetry = onRetry,
+                        onCategorySelected = onCategorySelected,
+                        onManageCategories = onManageCategories,
+                        onDisplayModeChange = onDisplayModeChange,
+                        onGridSizeChange = onGridSizeChange,
+                        onUnreadBadgeChange = onUnreadBadgeChange,
+                        onDownloadedBadgeChange = onDownloadedBadgeChange,
+                        onOpenFilterDialog = onOpenFilterDialog,
+                        onClearFilters = {
+                            onQueryChange("")
+                            onFilterChange(LibraryFilterState())
+                            onCategorySelected(SYSTEM_ALL_CATEGORY.id)
+                        },
+                        onToggleSelectionMode = onToggleSelectionMode,
+                        onToggleMangaSelection = onToggleMangaSelection,
+                        onSelectAll = onSelectAll,
+                        onDeselectAll = onDeselectAll,
+                        onBatchChangeCategories = onBatchChangeCategories,
+                        onBatchMarkRead = onBatchMarkRead,
+                        onBatchDownload = onBatchDownload,
+                        onBatchRemoveFromLibrary = onBatchRemoveFromLibrary,
+                        onOpenRandomManga = onOpenRandomManga,
+                        onContinueReading = onContinueReading,
+                        sourceBaseUrlFor = sourceBaseUrlFor,
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .then(if (sideBySide) Modifier.closeOnEmptyTap(onBackFromDetail) else Modifier)
+                            .testTag("library-grid-pane"),
+                    )
+
+                    if (sideBySide) {
+                        DetailPaneDivider(
+                            onDrag = { deltaPx -> rawPaneWidth = paneWidth - with(density) { deltaPx.toDp() } },
+                            onDragEnd = {
+                                if (rawPaneWidth < DETAIL_PANE_MIN_WIDTH - DETAIL_PANE_CLOSE_SLACK) {
+                                    // Dragged to the far right: close and keep the last good width.
+                                    rawPaneWidth = if (detailPaneWidthDp > 0) detailPaneWidthDp.dp else defaultPane
+                                    onBackFromDetail()
+                                } else {
+                                    rawPaneWidth = paneWidth
+                                    onDetailPaneWidthChange(paneWidth.value.toInt())
+                                }
+                            },
+                        )
+                        DetailPaneCard(
+                            selectedMangaId = state.selectedMangaId,
+                            onClose = onBackFromDetail,
+                            modifier = Modifier
+                                .width(paneWidth)
+                                .fillMaxHeight()
+                                .padding(top = 8.dp, bottom = 8.dp, end = 8.dp),
+                        ) {
+                            MangaDetailScreen(
+                                state = detailState,
+                                sourceBaseUrl = detailState.manga?.sourceId?.let(sourceBaseUrlFor),
+                                onBack = onBackFromDetail,
+                                actions = resolvedMangaDetailActions,
+                                onRetry = onDetailRetry,
+                                onToggleLibrary = onToggleMangaLibrary,
+                                onRefreshSource = onRefreshMangaSource,
+                                isLibraryActionRunning = isMangaLibraryActionRunning,
+                                isRefreshingSource = isMangaSourceRefreshing,
+                                onOpenChapterInWebView = onOpenChapterInWebView,
+                                showBack = false,
+                                onClose = onBackFromDetail,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        }
+                    }
+                }
             }
-        } else if (selected || standaloneDetails) {
-            MangaDetailScreen(
-                state = detailState,
-                sourceBaseUrl = detailState.manga?.sourceId?.let(sourceBaseUrlFor),
-                onBack = onBackFromDetail,
-                actions = resolvedMangaDetailActions,
-                onRetry = onDetailRetry,
-                onToggleLibrary = onToggleMangaLibrary,
-                onRefreshSource = onRefreshMangaSource,
-                isLibraryActionRunning = isMangaLibraryActionRunning,
-                isRefreshingSource = isMangaSourceRefreshing,
-                onOpenChapterInWebView = onOpenChapterInWebView,
-                showBack = true,
-                modifier = Modifier.fillMaxSize(),
-            )
-        } else {
-            LibraryPane(
-                state = state,
-                onQueryChange = onQueryChange,
-                onMangaSelected = onMangaSelected,
-                onImportBackup = onImportBackup,
-                onImportLocal = onImportLocal,
-                onPairPhoneSync = onPairPhoneSync,
-                onUpdateLibrary = onUpdateLibrary,
-                isUpdatingLibrary = isUpdatingLibrary,
-                isRepairingCovers = isRepairingCovers,
-                onRepairBrokenCovers = onRepairBrokenCovers,
-                onRetry = onRetry,
-                onCategorySelected = onCategorySelected,
-                onManageCategories = onManageCategories,
-                onDisplayModeChange = onDisplayModeChange,
-                onGridSizeChange = onGridSizeChange,
-                onUnreadBadgeChange = onUnreadBadgeChange,
-                onDownloadedBadgeChange = onDownloadedBadgeChange,
-                onOpenFilterDialog = onOpenFilterDialog,
-                onClearFilters = {
-                    onQueryChange("")
-                    onFilterChange(LibraryFilterState())
-                    onCategorySelected(SYSTEM_ALL_CATEGORY.id)
-                },
-                onToggleSelectionMode = onToggleSelectionMode,
-                onToggleMangaSelection = onToggleMangaSelection,
-                onSelectAll = onSelectAll,
-                onDeselectAll = onDeselectAll,
-                onBatchChangeCategories = onBatchChangeCategories,
-                onBatchMarkRead = onBatchMarkRead,
-                onBatchDownload = onBatchDownload,
-                onBatchRemoveFromLibrary = onBatchRemoveFromLibrary,
-                onOpenRandomManga = onOpenRandomManga,
-                onContinueReading = onContinueReading,
-                sourceBaseUrlFor = sourceBaseUrlFor,
-                modifier = Modifier.fillMaxSize().testTag("library-grid-pane"),
-            )
         }
 
         // Filter & Sort Dialog
@@ -1018,6 +1047,7 @@ private fun LibraryContent(
                         spacingDp = spacing.value,
                     )
                     LazyVerticalGrid(
+                        state = LocalLibraryScrollStates.current?.grid ?: rememberLazyGridState(),
                         columns = GridCells.Fixed(metrics.columns),
                         modifier = Modifier.fillMaxSize().testTag("library-view-comfortable"),
                         contentPadding = PaddingValues(bottom = 80.dp),
@@ -1072,6 +1102,7 @@ private fun LibraryContent(
                         spacingDp = spacing.value,
                     )
                     LazyVerticalGrid(
+                        state = LocalLibraryScrollStates.current?.grid ?: rememberLazyGridState(),
                         columns = GridCells.Fixed(metrics.columns),
                         modifier = Modifier.fillMaxSize().testTag("library-view-compact"),
                         contentPadding = PaddingValues(bottom = 80.dp),
@@ -1126,6 +1157,7 @@ private fun LibraryContent(
                         spacingDp = spacing.value,
                     )
                     LazyVerticalGrid(
+                        state = LocalLibraryScrollStates.current?.grid ?: rememberLazyGridState(),
                         columns = GridCells.Fixed(metrics.columns),
                         modifier = Modifier.fillMaxSize().testTag("library-view-coveronly"),
                         contentPadding = PaddingValues(bottom = 80.dp),
@@ -1173,6 +1205,7 @@ private fun LibraryContent(
                 }
                 LibraryDisplayMode.List -> {
                     LazyColumn(
+                        state = LocalLibraryScrollStates.current?.list ?: rememberLazyListState(),
                         modifier = Modifier.fillMaxSize().testTag("library-view-list"),
                         contentPadding = PaddingValues(bottom = 80.dp),
                         verticalArrangement = Arrangement.spacedBy(LocalSpacing.current.listRowGap),
@@ -1833,5 +1866,117 @@ private fun ErrorState(
                 Text(strings.libraryRetry)
             }
         }
+    }
+}
+
+private val DETAIL_PANE_GAP = 16.dp
+private val DETAIL_PANE_MIN_WIDTH = 360.dp
+private val DETAIL_PANE_CLOSE_SLACK = 80.dp
+private const val DETAIL_PANE_DEFAULT_FRACTION = 0.45f
+private const val DETAIL_PANE_MAX_FRACTION = 0.7f
+private val LIST_MODE_MIN_GRID_WIDTH = 360.dp
+
+/** Grid/list scroll positions shared by every library layout, so opening or closing details keeps them. */
+internal class LibraryScrollStates {
+    val grid = androidx.compose.foundation.lazy.grid.LazyGridState()
+    val list = androidx.compose.foundation.lazy.LazyListState()
+}
+
+internal val LocalLibraryScrollStates =
+    androidx.compose.runtime.staticCompositionLocalOf<LibraryScrollStates?> { null }
+
+internal fun gridFitsTwoColumns(
+    mode: LibraryDisplayMode,
+    gridWidth: androidx.compose.ui.unit.Dp,
+    gridSize: Float,
+    spacing: androidx.compose.ui.unit.Dp,
+): Boolean = if (mode == LibraryDisplayMode.List) {
+    gridWidth >= LIST_MODE_MIN_GRID_WIDTH
+} else {
+    gridWidth > 0.dp && calculateLibraryGridMetrics(mode, gridWidth.value, gridSize, spacing.value).columns >= 2
+}
+
+/** Primary taps nobody consumed (empty grid space) close the side pane; card clicks consume theirs. */
+private fun Modifier.closeOnEmptyTap(onClose: () -> Unit): Modifier = pointerInput(onClose) {
+    awaitEachGesture {
+        val down = awaitFirstDown(requireUnconsumed = false)
+        if (down.type == PointerType.Mouse && !currentEvent.buttons.isPrimaryPressed) return@awaitEachGesture
+        val up = waitForUpOrCancellation() ?: return@awaitEachGesture
+        if (!up.isConsumed) onClose()
+    }
+}
+
+/** The mouse's back side button closes details, like Esc. */
+private fun Modifier.closeOnMouseBack(onClose: (() -> Unit)?): Modifier = if (onClose == null) {
+    this
+} else {
+    pointerInput(onClose) {
+        awaitPointerEventScope {
+            while (true) {
+                val event = awaitPointerEvent(PointerEventPass.Initial)
+                if (event.type == PointerEventType.Press && event.buttons.isBackPressed) onClose()
+            }
+        }
+    }
+}
+
+@Composable
+private fun DetailPaneDivider(onDrag: (Float) -> Unit, onDragEnd: () -> Unit) {
+    val dragState = androidx.compose.foundation.gestures.rememberDraggableState(onDrag)
+    Box(
+        modifier = Modifier
+            .width(DETAIL_PANE_GAP)
+            .fillMaxHeight()
+            .pointerHoverIcon(PointerIcon(java.awt.Cursor(java.awt.Cursor.E_RESIZE_CURSOR)))
+            .draggable(
+                state = dragState,
+                orientation = androidx.compose.foundation.gestures.Orientation.Horizontal,
+                onDragStopped = { onDragEnd() },
+            )
+            .testTag("library-detail-divider"),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            Modifier
+                .width(4.dp)
+                .height(40.dp)
+                .clip(RoundedCornerShape(2.dp))
+                .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f)),
+        )
+    }
+}
+
+@Composable
+private fun DetailPaneCard(
+    selectedMangaId: Long?,
+    onClose: () -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    val focus = remember { androidx.compose.ui.focus.FocusRequester() }
+    LaunchedEffect(selectedMangaId) { runCatching { focus.requestFocus() } }
+    Surface(
+        modifier = modifier
+            .focusRequester(focus)
+            .focusable()
+            .onPreviewKeyEvent { event ->
+                if (event.type == KeyEventType.KeyDown && event.key == Key.Escape) {
+                    onClose()
+                    true
+                } else {
+                    false
+                }
+            }
+            .testTag("library-detail-card"),
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 1.dp,
+        shadowElevation = 2.dp,
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+        ),
+    ) {
+        Box(Modifier.fillMaxSize().testTag("library-detail-content")) { content() }
     }
 }

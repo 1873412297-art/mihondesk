@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -30,7 +31,30 @@ class UpdatesScreenTest {
             }
         }
 
-        onNodeWithText("No recent chapter updates").assertExists()
+        onNodeWithText("Your library is up to date").assertExists()
+        onNodeWithText("No recent chapter updates").assertDoesNotExist()
+        onNodeWithText("Your library is up to date.").assertDoesNotExist()
+    }
+
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun `empty state sits quietly in the middle of the page with a check action`() = runComposeUiTest {
+        var checked = false
+        setContent {
+            Box(modifier = Modifier.requiredSize(800.dp, 900.dp)) {
+                UpdatesScreen(
+                    updatedChapters = emptyList(),
+                    isUpdating = false,
+                    lastResult = null,
+                    onCheckForUpdates = { checked = true },
+                    onReadChapter = {},
+                )
+            }
+        }
+        val top = onNodeWithTag("updates-empty-state").getBoundsInRoot().top
+        (top > 300.dp && top < 500.dp) shouldBe true
+        onNodeWithTag("updates-empty-check").performClick()
+        checked shouldBe true
     }
 
     @OptIn(ExperimentalTestApi::class)

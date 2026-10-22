@@ -787,6 +787,7 @@ class DesktopSourceManager(
             if (!error.isMissingSource(sourceId)) throw error
             val targetExt = installer?.getInstalledExtensions()
                 ?.firstOrNull { extension -> extension.manifest.sources.any { it.id == sourceId } }
+            if (targetExt == null && installer != null) throw SourceExtensionNotInstalledException(sourceId)
             targetExt?.let { extension -> loadedPackages.remove(extension.pkg) }
             if (targetExt != null && !java.io.File(targetExt.packageFile).exists()) {
                 throw IllegalStateException("扩展包文件缺失：${targetExt.packageFile}，请重新安装该扩展", error)
@@ -799,7 +800,8 @@ class DesktopSourceManager(
                     if (targetExt != null && !java.io.File(targetExt.packageFile).exists()) {
                         throw IllegalStateException("扩展包文件缺失：${targetExt.packageFile}，请重新安装该扩展", retryError)
                     }
-                    throw IllegalStateException("扩展包文件缺失：${targetExt?.packageFile ?: sourceId}，请重新安装该扩展", retryError)
+                    if (targetExt == null) throw SourceExtensionNotInstalledException(sourceId)
+                    throw IllegalStateException("扩展包文件缺失：${targetExt.packageFile}，请重新安装该扩展", retryError)
                 }
                 throw retryError
             }

@@ -2121,6 +2121,9 @@ object SimplifiedChineseStrings : DesktopStrings {
     override fun historyGroupTitle(title: String) = when (title) {
         "Today" -> historyToday
         "Yesterday" -> historyYesterday
+        "Earlier this week" -> "本周早些时候"
+        "This month" -> "本月"
+        "Older" -> "更早"
         else -> title
     }
 
@@ -3103,6 +3106,9 @@ object TraditionalChineseStrings : DesktopStrings {
     override fun historyGroupTitle(title: String) = when (title) {
         "Today" -> historyToday
         "Yesterday" -> historyYesterday
+        "Earlier this week" -> "本週稍早"
+        "This month" -> "本月"
+        "Older" -> "更早"
         else -> title
     }
 

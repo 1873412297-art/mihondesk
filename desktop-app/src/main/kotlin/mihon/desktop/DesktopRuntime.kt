@@ -14,6 +14,8 @@ import mihon.desktop.cli.needsNotificationTray
 import mihon.desktop.download.DownloadCacheCleaner
 import mihon.desktop.download.DownloadDiskProvider
 import mihon.desktop.extension.DesktopNetworkSettingsStore
+import mihon.desktop.i18n.UiText
+import mihon.desktop.i18n.text
 import mihon.desktop.library.backup.AndroidBackupCodec
 import mihon.desktop.library.backup.AndroidBackupImporter
 import mihon.desktop.library.backup.AndroidBackupValidator
@@ -60,6 +62,7 @@ class DesktopRuntime(
     val syncServerManager: mihon.desktop.sync.DesktopSyncServerManager? = null,
     val cookieStore: mihon.desktop.extension.DesktopCookieStore? = null,
     val desktopNotificationService: mihon.desktop.platform.DesktopNotificationService? = null,
+    val libraryUpdateAlerts: mihon.desktop.notification.LibraryUpdateAlerts? = null,
     val libraryUpdateService: mihon.desktop.library.update.LibraryUpdateService? = null,
     val libraryUpdateScheduler: mihon.desktop.library.update.LibraryUpdateScheduler? = null,
     val extensionUpdateChecker: mihon.desktop.extension.ExtensionUpdateChecker? = null,
@@ -513,11 +516,47 @@ object DesktopRuntimeFactory {
                 hideContentProvider = { preferences.load().desktopNotificationsHideContent },
                 trayIconEnabled = command.needsNotificationTray,
             )
+            val libraryUpdateAlerts = mihon.desktop.notification.LibraryUpdateAlerts(
+                display = { title, message ->
+                    if (command.needsNotificationTray) {
+                        runCatching {
+                            mihon.desktop.platform.SharedTrayIcon.acquire()
+                                ?.displayMessage(title, message, java.awt.TrayIcon.MessageType.INFO)
+                        }
+                    }
+                },
+                badge = { count ->
+                    val strings = mihon.desktop.i18n.DesktopStrings.resolve(preferences.load().language)
+                    mihon.desktop.platform.SharedTrayIcon.setBadge(
+                        count,
+                        strings.text(UiText.TrayNewChapters, count),
+                    )
+                },
+                strings = { mihon.desktop.i18n.DesktopStrings.resolve(preferences.load().language) },
+                hideContent = { preferences.load().desktopNotificationsHideContent },
+                enabled = { preferences.load().desktopNotificationsEnabled },
+            )
+            mihon.desktop.platform.SharedTrayIcon.onNotificationClick = { libraryUpdateAlerts.consumeClick() }
             val libraryUpdateService = mihon.desktop.library.update.LibraryUpdateService(
                 repository = library,
                 syncService = onlineMangaSyncService,
                 downloader = downloader,
                 notificationService = desktopNotificationService,
+                onReport = { report ->
+                    libraryUpdateAlerts.onReport(report)
+                    if (launchUi) {
+                        mihon.desktop.activity.MissingSourceAlerts.publish(
+                            report = report,
+                            center = activityCenter,
+                            scope = appScope,
+                            strings = { mihon.desktop.i18n.DesktopStrings.resolve(preferences.load().language) },
+                            findInRepos = { sourceId ->
+                                extensionStoreService.fetchAvailableExtensions()
+                                    .firstOrNull { item -> item.sources.any { it.id == sourceId } }
+                            },
+                        )
+                    }
+                },
             )
             val libraryUpdateScheduler = mihon.desktop.library.update.LibraryUpdateScheduler(
                 updateService = libraryUpdateService,
@@ -611,6 +650,7 @@ object DesktopRuntimeFactory {
                 syncServerManager = syncServerManager,
                 cookieStore = cookieStore,
                 desktopNotificationService = desktopNotificationService,
+                libraryUpdateAlerts = libraryUpdateAlerts,
                 libraryUpdateService = libraryUpdateService,
                 libraryUpdateScheduler = libraryUpdateScheduler,
                 extensionUpdateChecker = extensionUpdateChecker,

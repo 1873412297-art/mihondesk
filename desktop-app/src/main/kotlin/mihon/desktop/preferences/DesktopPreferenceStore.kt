@@ -30,6 +30,7 @@ data class DesktopPreferences(
     val language: AppLanguage = AppLanguage.System,
     val libraryDisplayMode: String = "ComfortableGrid",
     val libraryGridSize: Float = 180f,
+    val libraryDetailPaneWidth: Int = 0,
     val libraryBadgeUnread: Boolean = true,
     val libraryBadgeDownloaded: Boolean = true,
     val librarySortMode: String = "None",
@@ -181,6 +182,8 @@ class DesktopPreferenceStore(private val file: Path) {
             language = AppLanguage.fromCode(properties.getProperty("language")),
             libraryDisplayMode = properties.getProperty("library.display_mode") ?: "ComfortableGrid",
             libraryGridSize = properties.getProperty("library.grid_size")?.toFloatOrNull() ?: 180f,
+            libraryDetailPaneWidth =
+            properties.getProperty("library.detail_pane_width")?.toIntOrNull()?.coerceAtLeast(0) ?: 0,
             libraryBadgeUnread = properties.getProperty("library.badge_unread")?.toBooleanStrictOrNull() ?: true,
             libraryBadgeDownloaded = properties.getProperty("library.badge_downloaded")?.toBooleanStrictOrNull()
                 ?: true,
@@ -284,6 +287,7 @@ class DesktopPreferenceStore(private val file: Path) {
         properties.setProperty("language", preferences.language.code)
         properties.setProperty("library.display_mode", preferences.libraryDisplayMode)
         properties.setProperty("library.grid_size", preferences.libraryGridSize.toString())
+        properties.setProperty("library.detail_pane_width", preferences.libraryDetailPaneWidth.toString())
         properties.setProperty("library.badge_unread", preferences.libraryBadgeUnread.toString())
         properties.setProperty("library.badge_downloaded", preferences.libraryBadgeDownloaded.toString())
         properties.setProperty("library.sort_mode", preferences.librarySortMode)

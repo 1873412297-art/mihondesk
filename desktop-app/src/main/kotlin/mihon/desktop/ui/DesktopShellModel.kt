@@ -51,6 +51,8 @@ data class DesktopShellState(
     val downloadRecoveryMessage: String? = null,
     val downloadStorageError: String? = null,
     val updatedChapters: List<UpdatedChapterItem> = emptyList(),
+    val homeToday: List<mihon.desktop.ui.home.TodayMangaUpdates> = emptyList(),
+    val libraryDetailPaneWidth: Int = 0,
     val updatesUnreadCount: Int = 0,
     val isUpdatingLibrary: Boolean = false,
     val isRepairingCovers: Boolean = false,
@@ -196,4 +198,6 @@ data class DesktopShellActions(
     val onLockNow: (() -> Unit)? = null,
     val onPairPhoneSync: (() -> Unit)? = null,
     val onContinueReading: ((Long) -> Unit)? = null,
+    val onLibraryDetailPaneWidthChange: (Int) -> Unit = {},
+    val onOpenMangaFromHome: (Long) -> Unit = {},
 )

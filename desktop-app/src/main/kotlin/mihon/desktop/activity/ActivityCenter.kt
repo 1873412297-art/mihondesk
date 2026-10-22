@@ -27,7 +27,11 @@ data class ActivityItem(
     val failureReason: String? = null,
     val updatedAt: Long = 0L,
     val retry: (() -> Unit)? = null,
+    /** Extra one-click actions rendered under the failure reason. */
+    val actions: List<ActivityAction> = emptyList(),
 )
+
+data class ActivityAction(val id: String, val label: String, val run: () -> Unit)
 
 data class ActivitySummary(val running: Int, val failed: Int)
 

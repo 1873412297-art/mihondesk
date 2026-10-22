@@ -123,16 +123,19 @@ fun UpdatesScreen(
                                 lastResult.newChaptersFound,
                             )
                         } else {
-                            strings.updatesEmptySubtitle
+                            null
                         }
                     }
-                    else -> strings.updatesEmptySubtitle
+                    else -> null
                 }
-                Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                // "Up to date" is said once, by the empty state under the header.
+                if (subtitle != null) {
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
 
             Row(
@@ -224,36 +227,34 @@ fun UpdatesScreen(
         }
 
         if (updatedChapters.isEmpty()) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
+            // Quiet, roughly centered: no big icon, no void with a tiny line in the corner.
+            androidx.compose.foundation.layout.Box(
+                modifier = Modifier.fillMaxSize().padding(bottom = 120.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                Surface(
-                    shape = RoundedCornerShape(16.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-                    modifier = Modifier.padding(32.dp),
+                Row(
+                    modifier = Modifier.testTag("updates-empty-state"),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Column(
-                        modifier = Modifier.padding(32.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.NewReleases,
-                            contentDescription = null,
-                            modifier = Modifier.size(56.dp),
-                            tint = MaterialTheme.colorScheme.primary,
-                        )
-                        Text(
-                            text = strings.updatesEmptyTitle,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                        Text(
-                            text = strings.updatesEmptySubtitle,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                    Icon(
+                        imageVector = Icons.Rounded.Check,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        text = strings.text(UiText.UpdatesUpToDate),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    if (!isUpdating) {
+                        androidx.compose.material3.TextButton(
+                            onClick = onCheckForUpdates,
+                            modifier = Modifier.testTag("updates-empty-check"),
+                        ) {
+                            Text(strings.updatesCheckButton)
+                        }
                     }
                 }
             }
@@ -263,25 +264,28 @@ fun UpdatesScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 groups.forEach { group ->
-                    item(key = "header-${group.date}", contentType = { "header" }) {
+                    item(key = "header-${group.kind}", contentType = { "header" }) {
                         val header = when (group.kind) {
                             UpdatesGroupKind.Today -> strings.text(UiText.UpdatesGroupToday)
                             UpdatesGroupKind.Yesterday -> strings.text(UiText.UpdatesGroupYesterday)
-                            UpdatesGroupKind.Date -> dateFormatter.format(group.date)
+                            UpdatesGroupKind.ThisWeek -> strings.text(UiText.UpdatesGroupThisWeek)
+                            UpdatesGroupKind.Earlier -> strings.text(UiText.UpdatesGroupEarlier)
                         }
                         Text(
                             text = header,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .testTag("updates-group-${group.date}"),
+                                .testTag("updates-group-${group.kind.name.lowercase()}"),
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.primary,
                         )
                     }
-                    items(group.items, key = { it.chapterId }, contentType = { "update" }) { item ->
+                    items(group.entries, key = { it.latest.chapterId }, contentType = { "update" }) { entry ->
+                        val item = entry.latest
                         UpdateRow(
                             item = item,
+                            chapterCount = entry.chapters.size,
                             timeFormatter = timeFormatter,
                             zone = zone,
                             onReadChapter = { onReadChapter(item.chapterId) },
@@ -298,6 +302,7 @@ fun UpdatesScreen(
 @Composable
 private fun UpdateRow(
     item: UpdatedChapterItem,
+    chapterCount: Int = 1,
     timeFormatter: DateTimeFormatter,
     zone: ZoneId,
     onReadChapter: () -> Unit,
@@ -346,6 +351,14 @@ private fun UpdateRow(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
+                if (chapterCount > 1) {
+                    Text(
+                        text = strings.text(UiText.UpdatesMangaChapters, chapterCount),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.testTag("updates-manga-count-${item.mangaId}"),
+                    )
+                }
                 if (item.dateFetch > 0L) {
                     val timeStr = remember(item.dateFetch, timeFormatter) {
                         try {

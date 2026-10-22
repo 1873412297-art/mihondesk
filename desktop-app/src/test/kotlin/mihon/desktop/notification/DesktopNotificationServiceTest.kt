@@ -25,7 +25,7 @@ class DesktopNotificationServiceTest {
         service.notifyDownloadError("Manga", "Chapter", "TLS: Remote host terminated the handshake")
         native.last() shouldBe ("下载失败" to "Manga - Chapter: 安全连接建立失败")
         service.notifyLibraryUpdate(5, 2)
-        native.last() shouldBe ("书库已更新" to "2 部漫画共发现 5 个新章节")
+        native.last() shouldBe ("书架已更新" to "2 部漫画共发现 5 个新章节")
         strings = mihon.desktop.i18n.TraditionalChineseStrings
         hidden = true
         service.notifyDownloadComplete("Private title", "Private chapter")

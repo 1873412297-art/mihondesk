@@ -81,30 +81,6 @@ internal fun railSelectionFor(selected: DesktopDestination): DesktopDestination 
     else -> selected
 }
 
-internal const val HISTORY_SEGMENTS_TEST_TAG = "history-segments"
-
-@Composable
-private fun HistorySegments(
-    selected: DesktopDestination,
-    onDestinationSelected: (DesktopDestination) -> Unit,
-) {
-    val strings = LocalStrings.current
-    androidx.compose.material3.PrimaryTabRow(
-        selectedTabIndex = if (selected == DesktopDestination.Stats) 1 else 0,
-        modifier = Modifier.widthIn(max = 360.dp).testTag(HISTORY_SEGMENTS_TEST_TAG),
-        containerColor = androidx.compose.ui.graphics.Color.Transparent,
-    ) {
-        listOf(DesktopDestination.History, DesktopDestination.Stats).forEach { destination ->
-            androidx.compose.material3.Tab(
-                selected = selected == destination,
-                onClick = { if (selected != destination) onDestinationSelected(destination) },
-                text = { Text(strings.destinationLabel(destination)) },
-                modifier = Modifier.testTag("history-segment-${destination.name.lowercase()}"),
-            )
-        }
-    }
-}
-
 const val DESKTOP_LOCK_NOW_BUTTON_TEST_TAG = "desktop-lock-now-button"
 
 @Composable
@@ -213,7 +189,7 @@ fun DesktopShell(
                     contentAlignment = Alignment.TopStart,
                 ) {
                     when (state.selected) {
-                        DesktopDestination.Library -> {
+                        DesktopDestination.Library -> Column {
                             LibraryScreen(
                                 state = state.libraryState,
                                 detailState = state.mangaDetailState,
@@ -221,6 +197,8 @@ fun DesktopShell(
                                 onQueryChange = actions.onLibraryQueryChange,
                                 onMangaSelected = actions.onMangaSelected,
                                 onBackFromDetail = actions.onBackFromMangaDetail,
+                                detailPaneWidthDp = state.libraryDetailPaneWidth,
+                                onDetailPaneWidthChange = actions.onLibraryDetailPaneWidthChange,
                                 onReadChapter = actions.onReadChapter,
                                 onDetailRetry = actions.onMangaDetailRetry,
                                 onImportBackup = actions.onImportBackup,
@@ -293,9 +271,9 @@ fun DesktopShell(
                             )
                         }
                         DesktopDestination.History -> Column {
-                            HistorySegments(state.selected, actions.onDestinationSelected)
                             mihon.desktop.ui.history.HistoryScreen(
                                 groups = state.historyGroups,
+                                onOpenStats = { actions.onDestinationSelected(DesktopDestination.Stats) },
                                 query = state.historyQuery,
                                 onQueryChange = actions.onHistoryQueryChange,
                                 onReadChapter = actions.onReadChapter,
@@ -398,10 +376,10 @@ fun DesktopShell(
                             }
                         }
                         DesktopDestination.Stats -> Column {
-                            HistorySegments(state.selected, actions.onDestinationSelected)
                             mihon.desktop.ui.stats.StatsScreen(
                                 data = state.statsData,
                                 onRefresh = actions.onRefreshStats,
+                                onOpenHistory = { actions.onDestinationSelected(DesktopDestination.History) },
                             )
                         }
                         DesktopDestination.Browse -> {
@@ -637,6 +615,10 @@ fun DesktopShell(
     onPairPhoneSync: (() -> Unit)? = null,
     onContinueReading: ((Long) -> Unit)? = null,
     settingsInitialSection: mihon.desktop.ui.settings.SettingsSection? = null,
+    homeToday: List<mihon.desktop.ui.home.TodayMangaUpdates> = emptyList(),
+    libraryDetailPaneWidth: Int = 0,
+    onLibraryDetailPaneWidthChange: (Int) -> Unit = {},
+    onOpenMangaFromHome: (Long) -> Unit = {},
 ) {
     val state = DesktopShellState(
         selected = selected,
@@ -652,6 +634,8 @@ fun DesktopShell(
         downloadRecoveryMessage = downloadRecoveryMessage,
         downloadStorageError = downloadStorageError,
         updatedChapters = updatedChapters,
+        homeToday = homeToday,
+        libraryDetailPaneWidth = libraryDetailPaneWidth,
         updatesUnreadCount = updatesUnreadCount,
         isUpdatingLibrary = isUpdatingLibrary,
         isRepairingCovers = isRepairingCovers,
@@ -776,6 +760,7 @@ fun DesktopShell(
         onLockNow,
         onPairPhoneSync,
         onContinueReading,
+        onOpenMangaFromHome,
     ) {
         DesktopShellActions(
             onDestinationSelected = onDestinationSelected,
@@ -876,6 +861,8 @@ fun DesktopShell(
             onLockNow = onLockNow,
             onPairPhoneSync = onPairPhoneSync,
             onContinueReading = onContinueReading,
+            onLibraryDetailPaneWidthChange = onLibraryDetailPaneWidthChange,
+            onOpenMangaFromHome = onOpenMangaFromHome,
         )
     }
     DesktopShell(state = state, actions = actions)

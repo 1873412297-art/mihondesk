@@ -69,6 +69,7 @@ fun DesktopShortcutsDialog(
                 row(ShellShortcutAction.ToggleNavigationRail)
 
                 ShortcutSectionHeader(strings.libraryFilterAndSort)
+                row(ShellShortcutAction.OpenCommandPalette)
                 row(ShellShortcutAction.FocusSearch)
                 row(ShellShortcutAction.RefreshCurrentPage)
 

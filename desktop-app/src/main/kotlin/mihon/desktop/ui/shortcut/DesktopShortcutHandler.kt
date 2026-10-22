@@ -25,6 +25,7 @@ enum class ShellShortcutAction {
     NavigateBack,
     ShowShortcutsHelp,
     ToggleNavigationRail,
+    OpenCommandPalette,
 }
 
 object DesktopShortcutMatcher {

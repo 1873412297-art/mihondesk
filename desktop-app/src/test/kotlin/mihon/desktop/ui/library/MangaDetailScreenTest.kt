@@ -74,8 +74,8 @@ class MangaDetailScreenTest {
 
     @Test
     fun `wide library shows adjacent detail with real metadata and chapter semantics in repository order`() =
-        runComposeUiTest {
-            setScreen(width = 1280.dp)
+        androidx.compose.ui.test.runDesktopComposeUiTest(1400, 1100) {
+            setScreen(width = 1280.dp, height = 1000.dp)
 
             onNodeWithTag("library-grid-pane").assertExists()
             onNodeWithTag("manga-detail-pane").assertExists()
@@ -97,7 +97,7 @@ class MangaDetailScreenTest {
     fun `narrow selection pushes detail and back returns to library`() = runComposeUiTest {
         var selected: Long? = 7
         var chapterId: Long? = null
-        setScreen(width = 900.dp, onBack = { selected = null }, onRead = { chapterId = it })
+        setScreen(width = 640.dp, onBack = { selected = null }, onRead = { chapterId = it })
 
         onNodeWithTag("library-grid-pane").assertDoesNotExist()
         onNodeWithTag("manga-detail-pane").assertExists()
@@ -148,13 +148,14 @@ class MangaDetailScreenTest {
 
     private fun androidx.compose.ui.test.ComposeUiTest.setScreen(
         width: androidx.compose.ui.unit.Dp,
+        height: androidx.compose.ui.unit.Dp = 800.dp,
         onBack: () -> Unit = {},
         onRead: (Long) -> Unit = {},
     ) {
         val item = LibraryManga(7, 107, "/7", "Real title", null, 2, 1, "Author name")
         setContent {
             MaterialTheme {
-                Box(Modifier.requiredSize(width, 800.dp)) {
+                Box(Modifier.requiredSize(width, height)) {
                     LibraryScreen(
                         state = LibraryUiState(false, items = listOf(item), selectedMangaId = 7),
                         detailState = detailState(),

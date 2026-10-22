@@ -31,6 +31,8 @@ class LibraryUpdateService(
     private val maxConcurrentSources: Int = 3,
     private val requestTimeoutMs: Long = 60_000L,
     private val nowMillis: () -> Long = System::currentTimeMillis,
+    /** Replaces the plain [notificationService] balloon with localized, clickable alerts when set. */
+    private val onReport: ((LibraryUpdateReport) -> Unit)? = null,
 ) {
 
     init {
@@ -137,7 +139,9 @@ class LibraryUpdateService(
         )
 
         // Notify user via Desktop Notification Service
-        if (newChaptersTotal > 0) {
+        if (onReport != null) {
+            runCatching { onReport.invoke(report) }
+        } else if (newChaptersTotal > 0) {
             val mangaCount = results.count { it.newChapters.isNotEmpty() }
             val firstManga = results.firstOrNull { it.newChapters.isNotEmpty() }?.title ?: "Manga"
             val message = if (mangaCount == 1) {
@@ -201,6 +205,14 @@ class LibraryUpdateService(
             return MangaUpdateItemResult(manga.id, manga.title, newlyAdded)
         } catch (error: CancellationException) {
             throw error
+        } catch (error: mihon.desktop.extension.SourceExtensionNotInstalledException) {
+            return MangaUpdateItemResult(
+                manga.id,
+                manga.title,
+                emptyList(),
+                "Failed to update '${manga.title}': source extension is not installed (source ${error.sourceId})",
+                missingSourceId = error.sourceId,
+            )
         } catch (error: Exception) {
             return MangaUpdateItemResult(
                 manga.id,

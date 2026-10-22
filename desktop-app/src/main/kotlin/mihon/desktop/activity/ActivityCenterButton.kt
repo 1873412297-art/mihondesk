@@ -261,13 +261,27 @@ private fun ActivityRow(item: ActivityItem, strings: DesktopStrings, onRetry: ()
                             overflow = TextOverflow.Ellipsis,
                         )
                     }
-                    if (item.retry != null) {
+                    if (item.retry != null || item.actions.isNotEmpty()) {
                         Row {
-                            TextButton(
-                                onClick = onRetry,
-                                modifier = Modifier.height(30.dp).testTag("activity-retry-${item.id}"),
-                            ) {
-                                Text(strings.text(UiText.ActivityRetry), style = MaterialTheme.typography.labelMedium)
+                            if (item.retry != null) {
+                                TextButton(
+                                    onClick = onRetry,
+                                    modifier = Modifier.height(30.dp).testTag("activity-retry-${item.id}"),
+                                ) {
+                                    Text(
+                                        strings.text(UiText.ActivityRetry),
+                                        style = MaterialTheme.typography.labelMedium,
+                                    )
+                                }
+                            }
+                            item.actions.forEach { action ->
+                                TextButton(
+                                    onClick = action.run,
+                                    modifier = Modifier.height(30.dp)
+                                        .testTag("activity-action-${item.id}-${action.id}"),
+                                ) {
+                                    Text(action.label, style = MaterialTheme.typography.labelMedium)
+                                }
                             }
                         }
                     }

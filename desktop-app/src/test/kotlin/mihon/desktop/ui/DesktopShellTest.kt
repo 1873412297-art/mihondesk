@@ -336,4 +336,58 @@ class DesktopShellTest {
         onNodeWithTag(UPDATES_SCREEN_TEST_TAG).assertExists()
         onNodeWithTag(UPCOMING_SCREEN_TEST_TAG).assertDoesNotExist()
     }
+
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun `no page shows the old strip or a continue reading row`() = runComposeUiTest {
+        mihon.desktop.ui.common.DesktopLayoutPrefs.bind(null)
+        val today = listOf(
+            mihon.desktop.ui.home.TodayMangaUpdates(
+                1,
+                "M1",
+                null,
+                listOf(mihon.desktop.updates.UpdatedChapterItem(1, 11, "M1", "第11话", 11.0, 1L)),
+            ),
+        )
+        var selected by mutableStateOf(DesktopDestination.Library)
+        setContent {
+            Box(modifier = Modifier.requiredSize(1000.dp, 700.dp)) {
+                DesktopShell(
+                    selected = selected,
+                    onDestinationSelected = {},
+                    homeToday = today,
+                )
+            }
+        }
+        onNodeWithTag("home-today").assertDoesNotExist()
+        onNodeWithTag("home-continue-5").assertDoesNotExist()
+        selected = DesktopDestination.Updates
+        waitForIdle()
+        onNodeWithTag(UPDATES_SCREEN_TEST_TAG).assertExists()
+        onNodeWithTag("home-today").assertDoesNotExist()
+        selected = DesktopDestination.History
+        waitForIdle()
+        onNodeWithTag("history-continue-row").assertDoesNotExist()
+        onNodeWithTag("history-continue-5").assertDoesNotExist()
+    }
+
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun `history and stats begin with their page header and switch via header buttons`() = runComposeUiTest {
+        mihon.desktop.ui.common.DesktopLayoutPrefs.bind(null)
+        var selected by mutableStateOf(DesktopDestination.History)
+        setContent {
+            Box(modifier = Modifier.requiredSize(1000.dp, 700.dp)) {
+                DesktopShell(selected = selected, onDestinationSelected = { selected = it })
+            }
+        }
+        onNodeWithTag("history-segments").assertDoesNotExist()
+        onNodeWithTag("history-open-stats").performClick()
+        waitForIdle()
+        selected shouldBe DesktopDestination.Stats
+        onNodeWithTag("history-segments").assertDoesNotExist()
+        onNodeWithTag("stats-open-history").performClick()
+        waitForIdle()
+        selected shouldBe DesktopDestination.History
+    }
 }

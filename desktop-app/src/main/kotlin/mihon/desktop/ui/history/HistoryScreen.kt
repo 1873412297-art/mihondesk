@@ -2,6 +2,8 @@ package mihon.desktop.ui.history
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.hoverable
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -30,6 +32,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -43,9 +46,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -75,6 +80,9 @@ fun HistoryScreen(
     onDeleteItem: (Long) -> Unit,
     onClearAll: () -> Unit,
     modifier: Modifier = Modifier,
+    /** Total pages of a chapter when the reader has seen it; null hides the "of Y" part and the bar. */
+    pageCountFor: (chapterId: Long) -> Int? = { null },
+    onOpenStats: (() -> Unit)? = null,
 ) {
     val strings = mihon.desktop.i18n.LocalStrings.current
     var showClearConfirmation by remember { mutableStateOf(false) }
@@ -101,21 +109,31 @@ fun HistoryScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            if (groups.isNotEmpty() || query.isNotEmpty()) {
-                OutlinedButton(
-                    onClick = { showClearConfirmation = true },
-                    modifier = Modifier.testTag("history-clear-all-button"),
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = MaterialTheme.colorScheme.error,
-                    ),
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.DeleteSweep,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp),
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(strings.historyClearAll)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (onOpenStats != null) {
+                    androidx.compose.material3.FilledTonalButton(
+                        onClick = onOpenStats,
+                        modifier = Modifier.testTag("history-open-stats"),
+                    ) {
+                        Text(strings.destinationLabel(mihon.desktop.navigation.DesktopDestination.Stats))
+                    }
+                }
+                if (groups.isNotEmpty() || query.isNotEmpty()) {
+                    OutlinedButton(
+                        onClick = { showClearConfirmation = true },
+                        modifier = Modifier.testTag("history-clear-all-button"),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = MaterialTheme.colorScheme.error,
+                        ),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.DeleteSweep,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(strings.historyClearAll)
+                    }
                 }
             }
         }
@@ -189,7 +207,7 @@ fun HistoryScreen(
         } else {
             LazyColumn(
                 modifier = Modifier.weight(1f).fillMaxWidth().testTag("history-list"),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
                 contentPadding = PaddingValues(bottom = 24.dp),
             ) {
                 groups.forEach { group ->
@@ -199,7 +217,10 @@ fun HistoryScreen(
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(vertical = 4.dp).testTag("history-group-${group.title}"),
+                            modifier = Modifier.padding(
+                                top = 10.dp,
+                                bottom = 2.dp,
+                            ).testTag("history-group-${group.title}"),
                         )
                     }
 
@@ -208,6 +229,7 @@ fun HistoryScreen(
                             item = item,
                             onRead = { onReadChapter(item.chapterId) },
                             onDelete = { onDeleteItem(item.chapterId) },
+                            pageCount = pageCountFor(item.chapterId),
                         )
                     }
                 }
@@ -248,43 +270,64 @@ private fun HistoryItemRow(
     onRead: () -> Unit,
     onDelete: () -> Unit,
     modifier: Modifier = Modifier,
+    pageCount: Int? = null,
 ) {
     val strings = LocalStrings.current
     var showContextMenu by remember { mutableStateOf(false) }
+    val interaction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val hovered by interaction.collectIsHoveredAsState()
     val timeFormatter = remember(strings) {
         DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT).withLocale(strings.locale)
     }
     val timeStr = remember(item.lastRead, timeFormatter) {
         Instant.ofEpochMilli(item.lastRead).atZone(ZoneId.systemDefault()).format(timeFormatter)
     }
+    val page = (item.lastPageRead + 1).toInt()
+    val total = pageCount?.takeIf { it > 0 }
+    val progressText = when {
+        item.read -> null
+        total != null -> strings.text(UiText.HistoryPageOf, page.coerceAtMost(total), total)
+        else -> strings.text(UiText.HistoryPageAt, page)
+    }
 
     Box(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(8.dp))
+            .hoverable(interaction)
             .onSecondaryClick { showContextMenu = true },
     ) {
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
+                .clickable(
+                    interactionSource = interaction,
+                    indication = androidx.compose.foundation.LocalIndication.current,
+                    role = Role.Button,
+                    onClickLabel = strings.historyResumeButton,
+                    onClick = onRead,
+                )
                 .testTag("history-item-${item.chapterId}"),
-            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (hovered) 0.8f else 0.5f),
         ) {
             Row(
-                modifier = Modifier.padding(12.dp),
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 MangaCover(
                     thumbnailUrl = item.mangaThumbnailUrl,
                     mangaId = item.mangaId,
                     modifier = Modifier
-                        .size(width = 48.dp, height = 68.dp)
-                        .clip(RoundedCornerShape(6.dp)),
+                        .size(width = 64.dp, height = 90.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .testTag("history-cover-${item.chapterId}"),
                 )
 
-                // Details
-                Column(modifier = Modifier.weight(1f)) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
                     Text(
                         text = item.mangaTitle,
                         style = MaterialTheme.typography.bodyLarge,
@@ -293,50 +336,53 @@ private fun HistoryItemRow(
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(
-                        text = "${item.chapterName} • ${strings.text(UiText.HistoryReadAt, timeStr)}",
+                        text = listOfNotNull(item.chapterName, progressText).joinToString(" · "),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
-                    if (item.readDuration > 0) {
-                        val durationMin = (item.readDuration / 60000).coerceAtLeast(1)
-                        Text(
-                            text = strings.text(UiText.ReadingDuration, durationMin),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.secondary,
+                    if (total != null && !item.read) {
+                        LinearProgressIndicator(
+                            progress = { (page.toFloat() / total).coerceIn(0f, 1f) },
+                            modifier = Modifier
+                                .width(160.dp)
+                                .height(3.dp)
+                                .clip(RoundedCornerShape(2.dp))
+                                .testTag("history-progress-${item.chapterId}"),
+                            color = MaterialTheme.colorScheme.primary,
+                            trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                            drawStopIndicator = {},
                         )
                     }
-                }
-
-                // Actions
-                DesktopTooltipBox(tooltip = strings.historyResumeButton) {
-                    FilledTonalButton(
-                        onClick = onRead,
-                        modifier = Modifier.testTag("history-resume-${item.chapterId}"),
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.PlayArrow,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp),
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(strings.historyResumeButton)
+                    val readAt = strings.text(UiText.HistoryReadAt, timeStr)
+                    val meta = if (item.readDuration > 0) {
+                        val minutes = (item.readDuration / 60000).coerceAtLeast(1)
+                        "$readAt · ${strings.text(UiText.ReadingDuration, minutes)}"
+                    } else {
+                        readAt
                     }
+                    Text(
+                        text = meta,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                    )
                 }
 
+                // Quiet delete: only visible on hover, still focusable and announced for accessibility.
                 DesktopTooltipBox(tooltip = strings.historyDeleteButton) {
-                    OutlinedButton(
+                    androidx.compose.material3.IconButton(
                         onClick = onDelete,
-                        modifier = Modifier.testTag("history-delete-${item.chapterId}"),
+                        modifier = Modifier
+                            .alpha(if (hovered) 1f else 0f)
+                            .testTag("history-delete-${item.chapterId}"),
                     ) {
                         Icon(
                             imageVector = Icons.Rounded.DeleteOutline,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp),
+                            contentDescription = strings.historyDeleteButton,
+                            modifier = Modifier.size(20.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(strings.historyDeleteButton)
                     }
                 }
             }
@@ -374,6 +420,7 @@ private fun HistoryItemRow(
                         showContextMenu = false
                         onDelete()
                     },
+                    modifier = Modifier.testTag("history-menu-delete-${item.chapterId}"),
                 )
             }
         }

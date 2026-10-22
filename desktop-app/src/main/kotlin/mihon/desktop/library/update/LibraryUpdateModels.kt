@@ -21,6 +21,8 @@ data class MangaUpdateItemResult(
     val title: String,
     val newChapters: List<LibraryChapter>,
     val error: String? = null,
+    /** Set when the update failed because the manga's source extension is not installed. */
+    val missingSourceId: Long? = null,
 )
 
 data class LibraryUpdateReport(

@@ -378,4 +378,20 @@ class LibraryUpdateServiceTest {
         override suspend fun getChapterList(manga: SManga): List<SChapter> = chapters
         override suspend fun getPageList(chapter: SChapter): List<Page> = emptyList()
     }
+
+    @Test
+    fun `manga whose source extension is not installed reports the missing source`() = runBlocking {
+        DesktopLibraryDatabaseFactory.open(tempDir.resolve("missing-source.db")).use { repo ->
+            repo.insertManga(MangaRecord(sourceId = 36L, url = "/m", title = "慾債", favorite = true))
+            val service = LibraryUpdateService(
+                repo,
+                refreshManga = { throw mihon.desktop.extension.SourceExtensionNotInstalledException(36L) },
+            )
+            val report = service.updateLibrary(throttleDelayMs = 0)
+            val result = report.results.single()
+            assertEquals(36L, result.missingSourceId)
+            assertTrue(result.error!!.contains("慾債"))
+            assertTrue("扩展包文件缺失" !in result.error!!)
+        }
+    }
 }

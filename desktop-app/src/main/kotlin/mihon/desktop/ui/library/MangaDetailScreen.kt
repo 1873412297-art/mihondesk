@@ -118,6 +118,8 @@ fun MangaDetailScreen(
     modifier: Modifier = Modifier,
     sourceBaseUrl: String? = null,
     showBack: Boolean = true,
+    /** Shown as a ✕ at the right end of the action row (side pane). */
+    onClose: (() -> Unit)? = null,
     onEditCategories: () -> Unit = actions.onEditCategories,
     onOpenTracking: () -> Unit = actions.onOpenTracking,
     onEditInfo: () -> Unit = actions.onEditInfo,
@@ -270,152 +272,201 @@ fun MangaDetailScreen(
                     ) {
                         item(key = "detail-header") {
                             Column(
-                                modifier = Modifier.fillMaxWidth().padding(24.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(start = 24.dp, end = 12.dp, top = 14.dp, bottom = 24.dp),
                                 verticalArrangement = Arrangement.spacedBy(16.dp),
                             ) {
-                                FlowRow(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                                ) {
-                                    if (showBack) {
-                                        TextButton(
-                                            onClick = onBack,
-                                            modifier = Modifier.testTag("manga-detail-back"),
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                                                contentDescription = null,
-                                                modifier = Modifier.size(18.dp),
-                                            )
-                                            Spacer(Modifier.width(6.dp))
-                                            Text(strings.mangaDetailBack)
-                                        }
-                                    }
-                                    onToggleLibrary?.let { toggleLibrary ->
-                                        OutlinedButton(
-                                            onClick = toggleLibrary,
-                                            enabled = !isLibraryActionRunning,
-                                            modifier = Modifier.testTag("manga-detail-library-button"),
-                                        ) {
-                                            Icon(
-                                                if (manga.favorite) {
-                                                    Icons.Rounded.Favorite
-                                                } else {
-                                                    Icons.Rounded.FavoriteBorder
-                                                },
-                                                contentDescription = null,
-                                                modifier = Modifier.size(16.dp),
-                                            )
-                                            Spacer(Modifier.width(6.dp))
-                                            Text(
-                                                if (manga.favorite) {
-                                                    strings.mangaDetailInLibrary
-                                                } else {
-                                                    strings.mangaDetailAddToLibrary
-                                                },
-                                            )
-                                        }
-                                    }
-                                    onRefreshSource?.let { refreshSource ->
-                                        OutlinedButton(
-                                            onClick = refreshSource,
-                                            enabled = !isRefreshingSource,
-                                            modifier = Modifier.testTag("manga-detail-refresh-button"),
-                                        ) {
-                                            Icon(
-                                                Icons.Rounded.Refresh,
-                                                contentDescription = null,
-                                                modifier = Modifier.size(16.dp),
-                                            )
-                                            Spacer(Modifier.width(6.dp))
-                                            Text(strings.browseRefresh)
-                                        }
-                                    }
-                                    OutlinedButton(
-                                        onClick = onEditInfo,
-                                        modifier = Modifier.testTag("manga-detail-edit-info-button"),
-                                    ) {
-                                        Icon(
-                                            Icons.Rounded.Edit,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(16.dp),
-                                        )
-                                        Spacer(Modifier.width(6.dp))
-                                        Text(strings.mangaDetailEditInfo)
-                                    }
-                                    OutlinedButton(
-                                        onClick = onEditCategories,
-                                        modifier = Modifier.testTag("manga-detail-edit-categories-button"),
-                                    ) {
-                                        Icon(
-                                            Icons.AutoMirrored.Rounded.Label,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(16.dp),
-                                        )
-                                        Spacer(Modifier.width(6.dp))
-                                        Text(strings.mangaDetailCategories)
-                                    }
-                                    if (manga.url.startsWith("http")) {
-                                        OutlinedButton(
-                                            onClick = {
-                                                mihon.desktop.platform.DesktopBrowserHelper.openInBrowser(manga.url)
-                                            },
-                                            modifier = Modifier.testTag("manga-detail-open-browser-button"),
-                                        ) {
-                                            Icon(
-                                                Icons.AutoMirrored.Rounded.OpenInNew,
-                                                contentDescription = null,
-                                                modifier = Modifier.size(16.dp),
-                                            )
-                                            Spacer(Modifier.width(6.dp))
-                                            Text(strings.openInBrowser)
-                                        }
-                                    }
-                                    val shareableLink = remember(manga.url, sourceBaseUrl) {
-                                        when {
-                                            manga.url.startsWith("http") -> manga.url
-                                            sourceBaseUrl != null -> sourceBaseUrl + manga.url
-                                            else -> null
-                                        }
-                                    }
-                                    if (shareableLink != null) {
-                                        val clipboardManager =
-                                            androidx.compose.ui.platform.LocalClipboardManager.current
-                                        val snackbarHostState = mihon.desktop.ui.common.LocalSnackbarHostState.current
-                                        OutlinedButton(
-                                            onClick = {
-                                                clipboardManager.setText(
-                                                    androidx.compose.ui.text.AnnotatedString(shareableLink),
-                                                )
-                                                coroutineScope.launch {
-                                                    snackbarHostState?.showSnackbar(strings.mangaDetailLinkCopied)
-                                                }
-                                            },
-                                            modifier = Modifier.testTag("manga-detail-copy-link-button"),
-                                        ) {
-                                            Icon(
-                                                Icons.Rounded.ContentCopy,
-                                                contentDescription = null,
-                                                modifier = Modifier.size(16.dp),
-                                            )
-                                            Spacer(Modifier.width(6.dp))
-                                            Text(strings.mangaDetailCopyLink)
-                                        }
-                                    }
-                                    FilledTonalButton(
-                                        onClick = onOpenTracking,
-                                        modifier = Modifier.testTag("manga-detail-open-tracking-button"),
-                                    ) {
-                                        Icon(
-                                            Icons.Rounded.Sync,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(16.dp),
-                                        )
-                                        Spacer(Modifier.width(6.dp))
-                                        Text(strings.mangaDetailTracking)
+                                val shareableLink = remember(manga.url, sourceBaseUrl) {
+                                    when {
+                                        manga.url.startsWith("http") -> manga.url
+                                        sourceBaseUrl != null -> sourceBaseUrl + manga.url
+                                        else -> null
                                     }
                                 }
+                                val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
+                                val snackbarHostState = mihon.desktop.ui.common.LocalSnackbarHostState.current
+                                val copyLink: () -> Unit = {
+                                    shareableLink?.let { link ->
+                                        clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(link))
+                                        coroutineScope.launch {
+                                            snackbarHostState?.showSnackbar(strings.mangaDetailLinkCopied)
+                                        }
+                                    }
+                                }
+                                val openBrowser: () -> Unit = {
+                                    mihon.desktop.platform.DesktopBrowserHelper.openInBrowser(manga.url)
+                                }
+                                // One row: 编辑信息 and 进度记录 overflow into ⋯ first when space runs out.
+                                val rowActions = buildList {
+                                    onToggleLibrary?.let { toggleLibrary ->
+                                        val icon =
+                                            if (manga.favorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder
+                                        val label = if (manga.favorite) {
+                                            strings.mangaDetailInLibrary
+                                        } else {
+                                            strings.mangaDetailAddToLibrary
+                                        }
+                                        add(
+                                            OverflowAction(
+                                                "library",
+                                                6,
+                                                label,
+                                                icon,
+                                                !isLibraryActionRunning,
+                                                toggleLibrary,
+                                            ) {
+                                                DetailActionButton(
+                                                    label,
+                                                    icon,
+                                                    toggleLibrary,
+                                                    "manga-detail-library-button",
+                                                    enabled = !isLibraryActionRunning,
+                                                )
+                                            },
+                                        )
+                                    }
+                                    onRefreshSource?.let { refreshSource ->
+                                        add(
+                                            OverflowAction(
+                                                "refresh",
+                                                5,
+                                                strings.browseRefresh,
+                                                Icons.Rounded.Refresh,
+                                                !isRefreshingSource,
+                                                refreshSource,
+                                            ) {
+                                                DetailActionButton(
+                                                    strings.browseRefresh,
+                                                    Icons.Rounded.Refresh,
+                                                    refreshSource,
+                                                    "manga-detail-refresh-button",
+                                                    enabled = !isRefreshingSource,
+                                                )
+                                            },
+                                        )
+                                    }
+                                    add(
+                                        OverflowAction(
+                                            "edit-info",
+                                            0,
+                                            strings.mangaDetailEditInfo,
+                                            Icons.Rounded.Edit,
+                                            onClick = onEditInfo,
+                                        ) {
+                                            DetailActionButton(
+                                                strings.mangaDetailEditInfo,
+                                                Icons.Rounded.Edit,
+                                                onEditInfo,
+                                                "manga-detail-edit-info-button",
+                                            )
+                                        },
+                                    )
+                                    add(
+                                        OverflowAction(
+                                            "categories",
+                                            4,
+                                            strings.mangaDetailCategories,
+                                            Icons.AutoMirrored.Rounded.Label,
+                                            onClick = onEditCategories,
+                                        ) {
+                                            DetailActionButton(
+                                                strings.mangaDetailCategories,
+                                                Icons.AutoMirrored.Rounded.Label,
+                                                onEditCategories,
+                                                "manga-detail-edit-categories-button",
+                                            )
+                                        },
+                                    )
+                                    if (manga.url.startsWith("http")) {
+                                        add(
+                                            OverflowAction(
+                                                "open-browser",
+                                                3,
+                                                strings.openInBrowser,
+                                                Icons.AutoMirrored.Rounded.OpenInNew,
+                                                onClick = openBrowser,
+                                            ) {
+                                                DetailActionButton(
+                                                    strings.openInBrowser,
+                                                    Icons.AutoMirrored.Rounded.OpenInNew,
+                                                    openBrowser,
+                                                    "manga-detail-open-browser-button",
+                                                )
+                                            },
+                                        )
+                                    }
+                                    if (shareableLink != null) {
+                                        add(
+                                            OverflowAction(
+                                                "copy-link",
+                                                2,
+                                                strings.mangaDetailCopyLink,
+                                                Icons.Rounded.ContentCopy,
+                                                onClick = copyLink,
+                                            ) {
+                                                DetailActionButton(
+                                                    strings.mangaDetailCopyLink,
+                                                    Icons.Rounded.ContentCopy,
+                                                    copyLink,
+                                                    "manga-detail-copy-link-button",
+                                                )
+                                            },
+                                        )
+                                    }
+                                    add(
+                                        OverflowAction(
+                                            "tracking",
+                                            1,
+                                            strings.mangaDetailTracking,
+                                            Icons.Rounded.Sync,
+                                            onClick = onOpenTracking,
+                                        ) {
+                                            DetailActionButton(
+                                                strings.mangaDetailTracking,
+                                                Icons.Rounded.Sync,
+                                                onOpenTracking,
+                                                "manga-detail-open-tracking-button",
+                                                tonal = true,
+                                            )
+                                        },
+                                    )
+                                }
+                                OverflowActionRow(
+                                    actions = rowActions,
+                                    moreLabel = strings.text(mihon.desktop.i18n.UiText.More),
+                                    modifier = Modifier.fillMaxWidth().testTag("manga-detail-action-row"),
+                                    leading = if (showBack) {
+                                        {
+                                            TextButton(
+                                                onClick = onBack,
+                                                modifier = Modifier.testTag("manga-detail-back"),
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                                                    contentDescription = null,
+                                                    modifier = Modifier.size(18.dp),
+                                                )
+                                                Spacer(Modifier.width(6.dp))
+                                                Text(strings.mangaDetailBack)
+                                            }
+                                        }
+                                    } else {
+                                        null
+                                    },
+                                    trailing = onClose?.let { close ->
+                                        {
+                                            mihon.desktop.ui.common.DesktopTooltipBox(tooltip = strings.dialogClose) {
+                                                IconButton(
+                                                    onClick = close,
+                                                    modifier = Modifier.testTag("library-detail-close"),
+                                                ) {
+                                                    Icon(Icons.Rounded.Close, contentDescription = strings.dialogClose)
+                                                }
+                                            }
+                                        }
+                                    },
+                                )
 
                                 state.missingSource?.let { missing ->
                                     Surface(
@@ -1665,5 +1716,26 @@ private fun VolumeHeaderRow(item: ChapterListItem.VolumeHeader) {
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+    }
+}
+
+@Composable
+private fun DetailActionButton(
+    label: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    onClick: () -> Unit,
+    tag: String,
+    enabled: Boolean = true,
+    tonal: Boolean = false,
+) {
+    val content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit = {
+        Icon(icon, contentDescription = null, modifier = Modifier.size(16.dp))
+        Spacer(Modifier.width(6.dp))
+        Text(label, maxLines = 1)
+    }
+    if (tonal) {
+        FilledTonalButton(onClick = onClick, enabled = enabled, modifier = Modifier.testTag(tag), content = content)
+    } else {
+        OutlinedButton(onClick = onClick, enabled = enabled, modifier = Modifier.testTag(tag), content = content)
     }
 }

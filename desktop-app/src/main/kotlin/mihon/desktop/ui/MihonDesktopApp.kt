@@ -25,6 +25,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -189,6 +190,7 @@ fun ApplicationScope.MihonDesktopApp(
         }
     }
     var showShortcutsHelp by remember { mutableStateOf(false) }
+    var showCommandPalette by remember { mutableStateOf(false) }
     val keyBindingStore = remember(runtime.preferences) { DesktopKeyBindingStore(runtime.preferences) }
     val windowState = host?.windowState ?: rememberWindowState(
         placement = if (savedPlacement.maximized) {
@@ -553,6 +555,63 @@ fun ApplicationScope.MihonDesktopApp(
     // Unread-count badge for the Updates rail item.
     val updatesUnreadCount = remember(updatedChapters) { updatedChapters.count { !it.read } }
 
+    // Home "today" strip: this session's report plus chapters fetched earlier today (read back
+    // from the database so it survives a restart), grouped per manga, and where to resume.
+    val storedTodayChapters by produceState(
+        emptyList<mihon.desktop.updates.UpdatedChapterItem>(),
+        lastReport,
+        allMangaList,
+    ) {
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            runCatching {
+                mihon.desktop.ui.home.todayLibraryChapters(
+                    library = runtime.library.librarySnapshot(null),
+                    chaptersFor = { runtime.library.chapterSnapshot(it) },
+                )
+            }.getOrDefault(emptyList())
+        }
+    }
+    val homeToday = remember(updatedChapters, storedTodayChapters) {
+        mihon.desktop.ui.home.todayUpdates(
+            mihon.desktop.ui.home.mergeTodayChapters(updatedChapters, storedTodayChapters),
+        )
+    }
+
+    val libraryUpdateAlerts = runtime.libraryUpdateAlerts
+    LaunchedEffect(Unit) {
+        mihon.desktop.activity.MissingSourceAlerts.requests.collect { request ->
+            when (request) {
+                is mihon.desktop.activity.MissingSourceAlerts.Request.Install ->
+                    mihon.desktop.ui.browse.BrowseRequests.installExtension(request.item)
+                is mihon.desktop.activity.MissingSourceAlerts.Request.Migrate ->
+                    mihon.desktop.ui.browse.BrowseRequests.openMigration(
+                        mihon.desktop.ui.browse.SourceWithMangaCount(
+                            request.sourceId,
+                            request.sourceName,
+                            request.mangaCount,
+                        ),
+                    )
+            }
+            navigator.navigate(DesktopDestination.Browse)
+        }
+    }
+    LaunchedEffect(libraryUpdateAlerts) {
+        libraryUpdateAlerts ?: return@LaunchedEffect
+        libraryUpdateAlerts.clicks.collect { target ->
+            target ?: return@collect
+            showMainWindow()
+            when (target) {
+                is mihon.desktop.notification.LibraryUpdateTarget.Chapter ->
+                    navigator.navigate(DesktopDestination.Reader(target.chapterId))
+                mihon.desktop.notification.LibraryUpdateTarget.Updates -> navigator.navigate(DesktopDestination.Updates)
+            }
+            libraryUpdateAlerts.clickHandled()
+            libraryUpdateAlerts.markSeen()
+        }
+    }
+    LaunchedEffect(libraryUpdateAlerts, navigator.current) {
+        if (navigator.current == DesktopDestination.Updates) libraryUpdateAlerts?.markSeen()
+    }
     // Chapter "Open in WebView" request state: resolved to a source descriptor + absolute URL.
     var chapterWebViewRequest by remember {
         mutableStateOf<Pair<mihon.extension.model.SourceDescriptor, String>?>(null)
@@ -664,6 +723,62 @@ fun ApplicationScope.MihonDesktopApp(
             highContrast = mihon.desktop.platform.JbrTitleBar.isHighContrast,
         )
     }
+    val paletteSourceSearch = remember(runtime) {
+        mihon.desktop.ui.palette.PaletteSourceSearch(
+            sources = {
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    val prefs = runtime.preferences.load()
+                    val installed = runCatching {
+                        runtime.extensionInstaller.getInstalledExtensions()
+                    }.getOrDefault(emptyList())
+                    runtime.sourceManager.getSourceStates()
+                        .filter { it.isEnabled && !it.isLocal }
+                        .map { it.source }
+                        .filter { source ->
+                            source.id !in prefs.hiddenSourceIds &&
+                                (prefs.showNsfwSources || !mihon.desktop.ui.browse.isSourceNsfw(source.id, installed))
+                        }
+                }
+            },
+            search = { sourceId, query ->
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    runtime.sourceManager.searchManga(sourceId, 1, query).mangas
+                }
+            },
+        )
+    }
+    val onPaletteSelect: (mihon.desktop.ui.palette.PaletteTarget) -> Unit = { target ->
+        when (target) {
+            is mihon.desktop.ui.palette.PaletteTarget.Manga -> {
+                libraryPresenter.openMangaDetail(target.mangaId)
+                navigator.navigate(DesktopDestination.MangaDetails(target.mangaId))
+            }
+            is mihon.desktop.ui.palette.PaletteTarget.Settings -> {
+                settingsSectionRequest = target.section
+                navigator.navigate(DesktopDestination.Settings)
+            }
+            is mihon.desktop.ui.palette.PaletteTarget.SourceManga -> {
+                mihon.desktop.ui.browse.BrowseRequests.openManga(target.source, target.manga)
+                navigator.navigate(DesktopDestination.Browse)
+            }
+            is mihon.desktop.ui.palette.PaletteTarget.Command -> when (target.command) {
+                mihon.desktop.ui.palette.PaletteCommand.OpenLibrary -> navigator.navigate(DesktopDestination.Library)
+                mihon.desktop.ui.palette.PaletteCommand.OpenUpdates -> navigator.navigate(DesktopDestination.Updates)
+                mihon.desktop.ui.palette.PaletteCommand.OpenHistory -> navigator.navigate(DesktopDestination.History)
+                mihon.desktop.ui.palette.PaletteCommand.OpenBrowse -> navigator.navigate(DesktopDestination.Browse)
+                mihon.desktop.ui.palette.PaletteCommand.OpenDownloads -> navigator.navigate(
+                    DesktopDestination.Downloads,
+                )
+                mihon.desktop.ui.palette.PaletteCommand.OpenStats -> navigator.navigate(DesktopDestination.Stats)
+                mihon.desktop.ui.palette.PaletteCommand.UpdateLibrary -> {
+                    presenterScope.launch { runtime.libraryUpdateScheduler?.triggerUpdateNow() }
+                }
+                mihon.desktop.ui.palette.PaletteCommand.ShowShortcuts -> showShortcutsHelp = true
+                mihon.desktop.ui.palette.PaletteCommand.ToggleNavigationRail ->
+                    mihon.desktop.ui.common.DesktopLayoutPrefs.requestRailToggle()
+            }
+        }
+    }
     // Plain keys (Backspace/Esc/?) are routed after the focused element so a text field that consumes
     // them (deleting, typing) always wins; Ctrl/Alt/F-key chords stay global via the preview pass.
     val onShellKey: (androidx.compose.ui.input.key.KeyEvent, Boolean) -> Boolean = shellKey@{ event, afterDispatch ->
@@ -724,6 +839,10 @@ fun ApplicationScope.MihonDesktopApp(
                 }
                 ShellShortcutAction.ShowShortcutsHelp -> {
                     showShortcutsHelp = true
+                }
+                ShellShortcutAction.OpenCommandPalette -> {
+                    if (navigator.current is DesktopDestination.Reader) return@shellKey false
+                    showCommandPalette = !showCommandPalette
                 }
             }
             true
@@ -1272,6 +1391,10 @@ fun ApplicationScope.MihonDesktopApp(
                                             navigator.navigate(DesktopDestination.Reader(chapterId))
                                         }
                                     },
+                                    onOpenMangaFromHome = { mangaId ->
+                                        libraryPresenter.openMangaDetail(mangaId)
+                                        navigator.navigate(DesktopDestination.MangaDetails(mangaId))
+                                    },
                                     onMangaDetailRetry = libraryPresenter::retryDetail,
                                     onImportBackup = startImportBackup,
                                     onImportLocal = startImportLocal,
@@ -1419,6 +1542,13 @@ fun ApplicationScope.MihonDesktopApp(
                                     updateProgress = updateProgress,
                                     onCancelLibraryUpdate = { runtime.libraryUpdateScheduler?.cancelUpdate() },
                                     updatedChapters = updatedChapters,
+                                    homeToday = homeToday,
+                                    libraryDetailPaneWidth = preferences.libraryDetailPaneWidth,
+                                    onLibraryDetailPaneWidthChange = { width ->
+                                        preferences = runtime.preferences.updatePreferences {
+                                            it.copy(libraryDetailPaneWidth = width)
+                                        }
+                                    },
                                     onCheckForUpdates = {
                                         presenterScope.launch { runtime.libraryUpdateScheduler?.triggerUpdateNow() }
                                     },
@@ -1965,6 +2095,21 @@ fun ApplicationScope.MihonDesktopApp(
                                 DesktopShortcutsDialog(
                                     onDismiss = { showShortcutsHelp = false },
                                     bindings = remember { keyBindingStore.load().global },
+                                )
+                            }
+                            if (showCommandPalette) {
+                                val paletteLibrary by produceState(
+                                    emptyList<mihon.desktop.library.model.LibraryManga>(),
+                                ) {
+                                    value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                        runCatching { runtime.library.librarySnapshot(null) }.getOrDefault(emptyList())
+                                    }
+                                }
+                                mihon.desktop.ui.palette.CommandPalette(
+                                    library = paletteLibrary,
+                                    sourceSearch = paletteSourceSearch,
+                                    onDismiss = { showCommandPalette = false },
+                                    onSelect = onPaletteSelect,
                                 )
                             }
                         }

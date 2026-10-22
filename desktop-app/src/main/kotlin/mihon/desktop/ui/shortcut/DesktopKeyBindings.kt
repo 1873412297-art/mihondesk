@@ -265,6 +265,7 @@ fun ShellShortcutAction.defaultChords(): List<KeyChord> = when (this) {
     )
     ShellShortcutAction.ShowShortcutsHelp -> listOf(chord(Key.Slash, ctrl = true), chord(Key.Slash, shift = true))
     ShellShortcutAction.ToggleNavigationRail -> listOf(chord(Key.B, ctrl = true))
+    ShellShortcutAction.OpenCommandPalette -> listOf(chord(Key.K, ctrl = true))
 }
 
 private fun destinationChords(index: Int): List<KeyChord> =

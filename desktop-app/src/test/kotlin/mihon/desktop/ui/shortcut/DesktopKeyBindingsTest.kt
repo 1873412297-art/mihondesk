@@ -129,10 +129,10 @@ class DesktopKeyBindingsTest {
 
         val free = bindings.planAssignment(
             ShortcutTarget.Global(ShellShortcutAction.FocusSearch),
-            KeyChord(Key.K, ctrl = true),
+            KeyChord(Key.J, ctrl = true),
         )
         free.hasConflict shouldBe false
-        free.replaced.global.match(KeyChord(Key.K, ctrl = true)) shouldBe ShellShortcutAction.FocusSearch
+        free.replaced.global.match(KeyChord(Key.J, ctrl = true)) shouldBe ShellShortcutAction.FocusSearch
         free.replaced.global.match(KeyChord(Key.F, ctrl = true)) shouldBe ShellShortcutAction.FocusSearch
     }
 
@@ -151,12 +151,12 @@ class DesktopKeyBindingsTest {
     @Test
     fun `shell matcher follows a customised map`() {
         val custom = DesktopKeyBindings.defaultGlobal
-            .withChords(ShellShortcutAction.FocusSearch, listOf(KeyChord(Key.K, ctrl = true)))
+            .withChords(ShellShortcutAction.FocusSearch, listOf(KeyChord(Key.J, ctrl = true)))
             .withChords(ShellShortcutAction.ShowShortcutsHelp, listOf(KeyChord(Key.F1)))
-        DesktopShortcutMatcher.matchAction(Key.K, isCtrlPressed = true, bindings = custom) shouldBe
+        DesktopShortcutMatcher.matchAction(Key.J, isCtrlPressed = true, bindings = custom) shouldBe
             ShellShortcutAction.FocusSearch
         DesktopShortcutMatcher.matchAction(Key.F, isCtrlPressed = true, bindings = custom).shouldBeNull()
-        DesktopShortcutMatcher.matchAction(Key.K, isMetaPressed = true, bindings = custom) shouldBe
+        DesktopShortcutMatcher.matchAction(Key.J, isMetaPressed = true, bindings = custom) shouldBe
             ShellShortcutAction.FocusSearch
         // Function keys still work while typing; plain keys do not.
         DesktopShortcutMatcher.matchAction(Key.F1, isTextInputFocused = true, bindings = custom) shouldBe
