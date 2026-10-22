@@ -72,10 +72,7 @@ class UnifiedOnlineMangaDetailTest {
                 }
             }
 
-            waitUntil(timeoutMillis = 30_000) {
-                onAllNodesWithTag("source-item-${UnifiedDetailSource.ID}").fetchSemanticsNodes().isNotEmpty()
-            }
-            onNodeWithTag("source-item-${UnifiedDetailSource.ID}").performClick()
+            openSourceWhenSettled(UnifiedDetailSource.ID)
             waitUntil(timeoutMillis = 30_000) {
                 onAllNodesWithTag("manga-card-${UnifiedDetailSource.MANGA_URL}").fetchSemanticsNodes().isNotEmpty()
             }

@@ -61,6 +61,9 @@ enum class ReaderShortcutAction {
     TOGGLE_BOOKMARK,
     CYCLE_READING_MODE,
     SHOW_HELP,
+    TOGGLE_AUTO_SCROLL,
+    AUTO_SCROLL_FASTER,
+    AUTO_SCROLL_SLOWER,
 }
 
 enum class ReaderInputFocus { READER, TEXT, MENU }
@@ -97,6 +100,8 @@ sealed interface ReaderInputCommand {
     data object ToggleBookmark : ReaderInputCommand
     data object CycleReadingMode : ReaderInputCommand
     data object ShowHelp : ReaderInputCommand
+    data object ToggleAutoScroll : ReaderInputCommand
+    data class AdjustAutoScroll(val faster: Boolean) : ReaderInputCommand
 }
 
 /** The reading mode the reader switches to when the mode key (V) is pressed: the next one, wrapping around. */
@@ -140,6 +145,9 @@ class ReaderInputMapper(private val nowMillis: () -> Long = System::currentTimeM
             ReaderShortcutAction.TOGGLE_BOOKMARK -> ReaderInputCommand.ToggleBookmark
             ReaderShortcutAction.CYCLE_READING_MODE -> ReaderInputCommand.CycleReadingMode
             ReaderShortcutAction.SHOW_HELP -> ReaderInputCommand.ShowHelp
+            ReaderShortcutAction.TOGGLE_AUTO_SCROLL -> ReaderInputCommand.ToggleAutoScroll
+            ReaderShortcutAction.AUTO_SCROLL_FASTER -> ReaderInputCommand.AdjustAutoScroll(faster = true)
+            ReaderShortcutAction.AUTO_SCROLL_SLOWER -> ReaderInputCommand.AdjustAutoScroll(faster = false)
         }
         return ReaderInputResult(command)
     }

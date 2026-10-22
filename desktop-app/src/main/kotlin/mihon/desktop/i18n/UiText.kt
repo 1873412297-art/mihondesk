@@ -3,6 +3,20 @@ package mihon.desktop.i18n
 /** App-owned labels. Source metadata and diagnostic details are not translated here. */
 enum class UiText(val english: String, val simplified: String, val traditional: String) {
     ActivityCenter("Activity", "后台任务", "背景任務"),
+    ChapterVolumeLabel("Volume {0}", "第 {0} 卷", "第 {0} 卷"),
+    ChapterVolumeNone("No volume", "未分卷", "未分卷"),
+    PreferredScanlators("Preferred scanlators", "优先汉化组", "優先翻譯組"),
+    PreferredScanlatorsHint(
+        "One per line, highest first. When several groups release the same chapter, only the top one is shown.",
+        "每行一个，越靠前越优先。同一话有多个组发布时，只显示最优先的组。",
+        "每行一個，越靠前越優先。同一話有多個組發布時，只顯示最優先的組。",
+    ),
+    AutoScrollToggle("Toggle auto-scroll", "开关自动滚动", "開關自動捲動"),
+    AutoScrollFaster("Auto-scroll faster", "自动滚动加速", "自動捲動加速"),
+    AutoScrollSlower("Auto-scroll slower", "自动滚动减速", "自動捲動減速"),
+    AutoScrollSpeed("Auto-scroll speed", "自动滚动速度", "自動捲動速度"),
+    AutoScrollStatus("Auto-scroll {0}", "自动滚动 {0}", "自動捲動 {0}"),
+    AutoScrollOff("Auto-scroll off", "自动滚动已关闭", "自動捲動已關閉"),
     ActivityCenterEmpty("No background activity", "暂无后台任务", "暫無背景任務"),
     ActivityDownloads("Downloads", "下载", "下載"),
     ActivityLibraryUpdate("Library update", "书架更新", "書架更新"),

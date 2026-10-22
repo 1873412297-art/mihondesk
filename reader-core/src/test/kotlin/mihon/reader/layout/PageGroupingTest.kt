@@ -231,6 +231,30 @@ class PageGroupingTest {
         groups[2].size shouldBe 1
         groups[2][0].id shouldBe pageId(2)
     }
+
+    @Test
+    fun `unsplit wide spreads stand alone in dual mode and restart pairing after them`() {
+        val pages = listOf(100 to 200, 100 to 200, 400 to 200, 100 to 200, 100 to 200, 400 to 200, 100 to 200)
+            .mapIndexed { i, (w, h) -> PageDescriptor(id = pageId(i), width = w, height = h) }
+        PageGrouping.dual(pages, reserveCover = false, split = DualPageSplit.NEVER)
+            .map { group -> group.map { it.id } }
+            .shouldContainExactly(
+                listOf(pageId(0), pageId(1)),
+                listOf(pageId(2)),
+                listOf(pageId(3), pageId(4)),
+                listOf(pageId(5)),
+                listOf(pageId(6)),
+            )
+    }
+
+    @Test
+    fun `a single page before an unsplit spread is not paired with the spread`() {
+        val pages = listOf(100 to 200, 400 to 200, 100 to 200)
+            .mapIndexed { i, (w, h) -> PageDescriptor(id = pageId(i), width = w, height = h) }
+        PageGrouping.dual(pages, reserveCover = false, split = DualPageSplit.NEVER)
+            .map { group -> group.map { it.id } }
+            .shouldContainExactly(listOf(pageId(0)), listOf(pageId(1)), listOf(pageId(2)))
+    }
 }
 
 private fun pageDescriptors(count: Int) = (0 until count).map { index ->

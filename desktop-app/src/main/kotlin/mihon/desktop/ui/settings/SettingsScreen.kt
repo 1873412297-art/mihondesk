@@ -3728,6 +3728,32 @@ private fun LibrarySettingsPane(
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
         )
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                var preferredScanlators by remember {
+                    mutableStateOf(
+                        preferenceStore.property(mihon.desktop.ui.library.PREFERRED_SCANLATORS_KEY).orEmpty(),
+                    )
+                }
+                Text(strings.text(UiText.PreferredScanlators), fontWeight = FontWeight.Bold)
+                Text(
+                    strings.text(UiText.PreferredScanlatorsHint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                androidx.compose.material3.OutlinedTextField(
+                    value = preferredScanlators,
+                    onValueChange = { value ->
+                        preferredScanlators = value
+                        preferenceStore.update {
+                            setProperty(mihon.desktop.ui.library.PREFERRED_SCANLATORS_KEY, value)
+                        }
+                    },
+                    minLines = 2,
+                    modifier = Modifier.fillMaxWidth().testTag("settings-preferred-scanlators"),
+                )
+            }
+        }
 
         Card(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {

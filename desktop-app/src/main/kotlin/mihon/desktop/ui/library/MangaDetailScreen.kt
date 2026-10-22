@@ -90,6 +90,7 @@ import mihon.desktop.download.DownloadStatus
 import mihon.desktop.extension.ExtensionStoreItem
 import mihon.desktop.i18n.LocalStrings
 import mihon.desktop.i18n.UiText
+import mihon.desktop.i18n.chapterCountLabel
 import mihon.desktop.i18n.locale
 import mihon.desktop.i18n.text
 import mihon.desktop.library.model.LibraryChapter
@@ -236,6 +237,7 @@ fun MangaDetailScreen(
                                         item.chapter.chapterNumber.toString().contains(chapterSearchQuery)
                                 }
                                 is ChapterListItem.MissingCount -> false
+                                is ChapterListItem.VolumeHeader -> false
                             }
                         }
                     }
@@ -1053,6 +1055,7 @@ fun MangaDetailScreen(
                                         },
                                     )
                                     is ChapterListItem.MissingCount -> MissingChapterIndicator(count = item.count)
+                                    is ChapterListItem.VolumeHeader -> VolumeHeaderRow(item)
                                 }
                             }
                         }
@@ -1637,4 +1640,30 @@ internal fun chooseCoverImage(title: String): java.nio.file.Path? {
     val file = dialog.file ?: return null
     val dir = dialog.directory ?: return null
     return java.nio.file.Path.of(dir, file)
+}
+
+@Composable
+private fun VolumeHeaderRow(item: ChapterListItem.VolumeHeader) {
+    val strings = mihon.desktop.i18n.LocalStrings.current
+    val title = item.volume?.let { strings.text(mihon.desktop.i18n.UiText.ChapterVolumeLabel, it) }
+        ?: strings.text(mihon.desktop.i18n.UiText.ChapterVolumeNone)
+    androidx.compose.foundation.layout.Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 4.dp)
+            .testTag("chapter-volume-header-${item.volume ?: "none"}"),
+        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.primary,
+        )
+        androidx.compose.foundation.layout.Spacer(Modifier.width(8.dp))
+        Text(
+            text = strings.chapterCountLabel(item.chapterCount.toLong()),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
 }

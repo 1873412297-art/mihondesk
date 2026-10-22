@@ -502,11 +502,15 @@ class LibraryPresenter(
                         scanlator.isNullOrBlank() || scanlator !in settings.excludedScanlators
                     }
                 }
-                val filtered = scanlatorFiltered.filter { chapter ->
+                val prioritized = applyScanlatorPriority(
+                    scanlatorFiltered,
+                    parsePreferredScanlators(preferences?.property(PREFERRED_SCANLATORS_KEY)),
+                )
+                val filtered = prioritized.filter { chapter ->
                     matchesChapterFilter(chapter, filter, downloadedIds)
                 }
                 val sorted = sortChapters(filtered, settings)
-                val readerChapters = sortChapters(scanlatorFiltered, settings)
+                val readerChapters = sortChapters(prioritized, settings)
                 val availableScanlators = rawChapters.mapNotNull { chapter ->
                     chapter.scanlator?.trim()?.takeIf(String::isNotEmpty)
                 }.toSet()

@@ -1,5 +1,6 @@
 package mihon.desktop.ui.reader
 
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -31,6 +32,9 @@ import mihon.reader.model.ReadingMode
 import mihon.reader.model.ScaleMode
 import mihon.reader.session.ReaderAction
 import mihon.reader.session.ReaderState
+
+/** Active auto-scroll speed in dp/s for continuous modes, or null when auto-scroll is off. */
+internal val LocalReaderAutoScrollSpeed = androidx.compose.runtime.compositionLocalOf<Int?> { null }
 
 @Composable
 internal fun ContinuousReader(
@@ -103,6 +107,20 @@ internal fun ContinuousReader(
             listState.layoutInfo.visibleItemsInfo.mapNotNull { item -> state.pages.getOrNull(item.index)?.id }
         }.distinctUntilChanged().collect { visiblePages ->
             onAction(ReaderAction.SetVisiblePages(visiblePages))
+        }
+    }
+
+    val autoScrollSpeed = LocalReaderAutoScrollSpeed.current
+    LaunchedEffect(listState, autoScrollSpeed) {
+        val speed = autoScrollSpeed ?: return@LaunchedEffect
+        val controller = mihon.desktop.reader.AutoScrollController(speed)
+        var last = androidx.compose.runtime.withFrameNanos { it }
+        while (true) {
+            val now = androidx.compose.runtime.withFrameNanos { it }
+            val delta = controller.deltaPixels(now - last, density.density)
+            last = now
+            // A user drag/fling takes priority and cancels this scroll; the next frame resumes.
+            if (listState.canScrollForward && !listState.isScrollInProgress) listState.scrollBy(delta)
         }
     }
 

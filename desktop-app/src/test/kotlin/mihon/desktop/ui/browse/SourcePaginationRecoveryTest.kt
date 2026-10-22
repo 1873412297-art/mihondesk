@@ -59,10 +59,7 @@ class SourcePaginationRecoveryTest {
             }
             runtime.sourceManager.registerBuiltinSource(source)
             setContent { Box(Modifier.requiredSize(1024.dp, 720.dp)) { BrowseContentView(runtime) } }
-            waitUntil(timeoutMillis = 60000) {
-                onAllNodesWithTag("source-item-${source.id}").fetchSemanticsNodes().isNotEmpty()
-            }
-            onNodeWithTag("source-item-${source.id}").performClick()
+            openSourceWhenSettled(source.id)
             waitUntil(timeoutMillis = 60000) { onAllNodesWithTag("manga-grid").fetchSemanticsNodes().isNotEmpty() }
             onNodeWithTag("source-search-input").performTextReplacement("submitted")
             onNodeWithTag("source-search-btn").performClick()

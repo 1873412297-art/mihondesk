@@ -87,8 +87,15 @@ object PageGrouping {
                 if (current.splitSide != null && index + 1 < expanded.size && expanded[index + 1].id == current.id) {
                     add(immutableSnapshot(listOf(current, expanded[index + 1])))
                     index += 2
-                } else if (index + 1 < expanded.size && expanded[index + 1].splitSide != null &&
-                    expanded[index + 1].id != current.id
+                } else if (current.isUnsplitSpread()) {
+                    // An already-combined spread fills the whole view; pairing restarts after it.
+                    add(immutableSnapshot(listOf(current)))
+                    index += 1
+                } else if (index + 1 < expanded.size &&
+                    (
+                        (expanded[index + 1].splitSide != null && expanded[index + 1].id != current.id) ||
+                            expanded[index + 1].isUnsplitSpread()
+                        )
                 ) {
                     add(immutableSnapshot(listOf(current)))
                     index += 1
@@ -120,5 +127,7 @@ object PageGrouping {
         }
     }
 }
+
+private fun PageDescriptor.isUnsplitSpread(): Boolean = splitSide == null && !rotated && isWide
 
 private fun <T> immutableSnapshot(items: Iterable<T>): List<T> = Collections.unmodifiableList(items.toList())

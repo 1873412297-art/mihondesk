@@ -51,6 +51,9 @@ fun DesktopStrings.shortcutLabel(action: ReaderShortcutAction): String = text(
         ReaderShortcutAction.TOGGLE_BOOKMARK -> UiText.ToggleChapterBookmarkShortcut
         ReaderShortcutAction.CYCLE_READING_MODE -> UiText.CycleReadingModeShortcut
         ReaderShortcutAction.SHOW_HELP -> UiText.ShowShortcuts
+        ReaderShortcutAction.TOGGLE_AUTO_SCROLL -> UiText.AutoScrollToggle
+        ReaderShortcutAction.AUTO_SCROLL_FASTER -> UiText.AutoScrollFaster
+        ReaderShortcutAction.AUTO_SCROLL_SLOWER -> UiText.AutoScrollSlower
     },
 )
 

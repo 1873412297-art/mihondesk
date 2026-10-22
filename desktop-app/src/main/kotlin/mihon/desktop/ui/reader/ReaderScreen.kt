@@ -165,6 +165,8 @@ fun ReaderScreen(
     var overlayVisibility by remember { mutableStateOf(ReaderOverlayVisibilityState()) }
     var hideGeneration by remember { mutableIntStateOf(0) }
     var showSettings by remember { mutableStateOf(false) }
+    var autoScrolling by remember { mutableStateOf(false) }
+    var autoScrollHudTick by remember { mutableStateOf(0) }
     var showShortcuts by remember { mutableStateOf(false) }
     var closing by remember(session) { mutableStateOf(false) }
     var pressChromeTarget by remember { mutableStateOf<Boolean?>(null) }
@@ -482,6 +484,17 @@ fun ReaderScreen(
             ReaderInputCommand.ToggleBookmark -> toggleChapterBookmark()
             ReaderInputCommand.CycleReadingMode -> applySettings(settings.copy(mode = settings.mode.nextForShortcut()))
             ReaderInputCommand.ShowHelp -> showShortcuts = true
+            ReaderInputCommand.ToggleAutoScroll -> {
+                autoScrolling = !autoScrolling && settings.mode.isContinuousForAutoScroll()
+                autoScrollHudTick++
+            }
+            is ReaderInputCommand.AdjustAutoScroll -> {
+                val controller = mihon.desktop.reader.AutoScrollController(settings.autoScrollSpeed)
+                val speed = if (command.faster) controller.faster() else controller.slower()
+                settings = settings.copy(autoScrollSpeed = speed)
+                settingsStore?.save(settings)
+                autoScrollHudTick++
+            }
         }
     }
 
@@ -769,6 +782,9 @@ fun ReaderScreen(
                 LocalReaderSelectedPage provides state.pages.getOrNull(state.selectedIndex)?.id,
                 LocalReaderPageSizeSink provides pageSizeSink,
                 LocalReaderPageImageStore provides imageStore,
+                LocalReaderAutoScrollSpeed provides settings.autoScrollSpeed.takeIf {
+                    autoScrolling && settings.mode.isContinuousForAutoScroll() && ready
+                },
             ) {
                 ReaderBody(
                     state = state,
@@ -961,6 +977,35 @@ fun ReaderScreen(
             ) {
                 Text(
                     text = strings.text(UiText.ReaderZoomOverlay, (state.zoom * 100).toInt()),
+                    style = MaterialTheme.typography.labelMedium,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                )
+            }
+        }
+        var autoScrollHudVisible by remember { mutableStateOf(false) }
+        LaunchedEffect(autoScrollHudTick) {
+            if (autoScrollHudTick == 0) return@LaunchedEffect
+            autoScrollHudVisible = true
+            delay(READER_ZOOM_HUD_MILLIS)
+            autoScrollHudVisible = false
+        }
+        if (autoScrollHudVisible && ready) {
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 72.dp)
+                    .semantics { liveRegion = androidx.compose.ui.semantics.LiveRegionMode.Polite }
+                    .testTag("reader-auto-scroll-hud"),
+                shape = RoundedCornerShape(999.dp),
+                color = Color(0xB3000000),
+                contentColor = Color.White,
+            ) {
+                Text(
+                    text = if (autoScrolling) {
+                        strings.text(UiText.AutoScrollStatus, "${settings.autoScrollSpeed} dp/s")
+                    } else {
+                        strings.text(UiText.AutoScrollOff)
+                    },
                     style = MaterialTheme.typography.labelMedium,
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                 )
@@ -1235,3 +1280,7 @@ private const val READER_PAGE_INDICATOR_FADE_MILLIS = 250
 private val TOP_REVEAL_HEIGHT = 24.dp
 
 private const val READER_TOAST_MILLIS = 4_000L
+
+/** Auto-scroll only makes sense where pages flow continuously. */
+internal fun mihon.reader.model.ReadingMode.isContinuousForAutoScroll(): Boolean =
+    this == mihon.reader.model.ReadingMode.WEBTOON || this == mihon.reader.model.ReadingMode.VERTICAL

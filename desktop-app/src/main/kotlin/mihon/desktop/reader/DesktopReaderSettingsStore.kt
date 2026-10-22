@@ -62,6 +62,8 @@ data class DesktopReaderSettings(
     val dualPageRotateToFit: Boolean = false,
     /** What the single F11 "immersive" toggle does: true = borderless window, false = OS fullscreen. */
     val immersiveBorderless: Boolean = false,
+    /** Continuous-mode auto-scroll speed in dp per second. */
+    val autoScrollSpeed: Int = AutoScrollController.DEFAULT_DP_PER_SECOND,
 ) {
     fun toCoreSettings(): ReaderSettings = ReaderSettings(
         mode = mode,
@@ -144,6 +146,8 @@ class DesktopReaderSettingsStore(private val preferences: DesktopPreferenceStore
             cropBordersWebtoon = preferences.property(CROP_BORDERS_WEBTOON)?.toBooleanStrictOrNull()
                 ?: defaults.cropBordersWebtoon,
             webtoonMaxWidth = preferences.property(WEBTOON_MAX_WIDTH)?.toIntOrNull() ?: defaults.webtoonMaxWidth,
+            autoScrollSpeed = (preferences.property(AUTO_SCROLL_SPEED)?.toIntOrNull() ?: defaults.autoScrollSpeed)
+                .coerceIn(AutoScrollController.MIN_DP_PER_SECOND, AutoScrollController.MAX_DP_PER_SECOND),
             webtoonSidePadding = preferences.property(WEBTOON_SIDE_PADDING)?.toIntOrNull()
                 ?: defaults.webtoonSidePadding,
             alwaysShowChapterTransition = preferences.property(ALWAYS_SHOW_CHAPTER_TRANSITION)
@@ -195,6 +199,7 @@ class DesktopReaderSettingsStore(private val preferences: DesktopPreferenceStore
             setProperty(CROP_BORDERS_WEBTOON, settings.cropBordersWebtoon.toString())
             setProperty(IMMERSIVE_BORDERLESS, settings.immersiveBorderless.toString())
             setProperty(WEBTOON_MAX_WIDTH, settings.webtoonMaxWidth.toString())
+            setProperty(AUTO_SCROLL_SPEED, settings.autoScrollSpeed.toString())
             setProperty(WEBTOON_SIDE_PADDING, settings.webtoonSidePadding.toString())
             setProperty(ALWAYS_SHOW_CHAPTER_TRANSITION, settings.alwaysShowChapterTransition.toString())
             setProperty(SKIP_READ, settings.skipReadChapters.toString())
@@ -259,6 +264,7 @@ class DesktopReaderSettingsStore(private val preferences: DesktopPreferenceStore
         const val CROP_BORDERS_WEBTOON = "reader.v1.crop-borders-webtoon"
         const val IMMERSIVE_BORDERLESS = "reader.v1.immersive-borderless"
         const val WEBTOON_MAX_WIDTH = "reader.v1.webtoon-max-width"
+        const val AUTO_SCROLL_SPEED = "reader.v1.auto-scroll-speed"
         const val WEBTOON_SIDE_PADDING = "reader.v1.webtoon-side-padding"
         const val ALWAYS_SHOW_CHAPTER_TRANSITION = "reader.v1.always-show-chapter-transition"
         const val SKIP_READ = "reader.v1.skip-read"

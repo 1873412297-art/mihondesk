@@ -293,6 +293,9 @@ fun ReaderShortcutAction.defaultChords(): List<KeyChord> = when (this) {
     ReaderShortcutAction.NEXT_CHAPTER -> listOf(chord(Key.N), chord(Key.RightBracket))
     ReaderShortcutAction.TOGGLE_BOOKMARK -> listOf(chord(Key.M))
     ReaderShortcutAction.CYCLE_READING_MODE -> listOf(chord(Key.V))
+    ReaderShortcutAction.TOGGLE_AUTO_SCROLL -> listOf(chord(Key.S))
+    ReaderShortcutAction.AUTO_SCROLL_FASTER -> listOf(chord(Key.DirectionDown, shift = true))
+    ReaderShortcutAction.AUTO_SCROLL_SLOWER -> listOf(chord(Key.DirectionUp, shift = true))
     ReaderShortcutAction.SHOW_HELP -> listOf(
         chord(Key.F1),
         chord(Key.Slash),

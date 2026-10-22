@@ -121,6 +121,13 @@ sealed interface ChapterListItem {
     ) : ChapterListItem {
         override val key: String get() = "missing-${afterChapterId ?: -1}-${beforeChapterId ?: -1}"
     }
+
+    /** Starts a run of chapters from one volume (null = chapters without a volume). */
+    data class VolumeHeader(
+        val volume: Int?,
+        val chapterCount: Int,
+        override val key: String,
+    ) : ChapterListItem
 }
 
 fun chapterSettingsFromFlags(
@@ -267,10 +274,23 @@ fun calculateMissingChapterCount(chapters: List<LibraryChapter>): Int {
 fun buildChapterListItems(
     chapters: List<LibraryChapter>,
     settings: ChapterSettings,
+    groupByVolume: Boolean = true,
 ): List<ChapterListItem> {
     if (chapters.isEmpty()) return emptyList()
-    val items = ArrayList<ChapterListItem>(chapters.size)
+    val volumes = chapters.map { parseChapterVolume(it.name) }
+    val showVolumes = groupByVolume && volumes.any { it != null }
+    val items = ArrayList<ChapterListItem>(chapters.size + 8)
+    val usedVolumeKeys = HashSet<String>()
     chapters.forEachIndexed { index, chapter ->
+        if (showVolumes && (index == 0 || volumes[index] != volumes[index - 1])) {
+            val volume = volumes[index]
+            var runLength = 0
+            while (index + runLength < chapters.size && volumes[index + runLength] == volume) runLength++
+            val baseKey = "volume-${volume ?: "none"}"
+            // Interleaved volumes (unusual sort orders) must still yield unique lazy-list keys.
+            val key = if (usedVolumeKeys.add(baseKey)) baseKey else "$baseKey-${chapter.id}"
+            items += ChapterListItem.VolumeHeader(volume, runLength, key)
+        }
         items += ChapterListItem.Chapter(
             chapter = chapter,
             label = chapterDisplayLabel(chapter, settings.displayMode),

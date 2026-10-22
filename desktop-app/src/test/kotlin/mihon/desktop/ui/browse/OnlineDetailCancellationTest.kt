@@ -75,10 +75,7 @@ class OnlineDetailCancellationTest {
                         if (visible.value) BrowseContentView(runtime, onOpenMangaDetail = { opened.add(it) })
                     }
                 }
-                waitUntil(timeoutMillis = 60000) {
-                    onAllNodesWithTag("source-item-${source.id}").fetchSemanticsNodes().isNotEmpty()
-                }
-                onNodeWithTag("source-item-${source.id}").performClick()
+                openSourceWhenSettled(source.id)
                 waitUntil(timeoutMillis = 60000) {
                     onAllNodesWithTag("manga-card-/slow").fetchSemanticsNodes().isNotEmpty()
                 }

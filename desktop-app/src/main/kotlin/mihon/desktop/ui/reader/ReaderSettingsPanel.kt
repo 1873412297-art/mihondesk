@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import mihon.desktop.i18n.LocalStrings
 import mihon.desktop.i18n.UiText
 import mihon.desktop.i18n.text
+import mihon.desktop.reader.AutoScrollController
 import mihon.desktop.reader.DesktopReaderSettings
 import mihon.desktop.reader.ReaderBackgroundColor
 import mihon.desktop.reader.ReaderClickAction
@@ -241,6 +242,20 @@ private fun GeneralSettingsPage(settings: DesktopReaderSettings, onChange: (Desk
         modifier = Modifier.testTag("reader-setting-center-boundary"),
     )
     WheelMenu(settings.wheelBehavior) { onChange(settings.copy(wheelBehavior = it)) }
+    Text("${strings.text(UiText.AutoScrollSpeed)}: ${settings.autoScrollSpeed} dp/s")
+    Slider(
+        value = settings.autoScrollSpeed.toFloat(),
+        onValueChange = { value ->
+            val step = AutoScrollController.STEP_DP_PER_SECOND
+            val speed = (value.roundToInt() / step * step).coerceIn(
+                AutoScrollController.MIN_DP_PER_SECOND,
+                AutoScrollController.MAX_DP_PER_SECOND,
+            )
+            onChange(settings.copy(autoScrollSpeed = speed))
+        },
+        valueRange = AutoScrollController.MIN_DP_PER_SECOND.toFloat()..AutoScrollController.MAX_DP_PER_SECOND.toFloat(),
+        modifier = Modifier.testTag("reader-setting-auto-scroll-speed"),
+    )
     Text(strings.text(UiText.ReaderPreloadPages, settings.preloadPages))
     Slider(
         value = settings.preloadPages.toFloat(),
