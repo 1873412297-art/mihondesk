@@ -506,8 +506,18 @@ internal class PackagedReaderVerifier(
             session.dispatch(ReaderAction.SelectPage(transitionReady.pages.lastIndex))
             session.awaitState { it.chapterId == transition.id && it.selectedIndex == transitionReady.pages.lastIndex }
             session.dispatch(ReaderAction.Next)
+            // The next chapter can be the undecodable RAR, which settles on its typed decode failure
+            // rather than a stable Ready; accept that deterministic outcome instead of racing it.
             session.awaitState {
-                it.chapterId != transition.id && it.chapterId != null && it.loadState is ReaderLoadState.Ready
+                it.chapterId != transition.id && it.chapterId != null &&
+                    (
+                        it.loadState is ReaderLoadState.Ready ||
+                            (
+                                it.chapterId == undecodable.id &&
+                                    (it.loadState as? ReaderLoadState.Failed)?.error?.code ==
+                                    ReaderErrorCode.PAGE_DECODE_FAILED
+                                )
+                        )
             }
 
             session.open(targetChapterId)
