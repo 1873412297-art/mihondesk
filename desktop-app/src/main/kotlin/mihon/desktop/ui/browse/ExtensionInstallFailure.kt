@@ -22,12 +22,15 @@ enum class ExtensionInstallFailure {
     /** No configured store offers the requested package/version anymore. */
     StoreUnavailable,
 
+    /** A file the user picked could not be read or converted (never a network problem). */
+    LocalFileFailed,
+
     /** Anything else: malformed packages, filesystem problems, unexpected errors. */
     Unknown,
 }
 
 /** Maps an install failure to the outcome to report. */
-internal fun classifyInstallFailure(failure: Throwable): ExtensionInstallFailure {
+internal fun classifyInstallFailure(failure: Throwable, fromLocalFile: Boolean = false): ExtensionInstallFailure {
     val chain = generateSequence(failure) { it.cause }.take(16).toList()
     return when {
         chain.any { it is ExtensionTrustRequiredException } -> ExtensionInstallFailure.TrustRequired
@@ -35,6 +38,7 @@ internal fun classifyInstallFailure(failure: Throwable): ExtensionInstallFailure
             it is ExtensionSignatureMismatchException ||
                 it is ExtensionSignatureException
         } -> ExtensionInstallFailure.SignatureRejected
+        fromLocalFile -> ExtensionInstallFailure.LocalFileFailed
         chain.any { it is ExtensionStoreUnavailableException } -> ExtensionInstallFailure.StoreUnavailable
         chain.any { it is ExtensionDownloadException || it is IOException } -> ExtensionInstallFailure.DownloadFailed
         chain.any { it.findNetworkFailure() != null } -> ExtensionInstallFailure.DownloadFailed

@@ -675,7 +675,7 @@ class BrowsePresenter(
     }
 
     fun installFromFile(file: File) {
-        startInstallation(file.name, file.name, ExtensionInstallPhase.Installing) {
+        startInstallation(file.name, file.name, ExtensionInstallPhase.Installing, fromLocalFile = true) {
             installer.installFromLocalFile(file)
             refreshInstalledAndSources()
         }
@@ -714,7 +714,13 @@ class BrowsePresenter(
     }
 
     @Synchronized
-    private fun startInstallation(pkg: String, name: String, phase: ExtensionInstallPhase, action: suspend () -> Unit) {
+    private fun startInstallation(
+        pkg: String,
+        name: String,
+        phase: ExtensionInstallPhase,
+        fromLocalFile: Boolean = false,
+        action: suspend () -> Unit,
+    ) {
         if (installJob?.isCompleted == false || !scope.isActive) return
         _state.update {
             it.copy(
@@ -740,9 +746,9 @@ class BrowsePresenter(
                 activityCenter?.fail(
                     activityId,
                     reason = failure.message ?: failure.javaClass.simpleName,
-                    retry = { startInstallation(pkg, name, phase, action) },
+                    retry = { startInstallation(pkg, name, phase, fromLocalFile, action) },
                 )
-                val reason = classifyInstallFailure(failure)
+                val reason = classifyInstallFailure(failure, fromLocalFile)
                 _state.update {
                     it.copy(
                         errorMessage = "Failed to install ${it.installingName}: ${failure.message}",

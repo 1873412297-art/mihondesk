@@ -19,7 +19,8 @@ $modules = $moduleMatch.Groups[1].Value -split '\s+' | Where-Object { $_ }
 
 # Modules the application actually reaches: jdk.httpserver backs the WebView broker,
 # java.net.http backs jsoup, jdk.dynalink backs the script engines, jdk.accessibility carries
-# the Java Access Bridge that exposes the UI to Windows screen readers.
+# the Java Access Bridge that exposes the UI to Windows screen readers, and jdk.zipfs provides
+# the zip FileSystem dex2jar uses to convert local APKs ("cant find zipfs support" without it).
 $required = @(
     'java.base',
     'java.desktop',
@@ -32,7 +33,8 @@ $required = @(
     'jdk.httpserver',
     'java.net.http',
     'jdk.dynalink',
-    'jdk.accessibility'
+    'jdk.accessibility',
+    'jdk.zipfs'
 )
 $missing = @($required | Where-Object { $_ -notin $modules })
 if ($missing.Count -gt 0) {

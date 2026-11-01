@@ -1158,7 +1158,7 @@ object EnglishStrings : DesktopStrings {
     override val browseSearchPlaceholder = "Search sources or extensions"
     override val browseNetworkDomainsHeader = "Declared Network Domains:"
     override val browseGlobalSearch = "Global Search"
-    override val browseInstallFromFile = "Install .mext"
+    override val browseInstallFromFile = "Install from file"
     override val browseUpdateAll = "Update All"
     override val browseOpenWebsite = "Open website"
     override val browseLocalBadge = "[Local]"
@@ -1193,6 +1193,7 @@ object EnglishStrings : DesktopStrings {
         ExtensionInstallFailure.SignatureRejected -> "The extension was rejected by the signature policy."
         ExtensionInstallFailure.TrustRequired -> "This extension's signer is not trusted yet."
         ExtensionInstallFailure.StoreUnavailable -> "No configured store offers this extension anymore."
+        ExtensionInstallFailure.LocalFileFailed -> "Could not read or convert the extension file."
         ExtensionInstallFailure.Unknown -> "The extension could not be installed."
     }
     override fun extensionInstallFailureHint(failure: ExtensionInstallFailure) = when (failure) {
@@ -1204,6 +1205,8 @@ object EnglishStrings : DesktopStrings {
             "Check the signer fingerprint and trust it only if you trust where the file came from."
         ExtensionInstallFailure.StoreUnavailable ->
             "Refresh the extension list, or add the store that publishes it."
+        ExtensionInstallFailure.LocalFileFailed ->
+            "Check that the file is a complete Tachiyomi/Mihon extension (.apk) or .mext, then try again. Copy the error details if it keeps failing."
         ExtensionInstallFailure.Unknown ->
             "Retry the install. If it keeps failing, copy the error details when reporting it."
     }
@@ -2157,7 +2160,7 @@ object SimplifiedChineseStrings : DesktopStrings {
     override val browseSearchPlaceholder = "搜索图源或扩展"
     override val browseNetworkDomainsHeader = "声明的网络域名:"
     override val browseGlobalSearch = "全局搜索"
-    override val browseInstallFromFile = "本地安装 (.mext)"
+    override val browseInstallFromFile = "本地安装"
     override val browseUpdateAll = "全部更新"
     override val browseOpenWebsite = "打开网页"
     override val browseLocalBadge = "[本地]"
@@ -2190,6 +2193,7 @@ object SimplifiedChineseStrings : DesktopStrings {
         ExtensionInstallFailure.SignatureRejected -> "该扩展未通过签名校验，已被拒绝安装。"
         ExtensionInstallFailure.TrustRequired -> "该扩展的签名尚未受信任，需要你确认。"
         ExtensionInstallFailure.StoreUnavailable -> "已配置的商店都不再提供该扩展。"
+        ExtensionInstallFailure.LocalFileFailed -> "无法读取或转换该扩展文件。"
         ExtensionInstallFailure.Unknown -> "扩展安装失败。"
     }
     override fun extensionInstallFailureHint(failure: ExtensionInstallFailure) = when (failure) {
@@ -2201,6 +2205,8 @@ object SimplifiedChineseStrings : DesktopStrings {
             "请核对签名指纹；仅在你信任该文件来源时选择信任并安装。"
         ExtensionInstallFailure.StoreUnavailable ->
             "请刷新扩展列表，或添加发布该扩展的仓库。"
+        ExtensionInstallFailure.LocalFileFailed ->
+            "请确认文件是完整的扩展安装包（.apk 或 .mext）后重试；若持续失败请复制错误详情反馈。"
         ExtensionInstallFailure.Unknown ->
             "请重试安装；若持续失败，可复制错误详情并反馈。"
     }
@@ -3145,7 +3151,7 @@ object TraditionalChineseStrings : DesktopStrings {
     override val browseSearchPlaceholder = "搜尋圖源或擴充套件"
     override val browseNetworkDomainsHeader = "宣告的網路網域:"
     override val browseGlobalSearch = "全域搜尋"
-    override val browseInstallFromFile = "本機安裝 (.mext)"
+    override val browseInstallFromFile = "本機安裝"
     override val browseUpdateAll = "全部更新"
     override val browseOpenWebsite = "開啟網頁"
     override val browseLocalBadge = "[本地]"
@@ -3178,6 +3184,7 @@ object TraditionalChineseStrings : DesktopStrings {
         ExtensionInstallFailure.SignatureRejected -> "此擴充套件未通過簽章驗證，已被拒絕安裝。"
         ExtensionInstallFailure.TrustRequired -> "此擴充套件的簽章尚未受信任，需要你確認。"
         ExtensionInstallFailure.StoreUnavailable -> "已設定的商店都不再提供此擴充套件。"
+        ExtensionInstallFailure.LocalFileFailed -> "無法讀取或轉換此擴充套件檔案。"
         ExtensionInstallFailure.Unknown -> "擴充套件安裝失敗。"
     }
     override fun extensionInstallFailureHint(failure: ExtensionInstallFailure) = when (failure) {
@@ -3189,6 +3196,8 @@ object TraditionalChineseStrings : DesktopStrings {
             "請核對簽章指紋；僅在你信任該檔案來源時選擇信任並安裝。"
         ExtensionInstallFailure.StoreUnavailable ->
             "請重新整理擴充套件清單，或新增發佈此擴充套件的存放庫。"
+        ExtensionInstallFailure.LocalFileFailed ->
+            "請確認檔案是完整的擴充套件安裝包（.apk 或 .mext）後重試；若持續失敗請複製錯誤詳情回報。"
         ExtensionInstallFailure.Unknown ->
             "請重試安裝；若持續失敗，可複製錯誤詳情並回報。"
     }

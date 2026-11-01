@@ -50,6 +50,25 @@ class ExtensionInstallFailurePresenterTest {
     }
 
     @Test
+    fun `a broken local file is reported as a local file failure, not a download failure`(
+        @TempDir root: Path,
+    ): Unit = runBlocking {
+        val store = serveStore(root) { respond(it, 503, null) }
+        try {
+            awaitAvailable(store.presenter)
+            // A file that vanished between picking and installing fails locally, never on the network.
+            val broken = root.resolve("missing.apk").toFile()
+
+            store.presenter.installFromFile(broken)
+            awaitInstallFailure(store.presenter)
+
+            store.presenter.state.value.installFailure shouldBe ExtensionInstallFailure.LocalFileFailed
+        } finally {
+            store.close()
+        }
+    }
+
+    @Test
     fun `an unsigned package asks for trust instead of being rejected outright`(
         @TempDir root: Path,
     ): Unit = runBlocking {

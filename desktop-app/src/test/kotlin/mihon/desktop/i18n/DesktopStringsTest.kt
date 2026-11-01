@@ -27,6 +27,23 @@ class DesktopStringsTest {
     }
 
     @Test
+    fun `local install button label has no file extension suffix`() {
+        EnglishStrings.browseInstallFromFile shouldBe "Install from file"
+        SimplifiedChineseStrings.browseInstallFromFile shouldBe "本地安装"
+        TraditionalChineseStrings.browseInstallFromFile shouldBe "本機安裝"
+    }
+
+    @Test
+    fun `local file failures never mention download or network`() {
+        SimplifiedChineseStrings.extensionInstallFailureTitle(ExtensionInstallFailure.LocalFileFailed)
+            .contains("下载") shouldBe false
+        SimplifiedChineseStrings.extensionInstallFailureHint(ExtensionInstallFailure.LocalFileFailed)
+            .contains("网络") shouldBe false
+        EnglishStrings.extensionInstallFailureHint(ExtensionInstallFailure.LocalFileFailed)
+            .contains("proxy") shouldBe false
+    }
+
+    @Test
     fun `AppLanguage parses code accurately with fallback to System`() {
         AppLanguage.fromCode("system") shouldBe AppLanguage.System
         AppLanguage.fromCode("zh-CN") shouldBe AppLanguage.SimplifiedChinese

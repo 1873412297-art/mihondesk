@@ -258,6 +258,8 @@ compose.desktop {
                 "java.net.http",
                 "jdk.dynalink",
                 "jdk.accessibility",
+                // dex2jar opens APKs through the zip FileSystem provider.
+                "jdk.zipfs",
             )
 
             windows {
@@ -322,6 +324,25 @@ val verifyRuntimeModules by tasks.registering(Exec::class) {
     )
 }
 
+val verifyReleaseRuntimeModules by tasks.registering(Exec::class) {
+    group = "verification"
+    description = "Rejects release runtimes missing JDK modules the app reaches at runtime"
+    dependsOn("createReleaseDistributable")
+    commandLine(
+        "powershell.exe",
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        rootProject.file("scripts/verify-runtime-modules.ps1").absolutePath,
+        "-ImagePath",
+        layout.buildDirectory.dir("compose/binaries/main-release/app/mihondesk").get().asFile.absolutePath,
+    )
+}
+
+tasks.matching { it.name == "packageReleaseMsi" || it.name == "packageReleaseExe" }.configureEach {
+    dependsOn(verifyReleaseRuntimeModules)
+}
 tasks.configureEach {
     if (
         name in setOf(

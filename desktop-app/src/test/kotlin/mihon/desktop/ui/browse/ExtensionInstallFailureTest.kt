@@ -29,6 +29,22 @@ class ExtensionInstallFailureTest {
     }
 
     @Test
+    fun `local file failures never claim a network problem but keep trust and signature outcomes`() {
+        classifyInstallFailure(IOException("cant find zipfs support"), fromLocalFile = true) shouldBe
+            ExtensionInstallFailure.LocalFileFailed
+        classifyInstallFailure(IllegalStateException("bad dex"), fromLocalFile = true) shouldBe
+            ExtensionInstallFailure.LocalFileFailed
+        classifyInstallFailure(ExtensionDownloadException("x"), fromLocalFile = true) shouldBe
+            ExtensionInstallFailure.LocalFileFailed
+        classifyInstallFailure(
+            ExtensionTrustRequiredException("ext.one", listOf("aa11"), "signer is unknown"),
+            fromLocalFile = true,
+        ) shouldBe ExtensionInstallFailure.TrustRequired
+        classifyInstallFailure(ExtensionSignatureException("bad"), fromLocalFile = true) shouldBe
+            ExtensionInstallFailure.SignatureRejected
+    }
+
+    @Test
     fun `download step failures are reported as such`() {
         classifyInstallFailure(ExtensionDownloadException("Failed to download extension package: HTTP 404")) shouldBe
             ExtensionInstallFailure.DownloadFailed
