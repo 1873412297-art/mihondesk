@@ -184,4 +184,49 @@ class LibraryImportActionsTest {
         counts: ImportCounts = ImportCounts(),
         items: List<ImportReportItem> = emptyList(),
     ) = ImportReport(id, ImportType.ANDROID_BACKUP, "source", ImportStatus.SUCCEEDED, 1, 2, counts, items)
+
+    @Test
+    fun `native file choosers never block the calling ui dispatcher`() {
+        // A modal FileDialog shown on Compose's UI dispatcher pumps a nested event loop and
+        // re-enters the dispatcher, which corrupted coroutine state ("Symbol cannot be cast to
+        // ImportActionState"). Choosers must run on their own dispatcher.
+        val uiExecutor = java.util.concurrent.Executors.newSingleThreadExecutor { Thread(it, "fake-ui") }
+        try {
+            val chooserThreads = mutableListOf<String>()
+            val actions = LibraryImportActions(
+                chooseBackup = {
+                    chooserThreads += Thread.currentThread().name
+                    null
+                },
+                chooseLocal = {
+                    chooserThreads += Thread.currentThread().name
+                    null
+                },
+                importBackup = { ImportActionState.Idle },
+                importLocal = { ImportActionState.Idle },
+            )
+            runBlocking(uiExecutor.asCoroutineDispatcher()) {
+                actions.chooseAndImportLocal() shouldBe ImportActionState.Idle
+                actions.chooseAndImportBackup() shouldBe ImportActionState.Idle
+            }
+            chooserThreads.size shouldBe 2
+            chooserThreads.none { it.startsWith("fake-ui") } shouldBe true
+        } finally {
+            uiExecutor.shutdownNow()
+        }
+    }
+
+    @Test
+    fun `clicking import when the chooser itself fails reports a friendly failure instead of crashing`() {
+        val actions = LibraryImportActions(
+            chooseBackup = { error("no display") },
+            chooseLocal = { error("no display") },
+            importBackup = { ImportActionState.Idle },
+            importLocal = { ImportActionState.Idle },
+        )
+        runBlocking {
+            (actions.chooseAndImportLocal() is ImportActionState.Failed) shouldBe true
+            (actions.chooseAndImportBackup() is ImportActionState.Failed) shouldBe true
+        }
+    }
 }

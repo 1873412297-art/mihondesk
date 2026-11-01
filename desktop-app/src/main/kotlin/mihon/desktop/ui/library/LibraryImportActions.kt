@@ -93,12 +93,30 @@ class LibraryImportActions(
     private val chooseLocal: () -> Path? = { chooseLocalMangaDirectory() },
     private val importBackup: suspend (Path) -> ImportActionState,
     private val importLocal: suspend (Path) -> ImportActionState,
+    // Native choosers are modal and pump a nested AWT event loop. Showing one while running on
+    // Compose's UI dispatcher re-enters that dispatcher mid-resume and corrupts coroutine state
+    // ("Symbol cannot be cast to ImportActionState"), so they always run on their own thread.
+    private val chooserDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) {
     suspend fun chooseAndImportBackup(): ImportActionState =
-        chooseBackup()?.let { importBackup(it) } ?: ImportActionState.Idle
+        choose(chooseBackup) { importBackup(it) }
 
     suspend fun chooseAndImportLocal(): ImportActionState =
-        chooseLocal()?.let { importLocal(it) } ?: ImportActionState.Idle
+        choose(chooseLocal) { importLocal(it) }
+
+    private suspend fun choose(
+        chooser: () -> Path?,
+        import: suspend (Path) -> ImportActionState,
+    ): ImportActionState {
+        val path = try {
+            withContext(chooserDispatcher) { chooser() }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Throwable) {
+            return ImportActionState.Failed("Could not open the file chooser. Please try again.")
+        }
+        return path?.let { import(it) } ?: ImportActionState.Idle
+    }
 }
 
 private fun ImportReport.sanitized() = SanitizedImportResult(
@@ -134,6 +152,12 @@ internal fun chooseAndroidBackup(title: String = "Import Android backup"): Path?
 }
 
 internal fun chooseLocalMangaDirectory(title: String = "Import local manga"): Path? {
+    // Swing components must be shown on the EDT; callers run this on a background dispatcher.
+    if (!javax.swing.SwingUtilities.isEventDispatchThread()) {
+        var result: Path? = null
+        javax.swing.SwingUtilities.invokeAndWait { result = chooseLocalMangaDirectory(title) }
+        return result
+    }
     val chooser = JFileChooser().apply {
         dialogTitle = title
         fileSelectionMode = JFileChooser.DIRECTORIES_ONLY
