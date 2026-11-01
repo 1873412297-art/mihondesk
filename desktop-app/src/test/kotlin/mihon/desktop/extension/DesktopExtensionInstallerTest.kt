@@ -298,6 +298,35 @@ class DesktopExtensionInstallerTest {
     }
 
     @Test
+    fun `the official keiyoushi signing key is trusted by default like Mihon`() {
+        // From keiyoushi repo.json meta.signingKeyFingerprint and the signer of its published APKs.
+        DesktopExtensionInstaller.OFFICIAL_SIGNING_KEYS shouldContain
+            "9add655a78e96c4ec7a53ef89dccb557cb5d767489fac5e785d671a5a75d4da2"
+    }
+
+    @Test
+    fun `local apk signed by an official key installs without a prompt and stays trusted`(@TempDir tempDir: Path) {
+        val manifest = sampleManifest("ext.test.v2.official")
+        val fixture = ExtensionSignatureTestFixtures.createV2OnlySignedApk(
+            target = tempDir.resolve("v2-official.apk").toFile(),
+            extraEntries = mapOf("manifest.json" to json.encodeToString(manifest).toByteArray()),
+        )
+        assumeTrue(fixture != null, "JDK keytool is not available")
+
+        runBlocking {
+            val installer = DesktopExtensionInstaller(
+                installRoot = tempDir.resolve("installed").toFile(),
+                preferenceStore = DesktopPreferenceStore(tempDir.resolve("prefs.properties")),
+                officialSigningKeys = setOf(fixture!!.fingerprint),
+            )
+
+            val installed = installer.installFromLocalFile(fixture.file)
+            installed.trustStatus shouldBe ExtensionTrustStatus.TRUSTED
+            installer.trustStore.pendingTrustRequest.value shouldBe null
+        }
+    }
+
+    @Test
     fun `v2 v3 only apk signature is rejected explicitly`(@TempDir tempDir: Path) {
         val apk = tempDir.resolve("v2-only.apk").toFile()
         ExtensionSignatureTestFixtures.createApkSigningBlockOnlyApk(apk)

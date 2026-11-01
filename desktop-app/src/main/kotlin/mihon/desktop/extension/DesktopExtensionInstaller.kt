@@ -75,6 +75,8 @@ class DesktopExtensionInstaller(
     trustStore: ExtensionTrustStore = ExtensionTrustStore(preferenceStore),
     /** Alias constructor parameter for callers/tests that name the fake verifier `verifier`. */
     verifier: ExtensionVerifier? = null,
+    /** Signing keys trusted without a prompt (official keiyoushi by default, like Mihon). */
+    private val officialSigningKeys: Set<String> = OFFICIAL_SIGNING_KEYS,
 ) {
     private val lifecycleMutex = Mutex()
 
@@ -85,6 +87,12 @@ class DesktopExtensionInstaller(
     val trustStore: ExtensionTrustStore = trustStore
     val extensionTrustStore: ExtensionTrustStore get() = trustStore
     companion object {
+        // SHA-256 signing certificate fingerprint of the official keiyoushi extensions
+        // (keiyoushi repo.json meta.signingKeyFingerprint, matches their published APKs).
+        val OFFICIAL_SIGNING_KEYS: Set<String> = setOf(
+            "9add655a78e96c4ec7a53ef89dccb557cb5d767489fac5e785d671a5a75d4da2",
+        )
+
         const val PREF_KEY_PENDING_CLEANUP = "extension.pending_cleanup"
         const val PREF_KEY_INSTALLED_EXTENSIONS = "extension.installed_list"
         const val PREF_KEY_TRUSTED_EXTENSIONS = ExtensionTrustStore.PREF_KEY_TRUSTED_EXTENSIONS
@@ -398,6 +406,7 @@ class DesktopExtensionInstaller(
             if (storeSigningKey.isNotEmpty() && signerFingerprints.contains(storeSigningKey)) {
                 trustStore.trust(manifest.id, storeSigningKey)
             }
+            signerFingerprints.filter { it in officialSigningKeys }.forEach { trustStore.trust(manifest.id, it) }
 
             if (tempConvertedMext != null && storeItem?.sources.isNullOrEmpty()) {
                 val runtimeSources = DesktopSourceManager.probeInstalledPackage(
@@ -675,7 +684,8 @@ class DesktopExtensionInstaller(
             )
         }
 
-        if (storeMatches || userMatches || installedMatches) {
+        val officialMatches = signerFingerprints.any { it in officialSigningKeys }
+        if (storeMatches || userMatches || installedMatches || officialMatches) {
             if (!revoked) return
             if (explicitTrust) {
                 trustStore.trust(pkg, signerFingerprints)
