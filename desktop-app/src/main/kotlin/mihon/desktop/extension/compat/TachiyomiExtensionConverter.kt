@@ -212,14 +212,7 @@ object TachiyomiExtensionConverter {
 
         val hierarchy = mutableMapOf<String, Pair<String?, List<String>>>()
         fun parents(type: String): Pair<String?, List<String>> = hierarchy.getOrPut(type) {
-            val stream = javaClass.classLoader.getResourceAsStream("$type.class")
-                ?: throw IllegalArgumentException("Unsupported extension dependency while computing JVM frames: $type")
-            stream.use {
-                org.objectweb.asm.ClassReader(it).let { reader ->
-                    reader.superName to
-                        reader.interfaces.toList()
-                }
-            }
+            frameParents(type, javaClass.classLoader)
         }
         for (jar in generatedJars.values) {
             java.util.zip.ZipInputStream(jar.inputStream()).use { input ->
@@ -368,6 +361,25 @@ object TachiyomiExtensionConverter {
     }
 
     /** Keep runtime IDs and languages while retaining the APK entry factory for the next load. */
+    // Superclass and interfaces of a type for ASM frame merging. Android framework classes are not on the
+    // desktop classpath; extensions often reference them only in branches that never run on desktop, so
+    // they merge as plain objects. The class still fails lazily if that code path is really executed.
+    internal fun frameParents(type: String, loader: ClassLoader): Pair<String?, List<String>> {
+        val stream = loader.getResourceAsStream("$type.class")
+        if (stream == null) {
+            require(type.startsWith("android/") || type.startsWith("androidx/")) {
+                "Unsupported extension dependency while computing JVM frames: $type"
+            }
+            return "java/lang/Object" to emptyList()
+        }
+        return stream.use {
+            org.objectweb.asm.ClassReader(it).let { reader ->
+                reader.superName to
+                    reader.interfaces.toList()
+            }
+        }
+    }
+
     internal fun rejectInvalidConstructorLowering(bytes: ByteArray, sourceName: String) {
         val node = org.objectweb.asm.tree.ClassNode()
         org.objectweb.asm.ClassReader(bytes).accept(node, org.objectweb.asm.ClassReader.SKIP_DEBUG)

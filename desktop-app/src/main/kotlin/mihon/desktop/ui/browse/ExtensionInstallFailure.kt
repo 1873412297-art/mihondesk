@@ -16,6 +16,9 @@ enum class ExtensionInstallFailure {
     /** The package was rejected by the signature/trust policy. */
     SignatureRejected,
 
+    /** The signer is not trusted yet; the user can review its fingerprint and trust it. */
+    TrustRequired,
+
     /** No configured store offers the requested package/version anymore. */
     StoreUnavailable,
 
@@ -27,9 +30,9 @@ enum class ExtensionInstallFailure {
 internal fun classifyInstallFailure(failure: Throwable): ExtensionInstallFailure {
     val chain = generateSequence(failure) { it.cause }.take(16).toList()
     return when {
+        chain.any { it is ExtensionTrustRequiredException } -> ExtensionInstallFailure.TrustRequired
         chain.any {
-            it is ExtensionTrustRequiredException ||
-                it is ExtensionSignatureMismatchException ||
+            it is ExtensionSignatureMismatchException ||
                 it is ExtensionSignatureException
         } -> ExtensionInstallFailure.SignatureRejected
         chain.any { it is ExtensionStoreUnavailableException } -> ExtensionInstallFailure.StoreUnavailable

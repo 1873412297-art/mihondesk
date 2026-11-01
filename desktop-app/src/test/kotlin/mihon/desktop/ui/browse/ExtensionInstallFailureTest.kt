@@ -16,12 +16,16 @@ class ExtensionInstallFailureTest {
 
     @Test
     fun `signature and trust rejections are reported as such`() {
-        classifyInstallFailure(ExtensionTrustRequiredException("ext.one", listOf("aa11"), "signer is unknown")) shouldBe
-            ExtensionInstallFailure.SignatureRejected
         classifyInstallFailure(ExtensionSignatureMismatchException("ext.one", setOf("aa11"), listOf("bb22"))) shouldBe
             ExtensionInstallFailure.SignatureRejected
         classifyInstallFailure(ExtensionSignatureException("v2/v3-only packages are not supported")) shouldBe
             ExtensionInstallFailure.SignatureRejected
+    }
+
+    @Test
+    fun `an unknown signer asks for trust rather than reporting a rejection`() {
+        classifyInstallFailure(ExtensionTrustRequiredException("ext.one", listOf("aa11"), "signer is unknown")) shouldBe
+            ExtensionInstallFailure.TrustRequired
     }
 
     @Test

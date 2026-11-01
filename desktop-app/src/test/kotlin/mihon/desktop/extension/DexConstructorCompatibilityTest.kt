@@ -37,6 +37,43 @@ class DexConstructorCompatibilityTest {
     }
 
     @Test
+    fun `normalizer restores constructors through an eliminated ancestor chain`() {
+        // Real keiyoushi shape: `new Leaf` invokes Object.<init> while Leaf -> Middle -> Object.
+        val node = com.googlecode.d2j.node.DexFileNode()
+        node.visit(1, "LMiddle;", "Ljava/lang/Object;", emptyArray()).visitEnd()
+        node.visit(1, "LLeaf;", "LMiddle;", emptyArray()).visitEnd()
+        val factory = node.visit(1, "LFactory;", "Ljava/lang/Object;", emptyArray())
+        factory.visitMethod(
+            9,
+            com.googlecode.d2j.Method("LFactory;", "create", emptyArray(), "LLeaf;"),
+        ).visitCode().apply {
+            visitRegister(1)
+            visitTypeStmt(com.googlecode.d2j.reader.Op.NEW_INSTANCE, 0, -1, "LLeaf;")
+            visitMethodStmt(
+                com.googlecode.d2j.reader.Op.INVOKE_DIRECT,
+                intArrayOf(0),
+                com.googlecode.d2j.Method("Ljava/lang/Object;", "<init>", emptyArray(), "V"),
+            )
+            visitStmt1R(com.googlecode.d2j.reader.Op.RETURN_OBJECT, 0)
+            visitEnd()
+        }
+        mihon.desktop.extension.compat.DexConstructorNormalizer.normalize(node)
+        val byName = node.clzs.associateBy { it.className }
+        fun superOwner(type: String) =
+            (
+                byName.getValue(
+                    type,
+                ).methods.single().codeNode.stmts.first() as com.googlecode.d2j.node.insn.MethodStmtNode
+                )
+                .method.owner
+        org.junit.jupiter.api.Assertions.assertEquals("LMiddle;", superOwner("LLeaf;"))
+        org.junit.jupiter.api.Assertions.assertEquals("Ljava/lang/Object;", superOwner("LMiddle;"))
+        val call = byName.getValue("LFactory;").methods.single().codeNode.stmts[1]
+            as com.googlecode.d2j.node.insn.MethodStmtNode
+        org.junit.jupiter.api.Assertions.assertEquals("LLeaf;", call.method.owner)
+    }
+
+    @Test
     fun `invalid R8 constructor lowering is rejected before package publication`() {
         val writer = ClassWriter(0)
         writer.visit(Opcodes.V1_8, Opcodes.ACC_PUBLIC, "Broken", null, "java/lang/Object", null)

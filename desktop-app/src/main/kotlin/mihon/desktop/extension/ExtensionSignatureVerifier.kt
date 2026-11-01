@@ -1,5 +1,6 @@
 package mihon.desktop.extension
 
+import com.android.apksig.ApkVerifier
 import mihon.extension.validator.ExtensionValidationException
 import java.io.File
 import java.io.InputStream
@@ -11,8 +12,8 @@ import java.util.jar.JarFile
 /**
  * Thrown when an extension package has a malformed, invalid, or unsupported signature.
  *
- * APK/JAR packages using only APK Signature Scheme v2/v3 (no v1 JAR signature) are rejected with
- * an explicit message because the desktop installer currently has no v2/v3 signature verifier.
+ * APK packages using only APK Signature Scheme v2/v3 are verified with apksig; a malformed or
+ * tampered APK Signing Block is reported with this exception.
  */
 open class ExtensionSignatureException(message: String, cause: Throwable? = null) :
     ExtensionValidationException(message, cause)
@@ -95,7 +96,7 @@ fun interface ExtensionVerifier {
 }
 
 /**
- * Extracts and verifies v1 JAR/APK signer certificate SHA-256 fingerprints.
+ * Extracts and verifies v1 JAR and v2/v3 APK signer certificate SHA-256 fingerprints.
  *
  * Verification is performed by [JarFile] with verification enabled: every non-directory entry is
  * read fully, which triggers the JDK's JAR signature validation. Certificates returned by
@@ -176,12 +177,9 @@ open class ExtensionSignatureVerifier : ExtensionVerifier {
 
         if (fingerprints.isEmpty()) {
             if (hasSigningBlock) {
-                return invalid(
-                    "APK is signed with APK Signature Scheme v2/v3 only. The desktop installer can only " +
-                        "verify v1 JAR signatures; this package cannot be verified and was not trusted.",
-                    hasSigningBlock = true,
-                    hasV1SignatureFiles = hasV1SignatureFiles,
-                )
+                // Official repositories (e.g. keiyoushi) ship v2/v3-only APKs, so verify the APK
+                // Signing Block itself instead of rejecting the package.
+                return verifyApkSigningBlock(file, hasV1SignatureFiles)
             }
             if (hasV1SignatureFiles) {
                 return invalid(
@@ -232,6 +230,41 @@ open class ExtensionSignatureVerifier : ExtensionVerifier {
 
     fun requireValid(file: File): ExtensionSignatureVerification = verifyOrThrow(file)
 
+    /**
+     * Verifies APK Signature Scheme v2/v3 with apksig and returns the signer certificate SHA-256s.
+     * The platform range starts at API 24 so a missing v1 signature is not itself treated as an error.
+     */
+    private fun verifyApkSigningBlock(file: File, hasV1SignatureFiles: Boolean): ExtensionSignatureVerification {
+        val result = try {
+            ApkVerifier.Builder(file)
+                .setMinCheckedPlatformVersion(MIN_CHECKED_SDK)
+                .setMaxCheckedPlatformVersion(MAX_CHECKED_SDK)
+                .build()
+                .verify()
+        } catch (e: Exception) {
+            return invalid(
+                "APK Signature Scheme v2/v3 block could not be verified: ${e.message ?: e::class.simpleName}",
+                hasSigningBlock = true,
+                hasV1SignatureFiles = hasV1SignatureFiles,
+            )
+        }
+        val certificates = result.signerCertificates.orEmpty()
+        if (!result.isVerified || certificates.isEmpty()) {
+            val details = result.allErrors.joinToString("; ").ifBlank { "no verified signer" }
+            return invalid(
+                "APK Signature Scheme v2/v3 verification failed: $details",
+                hasSigningBlock = true,
+                hasV1SignatureFiles = hasV1SignatureFiles,
+            )
+        }
+        return ExtensionSignatureVerification(
+            fingerprints = certificates.map { sha256Hex(it.encoded) }.distinct(),
+            hasV1Signature = hasV1SignatureFiles,
+            hasApkSigningBlock = true,
+            valid = true,
+        )
+    }
+
     private fun invalid(
         message: String,
         hasSigningBlock: Boolean = false,
@@ -249,6 +282,8 @@ open class ExtensionSignatureVerifier : ExtensionVerifier {
         private const val EOCD_SIGNATURE = 0x06054b50
         private const val EOCD_MIN_SIZE = 22
         private const val MAX_ZIP_COMMENT = 0xFFFF
+        private const val MIN_CHECKED_SDK = 24
+        private const val MAX_CHECKED_SDK = 35
 
         override fun verify(file: File): ExtensionSignatureVerification = ExtensionSignatureVerifier().verify(file)
 

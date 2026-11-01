@@ -38,12 +38,19 @@ internal object DexConstructorNormalizer {
     fun normalize(node: DexFileNode) {
         val classes = node.clzs.associateBy { it.className }
         val generated = mutableSetOf<Method>()
-        fun restore(type: String, parentConstructor: Method): Method {
+        fun restore(type: String, ancestorConstructor: Method, intermediate: Boolean = false): Method {
             val target = classes[type] ?: error("Unsupported cross-DEX eliminated constructor: $type")
-            require(target.superClass == parentConstructor.owner) {
-                "Unsupported eliminated ancestor constructor: $type"
+            val restored = Method(type, "<init>", ancestorConstructor.parameterTypes, "V")
+            // R8 may skip several removed constructors (Leaf -> Middle -> Object): rebuild each link in order.
+            val parentConstructor = if (target.superClass == ancestorConstructor.owner) {
+                ancestorConstructor
+            } else {
+                require(target.superClass in classes) { "Unsupported eliminated ancestor constructor: $type" }
+                restore(target.superClass, ancestorConstructor, intermediate = true)
             }
-            val restored = Method(type, "<init>", parentConstructor.parameterTypes, "V")
+            if (intermediate && restored !in generated && target.methods.orEmpty().any { it.method == restored }) {
+                return restored
+            }
             require(restored in generated || target.methods.orEmpty().none { it.method == restored }) {
                 "Unsupported eliminated constructor conflicts with an existing constructor: $type"
             }

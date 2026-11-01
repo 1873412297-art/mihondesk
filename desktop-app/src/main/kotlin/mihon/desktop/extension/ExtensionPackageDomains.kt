@@ -16,6 +16,7 @@ internal object ExtensionPackageDomains {
             return manifest.declaredDomains
         }
         val domains = linkedSetOf<String>()
+        val bareHosts = linkedSetOf<String>()
         fun inspect(bytes: ByteArray) {
             val reader = ClassReader(bytes)
             val chars = CharArray(reader.maxStringLength)
@@ -26,6 +27,7 @@ internal object ExtensionPackageDomains {
                 URL.findAll(literal).forEach { match ->
                     match.value.toHttpUrlOrNull()?.host?.let(domains::add)
                 }
+                if (BARE_HOST.matches(literal)) bareHosts += literal.lowercase()
             }
         }
         ZipFile(file).use { zip ->
@@ -41,8 +43,15 @@ internal object ExtensionPackageDomains {
                 }
             }
         }
+        // Image/API servers are often stored as bare hosts (e.g. "hip-cf-1.s3imgs.top"). Accept them only
+        // when they share a parent domain with a URL host already found, so arbitrary literals stay denied.
+        val parents = domains.map(::parentDomain).toSet()
+        bareHosts.filterTo(domains) { parentDomain(it) in parents }
         return domains.toList()
     }
 
+    private fun parentDomain(host: String): String = host.split('.').takeLast(2).joinToString(".")
+
     private val URL = Regex("https?://[a-zA-Z0-9.-]+(?::[0-9]+)?")
+    private val BARE_HOST = Regex("(?:[a-zA-Z0-9-]+\\.)+[a-zA-Z]{2,}")
 }

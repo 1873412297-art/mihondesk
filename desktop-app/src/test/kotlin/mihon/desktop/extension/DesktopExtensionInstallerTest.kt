@@ -241,6 +241,63 @@ class DesktopExtensionInstallerTest {
     }
 
     @Test
+    fun `local v2-only apk from an unknown signer asks for trust instead of being rejected`(@TempDir tempDir: Path) {
+        val manifest = sampleManifest("ext.test.v2.local")
+        val fixture = ExtensionSignatureTestFixtures.createV2OnlySignedApk(
+            target = tempDir.resolve("v2-local.apk").toFile(),
+            extraEntries = mapOf("manifest.json" to json.encodeToString(manifest).toByteArray()),
+        )
+        assumeTrue(fixture != null, "JDK keytool is not available")
+
+        runBlocking {
+            val installer = DesktopExtensionInstaller(
+                installRoot = tempDir.resolve("installed").toFile(),
+                preferenceStore = DesktopPreferenceStore(tempDir.resolve("prefs.properties")),
+            )
+
+            val error = assertThrows<ExtensionTrustRequiredException> {
+                installer.installFromLocalFile(fixture!!.file)
+            }
+            error.pkg shouldBe manifest.id
+            val pending = installer.trustStore.pendingTrustRequest.value.shouldNotBeNull()
+            pending.fingerprints shouldContain fixture!!.fingerprint
+            pending.filePath shouldBe fixture.file.absolutePath
+            installer.getInstalledExtensions() shouldHaveSize 0
+
+            val installed = installer.installFromLocalFile(fixture.file, trustOnInstall = true)
+            installed.signatureFingerprints shouldContain fixture.fingerprint
+            installed.trustStatus shouldBe ExtensionTrustStatus.TRUSTED
+        }
+    }
+
+    @Test
+    fun `local v2-only apk signed by a configured repository key installs without a prompt`(@TempDir tempDir: Path) {
+        val manifest = sampleManifest("ext.test.v2.repo")
+        val fixture = ExtensionSignatureTestFixtures.createV2OnlySignedApk(
+            target = tempDir.resolve("v2-repo.apk").toFile(),
+            extraEntries = mapOf("manifest.json" to json.encodeToString(manifest).toByteArray()),
+        )
+        assumeTrue(fixture != null, "JDK keytool is not available")
+
+        runBlocking {
+            val installer = DesktopExtensionInstaller(
+                installRoot = tempDir.resolve("installed").toFile(),
+                preferenceStore = DesktopPreferenceStore(tempDir.resolve("prefs.properties")),
+            )
+            val storeItem = ExtensionStoreItem(
+                pkg = manifest.id,
+                name = manifest.name,
+                version = manifest.version,
+                versionCode = manifest.versionCode,
+                signingKey = fixture!!.fingerprint,
+            )
+
+            val installed = installer.installFromLocalFile(fixture.file, storeItem = storeItem)
+            installed.trustStatus shouldBe ExtensionTrustStatus.TRUSTED
+        }
+    }
+
+    @Test
     fun `v2 v3 only apk signature is rejected explicitly`(@TempDir tempDir: Path) {
         val apk = tempDir.resolve("v2-only.apk").toFile()
         ExtensionSignatureTestFixtures.createApkSigningBlockOnlyApk(apk)

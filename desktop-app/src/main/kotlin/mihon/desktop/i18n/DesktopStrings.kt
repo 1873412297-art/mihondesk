@@ -1191,6 +1191,7 @@ object EnglishStrings : DesktopStrings {
     override fun extensionInstallFailureTitle(failure: ExtensionInstallFailure) = when (failure) {
         ExtensionInstallFailure.DownloadFailed -> "Could not download the extension package."
         ExtensionInstallFailure.SignatureRejected -> "The extension was rejected by the signature policy."
+        ExtensionInstallFailure.TrustRequired -> "This extension's signer is not trusted yet."
         ExtensionInstallFailure.StoreUnavailable -> "No configured store offers this extension anymore."
         ExtensionInstallFailure.Unknown -> "The extension could not be installed."
     }
@@ -1199,6 +1200,8 @@ object EnglishStrings : DesktopStrings {
             "Check your connection or proxy, then retry the install."
         ExtensionInstallFailure.SignatureRejected ->
             "Its signer does not match the key trusted for this package, so nothing was installed."
+        ExtensionInstallFailure.TrustRequired ->
+            "Check the signer fingerprint and trust it only if you trust where the file came from."
         ExtensionInstallFailure.StoreUnavailable ->
             "Refresh the extension list, or add the store that publishes it."
         ExtensionInstallFailure.Unknown ->
@@ -2185,6 +2188,7 @@ object SimplifiedChineseStrings : DesktopStrings {
     override fun extensionInstallFailureTitle(failure: ExtensionInstallFailure) = when (failure) {
         ExtensionInstallFailure.DownloadFailed -> "扩展包下载失败。"
         ExtensionInstallFailure.SignatureRejected -> "该扩展未通过签名校验，已被拒绝安装。"
+        ExtensionInstallFailure.TrustRequired -> "该扩展的签名尚未受信任，需要你确认。"
         ExtensionInstallFailure.StoreUnavailable -> "已配置的商店都不再提供该扩展。"
         ExtensionInstallFailure.Unknown -> "扩展安装失败。"
     }
@@ -2193,6 +2197,8 @@ object SimplifiedChineseStrings : DesktopStrings {
             "请检查网络或代理设置后重试安装。"
         ExtensionInstallFailure.SignatureRejected ->
             "其签名与此扩展包已受信任的密钥不一致，因此没有安装任何内容。"
+        ExtensionInstallFailure.TrustRequired ->
+            "请核对签名指纹；仅在你信任该文件来源时选择信任并安装。"
         ExtensionInstallFailure.StoreUnavailable ->
             "请刷新扩展列表，或添加发布该扩展的仓库。"
         ExtensionInstallFailure.Unknown ->
@@ -3170,6 +3176,7 @@ object TraditionalChineseStrings : DesktopStrings {
     override fun extensionInstallFailureTitle(failure: ExtensionInstallFailure) = when (failure) {
         ExtensionInstallFailure.DownloadFailed -> "擴充套件下載失敗。"
         ExtensionInstallFailure.SignatureRejected -> "此擴充套件未通過簽章驗證，已被拒絕安裝。"
+        ExtensionInstallFailure.TrustRequired -> "此擴充套件的簽章尚未受信任，需要你確認。"
         ExtensionInstallFailure.StoreUnavailable -> "已設定的商店都不再提供此擴充套件。"
         ExtensionInstallFailure.Unknown -> "擴充套件安裝失敗。"
     }
@@ -3178,6 +3185,8 @@ object TraditionalChineseStrings : DesktopStrings {
             "請檢查網路或代理設定後重試安裝。"
         ExtensionInstallFailure.SignatureRejected ->
             "其簽章與此擴充套件已受信任的金鑰不一致，因此沒有安裝任何內容。"
+        ExtensionInstallFailure.TrustRequired ->
+            "請核對簽章指紋；僅在你信任該檔案來源時選擇信任並安裝。"
         ExtensionInstallFailure.StoreUnavailable ->
             "請重新整理擴充套件清單，或新增發佈此擴充套件的存放庫。"
         ExtensionInstallFailure.Unknown ->

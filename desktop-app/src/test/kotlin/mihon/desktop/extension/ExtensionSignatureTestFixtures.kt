@@ -154,6 +154,95 @@ object ExtensionSignatureTestFixtures {
         target.writeBytes(updated)
     }
 
+    /**
+     * Signs a ZIP with APK Signature Scheme v2 only (no v1 JAR signature), like current official
+     * extension repositories do. Returns null when keytool is unavailable.
+     */
+    fun createV2OnlySignedApk(
+        target: File,
+        extraEntries: Map<String, ByteArray> = emptyMap(),
+    ): SignedJarFixture? {
+        val keytool = jdkTool("keytool") ?: return null
+        val workDir = Files.createTempDirectory("mihon-v2-fixture").toFile()
+        try {
+            val unsigned = File(workDir, "unsigned.apk")
+            val payload = "hello v2 extension".toByteArray()
+            ZipOutputStream(FileOutputStream(unsigned)).use { zip ->
+                // apksig requires a binary manifest, as every real APK has.
+                zip.putNextEntry(ZipEntry("AndroidManifest.xml"))
+                zip.write(minimalBinaryManifest())
+                zip.closeEntry()
+                zip.putNextEntry(ZipEntry("payload.txt"))
+                zip.write(payload)
+                zip.closeEntry()
+                for ((name, bytes) in extraEntries) {
+                    zip.putNextEntry(ZipEntry(name))
+                    zip.write(bytes)
+                    zip.closeEntry()
+                }
+            }
+            val alias = "testkey"
+            val password = "changeit"
+            val keystore = File(workDir, "keystore.p12")
+            val ok = runTool(
+                keytool.absolutePath, "-genkeypair", "-alias", alias, "-keyalg", "RSA", "-keysize", "2048",
+                "-validity", "3650", "-storetype", "PKCS12", "-keystore", keystore.absolutePath,
+                "-storepass", password, "-keypass", password,
+                "-dname", "CN=Mihon Test V2 Extension, OU=Dev, O=Mihon, C=US", "-noprompt",
+            )
+            if (!ok) return null
+            val loaded = KeyStore.getInstance("PKCS12")
+            FileInputStream(keystore).use { loaded.load(it, password.toCharArray()) }
+            val certificate = loaded.getCertificate(alias) as X509Certificate
+            val key = loaded.getKey(alias, password.toCharArray()) as java.security.PrivateKey
+            val signer = com.android.apksig.ApkSigner.SignerConfig.Builder("CERT", key, listOf(certificate)).build()
+            com.android.apksig.ApkSigner.Builder(listOf(signer))
+                .setInputApk(unsigned)
+                .setOutputApk(target)
+                .setMinSdkVersion(24)
+                .setV1SigningEnabled(false)
+                .setV2SigningEnabled(true)
+                .setV3SigningEnabled(false)
+                .build()
+                .sign()
+            return SignedJarFixture(target, ExtensionSignatureVerifier.sha256Hex(certificate.encoded), payload)
+        } finally {
+            workDir.deleteRecursively()
+        }
+    }
+
+    /** A minimal Android binary XML document containing only an empty `<manifest>` element. */
+    private fun minimalBinaryManifest(): ByteArray {
+        val name = "manifest".toByteArray(Charsets.UTF_8)
+        // UTF-8 string: char length, byte length, bytes, NUL terminator; padded to 4 bytes.
+        val stringData = byteArrayOf(name.size.toByte(), name.size.toByte()) + name + byteArrayOf(0)
+        val paddedStrings = stringData + ByteArray((4 - stringData.size % 4) % 4)
+        val poolHeader = 28
+        val poolSize = poolHeader + 4 + paddedStrings.size
+        val buffer = java.nio.ByteBuffer.allocate(8 + poolSize + 36 + 24).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+        buffer.putShort(0x0003).putShort(8).putInt(8 + poolSize + 36 + 24)
+        buffer.putShort(0x0001).putShort(poolHeader.toShort()).putInt(poolSize)
+        buffer.putInt(1).putInt(0).putInt(0x100).putInt(poolHeader + 4).putInt(0)
+        buffer.putInt(0).put(paddedStrings)
+        buffer.putShort(0x0102).putShort(16).putInt(36)
+        buffer.putInt(1).putInt(-1).putInt(-1).putInt(0)
+        buffer.putShort(20).putShort(20).putShort(0).putShort(0).putShort(0).putShort(0)
+        buffer.putShort(0x0103).putShort(16).putInt(24)
+        buffer.putInt(1).putInt(-1).putInt(-1).putInt(0)
+        return buffer.array()
+    }
+
+    /** Flips one byte inside the stored ZIP entry data, which invalidates a v2 signature digest. */
+    fun corruptFirstEntryData(file: File) {
+        val bytes = file.readBytes()
+        // Local file header: data starts after 30 bytes + name length + extra length.
+        val nameLen = (bytes[26].toInt() and 0xFF) or ((bytes[27].toInt() and 0xFF) shl 8)
+        val extraLen = (bytes[28].toInt() and 0xFF) or ((bytes[29].toInt() and 0xFF) shl 8)
+        val dataStart = 30 + nameLen + extraLen
+        bytes[dataStart] = (bytes[dataStart].toInt() xor 0x01).toByte()
+        file.writeBytes(bytes)
+    }
+
     private fun jdkTool(name: String): File? {
         val executable = if (System.getProperty("os.name").lowercase().contains("win")) "$name.exe" else name
         val file = File(System.getProperty("java.home"), "bin/$executable")

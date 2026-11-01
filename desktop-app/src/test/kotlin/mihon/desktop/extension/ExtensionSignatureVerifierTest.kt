@@ -61,6 +61,30 @@ class ExtensionSignatureVerifierTest {
     }
 
     @Test
+    fun `verifies a v2-only signed apk and returns its signer fingerprint`(@TempDir tempDir: Path) {
+        val fixture = ExtensionSignatureTestFixtures.createV2OnlySignedApk(tempDir.resolve("v2.apk").toFile())
+        assumeTrue(fixture != null, "JDK keytool is not available")
+
+        val result = ExtensionSignatureVerifier.verify(fixture!!.file)
+
+        result.valid shouldBe true
+        result.v2V3Only shouldBe false
+        result.fingerprints shouldBe listOf(fixture.fingerprint)
+    }
+
+    @Test
+    fun `rejects a v2-only apk whose content changed after signing`(@TempDir tempDir: Path) {
+        val fixture = ExtensionSignatureTestFixtures.createV2OnlySignedApk(tempDir.resolve("v2.apk").toFile())
+        assumeTrue(fixture != null, "JDK keytool is not available")
+        ExtensionSignatureTestFixtures.corruptFirstEntryData(fixture!!.file)
+
+        val result = ExtensionSignatureVerifier.verify(fixture.file)
+
+        result.valid shouldBe false
+        result.fingerprints.shouldBeEmpty()
+    }
+
+    @Test
     fun `reports v2 v3 only apk signing as explicitly unsupported`(@TempDir tempDir: Path) {
         val apk = tempDir.resolve("v2-only.apk").toFile()
         ExtensionSignatureTestFixtures.createApkSigningBlockOnlyApk(apk)

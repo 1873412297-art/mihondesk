@@ -50,7 +50,9 @@ class ExtensionInstallFailurePresenterTest {
     }
 
     @Test
-    fun `a signature or trust rejection is reported as a signature rejection`(@TempDir root: Path): Unit = runBlocking {
+    fun `an unsigned package asks for trust instead of being rejected outright`(
+        @TempDir root: Path,
+    ): Unit = runBlocking {
         val store = serveStore(root) { respond(it, 200, unsignedPackageBytes()) }
         try {
             awaitAvailable(store.presenter)
@@ -58,7 +60,7 @@ class ExtensionInstallFailurePresenterTest {
             store.presenter.installExtension(store.presenter.state.value.availableExtensions.single())
             awaitInstallFailure(store.presenter)
 
-            store.presenter.state.value.installFailure shouldBe ExtensionInstallFailure.SignatureRejected
+            store.presenter.state.value.installFailure shouldBe ExtensionInstallFailure.TrustRequired
             store.presenter.state.value.errorMessage!!.contains("trust", ignoreCase = true) shouldBe true
             store.installer.getInstalledExtensions() shouldBe emptyList()
         } finally {
