@@ -227,6 +227,13 @@ compose.desktop {
         javaHome = desktopJavaHome
         jvmArgs += "-Djava.net.useSystemProxies=true"
 
+        buildTypes.release.proguard {
+            // Plugin host: extensions and child JVMs link to our classes by name (see proguard-rules.pro).
+            obfuscate.set(false)
+            optimize.set(false)
+            configurationFiles.from(project.file("proguard-rules.pro"))
+        }
+
         nativeDistributions {
             appResourcesRootDir.set(distributionResourcesRoot)
             targetFormats(TargetFormat.Exe, TargetFormat.Msi)
