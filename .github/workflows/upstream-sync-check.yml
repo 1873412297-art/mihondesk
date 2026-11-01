@@ -27,7 +27,9 @@ jobs:
       - name: Fetch upstream and tags
         run: |
           git remote add upstream https://github.com/mihonapp/mihon || git remote set-url upstream https://github.com/mihonapp/mihon
-          git fetch upstream '+refs/heads/*:refs/remotes/upstream/*' --tags
+          # Upstream tags go into their own namespace: this fork has its own vX.Y.Z tags (e.g. v0.2.3)
+          # that collide with upstream's, and fetching them into refs/tags fails with "would clobber existing tag".
+          git fetch --no-tags upstream '+refs/heads/*:refs/remotes/upstream/*' '+refs/tags/*:refs/upstream-tags/*'
 
       - name: Evaluate sync status
         id: sync_check
@@ -130,13 +132,13 @@ jobs:
                                   if tag_name not in upstream_tags:
                                       upstream_tags[tag_name] = sha
 
-              # Also include any tags merged into upstream/main
-              ok, merged_tags = run_git_allow_fail(['tag', '--merged', 'upstream/main'])
+              # Also include upstream tags fetched into refs/upstream-tags (never the fork's own tags)
+              ok, merged_tags = run_git_allow_fail(['for-each-ref', '--format=%(refname:lstrip=2)', '--merged', 'upstream/main', 'refs/upstream-tags/'])
               if ok and merged_tags:
                   for tag in merged_tags.splitlines():
                       t = tag.strip()
                       if t and t not in upstream_tags:
-                          ok_sha, sha = run_git_allow_fail(['rev-parse', f'{t}^{{commit}}'])
+                          ok_sha, sha = run_git_allow_fail(['rev-parse', f'refs/upstream-tags/{t}^{{commit}}'])
                           if ok_sha and sha:
                               upstream_tags[t] = sha
 
