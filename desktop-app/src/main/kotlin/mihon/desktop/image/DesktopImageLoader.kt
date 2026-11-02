@@ -10,6 +10,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
+import mihon.desktop.extension.withTlsFallback
 import mihon.desktop.reader.codec.PackagedReaderCodec
 import mihon.reader.image.ImageFormatDetector
 import mihon.reader.image.ReaderImageFormat
@@ -64,8 +65,7 @@ class DesktopImageLoader(
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(20, TimeUnit.SECONDS)
         .proxySelector(mihon.desktop.extension.DesktopPolicyProxySelector(policyProvider))
-        .connectionSpecs(mihon.desktop.extension.DesktopTls.connectionSpecs)
-        .build(),
+        .withTlsFallback(),
     private val customCoverManager: CustomCoverManager? = null,
     private val maxMemoryEntries: Int = 120,
 ) {

@@ -70,7 +70,7 @@ class DesktopExtensionInstaller(
         .followRedirects(true)
         .followSslRedirects(true)
         .proxySelector(DesktopPolicyProxySelector(policyProvider))
-        .build(),
+        .withTlsFallback(),
     signatureVerifier: ExtensionVerifier = ExtensionSignatureVerifier(),
     trustStore: ExtensionTrustStore = ExtensionTrustStore(preferenceStore),
     /** Alias constructor parameter for callers/tests that name the fake verifier `verifier`. */

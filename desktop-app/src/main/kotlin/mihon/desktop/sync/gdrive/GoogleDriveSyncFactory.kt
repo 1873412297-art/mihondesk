@@ -1,6 +1,7 @@
 package mihon.desktop.sync.gdrive
 
 import kotlinx.coroutines.CoroutineScope
+import mihon.desktop.extension.withTlsFallback
 import mihon.sync.engine.SyncLocalRepository
 import mihon.sync.transport.gdrive.DriveRestSnapshotStore
 import mihon.sync.transport.gdrive.GoogleDriveTransport
@@ -29,7 +30,7 @@ object GoogleDriveSyncFactory {
             .apply { if (proxySelector != null) proxySelector(proxySelector) }
             .connectTimeout(20, TimeUnit.SECONDS)
             .readTimeout(60, TimeUnit.SECONDS)
-            .build()
+            .withTlsFallback()
         return GoogleDriveSyncService(
             config = config,
             vault = DriveTokenVault(dir.resolve("tokens.bin")),

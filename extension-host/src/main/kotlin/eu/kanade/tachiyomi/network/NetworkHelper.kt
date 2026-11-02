@@ -83,7 +83,7 @@ open class NetworkHelper(
                         return store.filter { it.matches(url) }.sortedByDescending { it.path.length }
                     }
                 })
-                .build()
+                .withTlsFallback()
         }
     }
 }

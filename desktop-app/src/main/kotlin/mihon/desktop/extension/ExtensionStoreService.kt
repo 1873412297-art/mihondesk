@@ -61,7 +61,7 @@ class ExtensionStoreService(
         .readTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
         .callTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
         .proxySelector(DesktopPolicyProxySelector(policyProvider))
-        .build(),
+        .withTlsFallback(),
 ) {
     companion object {
         const val PREF_KEY_REPOSITORIES = "extension.repositories"

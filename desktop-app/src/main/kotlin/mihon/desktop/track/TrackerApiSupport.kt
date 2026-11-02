@@ -5,6 +5,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import mihon.desktop.extension.DesktopNetworkPolicy
 import mihon.desktop.extension.DesktopPolicyProxySelector
+import mihon.desktop.extension.withTlsFallback
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Protocol
@@ -48,7 +49,7 @@ internal fun defaultTrackerHttpClient(
             chain.proceed(request)
         }
     }
-    .build()
+    .withTlsFallback()
 
 /** Raised for any tracker API/transport failure that is not a plain HTTP status error. */
 open class TrackerApiException(message: String, cause: Throwable? = null) : IOException(message, cause)

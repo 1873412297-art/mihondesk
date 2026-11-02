@@ -1,42 +1,78 @@
 package mihon.desktop.extension
 
-import io.kotest.matchers.collections.shouldContainAll
 import io.kotest.matchers.shouldBe
 import okhttp3.ConnectionSpec
 import okhttp3.OkHttpClient
+import okhttp3.Protocol
+import okhttp3.Request
+import okhttp3.Response
+import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.jupiter.api.Test
-import javax.net.ssl.SSLContext
+import java.io.IOException
+import java.net.SocketException
+import javax.net.ssl.SSLHandshakeException
 
 /**
- * Regression for the bilimanga (哔哩漫畫) "TLS: Remote host terminated the handshake" failure:
- * OkHttp's default MODERN_TLS spec trims the JDK's ClientHello cipher list; through the user's
- * system proxy that ClientHello was reset while the JDK default ClientHello succeeded. Source
- * traffic must offer the full set of JDK-enabled TLS versions and cipher suites.
+ * bilimanga (哔哩漫畫): through the user's system proxy OkHttp's MODERN_TLS ClientHello was reset
+ * ("Remote host terminated the handshake") while a JDK-default ClientHello succeeded. Design:
+ * MODERN_TLS stays the default; only a host whose handshake is reset is retried, and remembered,
+ * with the compatible (all JDK-enabled versions and suites) spec.
  */
 class DesktopTlsConnectionSpecTest {
 
-    private val jdkEnabledSuites = SSLContext.getDefault().createSSLEngine().enabledCipherSuites.toList()
-
-    private fun List<ConnectionSpec>.tlsSpec() = first { it.isTls }
-
     @Test
-    fun `brokered source client offers every JDK-enabled cipher suite`() {
+    fun `brokered source client defaults to MODERN_TLS`() {
         val helper = DesktopNetworkHelper(OkHttpClient())
-        val spec = helper.connectionSpecs().tlsSpec()
-        spec.cipherSuites shouldBe null
-        spec.tlsVersions shouldBe null
-        helper.connectionSpecs().any { it == ConnectionSpec.CLEARTEXT } shouldBe true
+        helper.connectionSpecs() shouldBe listOf(ConnectionSpec.MODERN_TLS, ConnectionSpec.CLEARTEXT)
         helper.close()
     }
 
     @Test
-    fun `desktop tls spec applied to a socket keeps the JDK cipher list`() {
-        val engine = SSLContext.getDefault().createSSLEngine()
-        val socketSuites = engine.enabledCipherSuites.toList()
-        val modern = ConnectionSpec.MODERN_TLS.cipherSuites!!.map { it.javaName }
-        // Sanity: MODERN_TLS really is narrower than the JDK default, which is what broke the handshake.
-        (socketSuites.size > socketSuites.count { it in modern }) shouldBe true
-        DesktopTls.connectionSpecs.tlsSpec().cipherSuites shouldBe null
-        jdkEnabledSuites shouldContainAll socketSuites
+    fun `compatible spec offers every JDK-enabled version and suite`() {
+        val spec = DesktopTls.compatibleSpecs.first { it.isTls }
+        spec.cipherSuites shouldBe null
+        spec.tlsVersions shouldBe null
     }
+
+    @Test
+    fun `handshake resets are recognised, other failures are not`() {
+        DesktopTls.isHandshakeReset(SSLHandshakeException("Remote host terminated the handshake")) shouldBe true
+        DesktopTls.isHandshakeReset(SocketException("Connection reset")) shouldBe true
+        DesktopTls.isHandshakeReset(IOException("timeout")) shouldBe false
+        DesktopTls.isHandshakeReset(SSLHandshakeException("PKIX path building failed")) shouldBe false
+    }
+
+    @Test
+    fun `reset host is retried with the compatible client and remembered`() {
+        val fallbackHosts = DesktopTls.FallbackHosts()
+        val compatibleCalls = mutableListOf<String>()
+        var defaultCalls = 0
+        val interceptor = DesktopTls.FallbackInterceptor(fallbackHosts) { request ->
+            compatibleCalls += request.url.host
+            ok(request)
+        }
+        val reset: (Request) -> Response = {
+            defaultCalls++
+            throw SSLHandshakeException("Remote host terminated the handshake")
+        }
+        val request = Request.Builder().url("https://www.bilimanga.net/").build()
+        interceptor.proceed(request, reset).code shouldBe 200
+        fallbackHosts.contains("www.bilimanga.net") shouldBe true
+        interceptor.proceed(request, reset).code shouldBe 200
+        defaultCalls shouldBe 1
+        compatibleCalls shouldBe listOf("www.bilimanga.net", "www.bilimanga.net")
+        interceptor.proceed(Request.Builder().url("https://ok.example/").build(), ::ok).code shouldBe 200
+        fallbackHosts.contains("ok.example") shouldBe false
+    }
+
+    @Test
+    fun `cleartext requests are never retried`() {
+        val interceptor = DesktopTls.FallbackInterceptor(DesktopTls.FallbackHosts()) { error("no fallback") }
+        val request = Request.Builder().url("http://plain.example/").build()
+        runCatching { interceptor.proceed(request) { throw SocketException("Connection reset") } }
+            .exceptionOrNull()?.javaClass shouldBe SocketException::class.java
+    }
+
+    private fun ok(request: Request) = Response.Builder().request(request).protocol(Protocol.HTTP_1_1)
+        .code(200).message("OK").body("".toResponseBody()).build()
 }
