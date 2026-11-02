@@ -106,6 +106,23 @@ class GoogleDriveSyncServiceTest {
     )
 
     @Test
+    fun `readiness follows sign-in and the dirty check uses the Drive watermark`(): Unit = runBlocking {
+        val manga = AndroidBackupManga(source = 1L, url = "/a", title = "A", favorite = true, lastModifiedAt = 500L)
+        val repo = Repo(listOf(manga))
+        val s = service("w", MemStore(), repo)
+        s.isReady() shouldBe false
+        s.hasLocalChanges() shouldBe false
+        s.signIn() shouldBe true
+        s.isReady() shouldBe true
+        s.hasLocalChanges() shouldBe true
+        s.syncNow().shouldNotBeNull().success shouldBe true
+        s.hasLocalChanges() shouldBe false
+        repo.mangas = repo.mangas +
+            AndroidBackupManga(source = 1L, url = "/b", title = "B", favorite = true, lastModifiedAt = now + 10)
+        s.hasLocalChanges() shouldBe true
+    }
+
+    @Test
     fun `not configured without secret`(): Unit = runBlocking {
         val s = service("d", MemStore(), Repo(emptyList()), secret = null)
         s.state.value.configured shouldBe false

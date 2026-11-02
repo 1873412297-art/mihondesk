@@ -81,14 +81,6 @@ data class DesktopPreferences(
     val lastSyncEpochMillis: Long = 0L,
     val lastSyncMessage: String = "",
     val syncDeviceId: String = "",
-    val syncServerEnabled: Boolean = false,
-    val syncServerPort: Int = 45831,
-    val syncServerToken: String = "",
-    /** When true, token is broadcast in mDNS TXT so phones can pair without scanning. Default false (security). */
-    val syncServerQuickPair: Boolean = false,
-    /** Display name advertised via mDNS. Defaults to hostname. */
-    val syncServerDeviceName: String = "",
-    val syncServerSelectedIp: String = "",
     val runInBackgroundOnClose: Boolean = false,
     /** Advanced: use the classic Windows caption instead of the custom title bar. */
     val useSystemTitleBar: Boolean = false,
@@ -256,12 +248,6 @@ class DesktopPreferenceStore(private val file: Path) {
             lastSyncEpochMillis = properties.getProperty("sync.last_epoch_millis")?.toLongOrNull() ?: 0L,
             lastSyncMessage = properties.getProperty("sync.last_message") ?: "",
             syncDeviceId = properties.getProperty("sync.device_id") ?: "",
-            syncServerEnabled = properties.getProperty("sync.server_enabled")?.toBooleanStrictOrNull() ?: false,
-            syncServerPort = properties.getProperty("sync.server_port")?.toIntOrNull() ?: 45831,
-            syncServerToken = properties.getProperty("sync.server_token") ?: "",
-            syncServerQuickPair = properties.getProperty("sync.server_quick_pair")?.toBooleanStrictOrNull() ?: false,
-            syncServerDeviceName = properties.getProperty("sync.server_device_name") ?: "",
-            syncServerSelectedIp = properties.getProperty("sync.server_selected_ip") ?: "",
             runInBackgroundOnClose = properties.getProperty("background.run_in_background_on_close")
                 ?.toBooleanStrictOrNull() ?: false,
             useSystemTitleBar = properties.getProperty("window.use_system_title_bar")
@@ -383,12 +369,7 @@ class DesktopPreferenceStore(private val file: Path) {
         properties.setProperty("sync.last_epoch_millis", preferences.lastSyncEpochMillis.toString())
         properties.setProperty("sync.last_message", preferences.lastSyncMessage)
         properties.setProperty("sync.device_id", preferences.syncDeviceId)
-        properties.setProperty("sync.server_enabled", preferences.syncServerEnabled.toString())
-        properties.setProperty("sync.server_port", preferences.syncServerPort.toString())
-        properties.setProperty("sync.server_token", preferences.syncServerToken)
-        properties.setProperty("sync.server_quick_pair", preferences.syncServerQuickPair.toString())
-        properties.setProperty("sync.server_device_name", preferences.syncServerDeviceName)
-        properties.setProperty("sync.server_selected_ip", preferences.syncServerSelectedIp)
+        LEGACY_SYNC_SERVER_KEYS.forEach(properties::remove)
         properties.setProperty("onboarding.completed", preferences.onboardingCompleted.toString())
         properties.setProperty("splash.every_launch", preferences.splashEveryLaunch.toString())
         properties.setProperty("browse.show_nsfw", preferences.showNsfwSources.toString())
@@ -506,10 +487,14 @@ class DesktopPreferenceStore(private val file: Path) {
     }
 
     companion object {
-        fun generateSyncToken(): String {
-            val bytes = ByteArray(32)
-            java.security.SecureRandom().nextBytes(bytes)
-            return bytes.joinToString("") { "%02x".format(it) }
-        }
+        /** Keys left behind by the removed LAN sync server; stripped on the next save. */
+        private val LEGACY_SYNC_SERVER_KEYS = listOf(
+            "sync.server_enabled",
+            "sync.server_port",
+            "sync.server_token",
+            "sync.server_quick_pair",
+            "sync.server_device_name",
+            "sync.server_selected_ip",
+        )
     }
 }

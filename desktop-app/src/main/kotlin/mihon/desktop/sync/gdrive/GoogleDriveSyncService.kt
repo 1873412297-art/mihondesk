@@ -57,7 +57,7 @@ class GoogleDriveSyncService(
     private val transportFactory: (DriveTokenProvider) -> SyncTransport,
     private val clock: () -> Long = System::currentTimeMillis,
     private val debounceMillis: Long = 4_000L,
-) {
+) : mihon.desktop.sync.SyncBackend {
     private val mutex = Mutex()
     private var requestJob: Job? = null
     private val _state = MutableStateFlow(
@@ -70,6 +70,19 @@ class GoogleDriveSyncService(
         ),
     )
     val state: StateFlow<GoogleDriveSyncState> = _state.asStateFlow()
+
+    override val sourceIdentifier: String = "gdrive:appDataFolder"
+
+    override fun isReady(): Boolean = config.isConfigured && _state.value.signedIn
+
+    /** Pending local edits since the last Drive push; a never-synced account always counts as dirty. */
+    override suspend fun hasLocalChanges(): Boolean = withContext(Dispatchers.IO) {
+        if (!isReady()) return@withContext false
+        if (stateStore.lastSyncAt() <= 0L) return@withContext true
+        val watermark = stateStore.getLastPushWatermark()
+        val repo = localRepository()
+        !repo.exportDelta(watermark).isEmpty || repo.exportTombstones(watermark).isNotEmpty()
+    }
 
     suspend fun signIn(): Boolean {
         if (!config.isConfigured) {
@@ -119,7 +132,7 @@ class GoogleDriveSyncService(
     }
 
     /** Runs a sync now; returns null when not signed in / not configured. */
-    suspend fun syncNow(): SyncReport? = mutex.withLock {
+    override suspend fun syncNow(): SyncReport? = mutex.withLock {
         if (!config.isConfigured || !_state.value.signedIn) return@withLock null
         val tokens = vault.load() ?: run {
             _state.update { it.copy(signedIn = false, error = GoogleDriveError.AUTH_EXPIRED) }

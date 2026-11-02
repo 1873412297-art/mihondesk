@@ -59,7 +59,6 @@ class DesktopRuntime(
     val statsService: mihon.desktop.stats.DesktopStatsService? = null,
     val backupScheduler: mihon.desktop.backup.DesktopBackupScheduler? = null,
     val syncScheduler: mihon.desktop.sync.DesktopSyncScheduler? = null,
-    val syncServerManager: mihon.desktop.sync.DesktopSyncServerManager? = null,
     val cookieStore: mihon.desktop.extension.DesktopCookieStore? = null,
     val desktopNotificationService: mihon.desktop.platform.DesktopNotificationService? = null,
     val libraryUpdateAlerts: mihon.desktop.notification.LibraryUpdateAlerts? = null,
@@ -526,10 +525,6 @@ object DesktopRuntimeFactory {
             }.onFailure {
                 mihon.desktop.logging.DesktopLogger.warn("DesktopRuntime", "Google Drive sync unavailable", it)
             }.getOrNull()
-            val syncServerManager = mihon.desktop.sync.DesktopSyncServerManager(
-                storageDir = directories.root.resolve("sync-server"),
-                onChangesetAccepted = syncScheduler::onRemoteChangeset,
-            )
             val desktopNotificationService = mihon.desktop.platform.DesktopNotificationService(
                 enabledProvider = { preferences.load().desktopNotificationsEnabled },
                 hideContentProvider = { preferences.load().desktopNotificationsHideContent },
@@ -604,22 +599,6 @@ object DesktopRuntimeFactory {
                     StartupTrace.phase("local orphan scan") { cleanupOrphans(localImporter, localLibraryRoot) }
                     backupScheduler.start()
                     extensionUpdateChecker.start()
-                    val currentPrefs = preferences.load()
-                    if (currentPrefs.syncServerEnabled) {
-                        StartupTrace.phase("sync server start") {
-                            var token = currentPrefs.syncServerToken
-                            if (token.isBlank()) {
-                                token = DesktopPreferenceStore.generateSyncToken()
-                                preferences.updatePreferences { it.copy(syncServerToken = token) }
-                            }
-                            syncServerManager.start(
-                                port = currentPrefs.syncServerPort,
-                                token = token,
-                                deviceName = currentPrefs.syncServerDeviceName,
-                                quickPairEnabled = currentPrefs.syncServerQuickPair,
-                            )
-                        }
-                    }
                     syncScheduler.start()
                     syncScheduler.googleDrive?.requestSync()
                     val launchPreferences = preferences.load()
@@ -667,7 +646,6 @@ object DesktopRuntimeFactory {
                 statsService = statsService,
                 backupScheduler = backupScheduler,
                 syncScheduler = syncScheduler,
-                syncServerManager = syncServerManager,
                 cookieStore = cookieStore,
                 desktopNotificationService = desktopNotificationService,
                 libraryUpdateAlerts = libraryUpdateAlerts,
@@ -685,7 +663,6 @@ object DesktopRuntimeFactory {
                 deferredServices = deferredServices,
                 closeReaderServices = {
                     mihon.desktop.logging.DesktopLogger.info("DesktopRuntime", "Shutting down desktop runtime services")
-                    syncServerManager.stop()
                     backupScheduler.stop()
                     syncScheduler.stop()
                     extensionUpdateChecker.stop()

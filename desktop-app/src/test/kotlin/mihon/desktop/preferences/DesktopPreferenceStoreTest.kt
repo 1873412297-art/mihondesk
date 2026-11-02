@@ -197,34 +197,32 @@ class DesktopPreferenceStoreTest {
     }
 
     @Test
-    fun `syncServerSelectedIp and runInBackgroundOnClose survive reload`() {
-        val file = tempDir.resolve("preferences-bg-ip.properties")
-        val store = DesktopPreferenceStore(file)
-        val expected = DesktopPreferences(
-            syncServerSelectedIp = "192.168.1.100",
-            runInBackgroundOnClose = true,
-        )
-        store.save(expected)
-
-        val loaded = DesktopPreferenceStore(file).load()
-        loaded.syncServerSelectedIp shouldBe "192.168.1.100"
-        loaded.runInBackgroundOnClose shouldBe true
+    fun `runInBackgroundOnClose survives reload`() {
+        val file = tempDir.resolve("preferences-bg.properties")
+        DesktopPreferenceStore(file).save(DesktopPreferences(runInBackgroundOnClose = true))
+        DesktopPreferenceStore(file).load().runInBackgroundOnClose shouldBe true
     }
 
     @Test
-    fun `syncServerSelectedIp and runInBackgroundOnClose can be parsed from properties`() {
-        val file = tempDir.resolve("preferences-manual.properties")
+    fun `legacy LAN sync server keys are ignored on load and dropped on save`() {
+        val file = tempDir.resolve("preferences-legacy-lan.properties")
         Files.writeString(
             file,
             """
+            sync.server_enabled=true
+            sync.server_port=notaport
+            sync.server_token=legacy
+            sync.server_quick_pair=true
+            sync.server_device_name=PC
             sync.server_selected_ip=10.0.0.42
             background.run_in_background_on_close=true
             """.trimIndent(),
         )
-
-        val loaded = DesktopPreferenceStore(file).load()
-        loaded.syncServerSelectedIp shouldBe "10.0.0.42"
+        val store = DesktopPreferenceStore(file)
+        val loaded = store.load()
         loaded.runInBackgroundOnClose shouldBe true
+        store.save(loaded)
+        Files.readString(file).contains("sync.server_") shouldBe false
     }
 
     @Test

@@ -110,8 +110,6 @@ dependencies {
     implementation(project(":reader-core"))
     implementation(project(":extension-sdk"))
     implementation(project(":extension-host"))
-    implementation(project(":sync-server"))
-    implementation(project(":sync-transport-http"))
     implementation(project(":sync-transport-gdrive"))
     implementation(libs.jna.platform)
     implementation("org.jetbrains.runtime:jbr-api:1.10.1")
@@ -122,7 +120,6 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.serialization.protobuf)
     implementation(libs.okhttp.core)
-    implementation(libs.zxing.core)
     // Verifies APK Signature Scheme v2/v3 (official extension repos ship v2/v3-only APKs).
     implementation("com.android.tools.build:apksig:9.4.1")
     implementation("com.github.ThexXTURBOXx.dex2jar:dex-translator:v64")

@@ -19,7 +19,6 @@ import mihon.desktop.reader.DesktopReaderSettingsStore
 import mihon.desktop.security.DesktopAppLockController
 import mihon.desktop.stats.DesktopStatsData
 import mihon.desktop.sync.DesktopSyncScheduler
-import mihon.desktop.sync.DesktopSyncServerManager
 import mihon.desktop.track.DesktopTrackerManager
 import mihon.desktop.track.TrackOnReadSyncService
 import mihon.desktop.ui.library.ChapterDisplayMode
@@ -71,7 +70,6 @@ data class DesktopShellState(
     val trackSyncService: TrackOnReadSyncService? = null,
     val backupScheduler: DesktopBackupScheduler? = null,
     val syncScheduler: DesktopSyncScheduler? = null,
-    val syncServerManager: DesktopSyncServerManager? = null,
     val backgroundScheduler: WindowsBackgroundScheduler? = null,
     val updateScheduler: LibraryUpdateScheduler? = null,
     val cookieStore: DesktopCookieStore? = null,

@@ -1612,7 +1612,6 @@ fun ApplicationScope.MihonDesktopApp(
                                     trackSyncService = runtime.trackSyncService,
                                     backupScheduler = runtime.backupScheduler,
                                     syncScheduler = runtime.syncScheduler,
-                                    syncServerManager = runtime.syncServerManager,
                                     backgroundScheduler = runtime.backgroundScheduler,
                                     updateScheduler = runtime.libraryUpdateScheduler,
                                     cookieStore = runtime.cookieStore,
