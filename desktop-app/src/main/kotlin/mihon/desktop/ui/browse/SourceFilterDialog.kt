@@ -17,8 +17,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -245,9 +243,12 @@ private fun FilterItem(
             }
         }
         is Filter.Select<*> -> {
-            var expanded by remember { mutableStateOf(false) }
-            val selectedIndex = filter.state.coerceIn(0, (filter.values.size - 1).coerceAtLeast(0))
-            val selectedLabel = filter.values.getOrNull(selectedIndex)?.toString() ?: ""
+            val labels = filter.values.map { it.toString() }
+            val selectedIndex = filter.state.coerceIn(0, (labels.size - 1).coerceAtLeast(0))
+            val onSelect: (Int) -> Unit = { index ->
+                filter.state = index
+                onStateChanged()
+            }
 
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
@@ -255,38 +256,25 @@ private fun FilterItem(
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
                 )
-                Box {
-                    OutlinedButton(
-                        onClick = { expanded = true },
+                when (selectFilterLayout(labels)) {
+                    SelectFilterLayout.Dropdown -> ThemedDropdownSelect(
+                        options = labels,
+                        selectedIndex = selectedIndex,
+                        onSelect = onSelect,
                         modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text(
-                            text = selectedLabel,
-                            modifier = Modifier.weight(1f),
-                        )
-                        Text(text = "▼", style = MaterialTheme.typography.labelSmall)
-                    }
-                    DropdownMenu(
-                        expanded = expanded,
-                        onDismissRequest = { expanded = false },
-                    ) {
-                        filter.values.forEachIndexed { index, value ->
-                            DropdownMenuItem(
-                                text = { Text(value.toString()) },
-                                onClick = {
-                                    filter.state = index
-                                    expanded = false
-                                    onStateChanged()
-                                },
-                            )
-                        }
-                    }
+                        testTag = "filter-select-${filter.name}",
+                    )
+                    SelectFilterLayout.GroupedChips -> GroupedSelectChips(
+                        options = labels,
+                        selectedIndex = selectedIndex,
+                        onSelect = onSelect,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                 }
             }
         }
         is Filter.Sort -> {
             val selection = filter.state
-            var expanded by remember { mutableStateOf(false) }
             val currentIndex = selection?.index ?: 0
             val ascending = selection?.ascending ?: false
             val currentLabel = filter.values.getOrNull(currentIndex) ?: ""
@@ -302,33 +290,16 @@ private fun FilterItem(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Box(modifier = Modifier.weight(1f)) {
-                        OutlinedButton(
-                            onClick = { expanded = true },
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Text(
-                                text = currentLabel,
-                                modifier = Modifier.weight(1f),
-                            )
-                            Text(text = "▼", style = MaterialTheme.typography.labelSmall)
-                        }
-                        DropdownMenu(
-                            expanded = expanded,
-                            onDismissRequest = { expanded = false },
-                        ) {
-                            filter.values.forEachIndexed { index, value ->
-                                DropdownMenuItem(
-                                    text = { Text(value) },
-                                    onClick = {
-                                        filter.state = Filter.Sort.Selection(index, ascending)
-                                        expanded = false
-                                        onStateChanged()
-                                    },
-                                )
-                            }
-                        }
-                    }
+                    ThemedDropdownSelect(
+                        options = filter.values.toList(),
+                        selectedIndex = currentIndex,
+                        onSelect = { index ->
+                            filter.state = Filter.Sort.Selection(index, ascending)
+                            onStateChanged()
+                        },
+                        modifier = Modifier.weight(1f),
+                        testTag = "filter-sort-${filter.name}",
+                    )
                     OutlinedButton(
                         onClick = {
                             filter.state = Filter.Sort.Selection(currentIndex, !ascending)
