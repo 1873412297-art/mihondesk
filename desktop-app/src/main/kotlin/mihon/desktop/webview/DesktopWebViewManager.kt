@@ -39,6 +39,12 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
+/**
+ * A browser that has already opened stays up. A later page error, including one from a login
+ * redirect, must not close the verification window.
+ */
+internal fun browserErrorClosesSession(sessionReady: Boolean): Boolean = !sessionReady
+
 /** A browser process is created only by open(), one capability and process per source session. */
 class DesktopWebViewManager(
     private val browserRuntime: Path,
@@ -304,10 +310,14 @@ class DesktopWebViewManager(
                 "cookie" -> importCookie(Json.parseToJsonElement(value).jsonObject)
                 "error" -> {
                     val failure = IllegalStateException(value)
-                    ready.completeExceptionally(failure)
-                    loaded.completeExceptionally(failure)
-                    pending.values.forEach { it.completeExceptionally(failure) }
-                    close()
+                    if (browserErrorClosesSession(ready.isCompleted)) {
+                        ready.completeExceptionally(failure)
+                        loaded.completeExceptionally(failure)
+                        pending.values.forEach { it.completeExceptionally(failure) }
+                        close()
+                    } else {
+                        pending.values.forEach { it.completeExceptionally(failure) }
+                    }
                 }
                 "closed" -> close()
             }

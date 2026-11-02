@@ -119,7 +119,11 @@ internal class WebViewSession(
                 errorText: String?,
                 failedUrl: String?,
             ) {
-                if (frame?.isMain == true) events.send("error", value = "$errorCode: $errorText")
+                // Login handoffs redirect and abort the previous navigation. That abort is not a
+                // failure; reporting it makes the parent close the verification window.
+                if (frame?.isMain == true && errorCode != CefLoadHandler.ErrorCode.ERR_ABORTED) {
+                    events.send("error", value = "$errorCode: $errorText")
+                }
             }
         })
         client.addRequestHandler(object : CefRequestHandlerAdapter() {

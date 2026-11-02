@@ -18,6 +18,11 @@ import java.nio.file.Path
 class DesktopWebViewManagerTest {
     @TempDir lateinit var directory: Path
 
+    @Test fun `a page error after the browser is open does not close the verification window`() {
+        assertTrue(browserErrorClosesSession(sessionReady = false))
+        assertFalse(browserErrorClosesSession(sessionReady = true))
+    }
+
     @Test fun `ordinary HTTP does not launch helper and missing runtime fails explicitly`() = runBlocking {
         val cookies = DesktopCookieStore(directory.resolve("cookies"))
         val manager =
