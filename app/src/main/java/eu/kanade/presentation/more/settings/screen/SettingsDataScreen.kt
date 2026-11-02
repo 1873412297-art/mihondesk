@@ -114,15 +114,17 @@ object SettingsDataScreen : SearchableSettings {
         val navigator = LocalNavigator.currentOrThrow
         val context = LocalContext.current
         val syncPreferences = remember { context.appGraph.syncPreferences }
-        val isSyncEnabled by syncPreferences.isSyncEnabled.collectAsState()
+        val isSyncEnabled by syncPreferences.googleDriveEnabled.collectAsState()
         val lastSyncTimestamp by syncPreferences.lastSyncTimestamp.collectAsState()
 
         val subtitle = if (!isSyncEnabled) {
-            "Disabled"
+            eu.kanade.tachiyomi.data.sync.SyncStrings.googleDrive + " · " +
+                eu.kanade.tachiyomi.data.sync.SyncStrings.statusSignedOut
         } else if (lastSyncTimestamp <= 0L) {
-            "Never synced"
+            eu.kanade.tachiyomi.data.sync.SyncStrings.googleDrive + " · " +
+                eu.kanade.tachiyomi.data.sync.SyncStrings.lastSyncNever
         } else {
-            "Last synced: " + java.text.DateFormat.getDateTimeInstance(
+            eu.kanade.tachiyomi.data.sync.SyncStrings.lastSync + ": " + java.text.DateFormat.getDateTimeInstance(
                 java.text.DateFormat.SHORT,
                 java.text.DateFormat.SHORT,
             ).format(java.util.Date(lastSyncTimestamp))

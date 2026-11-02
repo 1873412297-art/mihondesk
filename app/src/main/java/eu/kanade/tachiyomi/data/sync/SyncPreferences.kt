@@ -11,8 +11,6 @@ import tachiyomi.core.common.preference.PreferenceStore
 class SyncPreferences(
     preferenceStore: PreferenceStore,
 ) {
-    val isSyncEnabled: Preference<Boolean> = preferenceStore.getBoolean("sync_enabled", false)
-
     val syncIntervalMinutes: Preference<Int> = preferenceStore.getInt("sync_interval_minutes", 0) // 0 = manual only
 
     val syncOnlyOnWifi: Preference<Boolean> = preferenceStore.getBoolean("sync_only_on_wifi", false)
@@ -27,26 +25,19 @@ class SyncPreferences(
         "",
     )
 
+    /** Holds a [DriveSyncError] name; anything else (e.g. legacy LAN messages) is ignored by the UI. */
     val lastSyncError: Preference<String> = preferenceStore.getString(
         Preference.appStateKey("sync_last_error"),
         "",
     )
 
-    val syncPairingCode: Preference<String> = preferenceStore.getString("sync_pairing_code", "")
-
-    val syncHttpHost: Preference<String> = preferenceStore.getString("sync_http_host", "")
-
-    val syncHttpPort: Preference<Int> = preferenceStore.getInt("sync_http_port", 45831)
-
-    val syncHttpToken: Preference<String> = preferenceStore.getString("sync_http_token", "")
-
-    /** When true, SyncWorker syncs through Google Drive appDataFolder instead of the LAN server. */
+    /** True once the user has signed in to Google Drive; Drive is the only sync backend. */
     val googleDriveEnabled: Preference<Boolean> = preferenceStore.getBoolean("sync_gdrive_enabled", false)
 
-    fun updateFromPairingCode(code: mihon.sync.transport.http.SyncPairingCode) {
-        syncPairingCode.set(code.toUriString())
-        syncHttpHost.set(code.host)
-        syncHttpPort.set(code.port)
-        syncHttpToken.set(code.token)
+    fun clearDriveSignIn() {
+        googleDriveEnabled.set(false)
+        lastSyncTimestamp.set(0L)
+        lastSyncSummary.set("")
+        lastSyncError.set("")
     }
 }

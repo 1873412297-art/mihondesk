@@ -20,9 +20,11 @@ import eu.kanade.tachiyomi.util.system.workManager
 import logcat.LogPriority
 import mihon.app.di.appGraph
 import mihon.sync.engine.SyncEngine
+import okhttp3.OkHttpClient
 import tachiyomi.core.common.util.system.logcat
 import java.util.concurrent.TimeUnit
 
+/** Syncs the library through Google Drive (appDataFolder), the only sync backend. */
 class SyncWorker(
     private val context: Context,
     workerParams: WorkerParameters,
@@ -35,89 +37,62 @@ class SyncWorker(
         val syncPreferences = appGraph.syncPreferences
         val isManual = inputData.getBoolean(KEY_IS_MANUAL, false)
 
-        if (!syncPreferences.isSyncEnabled.get()) {
+        if (!syncPreferences.googleDriveEnabled.get()) {
             return Result.success()
         }
 
-        val useDrive = syncPreferences.googleDriveEnabled.get()
-        val host = syncPreferences.syncHttpHost.get().trim()
-        val port = syncPreferences.syncHttpPort.get()
-        val token = syncPreferences.syncHttpToken.get().trim()
-        if (!useDrive && (host.isBlank() || token.isBlank())) {
-            val errMsg = "HTTP sync server or token not configured"
-            syncPreferences.lastSyncError.set(errMsg)
-            if (isManual) notifier.showSyncError(errMsg)
-            return Result.failure()
-        }
-        val driveClient = if (useDrive) okhttp3.OkHttpClient() else null
-        val transport: mihon.sync.transport.api.SyncTransport = if (driveClient != null) {
-            GoogleDriveAuth.transport(context, driveClient)
-        } else {
-            mihon.sync.transport.http.HttpTransport(
-                baseUrl = "http://$host:$port",
-                token = token,
-                ownsClient = true,
-            )
-        }
-        val cleanupTransport = AutoCloseable {
-            (transport as? AutoCloseable)?.close()
-            driveClient?.let {
-                it.dispatcher.executorService.shutdown()
-                it.connectionPool.evictAll()
-            }
+        fun fail(error: DriveSyncError, retry: Boolean): Result {
+            syncPreferences.lastSyncError.set(error.name)
+            if (isManual) notifier.showSyncError(SyncStrings.driveError(error))
+            return if (retry) Result.retry() else Result.failure()
         }
 
+        val client = OkHttpClient()
         setForegroundSafely()
 
         return try {
-            val database = appGraph.database
-            val stateStore = AndroidSyncStateStore(database)
-            val localRepository = AndroidSyncLocalRepository(database, appGraph.json)
+            // Fail fast (without UI) when consent is needed so the settings screen can prompt.
+            GoogleDriveAuth.silentAccessToken(context.applicationContext)
 
+            val database = appGraph.database
+            val legacyState = AndroidSyncStateStore(database)
+            val stateStore = AndroidDriveSyncStateStore(
+                file = AndroidDriveSyncStateStore.file(context),
+                deviceId = { legacyState.getDeviceId() },
+            )
             val engine = SyncEngine(
-                repository = localRepository,
-                transport = transport,
+                repository = AndroidSyncLocalRepository(database, appGraph.json),
+                transport = GoogleDriveAuth.transport(context, client),
                 stateStore = stateStore,
             )
 
             val report = engine.syncNow()
             if (report.success) {
-                val pushedCursor = report.pushedChangeset?.cursor ?: 0L
-                val summary = "Pulled ${report.pulledChangesetCount} changesets, " +
-                    "merged ${report.mangaMerged} manga, ${report.chapterMerged} chapters. " +
-                    "Pushed cursor $pushedCursor."
-                syncPreferences.lastSyncTimestamp.set(System.currentTimeMillis())
+                val summary = SyncStrings.summary(
+                    pulled = report.pulledChangesetCount,
+                    pushed = if (report.pushedChangeset != null) 1 else 0,
+                    changed = report.totalChanged,
+                )
+                val now = System.currentTimeMillis()
+                stateStore.recordSync(now, summary)
+                syncPreferences.lastSyncTimestamp.set(now)
                 syncPreferences.lastSyncSummary.set(summary)
                 syncPreferences.lastSyncError.set("")
-                if (isManual) {
-                    notifier.showSyncComplete(summary)
-                } else {
-                    notifier.cancelProgress()
-                }
-                logcat(LogPriority.INFO) { "Library sync completed successfully: $summary" }
+                if (isManual) notifier.showSyncComplete(summary) else notifier.cancelProgress()
+                logcat(LogPriority.INFO) { "Drive sync completed: $summary" }
                 Result.success()
             } else {
-                val err = report.errorMessage ?: "Unknown error"
-                syncPreferences.lastSyncError.set(err)
-                if (isManual) notifier.showSyncError(err)
-                logcat(LogPriority.ERROR) { "Library sync failed: $err" }
-                Result.retry()
+                val error = DriveSyncError.classifyMessage(report.errorMessage)
+                logcat(LogPriority.ERROR) { "Drive sync failed: $error" }
+                fail(error, retry = error == DriveSyncError.NETWORK || error == DriveSyncError.UNKNOWN)
             }
-        } catch (e: mihon.sync.transport.http.SyncPairingException) {
-            logcat(LogPriority.ERROR, e) { "Library sync failed: pairing expired" }
-            val msg = SyncStrings.pairingExpired
-            syncPreferences.lastSyncError.set(msg)
-            if (isManual) notifier.showSyncError(msg)
-            Result.failure()
         } catch (e: Exception) {
-            logcat(LogPriority.ERROR, e) { "Library sync worker crashed" }
-            syncPreferences.lastSyncError.set(e.message ?: "Unknown error")
-            if (isManual) notifier.showSyncError(e.message)
-            Result.failure()
+            val error = DriveSyncError.classify(e)
+            logcat(LogPriority.ERROR, e) { "Drive sync failed: $error" }
+            fail(error, retry = error == DriveSyncError.NETWORK)
         } finally {
-            try {
-                cleanupTransport.close()
-            } catch (_: Throwable) {}
+            client.dispatcher.executorService.shutdown()
+            client.connectionPool.evictAll()
             notifier.cancelProgress()
         }
     }

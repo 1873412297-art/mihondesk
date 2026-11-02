@@ -72,8 +72,6 @@ import eu.kanade.presentation.components.AppStateBanners
 import eu.kanade.presentation.components.DownloadedOnlyBannerBackgroundColor
 import eu.kanade.presentation.components.IncognitoModeBannerBackgroundColor
 import eu.kanade.presentation.components.IndexingBannerBackgroundColor
-import eu.kanade.presentation.more.settings.screen.SettingsLibrarySyncScreen
-import eu.kanade.presentation.more.settings.screen.SyncPairingConfirmScreen
 import eu.kanade.presentation.more.settings.screen.browse.ExtensionStoresScreen
 import eu.kanade.presentation.more.settings.screen.data.RestoreBackupScreen
 import eu.kanade.presentation.util.AssistContentScreen
@@ -81,7 +79,6 @@ import eu.kanade.presentation.util.DefaultNavigatorScreenTransition
 import eu.kanade.tachiyomi.data.cache.ChapterCache
 import eu.kanade.tachiyomi.data.download.DownloadCache
 import eu.kanade.tachiyomi.data.notification.NotificationReceiver
-import eu.kanade.tachiyomi.data.sync.SyncStrings
 import eu.kanade.tachiyomi.extension.ExtensionManager
 import eu.kanade.tachiyomi.extension.api.ExtensionApi
 import eu.kanade.tachiyomi.ui.base.activity.BaseActivity
@@ -590,14 +587,6 @@ class MainActivity : BaseActivity() {
                     intent.data?.getQueryParameter("url")?.let { repoUrl ->
                         navigator.popUntilRoot()
                         navigator.push(ExtensionStoresScreen(repoUrl))
-                    }
-                }
-                // Sync pairing deep link (external QR scanner opened a mihonsync:// URI)
-                else if (intent.scheme == "mihonsync") {
-                    val parsed = intent.dataString?.let { mihon.sync.transport.http.SyncPairingCode.parseOrNull(it) }
-                    if (parsed != null) {
-                        navigator.popUntilRoot()
-                        navigator.push(SyncPairingConfirmScreen(parsed))
                     }
                 }
                 null

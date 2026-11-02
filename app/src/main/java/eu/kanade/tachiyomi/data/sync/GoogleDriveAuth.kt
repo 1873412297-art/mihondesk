@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.data.sync
 
-import android.app.Activity
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
@@ -42,8 +41,8 @@ object GoogleDriveAuth {
     }
 
     /** Parses the consent activity result returned from [Outcome.NeedsConsent]. */
-    fun fromConsentResult(activity: Activity, data: Intent?): Outcome =
-        toOutcome(Identity.getAuthorizationClient(activity).getAuthorizationResultFromIntent(data))
+    fun fromConsentResult(context: Context, data: Intent?): Outcome =
+        toOutcome(Identity.getAuthorizationClient(context).getAuthorizationResultFromIntent(data))
 
     private fun toOutcome(result: AuthorizationResult): Outcome {
         val token = result.accessToken
