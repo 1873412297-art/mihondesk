@@ -93,7 +93,8 @@ fun classifyDownloadFailure(message: String?): DownloadFailureReason {
         "http 429" in text || "rate_limited" in text -> DownloadFailureReason.RATE_LIMITED
         "web_verification" in text -> DownloadFailureReason.WEB_VERIFICATION
         "site_blocked" in text -> DownloadFailureReason.SITE_BLOCKED
-        "http 401" in text || "http 403" in text || "authentication_required" in text ->
+        "http 401" in text || "http 403" in text || "authentication_required" in text ||
+            "website denied access" in text || "网站拒绝访问" in text || "網站拒絕存取" in text ->
             DownloadFailureReason.AUTHENTICATION
         "page list is empty" in text -> DownloadFailureReason.EMPTY_CHAPTER
         "unsupported image" in text || "invalid image" in text || "not an image" in text ->

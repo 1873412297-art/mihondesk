@@ -48,6 +48,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.awt.Color
 import java.awt.image.BufferedImage
+import java.io.IOException
 import java.nio.file.Path
 
 @OptIn(ExperimentalTestApi::class)
@@ -294,6 +295,20 @@ class ReaderScreenTest {
         onNodeWithText(failure.message!!).assertDoesNotExist()
         onNodeWithTag("reader-error-details").performClick()
         onNodeWithText(failure.message!!).assertExists()
+    }
+
+    @Test
+    fun `source http denial explains access instead of a missing chapter`() = runComposeUiTest(
+        testTimeout = UI_TEST_TIMEOUT,
+    ) {
+        val failure = IOException("網站拒絕存取，請先在 WebView 開啟網站確認，或稍後重試")
+        val session = FakeReaderSession(
+            ReaderState(
+                loadState = ReaderLoadState.Failed(ReaderSessionError(ReaderErrorCode.SOURCE_UNAVAILABLE, failure)),
+            ),
+        )
+        setReaderScreen(session, settingsStore())
+        onNodeWithTag("reader-error").assertTextContains("Website denied access")
     }
 
     @Test

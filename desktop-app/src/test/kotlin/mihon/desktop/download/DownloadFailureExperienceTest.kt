@@ -42,6 +42,10 @@ class DownloadFailureExperienceTest {
         ) shouldBe
             DownloadFailureReason.DOMAIN_DENIED
         classifyDownloadFailure("Unexpected parser response") shouldBe DownloadFailureReason.UNKNOWN
+        val hipmhDenied = "網站拒絕存取，請先在 WebView 開啟網站確認，或稍後重試"
+        classifyDownloadFailure(hipmhDenied) shouldBe DownloadFailureReason.AUTHENTICATION
+        classifyDownloadFailure(IOException(hipmhDenied)) shouldBe DownloadFailureReason.AUTHENTICATION
+        classifyDownloadFailure("网站拒绝访问") shouldBe DownloadFailureReason.AUTHENTICATION
     }
 
     @Test
