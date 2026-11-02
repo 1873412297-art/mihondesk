@@ -23,16 +23,16 @@ AI 辅助开发的开源项目 · 基于 Mihon · Kotlin / Compose Desktop
 
 ## 下载与安装
 
-当前版本：**0.3.7**。面向 **Windows 10 22H2 / Windows 11，x64**，发行包已内置 JetBrains Runtime 21（JBR），无需另装 Java。
+当前版本：**0.3.17**。面向 **Windows 10 22H2 / Windows 11，x64**，发行包已内置 JetBrains Runtime 21（JBR），无需另装 Java。
 
 程序、安装包和快捷方式现已统一命名为 **mihondesk**。安装版继续使用原有数据目录，支持从 MihonW 升级。
 
 | 下载 | 适用方式 |
 | --- | --- |
-| **[EXE 安装包](https://github.com/1873412297-art/mihondesk/releases/download/v0.3.7/mihondesk-0.3.7.exe)** | 推荐使用，下载后按向导安装 |
-| [MSI 安装包](https://github.com/1873412297-art/mihondesk/releases/download/v0.3.7/mihondesk-0.3.7.msi) | 需要 MSI 安装方式时使用 |
-| [便携 ZIP](https://github.com/1873412297-art/mihondesk/releases/download/v0.3.7/mihondesk-0.3.7-windows-x64-portable.zip) | 完整解压到可写目录，运行其中的 `mihondesk.exe` |
-| [SHA-256 校验文件](https://github.com/1873412297-art/mihondesk/releases/download/v0.3.7/SHA256SUMS.txt) | 校验下载文件的完整性 |
+| **[EXE 安装包](https://github.com/1873412297-art/mihondesk/releases/download/v0.3.17/mihondesk-0.3.17.exe)** | 推荐使用，下载后按向导安装 |
+| [MSI 安装包](https://github.com/1873412297-art/mihondesk/releases/download/v0.3.17/mihondesk-0.3.17.msi) | 需要 MSI 安装方式时使用 |
+| [便携 ZIP](https://github.com/1873412297-art/mihondesk/releases/download/v0.3.17/mihondesk-0.3.17-windows-x64-portable.zip) | 完整解压到可写目录，运行其中的 `mihondesk.exe` |
+| [SHA-256 校验文件](https://github.com/1873412297-art/mihondesk/releases/download/v0.3.17/SHA256SUMS.txt) | 校验下载文件的完整性 |
 
 **首次使用**：发行包不预装在线图源或扩展仓库，请自行添加仓库或安装扩展。本地文件阅读无需安装图源。升级会保留已有书架、设置和阅读数据。
 
@@ -55,7 +55,7 @@ AI 辅助开发的开源项目 · 基于 Mihon · Kotlin / Compose Desktop
 | 离线与更新 | 章节下载、下载队列恢复、从下载页直接阅读已完成内容，以及书库章节更新 |
 | 备份与恢复 | 导入、导出 Mihon 兼容备份；具体字段支持范围见下方兼容说明 |
 | 界面与操作 | 浅色 / 深色 / AMOLED 主题与 Ink 配色、可折叠导航栏、界面密度、可自定义键盘快捷键、简体 / 繁体中文与英文界面 |
-| 手机书架同步 | 桌面端开启内置同步服务器后，手机扫码 / 局域网发现 / 配对码完成配对，收藏、已读、分类与阅读进度双向自动同步（0.2.20 起） |
+| 书架同步 | 通过 Google Drive 中仅本应用可见的文件夹，同步书架、分类和阅读进度。桌面端在浏览器登录，手机端使用系统账号授权 |
 
 ## 开始使用
 
@@ -63,6 +63,16 @@ AI 辅助开发的开源项目 · 基于 Mihon · Kotlin / Compose Desktop
 2. **阅读本地文件**：使用本地导入入口选择漫画文件或图片目录。
 3. **阅读在线内容**：在浏览页安装扩展包，再选择图源。安装入口支持 `.mext`，也可尝试转换受支持的扩展 `.apk`。
 4. **保留阅读数据**：使用备份功能定期导出。备份不包含已下载的漫画图片。
+
+## 0.3.17 更新
+
+- **同步**：局域网同步和扫码配对已移除，只保留 Google Drive。桌面端用浏览器登录，Android 用系统账号授权；
+- **阅读器**：网站拒绝访问（例如嗨皮漫画 HTTP 403）现在显示「网站拒绝访问」，不再误报成图源或本地章节不可用。另有条漫自动滚动、跨页合图、优先扫描组和卷标题；
+- **图源与扩展**：默认可信任 Keiyoushi 官方签名，可安装本地 Tachiyomi APK。站点可注册域的子域名会被放行。TLS 默认使用现代套件，握手被重置时按主机回退。WebView 验证通过后，后续请求会带上该验证会话；
+- **界面与启动**：启动页每次启动播放（可关闭）；主窗口先出现，同步和扫描延后到界面可交互之后。活动中心、更新提醒、缺扩展提示、更新/历史重做、书架详情栏，以及浏览筛选的下拉和分组芯片；
+- 说明：0.3.8–0.3.16 为未发布的本地迭代版本，内容随本版一并发布（同版本号 MSI 会被 Windows Installer 拒绝覆盖）。
+
+详见[本版发布说明](https://github.com/1873412297-art/mihondesk/releases/tag/v0.3.17)和[更新日志](CHANGELOG.md)。
 
 ## 0.3.7 更新
 
@@ -91,7 +101,7 @@ AI 辅助开发的开源项目 · 基于 Mihon · Kotlin / Compose Desktop
 
 ## 当前限制
 
-mihondesk 仍在持续开发，桌面端尚未覆盖 Mihon 的全部功能。当前版本号为独立序列（`0.x`，现为 0.3.7），与上游 mihon `0.20.x` 无对应关系。以下限制基于[功能覆盖快照](docs/superpowers/evidence/suwayomi-feature-coverage.md)与原设计完成标准，会随验证进展持续收敛：
+mihondesk 仍在持续开发，桌面端尚未覆盖 Mihon 的全部功能。当前版本号为独立序列（`0.x`，现为 0.3.17），与上游 mihon `0.20.x` 无对应关系。以下限制基于[功能覆盖快照](docs/superpowers/evidence/suwayomi-feature-coverage.md)与原设计完成标准，会随验证进展持续收敛：
 
 - **扩展与图源兼容性**：扩展可安装并加载，不代表该图源的浏览→详情→章节→图片全链可用。部分站点需要验证码或登录。2026-09-20 端到端矩阵实测：MangaDex / NHentai 全链通过，BiliManga 除搜索外全链通过（搜索需登录），MangaFire 被 Cloudflare 封锁（需人工过验证），MangaPlus 因地区封锁不可用（其 API 对本网络返回错误信封；兼容层 Filter.Select 缺陷当日已修复，授权地区网络下有望通过）。详见[扩展兼容矩阵](docs/suwayomi-extension-compatibility.md)。
 - **Tracker 账户**：11 个服务均有实现与本地契约测试。2026-09-22 生产实测：**Bangumi** 与 **AniList** 已完成登录→搜索绑定→进度写入→重进保持→解绑全链验证；其余服务（MyAnimeList、Kitsu、Shikimori、MangaUpdates、Hikka、MangaBaka 及自托管 Komga / Kavita / Suwayomi）尚待账户或实例就绪后继续联调，新增服务的 OAuth 自动登录配置也未完成。

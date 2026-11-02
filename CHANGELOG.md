@@ -2,6 +2,14 @@
 
 这里记录 mihondesk Windows 版的更新。安装包与完整发布说明见 [GitHub Releases](https://github.com/1873412297-art/mihondesk/releases)。继承自 Android 上游的历史日志保留在 [Mihon 更新日志](docs/upstream/MIHON_CHANGELOG.md)。
 
+## [0.3.17](https://github.com/1873412297-art/mihondesk/releases/tag/v0.3.17)
+
+- **同步**：局域网同步和扫码配对已移除，只保留 Google Drive。桌面端在浏览器登录，Android 使用系统账号授权；
+- **阅读器**：网站拒绝访问时显示「网站拒绝访问」，不再误报成图源或本地章节不可用；条漫自动滚动、跨页合图、优先扫描组与卷标题；
+- **图源与扩展**：默认可信任 Keiyoushi 官方签名，可安装本地 Tachiyomi APK；站点子域名放行；TLS 握手失败时按主机回退兼容套件；WebView 验证会话会用于后续请求；
+- **界面与启动**：启动页可每次播放；主窗口先出现。活动中心、更新提醒、缺扩展提示、更新/历史重做、书架详情栏，以及浏览筛选的下拉和分组芯片；
+- 说明：0.3.8–0.3.16 为未发布的本地迭代版本，内容随本版一并发布。
+
 ## [0.3.7](https://github.com/1873412297-art/mihondesk/releases/tag/v0.3.7)
 
 - **界面与品牌**：Ink 暖纸配色与新图标、首次运行启动页、JBR 自定义标题栏、可折叠导航栏与界面密度、设置侧栏分组、可自定义快捷键；
