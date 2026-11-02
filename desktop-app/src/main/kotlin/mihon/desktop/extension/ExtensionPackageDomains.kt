@@ -13,7 +13,7 @@ internal object ExtensionPackageDomains {
         if (manifest.declaredDomains.isNotEmpty() ||
             !manifest.id.startsWith("eu.kanade.tachiyomi.extension.")
         ) {
-            return manifest.declaredDomains
+            return withSiteSubdomains(manifest.declaredDomains)
         }
         val domains = linkedSetOf<String>()
         val bareHosts = linkedSetOf<String>()
@@ -45,12 +45,27 @@ internal object ExtensionPackageDomains {
         }
         // Image/API servers are often stored as bare hosts (e.g. "hip-cf-1.s3imgs.top"). Accept them only
         // when they share a parent domain with a URL host already found, so arbitrary literals stay denied.
-        val parents = domains.map(::parentDomain).toSet()
+        val parents = domains.mapNotNull(::parentDomain).toSet()
         bareHosts.filterTo(domains) { parentDomain(it) in parents }
-        return domains.toList()
+        return withSiteSubdomains(domains.toList())
     }
 
-    private fun parentDomain(host: String): String = host.split('.').takeLast(2).joinToString(".")
+    /**
+     * Sources build API/image hosts at runtime (vomic: "https://vomicmh.com" in code, api.vomicmh.com on
+     * the wire). Allow subdomains of each site's registrable domain (public-suffix aware, so
+     * "x.github.io" never widens to "*.github.io"), but nothing outside that site.
+     */
+    private fun withSiteSubdomains(domains: List<String>): List<String> {
+        val result = linkedSetOf<String>()
+        domains.forEach { domain ->
+            result += domain
+            if (domain.startsWith("*")) return@forEach
+            parentDomain(domain)?.let { result += "*.$it" }
+        }
+        return result.toList()
+    }
+
+    private fun parentDomain(host: String): String? = "https://$host/".toHttpUrlOrNull()?.topPrivateDomain()
 
     private val URL = Regex("https?://[a-zA-Z0-9.-]+(?::[0-9]+)?")
     private val BARE_HOST = Regex("(?:[a-zA-Z0-9-]+\\.)+[a-zA-Z]{2,}")

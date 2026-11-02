@@ -46,11 +46,11 @@ class ExtensionPackageDomainsTest {
             sources = emptyList(),
         )
         assertEquals(
-            setOf("www.example.org", "api.example.org"),
+            setOf("www.example.org", "api.example.org", "*.example.org"),
             ExtensionPackageDomains.resolve(file, manifest).toSet(),
         )
         assertEquals(
-            listOf("explicit.example.org"),
+            listOf("explicit.example.org", "*.example.org"),
             ExtensionPackageDomains.resolve(file, manifest.copy(declaredDomains = listOf("explicit.example.org"))),
         )
         assertEquals(emptyList<String>(), ExtensionPackageDomains.resolve(file, manifest.copy(id = "native.fixture")))
@@ -90,7 +90,14 @@ class ExtensionPackageDomainsTest {
             sources = emptyList(),
         )
         assertEquals(
-            setOf("cover.s3imgs.top", "m.hipmh.com", "hip-cf-1.s3imgs.top", "hip-tx-s1.s3imgs.top"),
+            setOf(
+                "cover.s3imgs.top",
+                "m.hipmh.com",
+                "hip-cf-1.s3imgs.top",
+                "hip-tx-s1.s3imgs.top",
+                "*.s3imgs.top",
+                "*.hipmh.com",
+            ),
             ExtensionPackageDomains.resolve(file, manifest).toSet(),
         )
     }
