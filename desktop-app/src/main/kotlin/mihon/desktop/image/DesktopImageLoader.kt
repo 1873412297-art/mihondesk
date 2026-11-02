@@ -64,6 +64,7 @@ class DesktopImageLoader(
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(20, TimeUnit.SECONDS)
         .proxySelector(mihon.desktop.extension.DesktopPolicyProxySelector(policyProvider))
+        .connectionSpecs(mihon.desktop.extension.DesktopTls.connectionSpecs)
         .build(),
     private val customCoverManager: CustomCoverManager? = null,
     private val maxMemoryEntries: Int = 120,

@@ -28,7 +28,8 @@ internal val DownloadFailureReason.title: UiText
 
 internal val DownloadFailureReason.hint: UiText
     get() = when (this) {
-        DownloadFailureReason.TLS, DownloadFailureReason.TIMEOUT, DownloadFailureReason.OFFLINE,
+        DownloadFailureReason.TLS -> UiText.HintTls
+        DownloadFailureReason.TIMEOUT, DownloadFailureReason.OFFLINE,
         DownloadFailureReason.PROXY, DownloadFailureReason.CONNECTION,
         -> UiText.HintNetwork
         DownloadFailureReason.RATE_LIMITED -> UiText.HintRateLimit

@@ -42,7 +42,13 @@ class DesktopNetworkHelper(
     private val policyProvider: () -> DesktopNetworkPolicy = { DesktopNetworkPolicy() },
 ) : AutoCloseable {
     // Redirects are followed here so every destination uses its own permissions and session.
-    private val baseClient = client.newBuilder().followRedirects(false).followSslRedirects(false).build()
+    private val baseClient = client.newBuilder()
+        .followRedirects(false)
+        .followSslRedirects(false)
+        .connectionSpecs(DesktopTls.connectionSpecs)
+        .build()
+
+    internal fun connectionSpecs(): List<okhttp3.ConnectionSpec> = currentClient().connectionSpecs
 
     @Volatile private var client = baseClient
     private var appliedPolicy: DesktopNetworkPolicy? = null
@@ -164,6 +170,11 @@ class DesktopNetworkHelper(
                 }
             else -> NetworkFailureKind.CONNECTION
         }
+        mihon.desktop.logging.DesktopLogger.warn(
+            "DesktopNetworkHelper",
+            "Brokered ${request.method} ${request.url} failed ($kind) for ${request.extensionId ?: request.sourceId}",
+            failure,
+        )
         BrokerHttpResponse(502, error = "$kind: ${failure.message}", failureKind = kind)
     }
 
@@ -182,6 +193,7 @@ class DesktopNetworkHelper(
             headers[key] = values
         }
         repeat(MAX_REDIRECTS + 1) { hop ->
+            mihon.desktop.logging.DesktopLogger.debug("DesktopNetworkHelper", "Forwarding $method $url for $identity")
             if (url != permittedCdnRedirect && !isDomainAllowed(url.host, owner)) {
                 throw SecurityException(
                     "Access denied: domain '${url.host}' is not declared for ${owner ?: "the request"}",

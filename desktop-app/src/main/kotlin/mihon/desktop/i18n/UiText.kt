@@ -253,6 +253,11 @@ enum class UiText(val english: String, val simplified: String, val traditional: 
         "请稍后重试；若持续出现，请检查网络和代理设置。",
         "請稍後重試；若持續出現，請檢查網路和代理設定。",
     ),
+    HintTls(
+        "The website closed the secure connection. Retry later; if it keeps failing, open the source in WebView or report it to the source.",
+        "网站中断了安全连接。请稍后重试；若持续出现，请在网页中打开该图源或向图源反馈。",
+        "網站中斷了安全連線。請稍後重試；若持續出現，請在網頁中開啟該圖源或向圖源回報。",
+    ),
     HintRateLimit(
         "Wait a while, then retry. Reducing parallel downloads may help.",
         "请等待一段时间再重试，也可降低同时下载的数量。",
