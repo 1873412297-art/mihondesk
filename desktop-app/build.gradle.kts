@@ -5,6 +5,7 @@ import java.net.URI
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.security.MessageDigest
+import java.util.Properties
 
 plugins {
     alias(libs.plugins.kotlin.jvm)
@@ -40,8 +41,39 @@ val generateDesktopVersion by tasks.registering {
     }
 }
 sourceSets.main { resources.srcDir(generatedVersionResources) }
+// Google Drive OAuth client (installed app). The secret is NEVER committed: it is read from the
+// gradle property / local.properties key `gdrive.clientSecret` (or env GDRIVE_CLIENT_SECRET) and
+// written to a generated resource under build/ at package time.
+val gdriveLocalProperties = Properties().apply {
+    rootProject.file("local.properties").takeIf { it.isFile }?.reader()?.use { load(it) }
+}
+fun gdriveSetting(key: String, env: String): Provider<String> =
+    providers.gradleProperty(key)
+        .orElse(providers.environmentVariable(env))
+        .orElse(provider { gdriveLocalProperties.getProperty(key).orEmpty() })
+val gdriveClientId = gdriveSetting("gdrive.clientId", "GDRIVE_CLIENT_ID")
+val gdriveClientSecret = gdriveSetting("gdrive.clientSecret", "GDRIVE_CLIENT_SECRET")
+val generatedGdriveResources = layout.buildDirectory.dir("generated/gdrive-resources")
+val generateGdriveConfig by tasks.registering {
+    inputs.property("clientId", gdriveClientId)
+    inputs.property("clientSecretPresent", gdriveClientSecret.map { it.isNotBlank() })
+    inputs.property("clientSecretHash", gdriveClientSecret.map { it.hashCode() })
+    outputs.dir(generatedGdriveResources)
+    doLast {
+        val out = generatedGdriveResources.get().file("mihon-gdrive.properties").asFile
+        out.parentFile.mkdirs()
+        val props = Properties()
+        gdriveClientId.get().takeIf { it.isNotBlank() }?.let { props.setProperty("clientId", it) }
+        gdriveClientSecret.get().takeIf { it.isNotBlank() }?.let { props.setProperty("clientSecret", it) }
+        out.writer().use { props.store(it, null) }
+        if (gdriveClientSecret.get().isBlank()) {
+            logger.warn("gdrive.clientSecret not set: Google Drive sync will show 'not configured'.")
+        }
+    }
+}
+sourceSets.main { resources.srcDir(generatedGdriveResources) }
 tasks.named<ProcessResources>("processResources") {
-    dependsOn(generateDesktopVersion)
+    dependsOn(generateDesktopVersion, generateGdriveConfig)
     from(rootProject.file("scripts/mihondesk-updater.ps1"))
 }
 
@@ -80,6 +112,7 @@ dependencies {
     implementation(project(":extension-host"))
     implementation(project(":sync-server"))
     implementation(project(":sync-transport-http"))
+    implementation(project(":sync-transport-gdrive"))
     implementation(libs.jna.platform)
     implementation("org.jetbrains.runtime:jbr-api:1.10.1")
     implementation(compose.desktop.currentOs)
