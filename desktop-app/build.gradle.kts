@@ -138,7 +138,7 @@ dependencies {
 }
 
 tasks.test {
-    useJUnitPlatform()
+    useJUnitPlatform { excludeTags("network") }
     systemProperty("mihon.desktop.expectedVersion", desktopVersion)
 }
 
@@ -500,4 +500,16 @@ val assembleWindowsRelease by tasks.registering(Sync::class) {
 // Real APK manifest fixtures are binary AXML despite their .xml suffix; preserve exact bytes.
 configure<com.diffplug.gradle.spotless.SpotlessExtension> {
     format("xml") { targetExclude("src/test/resources/real-manifests/**") }
+}
+
+// Network-dependent TLS matrix; see TlsCompatibilityDiagnostic. Not part of :test.
+tasks.register<Test>("tlsDiagnostics") {
+    testClassesDirs = sourceSets.test.get().output.classesDirs
+    classpath = sourceSets.test.get().runtimeClasspath
+    useJUnitPlatform { includeTags("network") }
+    outputs.upToDateWhen { false }
+    testLogging.showStandardStreams = true
+    listOf("mihon.diag.proxy", "mihon.diag.hosts", "javax.net.debug").forEach { key ->
+        System.getProperty(key)?.let { systemProperty(key, it) }
+    }
 }
