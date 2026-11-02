@@ -250,6 +250,13 @@ fun BrowseSourceScreen(
                             mihon.desktop.download.classifyDownloadFailure(error),
                         )
                     mihon.desktop.ui.common.ErrorDetails(error, "source-error")
+                    if (onOpenWebPage != null && suggestsWebVerification(error, state.networkFailure)) {
+                        Text(strings.text(mihon.desktop.i18n.UiText.HintWebVerificationAction))
+                        OutlinedButton(
+                            onClick = onOpenWebPage,
+                            modifier = Modifier.testTag("source-verify-webview"),
+                        ) { Text(strings.text(mihon.desktop.i18n.UiText.SourceVerifyInWebView)) }
+                    }
                 }
                 Button(onClick = onRetry) { Text(strings.libraryRetry) }
             }

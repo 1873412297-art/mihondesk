@@ -45,7 +45,7 @@ class DesktopNetworkHelper(
     private val baseClient = client.newBuilder()
         .followRedirects(false)
         .followSslRedirects(false)
-        .connectionSpecs(DesktopTls.connectionSpecs)
+        .connectionSpecs(DesktopTls.defaultSpecs)
         .build()
 
     internal fun connectionSpecs(): List<okhttp3.ConnectionSpec> = currentClient().connectionSpecs
@@ -76,7 +76,7 @@ class DesktopNetworkHelper(
                 )
             }
             client.connectionPool.evictAll()
-            client = builder.build()
+            client = builder.withTlsFallback()
             appliedPolicy = policy
         }
         return client
@@ -201,20 +201,25 @@ class DesktopNetworkHelper(
             }
             val builder = Request.Builder().url(url)
             headers.forEach { (key, values) -> values.forEach { builder.addHeader(key, it) } }
-            if (headers.keys.none { it.equals("User-Agent", true) }) {
+            val stored = cookieStore?.loadForRequest(identity, url)
+                ?: memoryCookies[identity].orEmpty().filter {
+                    it.expiresAt > System.currentTimeMillis() && it.matches(url)
+                }
+            // Cloudflare binds cf_clearance to the browser that solved the challenge, so a verified
+            // session must be replayed with the WebView's User-Agent even if the extension sets its own.
+            val verified = stored.any { it.name == "cf_clearance" }
+            if (verified || headers.keys.none { it.equals("User-Agent", true) }) {
                 builder.header("User-Agent", userAgentFor(url.toString()))
             }
-            if (headers.keys.none { it.equals("Cookie", true) }) {
-                val stored = cookieStore?.loadForRequest(identity, url)
-                    ?: memoryCookies[identity].orEmpty().filter {
-                        it.expiresAt > System.currentTimeMillis() && it.matches(url)
-                    }
-                val selected = stored.joinToString("; ") { "${it.name}=${it.value}" }
-                // User-entered cookies have no Secure metadata and are restricted to HTTPS.
-                val manual = if (url.isHttps) cookieStore?.getCookieHeader(url.host) else null
-                val value = listOfNotNull(selected.takeIf { it.isNotBlank() }, manual).joinToString("; ")
-                if (value.isNotBlank()) builder.header("Cookie", value)
-            }
+            val ownCookie = headers.entries.filter { it.key.equals("Cookie", true) }
+                .flatMap { it.value }.joinToString("; ").takeIf { it.isNotBlank() }
+            val ownNames = ownCookie.orEmpty().split(';').map { it.substringBefore('=').trim() }.toSet()
+            // Extension cookies win on name clashes; session cookies (e.g. cf_clearance) are appended.
+            val selected = stored.filter { it.name !in ownNames }.joinToString("; ") { "${it.name}=${it.value}" }
+            // User-entered cookies have no Secure metadata and are restricted to HTTPS.
+            val manual = if (url.isHttps && ownCookie == null) cookieStore?.getCookieHeader(url.host) else null
+            val value = listOfNotNull(ownCookie, selected.takeIf { it.isNotBlank() }, manual).joinToString("; ")
+            if (value.isNotBlank()) builder.header("Cookie", value)
             val contentType = headers.entries.firstOrNull { it.key.equals("Content-Type", true) }?.value?.firstOrNull()
             val body = when (method) {
                 "GET", "HEAD" -> null

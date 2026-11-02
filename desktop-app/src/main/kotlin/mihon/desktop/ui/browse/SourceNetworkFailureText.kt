@@ -28,3 +28,14 @@ internal fun sourceNetworkFailureText(failure: NetworkFailure): String {
     ).joinToString(" · ")
     return listOf(detail, context).filter { it.isNotBlank() }.joinToString("\n")
 }
+
+private val VERIFICATION_TEXT =
+    Regex("""\b(HTTP error 403|HTTP 403|cloudflare|cf-chl|just a moment)""", RegexOption.IGNORE_CASE)
+
+/** A 403 or Cloudflare challenge usually clears after the user passes the check in the source's web view. */
+internal fun suggestsWebVerification(errorMessage: String?, failure: NetworkFailure?): Boolean = when (failure?.kind) {
+    NetworkFailureKind.WEB_VERIFICATION -> true
+    NetworkFailureKind.AUTHENTICATION_REQUIRED -> failure.statusCode == 403
+    null -> errorMessage != null && VERIFICATION_TEXT.containsMatchIn(errorMessage)
+    else -> false
+}

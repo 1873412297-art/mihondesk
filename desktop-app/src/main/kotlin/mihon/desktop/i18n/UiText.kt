@@ -659,6 +659,12 @@ enum class UiText(val english: String, val simplified: String, val traditional: 
         "网站已封锁访问。可打开网页确认；如果网页也显示封锁，需要网站解除限制，应用重试无法解除。",
         "網站已封鎖存取。可開啟網頁確認；如果網頁也顯示封鎖，需要網站解除限制，應用程式重試無法解除。",
     ),
+    SourceVerifyInWebView("Verify in web view", "在网页中验证", "在網頁中驗證"),
+    HintWebVerificationAction(
+        "The site refused the request (HTTP 403 / Cloudflare check). Open it in the web view, pass the check, then choose Done, retry.",
+        "网站拒绝了请求（HTTP 403 / Cloudflare 验证）。请在网页中打开并通过验证，再点击“完成并重试”。",
+        "網站拒絕了請求（HTTP 403 / Cloudflare 驗證）。請在網頁中開啟並通過驗證，再點擊「完成並重試」。",
+    ),
     NetworkFailureWebVerification(
         "The website requires verification. Open its website, complete verification, then choose Done, retry.",
         "网站需要网页验证。请打开网页完成验证，再点击“完成并重试”。",
