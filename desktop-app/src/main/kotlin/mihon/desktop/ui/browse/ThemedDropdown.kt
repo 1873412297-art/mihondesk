@@ -1,4 +1,4 @@
-﻿package mihon.desktop.ui.browse
+package mihon.desktop.ui.browse
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
@@ -20,11 +20,14 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.surfaceColorAtElevation
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -35,6 +38,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 
@@ -110,7 +114,8 @@ fun ThemedDropdownSelect(
                 .heightIn(max = THEMED_DROPDOWN_MAX_HEIGHT)
                 .let { if (testTag != null) it.testTag("$testTag-menu") else it },
             shape = RoundedCornerShape(12.dp),
-            containerColor = colors.surfaceContainerHigh,
+            // Match SourceFilterDialog's Surface(color = surface, tonalElevation = 6.dp) exactly.
+            containerColor = colors.surfaceColorAtElevation(6.dp),
             tonalElevation = 0.dp,
             shadowElevation = 6.dp,
             border = BorderStroke(1.dp, colors.outlineVariant),
@@ -155,34 +160,37 @@ fun GroupedSelectChips(
     modifier: Modifier = Modifier,
 ) {
     val groups = remember(options) { groupSelectOptions(options) }
-    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        groups.forEach { group ->
-            if (group.header != null) {
-                Text(
-                    text = group.header,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                group.options.forEach { option ->
-                    FilterChip(
-                        selected = option.index == selectedIndex,
-                        onClick = { onSelect(option.index) },
-                        label = { Text(option.label) },
-                        shape = RoundedCornerShape(8.dp),
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = MaterialTheme.colorScheme.primary,
-                            selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
-                        ),
-                        modifier = Modifier.testTag("filter-select-chip-${option.index}"),
+    // Drop the 48dp touch-target padding so wrapped chip rows stay compact on desktop.
+    CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
+        Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            groups.forEach { group ->
+                if (group.header != null) {
+                    Text(
+                        text = group.header,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    group.options.forEach { option ->
+                        FilterChip(
+                            selected = option.index == selectedIndex,
+                            onClick = { onSelect(option.index) },
+                            label = { Text(option.label) },
+                            shape = RoundedCornerShape(8.dp),
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
+                            ),
+                            modifier = Modifier.testTag("filter-select-chip-${option.index}"),
+                        )
+                    }
+                }
+                Spacer(Modifier.size(2.dp))
             }
-            Spacer(Modifier.size(2.dp))
         }
     }
 }
