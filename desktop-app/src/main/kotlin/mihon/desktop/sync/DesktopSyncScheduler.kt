@@ -55,6 +55,10 @@ class DesktopSyncScheduler(
     private var requestJob: Job? = null
     private val syncMutex = Mutex()
 
+    /** Optional Google Drive transport, synced alongside the LAN server. */
+    @Volatile
+    var googleDrive: mihon.desktop.sync.gdrive.GoogleDriveSyncService? = null
+
     @Volatile
     var lastReport: SyncReport? = null
         private set

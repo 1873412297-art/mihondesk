@@ -439,6 +439,22 @@ interface DesktopStrings {
 
     // Settings - Backup
     val settingsBackupTitle: String
+    val gdriveTitle: String
+    val gdriveDescription: String
+    val gdriveSignIn: String
+    val gdriveSigningIn: String
+    val gdriveSignOut: String
+    val gdriveStatusSignedIn: String
+    val gdriveStatusSignedOut: String
+    val gdriveSyncNow: String
+    val gdriveSyncing: String
+    val gdriveLastSync: String
+    val gdriveErrNotConfigured: String
+    val gdriveErrCancelled: String
+    val gdriveErrExpired: String
+    val gdriveErrNetwork: String
+    val gdriveErrCorrupt: String
+    val gdriveErrUnknown: String
     val settingsBackupDescription: String
     val settingsExportBackupButton: String
     val settingsImportBackupButton: String
@@ -1337,6 +1353,22 @@ object EnglishStrings : DesktopStrings {
     override val networkSettingsSave = "Save network settings"
 
     override val settingsBackupTitle = "Cross-Platform Backup Exchange"
+    override val gdriveTitle = "Google Drive Sync"
+    override val gdriveDescription = "Syncs library and progress via a private app-only folder in Google Drive."
+    override val gdriveSignIn = "Sign in with Google"
+    override val gdriveSigningIn = "Waiting for browser sign-in…"
+    override val gdriveSignOut = "Sign out"
+    override val gdriveStatusSignedIn = "Connected to Google Drive"
+    override val gdriveStatusSignedOut = "Not signed in"
+    override val gdriveSyncNow = "Sync now"
+    override val gdriveSyncing = "Syncing…"
+    override val gdriveLastSync = "Last sync:"
+    override val gdriveErrNotConfigured = "Google Drive is not configured in this build (missing client secret)."
+    override val gdriveErrCancelled = "Sign-in was cancelled or timed out. Please try again."
+    override val gdriveErrExpired = "Google authorization expired or was revoked. Please sign in again."
+    override val gdriveErrNetwork = "Could not reach Google. Check your network or proxy settings."
+    override val gdriveErrCorrupt = "Drive sync data is damaged; Sync now rebuilds it from this device."
+    override val gdriveErrUnknown = "Sync failed due to an unexpected error."
     override val settingsBackupDescription =
         "mihondesk produces full Android-compatible ProtoBuf .tachibk backups (gzipped) containing your library, categories, reading history, tracking records, and preferences."
     override val settingsExportBackupButton = "Export Backup (.tachibk)"
@@ -2335,6 +2367,22 @@ object SimplifiedChineseStrings : DesktopStrings {
     override val networkSettingsSave = "保存网络设置"
 
     override val settingsBackupTitle = "跨平台备份交换"
+    override val gdriveTitle = "Google Drive 同步"
+    override val gdriveDescription = "通过 Google Drive 中的私有应用文件夹同步书架、分类和阅读进度，该文件夹仅本应用可见。"
+    override val gdriveSignIn = "使用 Google 登录"
+    override val gdriveSigningIn = "正在等待浏览器登录…"
+    override val gdriveSignOut = "退出登录"
+    override val gdriveStatusSignedIn = "已连接 Google Drive"
+    override val gdriveStatusSignedOut = "未登录"
+    override val gdriveSyncNow = "立即同步"
+    override val gdriveSyncing = "同步中…"
+    override val gdriveLastSync = "上次同步："
+    override val gdriveErrNotConfigured = "此版本未配置 Google Drive（缺少客户端密钥）。"
+    override val gdriveErrCancelled = "登录已取消或超时，请重试。"
+    override val gdriveErrExpired = "Google 授权已过期或被撤销，请重新登录。"
+    override val gdriveErrNetwork = "无法连接 Google，请检查网络或代理设置。"
+    override val gdriveErrCorrupt = "Drive 中的同步数据已损坏，立即同步将用本机数据重建。"
+    override val gdriveErrUnknown = "同步失败，发生了意外错误。"
     override val settingsBackupDescription =
         "mihondesk 可生成与 Android 端完全兼容的 ProtoBuf .tachibk 备份 (gzip压缩)，包含书架、分类、阅读历史、追踪记录及设置。"
     override val settingsExportBackupButton = "导出备份 (.tachibk)"
@@ -3326,6 +3374,22 @@ object TraditionalChineseStrings : DesktopStrings {
     override val networkSettingsSave = "儲存網路設定"
 
     override val settingsBackupTitle = "跨平臺備份交換"
+    override val gdriveTitle = "Google Drive 同步"
+    override val gdriveDescription = "透過 Google Drive 中的私有應用程式資料夾同步書架、分類和閱讀進度，該資料夾僅本應用程式可見。"
+    override val gdriveSignIn = "使用 Google 登入"
+    override val gdriveSigningIn = "正在等待瀏覽器登入…"
+    override val gdriveSignOut = "登出"
+    override val gdriveStatusSignedIn = "已連線 Google Drive"
+    override val gdriveStatusSignedOut = "未登入"
+    override val gdriveSyncNow = "立即同步"
+    override val gdriveSyncing = "同步中…"
+    override val gdriveLastSync = "上次同步："
+    override val gdriveErrNotConfigured = "此版本未設定 Google Drive（缺少用戶端密鑰）。"
+    override val gdriveErrCancelled = "登入已取消或逾時，請重試。"
+    override val gdriveErrExpired = "Google 授權已過期或被撤銷，請重新登入。"
+    override val gdriveErrNetwork = "無法連線 Google，請檢查網路或代理設定。"
+    override val gdriveErrCorrupt = "Drive 中的同步資料已損毀，立即同步將以本機資料重建。"
+    override val gdriveErrUnknown = "同步失敗，發生了未預期的錯誤。"
     override val settingsBackupDescription =
         "mihondesk 可生成與 Android 端完全相容的 ProtoBuf .tachibk 備份 (gzip壓縮)，包含書架、分類、閱讀歷史、追蹤記錄及設定。"
     override val settingsExportBackupButton = "匯出備份 (.tachibk)"

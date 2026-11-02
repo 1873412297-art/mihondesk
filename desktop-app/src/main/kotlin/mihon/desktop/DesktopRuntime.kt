@@ -507,6 +507,25 @@ object DesktopRuntimeFactory {
                 scope = appScope,
                 activityCenter = activityCenter,
             )
+            syncScheduler.googleDrive = runCatching {
+                mihon.desktop.sync.gdrive.GoogleDriveSyncFactory.create(
+                    profileRoot = directories.root,
+                    scope = appScope,
+                    deviceId = {
+                        preferences.load().syncDeviceId.ifBlank {
+                            val id = java.util.UUID.randomUUID().toString()
+                            preferences.updatePreferences { it.copy(syncDeviceId = id) }
+                            id
+                        }
+                    },
+                    localRepository = { mihon.desktop.library.sync.SqlDelightSyncLocalRepository(library.database) },
+                    proxySelector = mihon.desktop.extension.DesktopPolicyProxySelector(
+                        { DesktopNetworkSettingsStore(preferences).load() },
+                    ),
+                )
+            }.onFailure {
+                mihon.desktop.logging.DesktopLogger.warn("DesktopRuntime", "Google Drive sync unavailable", it)
+            }.getOrNull()
             val syncServerManager = mihon.desktop.sync.DesktopSyncServerManager(
                 storageDir = directories.root.resolve("sync-server"),
                 onChangesetAccepted = syncScheduler::onRemoteChangeset,
@@ -602,6 +621,7 @@ object DesktopRuntimeFactory {
                         }
                     }
                     syncScheduler.start()
+                    syncScheduler.googleDrive?.requestSync()
                     val launchPreferences = preferences.load()
                     if (launchPreferences.backgroundTasksEnabled) {
                         StartupTrace.phase("background task reconcile") {

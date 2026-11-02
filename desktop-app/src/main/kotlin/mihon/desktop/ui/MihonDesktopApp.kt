@@ -1077,6 +1077,7 @@ fun ApplicationScope.MihonDesktopApp(
                                                     chapter.chapterNumber,
                                                 )
                                             }
+                                            runtime.syncScheduler?.googleDrive?.requestSync()
                                             if (prefs.downloadAhead > 0) {
                                                 runtime.downloader?.checkAndDownloadAhead(
                                                     manga = manga,

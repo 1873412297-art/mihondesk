@@ -3704,6 +3704,8 @@ private fun BackupSettingsPane(
                 }
             }
         }
+
+        syncScheduler?.googleDrive?.let { GoogleDriveSyncCard(it) }
     }
 }
 
