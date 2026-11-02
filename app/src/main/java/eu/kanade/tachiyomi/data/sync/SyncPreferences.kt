@@ -40,6 +40,9 @@ class SyncPreferences(
 
     val syncHttpToken: Preference<String> = preferenceStore.getString("sync_http_token", "")
 
+    /** When true, SyncWorker syncs through Google Drive appDataFolder instead of the LAN server. */
+    val googleDriveEnabled: Preference<Boolean> = preferenceStore.getBoolean("sync_gdrive_enabled", false)
+
     fun updateFromPairingCode(code: mihon.sync.transport.http.SyncPairingCode) {
         syncPairingCode.set(code.toUriString())
         syncHttpHost.set(code.host)

@@ -39,21 +39,33 @@ class SyncWorker(
             return Result.success()
         }
 
+        val useDrive = syncPreferences.googleDriveEnabled.get()
         val host = syncPreferences.syncHttpHost.get().trim()
         val port = syncPreferences.syncHttpPort.get()
         val token = syncPreferences.syncHttpToken.get().trim()
-        if (host.isBlank() || token.isBlank()) {
+        if (!useDrive && (host.isBlank() || token.isBlank())) {
             val errMsg = "HTTP sync server or token not configured"
             syncPreferences.lastSyncError.set(errMsg)
             if (isManual) notifier.showSyncError(errMsg)
             return Result.failure()
         }
-        val transport = mihon.sync.transport.http.HttpTransport(
-            baseUrl = "http://$host:$port",
-            token = token,
-            ownsClient = true,
-        )
-        val cleanupTransport: AutoCloseable = transport
+        val driveClient = if (useDrive) okhttp3.OkHttpClient() else null
+        val transport: mihon.sync.transport.api.SyncTransport = if (driveClient != null) {
+            GoogleDriveAuth.transport(context, driveClient)
+        } else {
+            mihon.sync.transport.http.HttpTransport(
+                baseUrl = "http://$host:$port",
+                token = token,
+                ownsClient = true,
+            )
+        }
+        val cleanupTransport = AutoCloseable {
+            (transport as? AutoCloseable)?.close()
+            driveClient?.let {
+                it.dispatcher.executorService.shutdown()
+                it.connectionPool.evictAll()
+            }
+        }
 
         setForegroundSafely()
 

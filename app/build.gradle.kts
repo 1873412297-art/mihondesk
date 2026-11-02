@@ -222,6 +222,8 @@ dependencies {
     implementation(projects.syncCore)
     implementation(projects.syncEngine)
     implementation(projects.syncTransportHttp)
+    implementation(projects.syncTransportGdrive)
+    implementation(libs.play.services.auth)
     implementation(projects.presentationCore)
     implementation(projects.presentationWidget)
     implementation(projects.telemetry)
