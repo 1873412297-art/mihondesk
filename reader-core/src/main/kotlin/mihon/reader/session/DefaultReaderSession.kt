@@ -180,6 +180,7 @@ class DefaultReaderSession(
             if (_state.value.loadState is ReaderLoadState.Ready) submitProgressLocked()
             progress.closeAndFlush()
             closeChapterLocked()
+            contentPipeline.awaitBackgroundRelease()
             closeContentPipelineLocked()
             closed = true
             actionQueue.cancel()
@@ -200,6 +201,7 @@ class DefaultReaderSession(
                 visibleJob?.cancel()
                 progress.cancelWithoutFlush()
                 closeChapterLocked()
+                contentPipeline.awaitBackgroundRelease()
                 closeContentPipelineLocked()
                 closed = true
                 _state.value =
@@ -416,6 +418,7 @@ class DefaultReaderSession(
             progress.flush()
         }
         closeChapterLocked()
+        contentPipeline.awaitBackgroundRelease()
     }
 
     private fun closeChapterLocked() {

@@ -1,8 +1,10 @@
 package mihon.desktop.reader
 
 import io.kotest.matchers.collections.shouldContainExactly
+import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -13,6 +15,8 @@ import mihon.reader.image.ImageIoPageDecoder
 import mihon.reader.image.ImageMetadata
 import mihon.reader.image.IntRect
 import mihon.reader.memory.BoundedReaderMemoryBudget
+import mihon.reader.memory.MemoryKind
+import mihon.reader.memory.MemoryLease
 import mihon.reader.model.PageDescriptor
 import mihon.reader.model.PageId
 import mihon.reader.model.ReadingMode
@@ -24,12 +28,14 @@ import mihon.reader.source.BoundedPageInput
 import mihon.reader.source.ChapterSource
 import mihon.reader.source.ChapterSourceFactory
 import mihon.reader.source.ReaderChapterAsset
+import mihon.reader.source.ReaderLimits
 import org.junit.jupiter.api.Test
 import java.awt.Color
 import java.awt.image.BufferedImage
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.nio.file.Path
+import java.util.concurrent.atomic.AtomicReference
 import javax.imageio.ImageIO
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -168,6 +174,58 @@ class DesktopReaderContentPipelineTest {
         waitForOpened(adjacent, expected = setOf(0, 1, 2)) { runCurrent() }
         adjacent.openedIndexes.distinct() shouldBe listOf(0, 2, 1)
 
+        pipeline.close()
+        budget.close()
+        cache.close()
+    }
+
+    @Test
+    fun `closing a chapter releases the adjacent decoder reservation before another open`() = runTest {
+        val allowance = ReaderLimits.SEVEN_Z_MEMORY_KIB * 1024L
+        val budget = BoundedReaderMemoryBudget(ReaderLimits.READER_MEMORY_BYTES)
+        val pinch = budget.tryReserve(MemoryKind.CACHE_RESIDENT, 1).shouldNotBeNull()
+        val held = AtomicReference<MemoryLease?>()
+        val adjacentAsset = asset(8)
+        val adjacent = object : ChapterSource {
+            override val asset = adjacentAsset
+
+            override suspend fun pages() = listOf(PageDescriptor(PageId("8", "page.png"), 1, 1))
+
+            override suspend fun open(pageId: PageId): BoundedPageInput {
+                suspendCancellableCoroutine<Unit> { continuation ->
+                    continuation.invokeOnCancellation { }
+                }
+                error("warmup page open resumed")
+            }
+
+            override fun close() {
+                held.getAndSet(null)?.close()
+            }
+        }
+        val cache = WeightedTileCache(4L * 1024L * 1024L)
+        val pipeline = DesktopReaderContentPipeline(
+            decoder = ImageIoPageDecoder(budget),
+            cache = cache,
+            scope = backgroundScope,
+            sourceFactory = ChapterSourceFactory {
+                val lease = budget.tryReserve(MemoryKind.DECODED_OUTPUT, allowance)
+                    ?: error("adjacent decoder reservation failed")
+                held.set(lease)
+                adjacent
+            },
+        )
+        pipeline.open(CountingSource(asset(7), pageCount = 1))
+        pipeline.warmAdjacent(AdjacentChapterWarmup(adjacentAsset, preloadFirstUnit = true, preloadCount = 1))
+        runCurrent()
+
+        held.get().shouldNotBeNull()
+        budget.tryReserve(MemoryKind.DECODED_OUTPUT, allowance) shouldBe null
+        pipeline.closeChapter()
+        pipeline.awaitBackgroundRelease()
+        val released = budget.tryReserve(MemoryKind.DECODED_OUTPUT, allowance).shouldNotBeNull()
+
+        released.close()
+        pinch.close()
         pipeline.close()
         budget.close()
         cache.close()

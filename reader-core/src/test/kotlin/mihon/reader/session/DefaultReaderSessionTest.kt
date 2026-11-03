@@ -285,6 +285,53 @@ class DefaultReaderSessionTest {
         pipeline.closed shouldBe 1
     }
 
+    @Test
+    fun `opening the next chapter waits for adjacent warmup to release`() = runTest {
+        val current = asset(chapterId = 1, lastPageRead = 0)
+        val next = asset(chapterId = 2, lastPageRead = 0)
+        val events = mutableListOf<String>()
+        val pipeline = object : RecordingContentPipeline() {
+            override fun closeChapter() {
+                super.closeChapter()
+                events += "close"
+            }
+
+            override suspend fun awaitBackgroundRelease() {
+                events += "release"
+            }
+        }
+        val session = DefaultReaderSession(
+            scope = backgroundScope,
+            catalog = object : ReaderChapterCatalog {
+                override fun chapterAsset(chapterId: Long) = when (chapterId) {
+                    1L -> current
+                    2L -> next
+                    else -> null
+                }
+
+                override fun adjacentReadableChapter(
+                    chapterId: Long,
+                    direction: mihon.reader.source.ChapterDirection,
+                ) = next.takeIf { chapterId == 1L && direction == mihon.reader.source.ChapterDirection.NEXT }
+            },
+            sourceFactory = ChapterSourceFactory { requested ->
+                events += "create"
+                FakeSource(requested, pages(requested.chapterId, 1))
+            },
+            progressSink = ReaderProgressSink { ProgressWriteResult.APPLIED },
+            generationSource = AtomicReaderGenerationSource(),
+            contentPipeline = pipeline,
+        )
+
+        session.open(1)
+        runCurrent()
+        session.open(2)
+        runCurrent()
+
+        events shouldBe listOf("release", "create", "close", "release", "create")
+        session.closeAndFlush()
+    }
+
     private fun pages(chapterId: Long, count: Int) =
         (0 until count).map { index ->
             mihon.reader.model.PageDescriptor(
@@ -355,7 +402,7 @@ class DefaultReaderSessionTest {
         override fun close() = Unit
     }
 
-    private class RecordingContentPipeline : ReaderContentPipeline {
+    private open class RecordingContentPipeline : ReaderContentPipeline {
         val opened = mutableListOf<Long>()
         val positions = mutableListOf<ReaderContentPosition>()
         val warmups = mutableListOf<AdjacentChapterWarmup?>()

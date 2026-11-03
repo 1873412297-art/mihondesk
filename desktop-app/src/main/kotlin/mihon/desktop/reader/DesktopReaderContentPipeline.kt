@@ -54,6 +54,7 @@ class DesktopReaderContentPipeline(
     private var coordinator: PageLoadCoordinator? = null
     private var warmupRequest: AdjacentChapterWarmup? = null
     private var warmupJob: Job? = null
+    private val drainingWarmups = ArrayDeque<Job>()
     private var extendedPrefetchJob: Job? = null
     private var chapterSource: ChapterSource? = null
     private var chapterPages: List<PageDescriptor> = emptyList()
@@ -129,6 +130,7 @@ class DesktopReaderContentPipeline(
                 // Background priority so the page on screen still takes the last host slot.
                 scope.launch(PageLoadPriority { false }) { runWarmup(target) }
             }
+            if (old != null) drainingWarmups.addLast(old)
             old
         }
         prior?.cancel()
@@ -141,6 +143,7 @@ class DesktopReaderContentPipeline(
             val oldWarmup = warmupJob
             warmupJob = null
             warmupRequest = null
+            if (oldWarmup != null) drainingWarmups.addLast(oldWarmup)
             chapterPages = emptyList()
             chapterSource = null
             preloadFailures.clear()
@@ -149,6 +152,13 @@ class DesktopReaderContentPipeline(
         cancelExtendedPrefetch()
         warm?.cancel()
         active?.close()
+    }
+
+    override suspend fun awaitBackgroundRelease() {
+        while (true) {
+            val next = synchronized(lock) { drainingWarmups.removeFirstOrNull() } ?: return
+            next.join()
+        }
     }
 
     override fun close() {
