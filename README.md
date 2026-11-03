@@ -111,7 +111,7 @@ AI 辅助开发的开源项目 · 基于 Mihon · Kotlin / Compose Desktop
 
 mihondesk 仍在持续开发，桌面端尚未覆盖 Mihon 的全部功能。当前版本号为独立序列（`0.x`，现为 0.3.26），与上游 mihon `0.20.x` 无对应关系。以下限制基于[功能覆盖快照](docs/superpowers/evidence/suwayomi-feature-coverage.md)与原设计完成标准，会随验证进展持续收敛：
 
-- **扩展与图源兼容性**：扩展可安装并加载，不代表该图源的浏览→详情→章节→图片全链可用。部分站点需要验证码或登录。2026-09-20 端到端矩阵实测：MangaDex / NHentai 全链通过，BiliManga 除搜索外全链通过（搜索需登录），MangaFire 被 Cloudflare 封锁（需人工过验证），MangaPlus 因地区封锁不可用（其 API 对本网络返回错误信封；兼容层 Filter.Select 缺陷当日已修复，授权地区网络下有望通过）。详见[扩展兼容矩阵](docs/suwayomi-extension-compatibility.md)。
+- **扩展与图源兼容性**：扩展可安装并加载，不代表该图源的浏览→详情→章节→图片全链可用。部分站点需要验证码或登录。详见[扩展兼容矩阵](docs/suwayomi-extension-compatibility.md)。
 - **Tracker 账户**：11 个服务均有实现与本地契约测试。2026-09-22 生产实测：**Bangumi** 与 **AniList** 已完成登录→搜索绑定→进度写入→重进保持→解绑全链验证；其余服务（MyAnimeList、Kitsu、Shikimori、MangaUpdates、Hikka、MangaBaka 及自托管 Komga / Kavita / Suwayomi）尚待账户或实例就绪后继续联调，新增服务的 OAuth 自动登录配置也未完成。
 - **备份互通**：桌面端可导入/导出 Mihon 兼容备份。2026-09-20 已完成双向往返验证：真实 Android 编码器备份→桌面导入（字段级对照）、桌面导出→Android 解码器契约测试、桌面导出→Android 应用恢复→应用再导出→桌面再导入，六类字段无丢失；下载图片、密钥、SyncYomi uid、Suwayomi 私有设置不随备份迁移。详见[备份往返证据](docs/superpowers/evidence/2026-09-20-backup-roundtrip.md)。
 - **安装与升级**：MSI / EXE / 便携三种形态已在干净 Windows 11 虚拟机上完成实测（14/14 验收格）：三种形态的干净安装、0.2.10→0.2.18 向导覆盖升级、卸载（保留数据 / 删除数据）与损坏回滚。其中 EXE 安装器的 `/S` 静默安装不受支持，请在图形向导中安装。三种发行形态均**不注册控制面板卸载项**，卸载请使用原安装包或便携目录删除。Win10 22H2 干净机矩阵因宿主为异构大小核平台、Windows 10 客户机内核无法完成初始化而未完成（Win11 正常），详见[干净机矩阵证据](docs/superpowers/evidence/2026-09-21-clean-machine-matrix.md)。
