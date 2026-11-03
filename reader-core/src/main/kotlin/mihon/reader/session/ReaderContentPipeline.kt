@@ -44,6 +44,13 @@ interface ReaderContentPipeline : AutoCloseable {
     fun warmAdjacent(request: AdjacentChapterWarmup?)
 
     fun closeChapter()
+
+    /**
+     * Waits until work cancelled by [closeChapter] or a replaced [warmAdjacent] has released its
+     * chapter source. A 7z decoder reservation is half the reader budget, so the next chapter must
+     * not be opened while an adjacent warmup still holds one.
+     */
+    suspend fun awaitBackgroundRelease() = Unit
 }
 
 internal class CallbackReaderContentPipeline(
