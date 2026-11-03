@@ -75,7 +75,6 @@ import mihon.desktop.i18n.UiText
 import mihon.desktop.i18n.text
 import mihon.desktop.library.model.readerSettingsOverride
 import mihon.desktop.navigation.DesktopBackHandler
-import mihon.reader.session.ReaderLoadState
 import mihon.desktop.navigation.DesktopDestination
 import mihon.desktop.navigation.DesktopNavigator
 import mihon.desktop.navigation.LocalDesktopNavigator
@@ -84,9 +83,9 @@ import mihon.desktop.platform.SingleInstanceRequest
 import mihon.desktop.platform.toColorRef
 import mihon.desktop.reader.DesktopReaderSettingsStore
 import mihon.desktop.reader.MangaCacheRetention
-import mihon.desktop.reader.mangaCacheRetention
 import mihon.desktop.reader.ReaderChapterBookmarkStore
 import mihon.desktop.reader.ReaderWindowMode
+import mihon.desktop.reader.mangaCacheRetention
 import mihon.desktop.reader.window.ReaderWindowController
 import mihon.desktop.reader.window.ReaderWindowEscape
 import mihon.desktop.security.DesktopAppLockController
@@ -132,6 +131,7 @@ import mihon.desktop.ui.upcoming.UpcomingScreen
 import mihon.desktop.window.ScreenBounds
 import mihon.desktop.window.WindowPlacement
 import mihon.extension.source.model.SManga
+import mihon.reader.session.ReaderLoadState
 import java.awt.Frame
 import java.awt.Toolkit
 import java.io.File
