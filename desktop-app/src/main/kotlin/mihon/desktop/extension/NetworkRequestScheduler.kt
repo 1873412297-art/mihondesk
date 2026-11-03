@@ -13,8 +13,10 @@ import mihon.extension.ipc.RequestPriority
 
 /** Limits actual transport requests, including redirects and extension interceptor requests. */
 class NetworkRequestScheduler(
-    private val totalLimit: Int = 8,
-    private val hostLimit: Int = 3,
+    // Some image hosts trickle one connection (about 10KB/s for a small page). The reader asks for
+    // several pages at once, so they share the host instead of waiting for a queue of three.
+    private val totalLimit: Int = 12,
+    private val hostLimit: Int = 6,
     private val clock: () -> Long = System::currentTimeMillis,
 ) : AutoCloseable {
     private class Waiter(val host: String, val owner: String, val priority: Int) {

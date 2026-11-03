@@ -275,7 +275,10 @@ class DefaultReaderSessionTest {
             it.selectedIndex == 4 && it.visiblePages == listOf(source.descriptors[4].id, source.descriptors[5].id)
         } shouldBe true
         pipeline.positions.last { it.selectedIndex == 3 }.direction shouldBe NavigationDirection.BACKWARD
-        pipeline.warmups.any { it?.asset?.chapterId == 8L } shouldBe true
+        val nextWarmup = pipeline.warmups.last { it?.asset?.chapterId == 8L }!!
+        nextWarmup.preloadFirstUnit shouldBe true
+        nextWarmup.fromEnd shouldBe false
+        nextWarmup.preloadCount shouldBe 3
         pipeline.retried shouldBe listOf(source.descriptors[3].id)
         session.state.value.cacheMetrics shouldBe pipeline.cacheMetrics
         pipeline.chapterCloses shouldBe 1

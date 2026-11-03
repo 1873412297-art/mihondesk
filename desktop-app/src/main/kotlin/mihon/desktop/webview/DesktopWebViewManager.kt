@@ -173,6 +173,7 @@ class DesktopWebViewManager(
         private val pending = ConcurrentHashMap<String, CompletableDeferred<String>>()
         private val updates = MutableSharedFlow<BrowserEvent>(extraBufferCapacity = 64)
         val events = updates.asSharedFlow()
+        private var browserUserAgent: String? = null
         private val currentState = kotlinx.coroutines.flow.MutableStateFlow(BrowserEvent("starting", ""))
         val state: kotlinx.coroutines.flow.StateFlow<BrowserEvent> = currentState
         private val executor = Executors.newCachedThreadPool { runnable ->
@@ -211,6 +212,7 @@ class DesktopWebViewManager(
                                 sourceId = sourceId,
                                 bodyBase64 = request.text("bodyBase64").takeIf(String::isNotBlank),
                             ),
+                            browsing = true,
                         )
                     }
                     val output = Json.encodeToString(response).toByteArray()
@@ -245,7 +247,7 @@ class DesktopWebViewManager(
             processJob = job
             check(job.assignProcess(child)) { "Unable to contain browser process tree" }
             writer = child.outputStream.bufferedWriter(Charsets.UTF_8)
-            val initialCookies = cookies.loadForRequest(extensionId, initialUrl.toHttpUrl())
+            val initialCookies = cookies.loadAll(extensionId)
             send(
                 buildJsonObject {
                     put("url", initialUrl)
@@ -260,10 +262,19 @@ class DesktopWebViewManager(
                                     buildJsonObject {
                                         put("name", cookie.name)
                                         put("value", cookie.value)
-                                        put("domain", cookie.domain)
+                                        put(
+                                            "domain",
+                                            if (cookie.hostOnly) cookie.domain else ".${cookie.domain}",
+                                        )
                                         put("path", cookie.path)
                                         put("secure", cookie.secure)
                                         put("httpOnly", cookie.httpOnly)
+                                        put("expiresAt", if (cookie.persistent) cookie.expiresAt else 0)
+                                        put(
+                                            "url",
+                                            "${if (cookie.secure) "https" else "http"}://" +
+                                                "${cookie.domain.removePrefix(".")}/",
+                                        )
                                     },
                                 )
                             }
@@ -307,6 +318,12 @@ class DesktopWebViewManager(
                 "ready" -> ready.complete(Unit)
                 "loaded" -> if (value.startsWith("http")) loaded.complete(value)
                 "result", "cookiesDone" -> pending.remove(id)?.complete(value)
+                "userAgent" -> {
+                    if (value.isNotBlank()) {
+                        browserUserAgent = value
+                        cookies.noteBrowserUserAgent(initialUrl.toHttpUrl().host, value)
+                    }
+                }
                 "cookie" -> importCookie(Json.parseToJsonElement(value).jsonObject)
                 "error" -> {
                     val failure = IllegalStateException(value)
@@ -326,23 +343,40 @@ class DesktopWebViewManager(
             updates.tryEmit(event)
         }
         private fun importCookie(value: JsonObject) {
+            // The login window is the user browsing, so keep whatever session it collected.
+            // Extension requests still cannot call a host the source did not declare.
             val domain = value.text("domain").removePrefix(".")
-            if (!network.isDomainAllowed(domain, extensionId)) return
+            val name = value.text("name")
+            if (domain.isBlank() || name.isBlank()) return
+            mihon.desktop.logging.DesktopLogger.debug(
+                "DesktopWebViewManager",
+                "Keeping browser cookie $name for $domain ($extensionId)",
+            )
+            if (name == "cf_clearance") {
+                browserUserAgent?.let { cookies.noteBrowserUserAgent(domain, it) }
+            }
             val secure = value.text("secure") == "true"
-            val builder = Cookie.Builder().name(value.text("name")).value(value.text("value")).path(
-                value.text("path").ifBlank {
-                    "/"
-                },
-            )
-            if (value.text("domain").startsWith('.')) builder.domain(domain) else builder.hostOnlyDomain(domain)
-            if (secure) builder.secure()
-            if (value.text("httpOnly") == "true") builder.httpOnly()
-            value.text("expiresAt").toLongOrNull()?.takeIf { it > 0 }?.let(builder::expiresAt)
-            cookies.saveFromResponse(
-                extensionId,
-                "${if (secure) "https" else "http"}://$domain/".toHttpUrl(),
-                listOf(builder.build()),
-            )
+            val saved = runCatching {
+                val builder = Cookie.Builder().name(name).value(value.text("value")).path(
+                    value.text("path").ifBlank { "/" },
+                )
+                if (value.text("domain").startsWith('.')) builder.domain(domain) else builder.hostOnlyDomain(domain)
+                if (secure) builder.secure()
+                if (value.text("httpOnly") == "true") builder.httpOnly()
+                value.text("expiresAt").toLongOrNull()?.takeIf { it > 0 }?.let(builder::expiresAt)
+                cookies.saveFromResponse(
+                    extensionId,
+                    "${if (secure) "https" else "http"}://$domain/".toHttpUrl(),
+                    listOf(builder.build()),
+                )
+            }
+            saved.exceptionOrNull()?.let {
+                mihon.desktop.logging.DesktopLogger.warn(
+                    "DesktopWebViewManager",
+                    "Dropped browser cookie $name for $domain ($extensionId)",
+                    it,
+                )
+            }
         }
         suspend fun awaitLoaded(timeoutMillis: Long = 30_000): String = try {
             withTimeout(timeoutMillis) { loaded.await() }

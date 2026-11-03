@@ -89,6 +89,12 @@ class DesktopNetworkHelper(
     fun userAgentFor(url: String): String = cookieStore?.getUserAgent(url.toHttpUrl().host)
         ?: policyProvider().userAgent.takeIf { it.isNotBlank() } ?: defaultUserAgent
 
+    /** True when the extension sent no browser identity, only the token `Mozilla/5.0`. */
+    internal fun isStubUserAgent(value: String?): Boolean {
+        val agent = value?.trim().orEmpty()
+        return agent.isEmpty() || (agent.startsWith("Mozilla/5.0", ignoreCase = true) && '(' !in agent)
+    }
+
     fun registerExtensionDomains(pkg: String, domains: List<String>) {
         packageWhitelists[pkg] = domains.map { it.trim().lowercase() }.filter { it.isNotEmpty() }.toSet()
     }
@@ -140,8 +146,11 @@ class DesktopNetworkHelper(
         return response.bytes
     }
 
-    suspend fun executeBrokeredRequest(request: BrokerHttpRequest): BrokerHttpResponse = try {
-        val response = execute(request)
+    suspend fun executeBrokeredRequest(
+        request: BrokerHttpRequest,
+        browsing: Boolean = false,
+    ): BrokerHttpResponse = try {
+        val response = execute(request, browsing)
         BrokerHttpResponse(
             statusCode = response.code,
             headers = response.headers.mapValues { it.value.joinToString(", ") },
@@ -178,7 +187,7 @@ class DesktopNetworkHelper(
         BrokerHttpResponse(502, error = "$kind: ${failure.message}", failureKind = kind)
     }
 
-    private suspend fun execute(request: BrokerHttpRequest): NetworkResponse {
+    private suspend fun execute(request: BrokerHttpRequest, browsing: Boolean = false): NetworkResponse {
         val owner = request.extensionId ?: request.sourceId?.let(sourceOwners::get)
         val identity = owner ?: LEGACY_OWNER
         var url = request.url.toHttpUrl()
@@ -194,7 +203,11 @@ class DesktopNetworkHelper(
         }
         repeat(MAX_REDIRECTS + 1) { hop ->
             mihon.desktop.logging.DesktopLogger.debug("DesktopNetworkHelper", "Forwarding $method $url for $identity")
-            if (url != permittedCdnRedirect && !isDomainAllowed(url.host, owner)) {
+            // The source web view follows the site the user is looking at, including a login
+            // handoff on another host. That host stays closed to the extension's own requests.
+            if (url != permittedCdnRedirect && !isDomainAllowed(url.host, owner) &&
+                !(browsing && url.scheme in setOf("http", "https"))
+            ) {
                 throw SecurityException(
                     "Access denied: domain '${url.host}' is not declared for ${owner ?: "the request"}",
                 )
@@ -207,8 +220,14 @@ class DesktopNetworkHelper(
                 }
             // Cloudflare binds cf_clearance to the browser that solved the challenge, so a verified
             // session must be replayed with the WebView's User-Agent even if the extension sets its own.
+            // A bare "Mozilla/5.0" is the same problem from the other side: chapter pages answer 403
+            // (cf-mitigated: challenge) unless the agent names a real browser.
             val verified = stored.any { it.name == "cf_clearance" }
-            if (verified || headers.keys.none { it.equals("User-Agent", true) }) {
+            val declaredAgent = headers.entries
+                .firstOrNull { it.key.equals("User-Agent", true) }
+                ?.value
+                ?.firstOrNull { it.isNotBlank() }
+            if (verified || isStubUserAgent(declaredAgent)) {
                 builder.header("User-Agent", userAgentFor(url.toString()))
             }
             val ownCookie = headers.entries.filter { it.key.equals("Cookie", true) }

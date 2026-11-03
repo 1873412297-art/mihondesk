@@ -32,7 +32,7 @@ open class OnlineChapterSource(
     private val networkHelper: DesktopNetworkHelper,
     private val cacheDir: File,
     expansionBudget: ChapterExpansionBudget = ChapterExpansionBudget(),
-) : ManagedChapterSource(asset, expansionBudget) {
+) : ManagedChapterSource(asset, expansionBudget), OnlineImageCache {
 
     constructor(
         asset: ReaderChapterAsset,
@@ -55,8 +55,7 @@ open class OnlineChapterSource(
     internal var cachedPages: List<Page>? = null
     suspend fun invalidate(pageId: PageId) = withContext(Dispatchers.IO) {
         require(pageId.chapterId == asset.chapterId.toString())
-        val index = Regex("page_(\\d+)\\.[a-z0-9]+").matchEntire(pageId.entryName)
-            ?.groupValues?.get(1)?.toIntOrNull() ?: throw ReaderFailure.PageNotFound(pageId.entryName)
+        val index = pageIndex(pageId) ?: throw ReaderFailure.PageNotFound(pageId.entryName)
         val file = cacheFile(index)
         cacheLock(file).withLock { java.nio.file.Files.deleteIfExists(file.toPath()) }
     }
@@ -64,8 +63,14 @@ open class OnlineChapterSource(
 
     override suspend fun pages(): List<PageDescriptor> = withContext(Dispatchers.IO) {
         checkOpenAndCancellation()
-        val list = (cachedPages ?: sourceManager.getPageList(sourceId, chapter))
-            .mapIndexed { index, page -> page.copy(index = index) }.also { cachedPages = it }
+        // Warmup and the chapter that actually opens are different source instances, and the
+        // page list is the call that waits on the site. Keep it so the handoff does not fetch again.
+        val key = pageListKey(asset.mangaId, sourceId, chapter.url)
+        val list = (
+            cachedPages ?: sharedPageLists[key] ?: sourceManager.getPageList(sourceId, chapter).also { fetched ->
+                rememberSharedPages(key, fetched)
+            }
+            ).mapIndexed { index, page -> page.copy(index = index) }.also { cachedPages = it }
         entries = list.map { page ->
             val extension = page.imageUrl.orEmpty().substringBefore('?').substringAfterLast('.', "img")
                 .lowercase().takeIf { it.matches(Regex("[a-z0-9]{2,5}")) } ?: "img"
@@ -105,19 +110,13 @@ open class OnlineChapterSource(
             }
             if (cached != null) return@withLock cached
             val bytes = try {
-                val visible = kotlinx.coroutines.currentCoroutineContext()[mihon.reader.prefetch.PageLoadPriority]
-                    ?.isVisible?.invoke() ?: true
                 downloadSourcePage(
                     sourceId,
                     page,
                     chapter.url,
                     networkHelper,
                     sourceManager,
-                    priority = if (visible) {
-                        mihon.extension.ipc.RequestPriority.READER
-                    } else {
-                        mihon.extension.ipc.RequestPriority.NORMAL
-                    },
+                    priority = onlineImagePriority(kotlinx.coroutines.currentCoroutineContext()),
                 )
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
@@ -156,16 +155,53 @@ open class OnlineChapterSource(
         boundedInput(ByteArrayInputStream(imageBytes), imageBytes.size.toLong())
     }
 
-    private fun cacheFile(index: Int): File {
-        val identity = "$sourceId\n${chapter.url}"
-        val digest = java.security.MessageDigest.getInstance("SHA-256").digest(identity.toByteArray())
-            .joinToString("") { "%02x".format(it) }
-        return File(cacheDir, "online_${digest}_$index.img")
+    internal fun isImageCached(pageId: PageId): Boolean {
+        val index = pageIndex(pageId) ?: return false
+        val file = cacheFile(index)
+        return file.isFile && file.length() in 1..MAX_IMAGE_BYTES
     }
 
+    override fun cachedImageFiles(): List<File> = chapterImageFiles()
+
+    override fun deleteCachedImages() {
+        chapterImageFiles().forEach { file -> java.nio.file.Files.deleteIfExists(file.toPath()) }
+        discardSharedChapter(asset.mangaId, sourceId, chapter.url)
+    }
+
+    private fun cacheFile(index: Int): File =
+        OnlinePageCacheFiles.pageFile(cacheDir, asset.mangaId, sourceId, chapter.url, index)
+
+    private fun chapterImageFiles(): List<File> =
+        OnlinePageCacheFiles.chapterFiles(cacheDir, asset.mangaId, sourceId, chapter.url)
+
+    private fun pageIndex(pageId: PageId): Int? =
+        PAGE_INDEX.matchEntire(pageId.entryName)?.groupValues?.get(1)?.toIntOrNull()
+
     companion object {
+        private val PAGE_INDEX = Regex("page_(\\d+)\\.[a-z0-9]+")
+
+        internal fun pageListKey(mangaId: Long, sourceId: Long, chapterUrl: String): String =
+            "$mangaId\n$sourceId\n$chapterUrl"
+
+        internal fun discardSharedPages(mangaId: Long) {
+            val prefix = "$mangaId\n"
+            sharedPageLists.keys.filter { it.startsWith(prefix) }.forEach(sharedPageLists::remove)
+        }
+
+        internal fun discardSharedChapter(mangaId: Long, sourceId: Long, chapterUrl: String) {
+            sharedPageLists.remove(pageListKey(mangaId, sourceId, chapterUrl))
+        }
         private const val MAX_IMAGE_BYTES = 64L * 1024 * 1024
+        private const val MAX_SHARED_PAGE_LISTS = 24
+        private val sharedPageLists = java.util.concurrent.ConcurrentHashMap<String, List<Page>>()
         private val cacheLocks = Array(64) { Mutex() }
+
+        private fun rememberSharedPages(key: String, pages: List<Page>) {
+            if (sharedPageLists.size >= MAX_SHARED_PAGE_LISTS && !sharedPageLists.containsKey(key)) {
+                sharedPageLists.keys.firstOrNull()?.let(sharedPageLists::remove)
+            }
+            sharedPageLists[key] = pages
+        }
         private fun cacheLock(file: File): Mutex = cacheLocks[
             (file.absolutePath.hashCode() and Int.MAX_VALUE) %
                 cacheLocks.size,

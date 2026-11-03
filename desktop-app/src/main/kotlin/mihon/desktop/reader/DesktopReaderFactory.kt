@@ -62,6 +62,12 @@ class DesktopReaderFactory(
         networkHelper = networkHelper,
         onlineCacheDir = onlineCacheDir,
     )
+    val mangaOnlineCache = MangaOnlineCache(
+        root = onlineCacheDir,
+        scope = applicationScope,
+        catalog = catalog,
+        sourceFactory = sourceFactory,
+    )
     val decoder: PageDecoder = CompositePageDecoder(
         imageIo = ImageIoPageDecoder(memoryBudget),
         packagedCodec = PackagedCodecPageDecoder(memoryBudget, codecExecutable),
@@ -107,6 +113,7 @@ class DesktopReaderFactory(
             sourceFactory = sourceFactory,
             maxFullPagePixels = MAX_DISPLAY_PIXELS,
             preloadPages = preloadPages ?: { effectiveSettings.preloadPages },
+            mangaCache = mangaOnlineCache,
         )
         val animationCoordinator = AnimationCoordinator(
             scope = sessionScope,
@@ -227,7 +234,10 @@ class DesktopReaderFactory(
         failure?.let { throw it }
     }
 
+    fun mangaIdForChapter(chapterId: Long): Long? = catalog.chapterAsset(chapterId)?.mangaId
+
     fun closeServices() {
+        mangaOnlineCache.close()
         pageSizes.clear()
         bridge.close()
         cache.close()

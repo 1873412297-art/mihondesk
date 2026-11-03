@@ -68,6 +68,13 @@ class DesktopCookieStore(
         .filter { it.expiresAt > System.currentTimeMillis() && it.matches(url) }
         .sortedByDescending { it.path.length }
 
+    /** Every live cookie this extension has seen, including ones for a login host. */
+    @Synchronized
+    fun loadAll(extensionId: String): List<Cookie> = sessionCookies
+        .filter { it.extensionId == extensionId }
+        .mapNotNull(::decodeCookie)
+        .filter { it.expiresAt > System.currentTimeMillis() }
+
     @Synchronized
     fun clearSession(extensionId: String) {
         if (sessionCookies.removeAll { it.extensionId == extensionId }) persistSessions()
@@ -135,6 +142,26 @@ class DesktopCookieStore(
 
     fun getDomainConfig(domain: String): DomainCookieConfig? {
         return memoryMap[normalizeDomain(domain)]
+    }
+
+    /**
+     * Remember the embedded browser's own User-Agent for a host that had none.
+     * A user-saved agent is left alone: it belongs to the browser that minted those cookies.
+     */
+    @Synchronized
+    fun noteBrowserUserAgent(domain: String, userAgent: String) {
+        val ua = userAgent.trim()
+        if (ua.isEmpty()) return
+        val norm = normalizeDomain(domain)
+        if (norm.isEmpty()) return
+        val existing = memoryMap[norm]
+        if (!existing?.customUserAgent.isNullOrBlank()) return
+        memoryMap[norm] = DomainCookieConfig(
+            domain = norm,
+            cookies = existing?.cookies ?: emptyMap(),
+            customUserAgent = ua,
+        )
+        saveToDisk()
     }
 
     fun setCookies(

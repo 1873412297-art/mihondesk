@@ -75,11 +75,13 @@ class DefaultReaderSession(
         }
     }
 
-    override suspend fun open(chapterId: Long) {
+    override suspend fun open(chapterId: Long) = open(chapterId, landAtEnd = false)
+
+    override suspend fun open(chapterId: Long, landAtEnd: Boolean) {
         require(chapterId >= 0L) { "chapterId must not be negative" }
         sessionLock.withLock {
             check(!closed) { "reader session is closed" }
-            openLocked(chapterId, landAtEnd = false)
+            openLocked(chapterId, landAtEnd)
         }
     }
 
@@ -444,17 +446,29 @@ class DefaultReaderSession(
         )
         val chapterId = requireNotNull(state.chapterId)
         val remainingPages = state.pages.size - state.selectedIndex
-        val warmup = if (navigationDirection == NavigationDirection.FORWARD &&
-            remainingPages <= NEXT_CHAPTER_WARMUP_PAGES
-        ) {
-            catalog.adjacentReadableChapter(chapterId, ChapterDirection.NEXT)?.let { adjacent ->
-                AdjacentChapterWarmup(
-                    asset = adjacent,
-                    preloadFirstUnit = state.selectedIndex == state.pages.lastIndex,
-                )
-            }
-        } else {
-            null
+        val nearEnd = remainingPages <= NEXT_CHAPTER_WARMUP_PAGES
+        val nearStart = state.selectedIndex < NEXT_CHAPTER_WARMUP_PAGES
+        // Fetch the pages the reader is about to enter, not only the single boundary image.
+        // A short chapter is near both ends; follow the direction the pages are actually moving.
+        val warmup = when {
+            nearEnd && (!nearStart || navigationDirection != NavigationDirection.BACKWARD) ->
+                catalog.adjacentReadableChapter(chapterId, ChapterDirection.NEXT)?.let { adjacent ->
+                    AdjacentChapterWarmup(
+                        asset = adjacent,
+                        preloadFirstUnit = true,
+                        preloadCount = ADJACENT_PRELOAD_PAGES,
+                    )
+                }
+            nearStart ->
+                catalog.adjacentReadableChapter(chapterId, ChapterDirection.PREVIOUS)?.let { adjacent ->
+                    AdjacentChapterWarmup(
+                        asset = adjacent,
+                        preloadFirstUnit = true,
+                        fromEnd = true,
+                        preloadCount = ADJACENT_PRELOAD_PAGES,
+                    )
+                }
+            else -> null
         }
         contentPipeline.warmAdjacent(warmup)
         _state.update { it.copy(cacheMetrics = contentPipeline.metrics()) }
@@ -505,5 +519,6 @@ class DefaultReaderSession(
         private const val NANOS_PER_MILLI = 1_000_000L
         private const val MAX_DURATION_DELTA_MILLIS = 60_000L
         private const val NEXT_CHAPTER_WARMUP_PAGES = 5
+        private const val ADJACENT_PRELOAD_PAGES = 3
     }
 }

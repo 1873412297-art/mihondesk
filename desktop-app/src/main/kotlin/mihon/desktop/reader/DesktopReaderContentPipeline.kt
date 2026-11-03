@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.yield
+import mihon.desktop.extension.OnlineChapterSource
 import mihon.desktop.ui.reader.AnimationVisibilityReporter
 import mihon.desktop.ui.reader.ComposeTileBridge
 import mihon.desktop.ui.reader.IntrinsicPageSizeCache
@@ -47,6 +48,7 @@ class DesktopReaderContentPipeline(
     private val sourceFactory: ChapterSourceFactory,
     private val maxFullPagePixels: Long = DEFAULT_MAX_FULL_PAGE_PIXELS,
     private val preloadPages: () -> Int = { PrefetchPolicy.AHEAD_PAGES },
+    private val mangaCache: MangaOnlineCache? = null,
 ) : ReaderContentPipeline {
     private val lock = Any()
     private var coordinator: PageLoadCoordinator? = null
@@ -70,6 +72,8 @@ class DesktopReaderContentPipeline(
                 chapterSource = source
                 preloadFailures.clear()
             }
+            // Neighbor bytes are owned by the manga cache, which outlives this chapter.
+            mangaCache?.chapterOpened(source.asset.chapterId)
             opened
         } catch (failure: Throwable) {
             synchronized(lock) { if (coordinator === next) coordinator = null }
@@ -122,7 +126,8 @@ class DesktopReaderContentPipeline(
             warmupRequest = request
             val old = warmupJob
             warmupJob = request?.let { target ->
-                scope.launch { runWarmup(target) }
+                // Background priority so the page on screen still takes the last host slot.
+                scope.launch(PageLoadPriority { false }) { runWarmup(target) }
             }
             old
         }
@@ -331,7 +336,15 @@ class DesktopReaderContentPipeline(
                 val warmer = newCoordinator()
                 try {
                     val pages = warmer.openChapter(source)
-                    pages.firstOrNull()?.let { page -> warmer.loadVisible(page.id) }
+                    val count = request.preloadCount.coerceAtLeast(1)
+                    val targets = if (request.fromEnd) pages.takeLast(count).asReversed() else pages.take(count)
+                    for (page in targets) {
+                        currentCoroutineContext().ensureActive()
+                        // Online bytes are downloaded by the manga cache. Decoding here would be
+                        // cancelled on the chapter change and would have to start over.
+                        if (source is OnlineChapterSource && !source.isImageCached(page.id)) continue
+                        warmer.loadVisible(page.id)
+                    }
                 } finally {
                     warmer.close()
                 }

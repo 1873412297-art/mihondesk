@@ -75,6 +75,7 @@ import mihon.desktop.i18n.UiText
 import mihon.desktop.i18n.text
 import mihon.desktop.library.model.readerSettingsOverride
 import mihon.desktop.navigation.DesktopBackHandler
+import mihon.reader.session.ReaderLoadState
 import mihon.desktop.navigation.DesktopDestination
 import mihon.desktop.navigation.DesktopNavigator
 import mihon.desktop.navigation.LocalDesktopNavigator
@@ -82,6 +83,8 @@ import mihon.desktop.platform.ForwardedFileKind
 import mihon.desktop.platform.SingleInstanceRequest
 import mihon.desktop.platform.toColorRef
 import mihon.desktop.reader.DesktopReaderSettingsStore
+import mihon.desktop.reader.MangaCacheRetention
+import mihon.desktop.reader.mangaCacheRetention
 import mihon.desktop.reader.ReaderChapterBookmarkStore
 import mihon.desktop.reader.ReaderWindowMode
 import mihon.desktop.reader.window.ReaderWindowController
@@ -962,7 +965,36 @@ fun ApplicationScope.MihonDesktopApp(
                                     isEditMangaCategoriesDialogOpen = false
                                 }
                             }
+                            val readerMangaId = (destination as? DesktopDestination.Reader)?.let { reader ->
+                                mangaDetailState.allChapters.firstOrNull { it.id == reader.chapterId }?.mangaId
+                                    ?: runtime.readerFactory?.mangaIdForChapter(reader.chapterId)
+                            }
+                            var heldOnlineMangaId by remember { mutableStateOf<Long?>(null) }
+                            LaunchedEffect(destination, readerMangaId, mangaDetailState.manga?.id) {
+                                when (
+                                    val decision = mangaCacheRetention(
+                                        destination,
+                                        mangaDetailState.manga?.id,
+                                        readerMangaId,
+                                    )
+                                ) {
+                                    MangaCacheRetention.Keep -> Unit
+                                    MangaCacheRetention.Clear -> {
+                                        val previous = heldOnlineMangaId
+                                        heldOnlineMangaId = null
+                                        previous?.let { runtime.readerFactory?.mangaOnlineCache?.clear(it) }
+                                    }
+                                    is MangaCacheRetention.Switch -> if (decision.mangaId != heldOnlineMangaId) {
+                                        val previous = heldOnlineMangaId
+                                        heldOnlineMangaId = decision.mangaId
+                                        previous?.let { runtime.readerFactory?.mangaOnlineCache?.clear(it) }
+                                    }
+                                }
+                            }
                             if (destination is DesktopDestination.Reader) {
+                                // Paging back should enter on the last page. Remember dies with the reader,
+                                // so a later open from the library still resumes the saved page.
+                                var openChapterAtEnd by remember { mutableStateOf(false) }
                                 val currentChapterId = destination.chapterId
                                 val filteredNavigationChapters = if (mangaDetailState.readerChapters.isNotEmpty()) {
                                     mangaDetailState.readerChapters
@@ -1134,17 +1166,21 @@ fun ApplicationScope.MihonDesktopApp(
                                     },
                                     onPreviousChapter = {
                                         if (prevChapter != null) {
+                                            openChapterAtEnd = true
                                             navigator.navigate(DesktopDestination.Reader(prevChapter.id))
                                         }
                                     },
                                     onNextChapter = {
                                         if (nextChapter != null) {
+                                            openChapterAtEnd = false
                                             navigator.navigate(DesktopDestination.Reader(nextChapter.id))
                                         }
                                     },
                                     onChapterSelected = { chapterId ->
+                                        openChapterAtEnd = false
                                         navigator.navigate(DesktopDestination.Reader(chapterId))
                                     },
+                                    landAtEnd = openChapterAtEnd,
                                     hasPreviousChapter = prevChapter != null,
                                     hasNextChapter = nextChapter != null,
                                     onFullscreen = {
@@ -2215,9 +2251,9 @@ private fun ReaderDestination(
     currentChapterDownloaded: Boolean = false,
     bookmarkStore: ReaderChapterBookmarkStore? = null,
     foreground: Boolean = true,
+    landAtEnd: Boolean = false,
 ) {
     val strings = mihon.desktop.i18n.LocalStrings.current
-    var readerHandle by remember(destination) { mutableStateOf<mihon.desktop.reader.DesktopReaderHandle?>(null) }
     val factory = runtime.readerFactory
     if (factory == null) {
         Text(strings.readerUnavailable)
@@ -2231,7 +2267,17 @@ private fun ReaderDestination(
             runtime.library.mangaSnapshot(id)?.readerSettingsOverride
         }
     }
-    LaunchedEffect(destination, mangaReaderSettingsOverride) {
+    // Chapter changes stay on this handle. Keying it on the destination rebuilt the
+    // viewer and showed "opening chapter" between every page-boundary continue.
+    var readerHandle by remember(effectiveMangaId, mangaReaderSettingsOverride) {
+        mutableStateOf<mihon.desktop.reader.DesktopReaderHandle?>(null)
+    }
+    DisposableEffect(readerHandle) {
+        val handle = readerHandle
+        onDispose { handle?.session?.cancelWithoutFlush() }
+    }
+    LaunchedEffect(effectiveMangaId, mangaReaderSettingsOverride) {
+        if (readerHandle != null) return@LaunchedEffect
         val isIncognito = runtime.preferences.load().incognitoMode
         val handle = withContext(Dispatchers.Default) {
             factory.createHandle(
@@ -2240,8 +2286,15 @@ private fun ReaderDestination(
             )
         }
         readerHandle = handle
+    }
+    LaunchedEffect(readerHandle, destination.chapterId, landAtEnd) {
+        val handle = readerHandle ?: return@LaunchedEffect
         withContext(Dispatchers.Default) {
-            handle.session.open(destination.chapterId)
+            val current = handle.session.state.value
+            val alreadyOpen = current.chapterId == destination.chapterId &&
+                current.loadState is ReaderLoadState.Ready &&
+                (!landAtEnd || current.selectedIndex == current.pages.lastIndex)
+            if (!alreadyOpen) handle.session.open(destination.chapterId, landAtEnd)
         }
     }
     val activeHandle = readerHandle

@@ -4,6 +4,7 @@ import com.sun.net.httpserver.HttpServer
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.runBlocking
 import mihon.extension.ipc.BrokerHttpRequest
+import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -127,5 +128,62 @@ class DesktopNetworkHelperTest {
         helper.isDomainAllowed("img.everia.club") shouldBe true
         helper.isDomainAllowed("static.example.org") shouldBe true
         helper.isDomainAllowed("127.0.0.1") shouldBe true
+    }
+
+    @Test
+    fun `source web view follows a login redirect the extension itself cannot call`() {
+        val owner = "eu.kanade.tachiyomi.extension.zh.hipmh"
+        val signin = "https://m.hipmh.com/api/auth/signin"
+        val login = "https://oidc.idxbase.com/oauth2/auth"
+        val requests = mutableListOf<okhttp3.Request>()
+        DesktopNetworkHelper(
+            client = okhttp3.OkHttpClient.Builder().addInterceptor { chain ->
+                val request = chain.request()
+                requests += request
+                val redirect = if (request.url.toString() == signin) login else null
+                okhttp3.Response.Builder().request(request).protocol(okhttp3.Protocol.HTTP_1_1)
+                    .code(if (redirect == null) 200 else 302).message("fixture")
+                    .apply { redirect?.let { header("Location", it) } }
+                    .body("login form".toResponseBody()).build()
+            }.build(),
+        ).use { browsing ->
+            browsing.registerExtensionDomains(owner, listOf("*.hipmh.com"))
+            runBlocking {
+                val page = browsing.executeBrokeredRequest(
+                    BrokerHttpRequest("GET", signin, extensionId = owner),
+                    browsing = true,
+                )
+                page.statusCode shouldBe 200
+                page.finalUrl shouldBe login
+                page.body shouldBe "login form"
+                requests.map { it.url.toString() } shouldBe listOf(signin, login)
+                browsing.executeBrokeredRequest(BrokerHttpRequest("GET", login, extensionId = owner))
+                    .failureKind shouldBe mihon.extension.ipc.NetworkFailureKind.DOMAIN_DENIED
+                browsing.isDomainAllowed("oidc.idxbase.com", owner) shouldBe false
+            }
+        }
+    }
+
+    @Test
+    fun `replaces a bare Mozilla token and keeps a full browser user agent`() {
+        val seen = mutableListOf<String?>()
+        server.createContext("/ua") { exchange ->
+            seen += exchange.requestHeaders.getFirst("User-Agent")
+            val resp = "OK".toByteArray()
+            exchange.sendResponseHeaders(200, resp.size.toLong())
+            exchange.responseBody.use { it.write(resp) }
+        }
+        helper.registerExtensionDomains("ua.ext", listOf("127.0.0.1"))
+        val url = "http://127.0.0.1:$serverPort/ua"
+        val full = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/128.0.0.0"
+        runBlocking {
+            helper.executeBrokeredRequest(
+                BrokerHttpRequest("GET", url, headers = mapOf("User-Agent" to "Mozilla/5.0"), extensionId = "ua.ext"),
+            ).statusCode shouldBe 200
+            helper.executeBrokeredRequest(
+                BrokerHttpRequest("GET", url, headers = mapOf("User-Agent" to full), extensionId = "ua.ext"),
+            ).statusCode shouldBe 200
+        }
+        seen shouldBe listOf(helper.userAgentFor(url), full)
     }
 }

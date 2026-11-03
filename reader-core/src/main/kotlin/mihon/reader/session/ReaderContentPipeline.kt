@@ -20,6 +20,10 @@ data class ReaderContentPosition(
 data class AdjacentChapterWarmup(
     val asset: ReaderChapterAsset,
     val preloadFirstUnit: Boolean,
+    /** Preload the end of the chapter (going backward) instead of the start. */
+    val fromEnd: Boolean = false,
+    /** How many pages to fetch once [preloadFirstUnit] is set. Enumeration-only warmups ignore this. */
+    val preloadCount: Int = 1,
 )
 
 /**

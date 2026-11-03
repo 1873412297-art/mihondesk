@@ -265,7 +265,8 @@ class ReaderScreenActionsTest {
         onNodeWithTag("reader-transition-next-status").assertTextContains("Missing")
 
         onNodeWithTag("reader-transition-continue").performClick()
-        waitUntil(timeoutMillis = 30_000) { session.closeRequests == 1 && nextRequests == 1 }
+        waitUntil(timeoutMillis = 30_000) { nextRequests == 1 }
+        session.closeRequests shouldBe 0
         onNodeWithTag("reader-chapter-transition").assertDoesNotExist()
     }
 
@@ -307,7 +308,8 @@ class ReaderScreenActionsTest {
         )
 
         onNodeWithTag("reader-scrubber-next-chapter").performClick()
-        waitUntil(timeoutMillis = 30_000) { session.closeRequests == 1 && nextRequests == 1 }
+        waitUntil(timeoutMillis = 30_000) { nextRequests == 1 }
+        session.closeRequests shouldBe 0
         onNodeWithTag("reader-chapter-transition").assertDoesNotExist()
     }
 
@@ -327,7 +329,8 @@ class ReaderScreenActionsTest {
         )
 
         onNodeWithTag("reader-next-region").performClick()
-        waitUntil(timeoutMillis = 30_000) { session.closeRequests == 1 && nextRequests == 1 }
+        waitUntil(timeoutMillis = 30_000) { nextRequests == 1 }
+        session.closeRequests shouldBe 0
 
         session.actions.contains(mihon.reader.session.ReaderAction.Next) shouldBe false
     }
@@ -361,7 +364,8 @@ class ReaderScreenActionsTest {
         session.actions.contains(mihon.reader.session.ReaderAction.Next) shouldBe false
 
         onNodeWithTag("reader-transition-continue").performClick()
-        waitUntil(timeoutMillis = 30_000) { session.closeRequests == 1 && nextRequests == 1 }
+        waitUntil(timeoutMillis = 30_000) { nextRequests == 1 }
+        session.closeRequests shouldBe 0
     }
 
     @Test
@@ -391,7 +395,8 @@ class ReaderScreenActionsTest {
 
         onNodeWithTag("reader-scrubber-next-chapter").performClick()
         onNodeWithTag("reader-transition-continue").performClick()
-        waitUntil(timeoutMillis = 30_000) { session.closeRequests == 1 && selectedChapterId == 4L }
+        waitUntil(timeoutMillis = 30_000) { selectedChapterId == 4L }
+        session.closeRequests shouldBe 0
 
         adjacentRequests shouldBe 0
     }

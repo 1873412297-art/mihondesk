@@ -208,6 +208,7 @@ fun ReaderScreen(
         mutableStateOf<ReaderChapterTransitionDirection?>(null)
     }
     var pendingChapterDirection by remember(session) { mutableStateOf<ReaderChapterTransitionDirection?>(null) }
+    var skipArrivalTransition by remember(session) { mutableStateOf(false) }
     var observedChapterId by remember(session) { mutableStateOf(state.chapterId) }
     var bookmarked by remember(session, state.chapterId, effectiveBookmarkStore) {
         mutableStateOf(state.chapterId?.let { effectiveBookmarkStore?.isBookmarked(it) } ?: chapterBookmarked)
@@ -289,7 +290,11 @@ fun ReaderScreen(
     }
 
     fun navigateExternalChapter(direction: ReaderChapterTransitionDirection, targetChapterId: Long? = null) {
-        closeAndThen {
+        // Opening the next chapter on this session flushes progress. Closing first would
+        // destroy the viewer and cancel the pages already warming for the boundary.
+        skipArrivalTransition = true
+        scope.launch {
+            runCatching { withContext(Dispatchers.Default) { session.flushProgress() } }
             if (targetChapterId != null && onChapterSelected != null) {
                 onChapterSelected(targetChapterId)
             } else {
@@ -605,8 +610,10 @@ fun ReaderScreen(
         val chapterId = state.chapterId
         val previous = observedChapterId
         if (chapterId != null && previous != null && chapterId != previous) {
-            val direction = pendingChapterDirection ?: ReaderChapterTransitionDirection.NEXT
-            if (settings.alwaysShowChapterTransition) {
+            if (skipArrivalTransition) {
+                skipArrivalTransition = false
+            } else if (settings.alwaysShowChapterTransition) {
+                val direction = pendingChapterDirection ?: ReaderChapterTransitionDirection.NEXT
                 chapterTransition = buildChapterTransition(direction, chapterId)
             }
         }
@@ -879,7 +886,7 @@ fun ReaderScreen(
             chapterCatalog = chapterCatalog,
             currentChapterId = currentChapter?.id,
             onChapterSelected = { targetId ->
-                closeAndThen { onChapterSelected?.invoke(targetId) }
+                navigateExternalChapter(ReaderChapterTransitionDirection.NEXT, targetId)
             },
         )
         ReaderEdgeReveal(

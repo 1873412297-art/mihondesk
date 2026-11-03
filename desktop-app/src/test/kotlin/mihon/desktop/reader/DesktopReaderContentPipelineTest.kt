@@ -162,6 +162,12 @@ class DesktopReaderContentPipelineTest {
         adjacent.pagesCalls shouldBe 2
         adjacent.openedIndexes.distinct() shouldBe listOf(0)
 
+        pipeline.warmAdjacent(
+            AdjacentChapterWarmup(adjacent.asset, preloadFirstUnit = true, fromEnd = true, preloadCount = 2),
+        )
+        waitForOpened(adjacent, expected = setOf(0, 1, 2)) { runCurrent() }
+        adjacent.openedIndexes.distinct() shouldBe listOf(0, 2, 1)
+
         pipeline.close()
         budget.close()
         cache.close()

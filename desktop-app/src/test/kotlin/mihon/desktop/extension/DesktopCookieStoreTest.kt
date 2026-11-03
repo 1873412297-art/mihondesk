@@ -1,5 +1,7 @@
 package mihon.desktop.extension
 
+import okhttp3.Cookie
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
@@ -65,6 +67,37 @@ class DesktopCookieStoreTest {
         assertEquals("token_xyz", parsed["cf_clearance"])
         assertEquals("GA1.2.345", parsed["_ga"])
         assertEquals("9876", parsed["session_id"])
+    }
+
+    @Test
+    fun `browser user agent fills a blank one and does not replace a saved one`() {
+        val store = DesktopCookieStore(tempDir.resolve("cookies.json"))
+
+        store.setCookies("reader.hipmh.top", mapOf("k" to "v"))
+        store.noteBrowserUserAgent("reader.hipmh.top", "Chrome/Real")
+        assertEquals("k=v", store.getCookieHeader("reader.hipmh.top"))
+        assertEquals("Chrome/Real", store.getUserAgent("reader.hipmh.top"))
+
+        store.noteBrowserUserAgent("m.hipmh.com", "  ")
+        assertNull(store.getUserAgent("m.hipmh.com"))
+        store.noteBrowserUserAgent("m.hipmh.com", "Chrome/Real")
+        assertEquals("Chrome/Real", store.getUserAgent("m.hipmh.com"))
+
+        store.setCookies("example.com", mapOf("a" to "b"), "HandCopied/1")
+        store.noteBrowserUserAgent("example.com", "Chrome/Real")
+        assertEquals("HandCopied/1", store.getUserAgent("example.com"))
+        assertEquals("a=b", store.getCookieHeader("example.com"))
+    }
+
+    @Test
+    fun `loadAll returns every live cookie for that extension`() {
+        val store = DesktopCookieStore(tempDir.resolve("sessions.json"))
+        val cookie = Cookie.Builder().name("session").value("v").domain("hipmh.com").path("/")
+            .secure().httpOnly().expiresAt(System.currentTimeMillis() + 60_000).build()
+        store.saveFromResponse("hipmh", "https://m.hipmh.com/".toHttpUrl(), listOf(cookie))
+
+        assertEquals(listOf("session"), store.loadAll("hipmh").map { it.name })
+        assertTrue(store.loadAll("other").isEmpty())
     }
 
     @Test

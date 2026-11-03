@@ -2,6 +2,12 @@
 
 这里记录 mihondesk Windows 版的更新。安装包与完整发布说明见 [GitHub Releases](https://github.com/1873412297-art/mihondesk/releases)。继承自 Android 上游的历史日志保留在 [Mihon 更新日志](docs/upstream/MIHON_CHANGELOG.md)。
 
+## [0.3.26](https://github.com/1873412297-art/mihondesk/releases/tag/v0.3.26)
+
+- **图源网页**：登录过程中的跳转不再把窗口关掉。登录留下的 Cookie 会记住，之后的请求继续带上。扩展只给了残缺的 User-Agent（只有 `Mozilla/5.0`）时，改用完整的浏览器标识，避免网站直接拒绝访问；
+- **阅读器**：翻到上一话或下一话时不再整章重开，往回翻会落在上一话的最后一页。当前漫画的在线图片会临时缓存下一话和上一话末尾，离开这本漫画或退出后清掉。还没下完的第一张图仍然取决于图床速度；
+- 说明：0.3.18–0.3.25 为未发布的本地迭代版本，内容随本版一并发布。
+
 ## [0.3.17](https://github.com/1873412297-art/mihondesk/releases/tag/v0.3.17)
 
 - **同步**：局域网同步和扫码配对已移除，只保留 Google Drive。桌面端在浏览器登录，Android 使用系统账号授权；

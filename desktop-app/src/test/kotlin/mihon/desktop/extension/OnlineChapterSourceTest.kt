@@ -149,7 +149,7 @@ class OnlineChapterSourceTest {
         source.cachedPages = listOf(Page(index = 0, imageUrl = "http://127.0.0.1:$serverPort/page1.jpg"))
         val page = source.pages().single().id
         source.open(page).close()
-        tempDir.resolve("cache").toFile().listFiles()!!.single().writeText("<html>old failure</html>")
+        cachedImage(tempDir).writeText("<html>old failure</html>")
         source.open(page).use { it.input.readBytes().size shouldBe 4 }
     }
 
@@ -160,8 +160,35 @@ class OnlineChapterSourceTest {
         val page = source.pages().single().id
         source.open(page).close()
         source.invalidate(page)
-        tempDir.resolve("cache").toFile().listFiles()!!.size shouldBe 0
+        tempDir.resolve("cache").toFile().walkTopDown().none { it.isFile } shouldBe true
     }
+
+    @Test
+    fun `second instance reads the manga cache and does not download the image again`(
+        @TempDir tempDir: Path,
+    ): Unit = runBlocking {
+        var hits = 0
+        server.createContext("/once.jpg") { exchange ->
+            hits++
+            val img = byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 0xFF.toByte(), 0xE0.toByte())
+            exchange.sendResponseHeaders(200, img.size.toLong())
+            exchange.responseBody.use { it.write(img) }
+        }
+        val first = testSource(tempDir)
+        val page = Page(index = 0, imageUrl = "http://127.0.0.1:$serverPort/once.jpg")
+        first.cachedPages = listOf(page)
+        first.open(PageId("100", "page_0000.jpg")).close()
+
+        val second = testSource(tempDir)
+        second.cachedPages = listOf(page)
+        second.open(PageId("100", "page_0000.jpg")).use { it.input.readBytes().size shouldBe 4 }
+
+        hits shouldBe 1
+        cachedImage(tempDir).parentFile.name shouldBe "manga-1"
+    }
+
+    private fun cachedImage(tempDir: Path): java.io.File =
+        tempDir.resolve("cache").toFile().walkTopDown().first { it.isFile }
 
     private fun testSource(tempDir: Path): OnlineChapterSource {
         val asset = ReaderChapterAsset(
