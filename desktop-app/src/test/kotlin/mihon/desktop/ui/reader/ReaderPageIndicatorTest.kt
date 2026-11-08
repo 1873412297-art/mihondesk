@@ -14,6 +14,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performMouseInput
 import androidx.compose.ui.test.v2.runComposeUiTest
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import mihon.reader.session.ReaderAction
@@ -137,6 +138,6 @@ class ReaderPageIndicatorTest {
 
         override suspend fun closeAndFlush() = Unit
 
-        override fun cancelWithoutFlush() = Unit
+        override fun cancelWithoutFlush(): Job = Job()
     }
 }

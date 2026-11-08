@@ -8,6 +8,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.runBlocking
 import mihon.desktop.cli.DesktopCommand
 import mihon.desktop.extension.builtin.BundledLocalSource
+import mihon.desktop.extension.getSources
 import mihon.desktop.preferences.DesktopPreferenceStore
 import mihon.desktop.reader.DesktopReaderFactory
 import org.junit.jupiter.api.Test

@@ -6,8 +6,6 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -37,8 +35,8 @@ class KavitaTracker(
                 Request.Builder().url(authUrl).post(jsonRequestBody("{}")).build(),
                 false,
             ) as? JsonObject ?: throw TrackerApiException("Kavita returned an invalid login response")
-            val jwt = response.kString("token") ?: throw TrackerApiException("Kavita did not return a token")
-            setLoggedIn(true, response.kString("username"), jwt, url)
+            val jwt = response.stringField("token") ?: throw TrackerApiException("Kavita did not return a token")
+            setLoggedIn(true, response.stringField("username"), jwt, url)
             true
         } catch (error: CancellationException) {
             throw error
@@ -74,7 +72,7 @@ class KavitaTracker(
         }
         return values.mapNotNull {
             it as? JsonObject
-        }.filter { it.kString("name").orEmpty().contains(query, true) }.mapNotNull(::toResult)
+        }.filter { it.stringField("name").orEmpty().contains(query, true) }.mapNotNull(::toResult)
     }
 
     override suspend fun findRemote(track: DesktopTrackRecord): DesktopTrackRecord? {
@@ -93,17 +91,17 @@ class KavitaTracker(
             }
         }
         val latest = execute(auth("/Tachiyomi/latest-chapter?seriesId=${track.remoteId}"), allowEmpty = true)
-        val chapter = (latest as? JsonObject)?.kString("number")?.replace(',', '.')?.toDoubleOrNull() ?: 0.0
+        val chapter = (latest as? JsonObject)?.stringField("number")?.replace(',', '.')?.toDoubleOrNull() ?: 0.0
         val total = (execute(auth("/Series/volumes?seriesId=${track.remoteId}")) as? JsonArray).orEmpty()
             .flatMap { (it as? JsonObject)?.get("chapters")?.jsonArray.orEmpty() }
             .mapNotNull {
-                (it as? JsonObject)?.kString("number")?.replace(',', '.')?.toDoubleOrNull()
+                (it as? JsonObject)?.stringField("number")?.replace(',', '.')?.toDoubleOrNull()
             }.maxOrNull()?.toLong()
             ?: 0L
-        val pages = series.kLong("pages") ?: 0
-        val read = series.kLong("pagesRead") ?: 0
+        val pages = series.longField("pages") ?: 0
+        val read = series.longField("pagesRead") ?: 0
         return track.copy(
-            title = series.kString("name") ?: track.title,
+            title = series.stringField("name") ?: track.title,
             totalChapters = total,
             lastChapterRead = chapter,
             status = when {
@@ -151,10 +149,8 @@ class KavitaTracker(
         return if (text.isBlank() && allowEmpty) JsonObject(emptyMap()) else defaultTrackerJson.parseToJsonElement(text)
     }
     private fun toResult(series: JsonObject): TrackSearchResult? {
-        val remoteId = series.kLong("id") ?: return null
-        val title = series.kString("name") ?: return null
+        val remoteId = series.longField("id") ?: return null
+        val title = series.stringField("name") ?: return null
         return TrackSearchResult(id, remoteId, title, trackingUrl = "${requireApi()}/Series/$remoteId")
     }
 }
-private fun JsonObject.kString(name: String) = this[name]?.jsonPrimitive?.content
-private fun JsonObject.kLong(name: String) = kString(name)?.toLongOrNull()

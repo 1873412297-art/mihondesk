@@ -53,11 +53,18 @@ class MangaDetailScreenTest {
             ),
         )
         val base = detailState()
-        base.withDownloadProgress(queue.value, true).chapterDownloads.keys shouldBe setOf(72L)
+        val progressOf: (Long) -> ChapterDownloadProgress? = { chapterId ->
+            queue.value.firstOrNull { it.chapterId == chapterId }?.let {
+                ChapterDownloadProgress(it.status, it.progress)
+            }
+        }
+        val state = base.copy(downloadProgressOf = progressOf, downloadsRunning = true)
+        progressOf(72) shouldBe ChapterDownloadProgress(DownloadStatus.DOWNLOADING, 0.35f)
+        progressOf(1) shouldBe null
         setContent {
             MaterialTheme {
                 Box(Modifier.requiredSize(1280.dp, 1000.dp)) {
-                    MangaDetailScreen(base.withDownloadProgress(queue.value, true), onBack = {})
+                    MangaDetailScreen(state, onBack = {})
                 }
             }
         }

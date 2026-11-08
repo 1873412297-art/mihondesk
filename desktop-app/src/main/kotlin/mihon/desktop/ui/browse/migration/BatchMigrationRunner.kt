@@ -169,6 +169,8 @@ class BatchMigrationRunner(
             )
             val strings = stringsProvider()
             onSnackbar?.invoke(strings.migrateBatchCancelled(successCount, total))
+            // Report first, then let the cancellation finish the job as cancelled.
+            throw e
         }
     }
 

@@ -18,6 +18,8 @@ internal fun rememberReaderPointerIcon(visible: Boolean): PointerIcon {
                     "mihon-reader-hidden",
                 ),
             )
+        }.onFailure {
+            mihon.desktop.logging.DesktopLogger.debug("Reader", "Custom cursor unavailable; using default", it)
         }.getOrDefault(PointerIcon.Default)
     }
     return if (visible) PointerIcon.Default else hidden

@@ -41,4 +41,11 @@ interface LibraryRepository {
     fun allPreferenceSnapshots(): List<mihon.desktop.library.model.PreferenceSnapshotRecord>
     fun allSourcePreferenceSnapshots(): List<mihon.desktop.library.model.SourcePreferenceSnapshotRecord>
     fun checkIntegrity(): List<String>
+
+    /**
+     * Absolute paths of chapters registered as downloaded from an online source. The orphan cleaner
+     * uses the parent directory as an authority on which downloads still belong to the library, even
+     * when a legacy title-named folder no longer matches the manga's current title.
+     */
+    fun registeredChapterAssetPaths(): Set<java.nio.file.Path> = emptySet()
 }

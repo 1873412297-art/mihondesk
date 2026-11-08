@@ -52,7 +52,7 @@ class DesktopCategoryServiceTest {
     }
 
     @Test
-    fun `createCategory adds new category and increments sort order`() = runBlocking {
+    fun `createCategory adds new category and increments sort order`(): Unit = runBlocking {
         service.createCategory("Action")
         val categories = awaitCategories { it.any { c -> c.name == "Action" } }
         val action = categories.first { it.name == "Action" }
@@ -65,14 +65,14 @@ class DesktopCategoryServiceTest {
     }
 
     @Test
-    fun `createCategory with blank string is ignored`() = runBlocking {
+    fun `createCategory with blank string is ignored`(): Unit = runBlocking {
         service.createCategory("   ")
         delay(100)
         service.categories.value shouldHaveSize 0
     }
 
     @Test
-    fun `renameCategory updates category name`() = runBlocking {
+    fun `renameCategory updates category name`(): Unit = runBlocking {
         service.createCategory("OldName")
         val initial = awaitCategories { it.isNotEmpty() }
         val id = initial.first().id
@@ -83,7 +83,7 @@ class DesktopCategoryServiceTest {
     }
 
     @Test
-    fun `reorderCategory updates category order`() = runBlocking {
+    fun `reorderCategory updates category order`(): Unit = runBlocking {
         service.createCategory("Cat1")
         val initial = awaitCategories { it.isNotEmpty() }
         val id = initial.first().id
@@ -94,7 +94,7 @@ class DesktopCategoryServiceTest {
     }
 
     @Test
-    fun `deleteCategory removes the category`() = runBlocking {
+    fun `deleteCategory removes the category`(): Unit = runBlocking {
         service.createCategory("ToDelete")
         val initial = awaitCategories { it.isNotEmpty() }
         val id = initial.first().id
@@ -105,7 +105,7 @@ class DesktopCategoryServiceTest {
     }
 
     @Test
-    fun `setMangaCategories links manga to categories`() = runBlocking {
+    fun `setMangaCategories links manga to categories`(): Unit = runBlocking {
         service.createCategory("Shonen")
         val categories = awaitCategories { it.isNotEmpty() }
         val catId = categories.first().id

@@ -5,6 +5,7 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import mihon.desktop.platform.PortableLayout
 import java.nio.file.Files
 import java.nio.file.LinkOption.NOFOLLOW_LINKS
 import java.nio.file.Path
@@ -48,9 +49,11 @@ class PortableUpdateHandoff(
     }
 
     override val available: Boolean
+        // The updater script copies only `data/`, so a `portable-data/` profile keeps manual updates.
         get() = windowsDirectory != null &&
-            profile == target.resolve("data") &&
-            Files.isRegularFile(target.resolve(".portable"), NOFOLLOW_LINKS) &&
+            profile == target.resolve(PortableLayout.LEGACY_DATA_DIRECTORY) &&
+            listOf(PortableLayout.LEGACY_MARKER, PortableLayout.MARKER)
+                .any { Files.isRegularFile(target.resolve(it), NOFOLLOW_LINKS) } &&
             caller.info().command().orElse(null)?.let(Path::of)?.toAbsolutePath()?.normalize() ==
             target.resolve("mihondesk.exe") &&
             caller.info().startInstant().isPresent
@@ -79,57 +82,86 @@ class PortableUpdateHandoff(
                 created = true
                 val script = handoff.resolve("updater.ps1")
                 requireNotNull(javaClass.getResourceAsStream("/mihondesk-updater.ps1")).use { Files.copy(it, script) }
-                val receipt = Files.createTempFile(profile, ".update-receipt-", ".tmp")
-                try {
-                    Files.writeString(receipt, token)
-                    Files.move(receipt, pointer, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
-                } finally {
-                    Files.deleteIfExists(receipt)
-                }
-                val updateCaller = updateCaller()
-                val command = listOf(
-                    requireNotNull(
-                        windowsDirectory,
-                    ).resolve("System32/WindowsPowerShell/v1.0/powershell.exe").toString(),
-                    "-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden",
-                    "-ExecutionPolicy", "Bypass", "-File", script.toString(),
-                    "-ZipPath", archive.toAbsolutePath().toString(), "-TargetDir", target.toString(),
-                    "-ExpectedSha256", expectedSha256, "-CallerPid", updateCaller.pid().toString(),
-                    "-CallerStartMillis", updateCaller.info().startInstant().orElseThrow().toEpochMilli().toString(),
-                    "-HandoffToken", token,
-                )
+                writeReceipt(token)
                 val helper = ProcessBuilder(
-                    command,
+                    updaterCommand(script, archive, expectedSha256, token, updateCaller()),
                 ).redirectErrorStream(true).redirectOutput(handoff.resolve("update.log").toFile()).start()
-                withTimeout(180_000) {
-                    val ready = handoff.resolve("ready")
-                    while (true) {
-                        check(helper.isAlive) { "Updater preparation failed; see ${handoff.resolve("update.log")}" }
-                        if (Files.isRegularFile(ready, NOFOLLOW_LINKS) && Files.size(ready) == 32L &&
-                            Files.readString(ready) == token
-                        ) {
-                            break
-                        }
-                        delay(100)
-                    }
-                }
-                object : PreparedAppUpdate {
-                    override fun commit() {
-                        check(helper.isAlive) { "Prepared updater has exited" }
-                        Files.writeString(handoff.resolve("commit"), token)
-                    }
-                    override fun abort() {
-                        Files.writeString(handoff.resolve("abort"), token)
-                    }
-                }
+                awaitUpdaterReady(handoff, helper, token)
+                PreparedHandoffUpdate(handoff, helper, token)
             }
         } catch (error: Exception) {
-            if (created) {
-                withContext(NonCancellable + Dispatchers.IO) {
-                    runCatching { Files.writeString(handoff.resolve("abort"), token) }
-                }
-            }
+            if (created) abortHandoff(handoff, token)
             throw error
         }
+    }
+
+    private fun writeReceipt(token: String) {
+        val receipt = Files.createTempFile(profile, ".update-receipt-", ".tmp")
+        try {
+            Files.writeString(receipt, token)
+            Files.move(receipt, pointer, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+        } finally {
+            Files.deleteIfExists(receipt)
+        }
+    }
+
+    private suspend fun awaitUpdaterReady(handoff: Path, helper: Process, token: String) {
+        withTimeout(180_000) {
+            val ready = handoff.resolve("ready")
+            while (true) {
+                check(helper.isAlive) { "Updater preparation failed; see ${handoff.resolve("update.log")}" }
+                if (Files.isRegularFile(ready, NOFOLLOW_LINKS) && Files.size(ready) == 32L &&
+                    Files.readString(ready) == token
+                ) {
+                    return@withTimeout
+                }
+                delay(100)
+            }
+        }
+    }
+
+    private suspend fun abortHandoff(handoff: Path, token: String) {
+        withContext(NonCancellable + Dispatchers.IO) {
+            runCatching { Files.writeString(handoff.resolve("abort"), token) }
+                .onFailure {
+                    mihon.desktop.logging.DesktopLogger.warn(
+                        "Update",
+                        "Failed to write updater abort token",
+                        it,
+                    )
+                }
+        }
+    }
+
+    private fun updaterCommand(
+        script: Path,
+        archive: Path,
+        expectedSha256: String,
+        token: String,
+        updateCaller: ProcessHandle,
+    ): List<String> = listOf(
+        requireNotNull(windowsDirectory).resolve("System32/WindowsPowerShell/v1.0/powershell.exe").toString(),
+        "-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden",
+        "-ExecutionPolicy", "Bypass", "-File", script.toString(),
+        "-ZipPath", archive.toAbsolutePath().toString(), "-TargetDir", target.toString(),
+        "-ExpectedSha256", expectedSha256, "-CallerPid", updateCaller.pid().toString(),
+        "-CallerStartMillis", updateCaller.info().startInstant().orElseThrow().toEpochMilli().toString(),
+        "-HandoffToken", token,
+    )
+}
+
+/** The running updater and its handoff token; commit/abort just write the corresponding marker. */
+private class PreparedHandoffUpdate(
+    private val handoff: Path,
+    private val helper: Process,
+    private val token: String,
+) : PreparedAppUpdate {
+    override fun commit() {
+        check(helper.isAlive) { "Prepared updater has exited" }
+        Files.writeString(handoff.resolve("commit"), token)
+    }
+
+    override fun abort() {
+        Files.writeString(handoff.resolve("abort"), token)
     }
 }

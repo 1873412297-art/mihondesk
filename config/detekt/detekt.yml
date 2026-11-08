@@ -1,0 +1,75 @@
+# Desktop quality gates (see CLAUDE.md). Only the rule sets below run; everything else is off so a
+# failure always means one of the agreed red lines was crossed. Existing violations live in
+# baseline.xml (per module) and may only be removed, never added.
+
+complexity:
+  active: true
+  LongMethod:
+    active: true
+    allowedLines: 60
+  LargeClass:
+    active: true
+    allowedLines: 400
+  CognitiveComplexMethod:
+    active: false
+  ComplexCondition:
+    active: false
+  ComplexInterface:
+    active: false
+  CyclomaticComplexMethod:
+    active: false
+  LabeledExpression:
+    active: false
+  LongParameterList:
+    active: false
+  MethodOverloading:
+    active: false
+  NamedArguments:
+    active: false
+  NestedBlockDepth:
+    active: false
+  NestedScopeFunctions:
+    active: false
+  ReplaceSafeCallChainWithRun:
+    active: false
+  StringLiteralDuplication:
+    active: false
+  TooManyFunctions:
+    active: false
+
+empty-blocks:
+  active: true
+  EmptyFunctionBlock:
+    active: false
+  EmptyCatchBlock:
+    active: true
+    # No name exempts an empty catch: log it or explain it in code.
+    allowedExceptionNameRegex: 'a^'
+
+exceptions:
+  active: true
+  SwallowedException:
+    active: true
+  PrintStackTrace:
+    active: false
+  ThrowingExceptionFromFinally:
+    active: false
+  ThrowingExceptionsWithoutMessageOrCause:
+    active: false
+  TooGenericExceptionCaught:
+    active: false
+  TooGenericExceptionThrown:
+    active: false
+
+comments:
+  active: false
+coroutines:
+  active: false
+naming:
+  active: false
+performance:
+  active: false
+potential-bugs:
+  active: false
+style:
+  active: false

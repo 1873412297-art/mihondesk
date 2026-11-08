@@ -51,32 +51,32 @@ import java.io.Closeable
  * end as a backstop).
  */
 class PageLoadCoordinator(
-    private val decoder: PageDecoder,
-    private val cache: WeightedTileCache,
+    internal val decoder: PageDecoder,
+    internal val cache: WeightedTileCache,
     scope: CoroutineScope,
-    private val maxFullPagePixels: Long = Long.MAX_VALUE,
+    internal val maxFullPagePixels: Long = Long.MAX_VALUE,
 ) : Closeable {
     init {
         require(maxFullPagePixels > 0L) { "maxFullPagePixels must be positive" }
     }
 
-    private val job = SupervisorJob(scope.coroutineContext[Job])
-    private val scope = CoroutineScope(scope.coroutineContext + job)
+    internal val job = SupervisorJob(scope.coroutineContext[Job])
+    internal val scope = CoroutineScope(scope.coroutineContext + job)
 
-    private val lock = Any()
-    private val flights = HashMap<FlightKey, Flight>()
-    private val metadata = HashMap<PageId, ImageMetadata>()
-    private val pageErrors = HashMap<PageId, RecordedError>()
-    private val visiblePins = HashMap<TileKey, WeightedTileCache.TilePin>()
-    private val visibleDemand = HashMap<PageId, Int>()
-    private val uncachedTiles = ArrayList<DecodedTile>()
-    private var idleSignal = CompletableDeferred(Unit)
-    private var chapterSource: ChapterSource? = null
-    private var chapterPages = listOf<PageDescriptor>()
-    private var chapterPageIds = emptySet<PageId>()
-    private var prefetchSet = emptySet<PageId>()
-    private var chapterEpoch = 0
-    private var closed = false
+    internal val lock = Any()
+    internal val flights = HashMap<FlightKey, Flight>()
+    internal val metadata = HashMap<PageId, ImageMetadata>()
+    internal val pageErrors = HashMap<PageId, RecordedError>()
+    internal val visiblePins = HashMap<TileKey, WeightedTileCache.TilePin>()
+    internal val visibleDemand = HashMap<PageId, Int>()
+    internal val uncachedTiles = ArrayList<DecodedTile>()
+    internal var idleSignal = CompletableDeferred(Unit)
+    internal var chapterSource: ChapterSource? = null
+    internal var chapterPages = listOf<PageDescriptor>()
+    internal var chapterPageIds = emptySet<PageId>()
+    internal var prefetchSet = emptySet<PageId>()
+    internal var chapterEpoch = 0
+    internal var closed = false
 
     val cacheMetrics: CacheMetrics
         get() = cache.metrics
@@ -302,323 +302,5 @@ class PageLoadCoordinator(
         }
         drained.cancelAndClose()
         job.cancel()
-    }
-
-    private suspend fun runVisibleFlight(key: FlightKey): WeightedTileCache.LoadedTile {
-        demandUp(key.pageId)
-        try {
-            val epoch = synchronized(lock) {
-                checkOpenLocked()
-                if (chapterSource == null) throw ReaderFailure.SourceClosed()
-                chapterEpoch
-            }
-            while (true) {
-                val (flight, lead) = synchronized(lock) {
-                    checkOpenLocked()
-                    if (chapterEpoch != epoch) throw CancellationException("chapter changed")
-                    memoizedFailureLocked(key.pageId)?.let { throw it }
-                    val existing = flights[key]
-                    if (existing != null && !existing.cancelled) {
-                        existing.visibleWaiters++
-                        existing.visible = true
-                        notifyDemandChangedLocked()
-                        existing to false
-                    } else {
-                        val fresh = Flight(
-                            visible = true,
-                            prefetchWanted = key is FlightKey.FullPage &&
-                                key.frameIndex == 0 &&
-                                key.pageId in prefetchSet,
-                        )
-                        fresh.visibleWaiters = 1
-                        flights[key] = fresh
-                        fresh to true
-                    }
-                }
-                if (lead) runFlight(key, flight)
-                try {
-                    return flight.deferred.await()
-                } catch (cancel: CancellationException) {
-                    currentCoroutineContext().ensureActive()
-                    synchronized(lock) {
-                        if (chapterEpoch != epoch) throw CancellationException("chapter changed")
-                        if (flights[key] === flight && flight.cancelled) flights.remove(key)
-                    }
-                    continue
-                } finally {
-                    synchronized(lock) { flight.visibleWaiters-- }
-                }
-            }
-        } finally {
-            demandDown(key.pageId)
-        }
-    }
-
-    private suspend fun runFlight(key: FlightKey, flight: Flight) = kotlinx.coroutines.withContext(
-        PageLoadPriority { synchronized(lock) { flight.visible } },
-    ) {
-        val pageId = key.pageId
-        try {
-            val source = synchronized(lock) { chapterSource } ?: throw ReaderFailure.SourceClosed()
-            synchronized(lock) { memoizedFailureLocked(pageId) }?.let { throw it }
-            val meta = metadataFor(source, flight, pageId)
-            val loaded = when (key) {
-                is FlightKey.FullPage -> loadFullPage(source, flight, key, meta)
-                is FlightKey.Region -> loadRegionTile(source, flight, key, meta)
-            }
-            if (!loaded.resident) {
-                synchronized(lock) { uncachedTiles += loaded.tile }
-            }
-            flight.deferred.complete(loaded)
-        } catch (error: Throwable) {
-            if (error !is CancellationException && error !is ReaderFailure.SourceClosed) {
-                memoize(pageId, error)
-            }
-            flight.deferred.completeExceptionally(error)
-        } finally {
-            synchronized(lock) { if (flights[key] === flight) flights.remove(key) }
-        }
-    }
-
-    private suspend fun loadFullPage(
-        source: ChapterSource,
-        flight: Flight,
-        key: FlightKey.FullPage,
-        meta: ImageMetadata,
-    ): WeightedTileCache.LoadedTile {
-        val pageId = key.pageId
-        require(meta.isAnimated || key.frameIndex == 0) { "static pages expose only frame zero" }
-        val tileKey = fullPageTileKey(pageId, key.frameIndex, meta)
-        val sampleSize = tileKey.sampleSize
-        synchronized(lock) { if (flight.visible) pinVisibleLocked(tileKey) }
-        return cache.getOrLoad(tileKey, insertGuard = { !flight.cancelled }) {
-            flight.checkpoint()
-            val tile = if (sampleSize == 1) {
-                decoder.decodeFull(source.open(pageId), meta, FrameId(pageId, key.frameIndex))
-            } else {
-                decoder.decodeRegion(
-                    source.open(pageId),
-                    meta,
-                    TileRequest(
-                        key = tileKey,
-                        targetWidth = (meta.width + sampleSize - 1) / sampleSize,
-                        targetHeight = (meta.height + sampleSize - 1) / sampleSize,
-                    ),
-                )
-            }
-            try {
-                flight.checkpoint()
-            } catch (cancel: CancellationException) {
-                tile.close()
-                throw cancel
-            }
-            tile
-        }
-    }
-
-    private suspend fun loadRegionTile(
-        source: ChapterSource,
-        flight: Flight,
-        key: FlightKey.Region,
-        meta: ImageMetadata,
-    ): WeightedTileCache.LoadedTile {
-        val pageId = key.pageId
-        // GIF region decode ignores sampleSize (Task 4): force 1 for animated pages so the same
-        // raster is never cached under two keys and tile weights stay honest.
-        val sampleSize = if (meta.isAnimated) 1 else key.sampleSize
-        val frameId = if (meta.isAnimated) FrameId(pageId, key.frameIndex) else null
-        val tileKey = TileKey(pageId, frameId, key.bounds, sampleSize)
-        val request = TileRequest(
-            key = tileKey,
-            targetWidth = (key.bounds.width + sampleSize - 1) / sampleSize,
-            targetHeight = (key.bounds.height + sampleSize - 1) / sampleSize,
-        )
-        synchronized(lock) { if (flight.visible) pinVisibleLocked(tileKey) }
-        return cache.getOrLoad(tileKey, insertGuard = { !flight.cancelled }) {
-            flight.checkpoint()
-            val tile = decoder.decodeRegion(source.open(pageId), meta, request)
-            try {
-                flight.checkpoint()
-            } catch (cancel: CancellationException) {
-                tile.close()
-                throw cancel
-            }
-            tile
-        }
-    }
-
-    private fun fullPageTileKey(pageId: PageId, frameIndex: Int, meta: ImageMetadata): TileKey {
-        var sampleSize = 1
-        if (!meta.isAnimated) {
-            while (
-                ((meta.width.toLong() + sampleSize - 1) / sampleSize) *
-                ((meta.height.toLong() + sampleSize - 1) / sampleSize) > maxFullPagePixels
-            ) {
-                sampleSize = Math.multiplyExact(sampleSize, 2)
-            }
-        }
-        return TileKey(
-            pageId = pageId,
-            frameId = if (meta.isAnimated) FrameId(pageId, frameIndex) else null,
-            bounds = IntRect(0, 0, meta.width, meta.height),
-            sampleSize = sampleSize,
-        )
-    }
-
-    private suspend fun metadataFor(source: ChapterSource, flight: Flight, pageId: PageId): ImageMetadata {
-        synchronized(lock) { metadata[pageId] }?.let { return it }
-        flight.checkpoint()
-        val probed = decoder.probe(source.open(pageId))
-        flight.checkpoint()
-        synchronized(lock) { metadata[pageId] = probed }
-        return probed
-    }
-
-    private fun launchPrefetch(frame: FlightKey.FullPage, flight: Flight) {
-        flight.job = scope.launch {
-            // Yield once so visible requests queued behind this job can register demand first,
-            // then wait out any active visible load before touching the source or the ledger.
-            yield()
-            awaitVisibleIdle(flight, frame.pageId)
-            if (!flight.cancelled) runFlight(frame, flight)
-        }
-    }
-
-    private suspend fun awaitVisibleIdle(flight: Flight, pageId: PageId) {
-        while (true) {
-            val signal = synchronized(lock) {
-                if (flight.visible || flight.cancelled) return
-                val hasOtherDemand = visibleDemand.any { (id, count) -> id != pageId && count > 0 }
-                if (!hasOtherDemand) return
-                idleSignal
-            }
-            signal.await()
-        }
-    }
-
-    private fun notifyDemandChangedLocked() {
-        val signal = idleSignal
-        idleSignal = CompletableDeferred()
-        signal.complete(Unit)
-    }
-
-    private fun demandUp(pageId: PageId) {
-        synchronized(lock) {
-            visibleDemand.merge(pageId, 1, Int::plus)
-            notifyDemandChangedLocked()
-        }
-    }
-
-    private fun demandDown(pageId: PageId) {
-        synchronized(lock) {
-            val count = (visibleDemand[pageId] ?: 0) - 1
-            if (count <= 0) visibleDemand.remove(pageId) else visibleDemand[pageId] = count
-            notifyDemandChangedLocked()
-        }
-    }
-
-    private fun pinVisibleLocked(key: TileKey) {
-        if (key !in visiblePins) visiblePins[key] = cache.pin(key)
-    }
-
-    private fun memoizedFailureLocked(pageId: PageId): Throwable? {
-        val recorded = pageErrors[pageId] ?: return null
-        val asset = chapterSource?.asset ?: return null
-        return if (recorded.sizeBytes == asset.sizeBytes && recorded.modifiedAt == asset.modifiedAt) {
-            recorded.failure
-        } else {
-            pageErrors.remove(pageId)
-            null
-        }
-    }
-
-    private fun memoize(pageId: PageId, failure: Throwable) {
-        synchronized(lock) {
-            val asset = chapterSource?.asset ?: return
-            pageErrors[pageId] = RecordedError(failure, asset.sizeBytes, asset.modifiedAt)
-        }
-    }
-
-    private fun checkOpenLocked() {
-        if (closed) throw IllegalStateException("PageLoadCoordinator is closed")
-    }
-
-    /** Collects and clears all per-chapter state; callers cancel/close the results outside the lock. */
-    private fun drainStateLocked(): DrainedState {
-        val drained = DrainedState(
-            flights = flights.values.toList(),
-            pins = visiblePins.values.toList(),
-            uncached = uncachedTiles.toList(),
-            chapterIds = buildSet {
-                chapterPages.mapTo(this) { it.id.chapterId }
-                chapterSource?.let { add(it.asset.chapterId.toString()) }
-            },
-        )
-        flights.values.forEach { it.cancelled = true }
-        flights.clear()
-        visiblePins.clear()
-        uncachedTiles.clear()
-        prefetchSet = emptySet()
-        chapterPages = emptyList()
-        chapterPageIds = emptySet()
-        return drained
-    }
-
-    private class DrainedState(
-        val flights: List<Flight>,
-        val pins: List<WeightedTileCache.TilePin>,
-        val uncached: List<DecodedTile>,
-        val chapterIds: Set<String>,
-    ) {
-        fun cancelAndClose() {
-            flights.forEach { it.cancel("chapter state drained") }
-            pins.forEach { it.close() }
-            uncached.forEach { it.close() }
-        }
-    }
-
-    private sealed interface FlightKey {
-        val pageId: PageId
-
-        data class FullPage(
-            override val pageId: PageId,
-            val frameIndex: Int,
-        ) : FlightKey
-
-        data class Region(
-            override val pageId: PageId,
-            val bounds: IntRect,
-            val frameIndex: Int,
-            val sampleSize: Int,
-        ) : FlightKey
-    }
-
-    private class RecordedError(
-        val failure: Throwable,
-        val sizeBytes: Long,
-        val modifiedAt: Long,
-    )
-
-    /** A single-flight load. [cancel] is idempotent and safe to call from any thread. */
-    private class Flight(
-        var prefetchWanted: Boolean,
-        @Volatile var visible: Boolean = false,
-    ) {
-        val deferred = CompletableDeferred<WeightedTileCache.LoadedTile>()
-        var job: Job? = null
-        var visibleWaiters = 0
-
-        @Volatile var cancelled = false
-
-        suspend fun checkpoint() {
-            currentCoroutineContext().ensureActive()
-            if (cancelled) throw CancellationException("load superseded")
-        }
-
-        fun cancel(reason: String) {
-            cancelled = true
-            job?.cancel()
-            deferred.completeExceptionally(CancellationException(reason))
-        }
     }
 }

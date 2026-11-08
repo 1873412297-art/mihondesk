@@ -66,7 +66,7 @@ private const val LIBRARY_LIMIT = 6
 private const val COMMAND_LIMIT = 6
 private const val SOURCE_DEBOUNCE_MILLIS = 350L
 
-private sealed interface PaletteRow {
+internal sealed interface PaletteRow {
     data class Header(val key: String, val title: String, val loading: Boolean = false, val error: String? = null) :
         PaletteRow
     data class Entry(val item: PaletteItem, val index: Int) : PaletteRow
@@ -327,78 +327,6 @@ fun CommandPalette(
                     )
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun PaletteHeader(row: PaletteRow.Header) {
-    val strings = LocalStrings.current
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 4.dp)
-            .testTag("palette-${row.key}"),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Text(
-            text = row.title,
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.primary,
-            fontWeight = FontWeight.SemiBold,
-        )
-        when {
-            row.loading -> Text(
-                strings.text(UiText.PaletteSearching),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            row.error != null -> Text(
-                row.error,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.error,
-            )
-        }
-    }
-}
-
-@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
-@Composable
-private fun PaletteEntryRow(item: PaletteItem, isSelected: Boolean, onHover: () -> Unit, onClick: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 8.dp, vertical = 1.dp)
-            .background(
-                color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
-                shape = RoundedCornerShape(8.dp),
-            )
-            .onPointerEvent(PointerEventType.Move) { if (!isSelected) onHover() }
-            .clickable(onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 7.dp)
-            .testTag("palette-item-${item.key}"),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        Text(
-            text = item.title,
-            style = MaterialTheme.typography.bodyMedium,
-            color = if (isSelected) {
-                MaterialTheme.colorScheme.onPrimaryContainer
-            } else {
-                MaterialTheme.colorScheme.onSurface
-            },
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f, fill = false),
-        )
-        item.subtitle?.let {
-            Text(
-                text = it,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
         }
     }
 }

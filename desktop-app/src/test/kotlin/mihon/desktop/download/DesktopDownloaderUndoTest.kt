@@ -177,7 +177,7 @@ class DesktopDownloaderUndoTest {
     @Test
     fun `restoreDownloads restarts a drained queue so restored items get processed`(
         @TempDir tempDir: Path,
-    ) = runBlocking {
+    ): Unit = runBlocking {
         val downloader = DesktopDownloader(
             store = DownloadStore(tempDir.resolve("drained-undo-queue.json")),
             diskProvider = DownloadDiskProvider(tempDir.resolve("drained-undo-downloads")),
@@ -206,9 +206,13 @@ class DesktopDownloaderUndoTest {
 
             // Regression: before the fix the restored item stayed QUEUED forever because a drained
             // queue was never restarted. Now it must be picked up and processed again (the empty
-            // page list makes processing fail fast with ERROR).
+            // page list makes processing fail fast with ERROR). Wait for a terminal status: an item
+            // passes through DOWNLOADING on the way there, so "not QUEUED" is not settled yet.
             withTimeout(5_000) {
-                while (downloader.queueState.value.any { it.status == DownloadStatus.QUEUED }) {
+                while (
+                    downloader.queueState.value.single().status !in
+                    listOf(DownloadStatus.ERROR, DownloadStatus.COMPLETED)
+                ) {
                     delay(50)
                 }
             }

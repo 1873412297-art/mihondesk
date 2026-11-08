@@ -25,9 +25,9 @@ internal fun isStoreCandidateInstallable(
     available: List<ExtensionStoreItem>,
 ): Boolean {
     if (item.downloadUrl.isBlank()) return false
-    val repoUrl = item.repoUrl.trim().trimEnd('/')
+    val repoUrl = normalizeRepositoryUrl(item.repoUrl)
     if (repoUrl.isEmpty()) return true
-    if (repositories.none { it.trim().trimEnd('/') == repoUrl }) return false
+    if (repositories.none { normalizeRepositoryUrl(it) == repoUrl }) return false
     // [available] already holds one selected candidate per package, so only the package can be
     // compared here; the candidate's own store was checked above.
     return available.any { it.pkg == item.pkg }

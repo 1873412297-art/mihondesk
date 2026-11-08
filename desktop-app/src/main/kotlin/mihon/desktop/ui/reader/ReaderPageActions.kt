@@ -114,8 +114,9 @@ fun readerPageFileName(page: PageDescriptor, pageIndex: Int): String {
         .ifBlank { "page-${pageIndex + 1}" }
     val sanitized = baseName.map { character ->
         if (character.isLetterOrDigit() || character == '-' || character == '_') character else '_'
-    }.joinToString("")
-    return "${sanitized.ifBlank { "page-${pageIndex + 1}" }}.png"
+    }.joinToString("").ifBlank { "page-${pageIndex + 1}" }
+    // An entry named CON.jpg would otherwise suggest CON.png, which Windows refuses to create.
+    return "${mihon.reader.source.WindowsFileNames.sanitize(sanitized)}.png"
 }
 
 fun ImageBitmap.encodePageImage(target: ReaderPageActionTarget): ReaderPageImage? {
@@ -163,7 +164,11 @@ fun defaultReaderPageActionHandler(
         } catch (_: Exception) {
             false
         } finally {
+            // Best-effort cleanup; a failure here is not actionable.
             runCatching { Files.deleteIfExists(temp) }
+                .onFailure {
+                    mihon.desktop.logging.DesktopLogger.debug("Reader", "Failed to delete temporary cover file", it)
+                }
         }
     }
 
@@ -223,15 +228,25 @@ private object ReaderPageFileActions {
 
     private fun openPathInOs(path: Path): Boolean {
         val os = System.getProperty("os.name", "").lowercase()
-        val processResult = runCatching {
-            when {
-                os.contains("win") -> ProcessBuilder("explorer.exe", "/select,${path.toAbsolutePath()}").start()
-                os.contains("mac") -> ProcessBuilder("open", "-R", path.toAbsolutePath().toString()).start()
-                else -> ProcessBuilder("xdg-open", path.toAbsolutePath().toString()).start()
+        val process = runCatching {
+            val builder = when {
+                os.contains("win") -> ProcessBuilder("explorer.exe", "/select,${path.toAbsolutePath()}")
+                os.contains("mac") -> ProcessBuilder("open", "-R", path.toAbsolutePath().toString())
+                else -> ProcessBuilder("xdg-open", path.toAbsolutePath().toString())
             }
-            true
-        }.getOrDefault(false)
-        if (processResult) return true
+            builder.start()
+        }.getOrNull()
+        if (process != null) {
+            // The launcher detaches immediately; closing the pipes and tracking the handle keeps
+            // repeated shares from accumulating children.
+            runCatching {
+                process.inputStream.close()
+                process.errorStream.close()
+                process.outputStream.close()
+            }
+            mihon.desktop.platform.ChildProcessReaper.track(process)
+            return true
+        }
         if (GraphicsEnvironment.isHeadless()) return false
         return runCatching {
             if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.OPEN)) {

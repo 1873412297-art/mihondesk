@@ -2,10 +2,6 @@ package mihon.desktop.ui.common
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -100,38 +96,6 @@ enum class NavRailState {
             userCollapsed -> Collapsed
             else -> Expanded
         }
-    }
-}
-
-/** App-wide observable layout prefs, shared by the shell, Settings and the Ctrl+B shortcut. */
-object DesktopLayoutPrefs {
-    private var boundStore: DesktopPreferenceStore? = null
-    var contentDensity by mutableStateOf(ContentDensity.Standard)
-        private set
-    var railCollapsed by mutableStateOf(false)
-        private set
-    var railToggleRequests by mutableIntStateOf(0)
-        private set
-
-    fun bind(store: DesktopPreferenceStore?) {
-        if (store === boundStore && store != null) return
-        boundStore = store
-        contentDensity = ContentDensity.load(store)
-        railCollapsed = store?.property(NavRailState.PREF_KEY_COLLAPSED)?.toBooleanStrictOrNull() ?: false
-    }
-
-    fun updateContentDensity(store: DesktopPreferenceStore?, density: ContentDensity) {
-        contentDensity = density
-        store?.update { setProperty(ContentDensity.PREF_KEY, density.name) }
-    }
-
-    fun updateRailCollapsed(store: DesktopPreferenceStore?, collapsed: Boolean) {
-        railCollapsed = collapsed
-        store?.update { setProperty(NavRailState.PREF_KEY_COLLAPSED, collapsed.toString()) }
-    }
-
-    fun requestRailToggle() {
-        railToggleRequests++
     }
 }
 

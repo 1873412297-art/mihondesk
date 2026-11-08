@@ -25,6 +25,8 @@ class DownloadCacheCleaner(
 
     fun clearImageDiskCache(cacheDir: Path): Long = Companion.clearImageDiskCache(cacheDir)
 
+    fun clearImageCaches(cacheRoot: Path): Long = Companion.clearImageCaches(cacheRoot)
+
     /** Deletes downloaded chapters of manga that are no longer in the library (not favourited or gone). */
     fun deleteDownloadsNotInLibrary(protectedMangaIds: Set<Long> = emptySet(), dryRun: Boolean = false): CleanReport =
         Companion.deleteDownloadsNotInLibrary(
@@ -32,10 +34,12 @@ class DownloadCacheCleaner(
             diskProvider,
             protectedMangaIds + activeMangaIds(),
             dryRun,
+            repository.registeredChapterAssetPaths(),
         )
 
     companion object {
         private val MANGA_ID_DIR = Regex("manga-(\\d+)")
+        private val IMAGE_CACHE_DIRECTORIES = listOf("covers", "online-pages")
 
         /**
          * Removes per-manga download folders whose manga is not a library favourite.
@@ -48,12 +52,22 @@ class DownloadCacheCleaner(
             diskProvider: DownloadDiskProvider,
             protectedMangaIds: Set<Long> = emptySet(),
             dryRun: Boolean = false,
+            registeredChapterPaths: Set<Path> = emptySet(),
         ): CleanReport {
             val favourites = manga.filter { it.favorite }
             val keptIds = favourites.map { it.id }.toSet() + protectedMangaIds
+            // Keep the folder under every name a release may have given it, or a favourite downloaded
+            // with an older naming rule would look orphaned and be deleted.
             val keptLegacy = (favourites + manga.filter { it.id in protectedMangaIds })
-                .map { it.sourceId.toString() to diskProvider.sanitizeFileName(it.title) }
+                .flatMap { record ->
+                    DownloadFileNames.candidates(record.title).map { record.sourceId.toString() to it }
+                }
                 .toSet()
+            // A registered chapter is the strongest evidence that its manga folder still belongs to
+            // the library, even after the manga title (and therefore a legacy folder name) changed.
+            val registeredMangaDirs = registeredChapterPaths.mapTo(mutableSetOf()) { path ->
+                path.parent ?: path
+            }
             var chapters = 0
             var freed = 0L
             for (root in diskProvider.downloadRoots) {
@@ -66,7 +80,10 @@ class DownloadCacheCleaner(
                         if (!Files.isDirectory(mangaDir)) continue
                         val name = mangaDir.fileName.toString()
                         val id = MANGA_ID_DIR.matchEntire(name)?.groupValues?.get(1)?.toLongOrNull()
-                        val keep = if (id != null) id in keptIds else (sourceId to name) in keptLegacy
+                        val normalizedDir = mangaDir.toAbsolutePath().normalize()
+                        val keep = (id != null && id in keptIds) ||
+                            (sourceId to name) in keptLegacy ||
+                            normalizedDir in registeredMangaDirs
                         if (keep) continue
                         val entries = runCatching { Files.list(mangaDir).use { it.count().toInt() } }.getOrDefault(0)
                         val size = getDirectorySize(mangaDir)
@@ -84,24 +101,7 @@ class DownloadCacheCleaner(
             true
         }.getOrDefault(false)
 
-        fun calculateDownloadSize(downloadsDir: Path): Long {
-            if (!Files.exists(downloadsDir)) return 0L
-            return try {
-                Files.walk(downloadsDir).use { stream ->
-                    stream.filter { Files.isRegularFile(it) }
-                        .mapToLong {
-                            try {
-                                Files.size(it)
-                            } catch (_: Exception) {
-                                0L
-                            }
-                        }
-                        .sum()
-                }
-            } catch (_: Exception) {
-                0L
-            }
-        }
+        fun calculateDownloadSize(downloadsDir: Path): Long = getDirectorySize(downloadsDir)
 
         fun getDirectorySize(dir: Path): Long {
             if (!Files.exists(dir)) return 0L
@@ -111,13 +111,15 @@ class DownloadCacheCleaner(
                         .mapToLong {
                             try {
                                 Files.size(it)
-                            } catch (_: Exception) {
+                            } catch (_: java.io.IOException) {
+                                // A file deleted mid-walk (a finishing download) just does not count.
                                 0L
                             }
                         }
                         .sum()
                 }
-            } catch (_: Exception) {
+            } catch (error: Exception) {
+                mihon.desktop.logging.DesktopLogger.warn("CacheCleaner", "Unable to measure $dir", error)
                 0L
             }
         }
@@ -161,28 +163,41 @@ class DownloadCacheCleaner(
             )
         }
 
+        /**
+         * Clears only the image-bearing cache directories. The cache root also holds the webview
+         * profile, extracted native libraries and the portable temp directory, which must survive.
+         */
+        fun clearImageCaches(cacheRoot: Path): Long {
+            if (!Files.isDirectory(cacheRoot)) return 0L
+            return IMAGE_CACHE_DIRECTORIES.sumOf { name ->
+                val dir = cacheRoot.resolve(name)
+                if (Files.isDirectory(dir)) clearImageDiskCache(dir) else 0L
+            }
+        }
+
         fun clearImageDiskCache(cacheDir: Path): Long {
             if (!Files.exists(cacheDir)) return 0L
             var freed = 0L
             try {
-                Files.walk(cacheDir)
-                    .sorted(Comparator.reverseOrder())
-                    .forEach { path ->
-                        if (path != cacheDir) {
-                            try {
-                                if (Files.isRegularFile(path)) {
-                                    freed += Files.size(path)
+                Files.walk(cacheDir).use { stream ->
+                    stream.sorted(Comparator.reverseOrder())
+                        .forEach { path ->
+                            if (path != cacheDir) {
+                                try {
+                                    if (Files.isRegularFile(path)) {
+                                        freed += Files.size(path)
+                                    }
+                                    Files.deleteIfExists(path)
+                                } catch (e: Exception) {
+                                    mihon.desktop.logging.DesktopLogger.warn(
+                                        "DownloadCacheCleaner",
+                                        "Failed to delete cache file $path",
+                                        e,
+                                    )
                                 }
-                                Files.deleteIfExists(path)
-                            } catch (e: Exception) {
-                                mihon.desktop.logging.DesktopLogger.warn(
-                                    "DownloadCacheCleaner",
-                                    "Failed to delete cache file $path",
-                                    e,
-                                )
                             }
                         }
-                    }
+                }
             } catch (e: Exception) {
                 mihon.desktop.logging.DesktopLogger.warn(
                     "DownloadCacheCleaner",

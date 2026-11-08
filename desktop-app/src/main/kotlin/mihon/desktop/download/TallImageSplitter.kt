@@ -60,7 +60,7 @@ class TallImageSplitter(
 
         val produced = mutableListOf<Path>()
         return try {
-            val metadata = decoder.probe(openInput(pageFile))
+            val metadata = openInput(pageFile).use { decoder.probe(it) }
             if (metadata.isAnimated) return TallImageSplitResult.Untouched
             if (!TallImageSplitPolicy.shouldSplit(metadata.width, metadata.height, optimalSplitHeight)) {
                 return TallImageSplitResult.Untouched
@@ -80,19 +80,21 @@ class TallImageSplitter(
                 val staging = target.resolveSibling("${target.fileName}.part")
                 produced.add(target)
                 try {
-                    val tile = decoder.decodeRegion(
-                        openInput(pageFile),
-                        metadata,
-                        TileRequest(
-                            TileKey(
-                                PageId(SPLITTER_PAGE_ID, pageFile.fileName.toString()),
-                                null,
-                                IntRect(0, top, metadata.width, bottom),
+                    val tile = openInput(pageFile).use { input ->
+                        decoder.decodeRegion(
+                            input,
+                            metadata,
+                            TileRequest(
+                                TileKey(
+                                    PageId(SPLITTER_PAGE_ID, pageFile.fileName.toString()),
+                                    null,
+                                    IntRect(0, top, metadata.width, bottom),
+                                ),
+                                metadata.width,
+                                bottom - top,
                             ),
-                            metadata.width,
-                            bottom - top,
-                        ),
-                    )
+                        )
+                    }
                     try {
                         encodeJpeg(tile.image, staging)
                     } finally {
@@ -111,6 +113,7 @@ class TallImageSplitter(
             Files.delete(pageFile)
             TallImageSplitResult.Split(partCount, totalBytes)
         } catch (error: CancellationException) {
+            // Best-effort cleanup; a failure here is not actionable.
             produced.forEach { runCatching { Files.deleteIfExists(it) } }
             throw error
         } catch (error: Exception) {

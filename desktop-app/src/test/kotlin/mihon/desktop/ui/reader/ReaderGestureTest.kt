@@ -21,6 +21,7 @@ import androidx.compose.ui.test.v2.runComposeUiTest
 import androidx.compose.ui.unit.dp
 import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.shouldBe
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import mihon.reader.model.PageDescriptor
@@ -286,9 +287,12 @@ class ReaderGestureTest {
             swipe(start = center, end = center + Offset(120f, 0f), durationMillis = 200)
         }
         waitForIdle()
+        // The gesture is coalesced into one committed pan once the drag settles.
+        mainClock.advanceTimeBy(300)
+        waitForIdle()
 
         val pans = session.actions.filterIsInstance<ReaderAction.SetPan>()
-        (pans.size > 1) shouldBe true
+        pans.isNotEmpty() shouldBe true
         (pans.last().pan.x > 0f) shouldBe true
         (pans.last().pan.x <= 400f) shouldBe true
 
@@ -406,6 +410,6 @@ class ReaderGestureTest {
 
         override suspend fun closeAndFlush() = Unit
 
-        override fun cancelWithoutFlush() = Unit
+        override fun cancelWithoutFlush(): Job = Job()
     }
 }

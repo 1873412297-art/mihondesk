@@ -172,9 +172,10 @@ fun MangaCoverDialog(
                                             ?.takeIf { it.exists() }
                                             ?: File(System.getProperty("user.home"), "Downloads")
 
-                                        val safeName = mangaTitle
-                                            .replace(Regex("[\\\\/:*?\"<>|]"), "_")
-                                            .take(40)
+                                        // take(40) can leave a trailing dot or space, so sanitize after it.
+                                        val safeName = mihon.reader.source.WindowsFileNames.sanitize(
+                                            mangaTitle.take(40),
+                                        )
                                         val ext = sourcePath.fileName.toString().substringAfterLast('.', "jpg")
                                         val destFile = File(picturesDir, "${safeName}_cover.$ext")
 

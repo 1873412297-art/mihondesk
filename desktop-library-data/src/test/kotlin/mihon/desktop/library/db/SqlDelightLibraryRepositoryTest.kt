@@ -322,6 +322,32 @@ class SqlDelightLibraryRepositoryTest {
     }
 
     @Test
+    fun `registered chapter asset paths resolve online downloads and skip local manga`() {
+        val file = tempDir.resolve("registered-assets.db")
+        DesktopLibraryDatabaseFactory.open(file).use { repository ->
+            val onlineManga = repository.insertManga(MangaRecord(sourceId = 3, url = "/online", title = "Online"))
+            val onlineChapter = repository.insertChapter(
+                ChapterRecord(mangaId = onlineManga, url = "/chapter", name = "Chapter 1"),
+            )
+            repository.insertLocalManga(LocalMangaRecord(onlineManga, "downloads/online", "", 1L))
+            repository.insertLocalChapter(
+                LocalChapterRecord(onlineChapter, "Chapter 1", "DIRECTORY", 10L, 2L),
+            )
+            val localManga = repository.insertManga(MangaRecord(sourceId = 0, url = "/local", title = "Local"))
+            val localChapter = repository.insertChapter(
+                ChapterRecord(mangaId = localManga, url = "/chapter", name = "Chapter"),
+            )
+            repository.insertLocalManga(LocalMangaRecord(localManga, "local/manga/x", "", 1L))
+            repository.insertLocalChapter(LocalChapterRecord(localChapter, "Chapter", "DIRECTORY", 1L, 1L))
+
+            val paths = repository.registeredChapterAssetPaths()
+
+            paths.any { it.endsWith(Path.of("downloads/online", "Chapter 1")) } shouldBe true
+            paths.none { it.endsWith(Path.of("local/manga/x", "Chapter")) } shouldBe true
+        }
+    }
+
+    @Test
     fun `closing the repository closes its owned writer`() {
         val repository = DesktopLibraryDatabaseFactory.open(tempDir.resolve("closed.db"))
         repository.close()

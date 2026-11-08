@@ -47,6 +47,31 @@ class ExtensionStoreServiceTest {
     }
 
     @Test
+    fun `malformed index pb falls back to the legacy json index`(@TempDir tempDir: Path) = runBlocking {
+        val client = OkHttpClient.Builder().addInterceptor { chain ->
+            val path = chain.request().url.encodedPath
+            val (code, body) = when {
+                path.endsWith("/index.pb") -> 200 to byteArrayOf(0x0A, 0x7F)
+                path.endsWith("/index.min.json") -> 200 to (
+                    """[{"name":"Tachiyomi: A","pkg":"p.a","apk":"a.apk","lang":"en","code":1,"version":"1.4.1",""" +
+                        """"nsfw":0,"sources":[{"name":"A","lang":"en","id":"1","baseUrl":"https://a"}]}]"""
+                    ).toByteArray()
+                else -> 404 to ByteArray(0)
+            }
+            okhttp3.Response.Builder().request(chain.request()).protocol(okhttp3.Protocol.HTTP_1_1)
+                .code(code).message("x").body(okhttp3.ResponseBody.create(null, body)).build()
+        }.build()
+        val service =
+            ExtensionStoreService(DesktopPreferenceStore(tempDir.resolve("p.properties")), httpClient = client)
+
+        val items = service.fetchRepository("https://example.com/repo")
+
+        items.shouldHaveSize(1)
+        items.first().name shouldBe "Tachiyomi: A"
+        Unit
+    }
+
+    @Test
     fun `non jsdelivr repo has no mirrors`(@TempDir tempDir: Path) {
         val service = ExtensionStoreService(DesktopPreferenceStore(tempDir.resolve("p.properties")))
         service.mirrorCandidates("https://example.com/repo") shouldBe listOf("https://example.com/repo")

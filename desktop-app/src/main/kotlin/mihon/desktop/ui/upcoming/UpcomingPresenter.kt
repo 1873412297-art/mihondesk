@@ -102,7 +102,7 @@ class UpcomingPresenter(
         core.toUiState(categories)
     }.stateIn(
         scope = presenterScope,
-        started = SharingStarted.Eagerly,
+        started = SharingStarted.WhileSubscribed(5_000),
         initialValue = UpcomingUiState(
             loading = true,
             selectedMonth = initialMonth,

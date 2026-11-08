@@ -267,63 +267,9 @@ internal class WindowsAppContainerLauncher(
 
         private fun detectAppContainerSupport(): Boolean {
             if (!Platform.isWindows()) return false
-            if (isInsideAppxPackage()) return false
+            if (WindowsPackageIdentity.isInsidePackage()) return false
             if (isTempAccessibleByAllPackages()) return false
             return true
-        }
-
-        private fun isInsideAppxPackage(): Boolean {
-            try {
-                val length = IntByReference(0)
-                // APPMODEL_ERROR_NO_PACKAGE = 15700
-                val rc = WindowsSandboxNative.kernel.GetCurrentPackageFamilyName(length, null)
-                if (rc != 15700) return true
-            } catch (_: Throwable) {
-            }
-            try {
-                var handle: ProcessHandle? = ProcessHandle.current()
-                while (handle != null) {
-                    val command = handle.info().command().orElse("")
-                    if (command.contains("WindowsApps", ignoreCase = true)) {
-                        return true
-                    }
-                    val hProcess = Kernel32.INSTANCE.OpenProcess(0x1000, false, handle.pid().toInt())
-                    if (hProcess != null && hProcess != WinBase.INVALID_HANDLE_VALUE) {
-                        try {
-                            val length = IntByReference(0)
-                            val rc = WindowsSandboxNative.kernel.GetPackageFamilyName(hProcess, length, null)
-                            if (rc != 15700) return true
-                        } finally {
-                            Kernel32.INSTANCE.CloseHandle(hProcess)
-                        }
-                    }
-                    handle = handle.parent().orElse(null)
-                }
-            } catch (_: Throwable) {
-            }
-            val path = System.getenv("PATH").orEmpty()
-            if (path.contains("WindowsApps", ignoreCase = true)) {
-                return true
-            }
-            return false
-        }
-
-        private fun isTempAccessibleByAllPackages(): Boolean {
-            return try {
-                val probe = java.nio.file.Files.createTempDirectory("appcontainer-probe").toFile()
-                try {
-                    val process = ProcessBuilder("icacls", probe.absolutePath)
-                        .redirectErrorStream(true)
-                        .start()
-                    val output = process.inputStream.bufferedReader().readText()
-                    process.waitFor()
-                    output.contains("ALL APPLICATION PACKAGES", ignoreCase = true)
-                } finally {
-                    probe.delete()
-                }
-            } catch (_: Throwable) {
-                false
-            }
         }
     }
 
@@ -334,11 +280,24 @@ internal class WindowsAppContainerLauncher(
     }
     private fun runAcl(path: File, vararg arguments: String) {
         val executable = File(System.getenv("SystemRoot"), "System32/icacls.exe")
-        val process = ProcessBuilder(
-            listOf(executable.absolutePath, path.absolutePath) + arguments,
-        ).redirectErrorStream(true).start()
-        val result = process.inputStream.bufferedReader().readText()
-        check(process.waitFor() == 0) { "Sandbox ACL setup failed for $path: $result" }
+        val log = java.nio.file.Files.createTempFile("icacls-", ".log")
+        try {
+            val process = ProcessBuilder(
+                listOf(executable.absolutePath, path.absolutePath) + arguments,
+            ).redirectErrorStream(true).redirectOutput(log.toFile()).start()
+            try {
+                check(process.waitFor(ACL_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+                    "Sandbox ACL setup timed out for $path"
+                }
+                check(process.exitValue() == 0) {
+                    "Sandbox ACL setup failed for $path: ${java.nio.file.Files.readString(log)}"
+                }
+            } finally {
+                if (process.isAlive) process.destroyForcibly()
+            }
+        } finally {
+            log.toFile().delete()
+        }
     }
     override fun close() {
         try {
@@ -424,3 +383,6 @@ internal class SandboxProcess(
         Kernel32.INSTANCE.CloseHandle(info.hProcess)
     }
 }
+
+private const val PROBE_TIMEOUT_SECONDS = 5L
+private const val ACL_TIMEOUT_SECONDS = 10L

@@ -55,3 +55,19 @@ fun Modifier.onSecondaryClick(enabled: Boolean = true, onClick: () -> Unit): Mod
         }
     return this.onPointerEvent(PointerEventType.Press, onEvent = onEvent)
 }
+
+/**
+ * Remembers whether a text field below it has focus, still forwarding to the window's tracker.
+ * The reader reads it to keep its page-turn keys out of the chapter search box.
+ */
+@Composable
+fun rememberScopedTextInputTracker(): Pair<TextInputTracker, () -> Boolean> {
+    val parent = LocalTextInputTracker.current
+    return remember(parent) {
+        val focused = java.util.concurrent.atomic.AtomicBoolean(false)
+        TextInputTracker {
+            focused.set(it)
+            parent.setFocused(it)
+        } to focused::get
+    }
+}

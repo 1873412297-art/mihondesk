@@ -11,14 +11,14 @@ enum class NavigationDirection {
 /**
  * Computes which page indexes to prefetch around the selected page.
  *
- * The window matches Mihon's four adjacent images in the navigation direction, then keeps one
- * image behind for quick desktop direction reversal. Dual-page modes skip the other page in the
- * currently visible spread before counting the four images ahead. Pages are always emitted
- * nearest-first and RTL affects placement rather than logical page order.
+ * The default window keeps five images ahead in the navigation direction and two behind for
+ * direction reversal. Dual-page modes skip the other page in the currently visible spread before
+ * counting ahead. Pages are always emitted nearest-first and RTL affects placement rather than
+ * logical page order.
  */
 object PrefetchPolicy {
-    const val AHEAD_PAGES = 4
-    const val BEHIND_PAGES = 1
+    const val AHEAD_PAGES = 5
+    const val BEHIND_PAGES = 2
 
     fun unitPages(mode: ReadingMode): Int = if (mode.isDualPage) 2 else 1
 

@@ -121,6 +121,10 @@ fun NetworkSettingsCard(preferences: DesktopPreferenceStore) {
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
+            DohProviderChips(policy.dohProvider) {
+                policy = policy.copy(dohProvider = it)
+                saved = false
+            }
             error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             if (saved) Text(strings.networkSettingsSaved)
             Button(onClick = {

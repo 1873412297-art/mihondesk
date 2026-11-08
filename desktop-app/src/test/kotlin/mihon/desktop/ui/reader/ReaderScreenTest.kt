@@ -23,6 +23,7 @@ import androidx.compose.ui.test.v2.runComposeUiTest
 import androidx.compose.ui.unit.dp
 import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.shouldBe
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import mihon.desktop.preferences.DesktopPreferenceStore
@@ -521,6 +522,6 @@ class ReaderScreenTest {
             closeRequests++
         }
 
-        override fun cancelWithoutFlush() = Unit
+        override fun cancelWithoutFlush(): Job = Job()
     }
 }

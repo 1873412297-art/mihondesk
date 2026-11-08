@@ -9,53 +9,7 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import mihon.desktop.preferences.DesktopPreferenceStore
 import java.util.Base64
-import java.util.concurrent.atomic.AtomicReference
 import kotlin.jvm.JvmName
-
-/** Trust state for an extension package signer. */
-enum class ExtensionTrustStatus {
-    TRUSTED,
-    UNTRUSTED,
-    UNKNOWN,
-    INVALID,
-    ;
-
-    val label: String
-        get() = when (this) {
-            TRUSTED -> "Trusted"
-            UNTRUSTED -> "Untrusted"
-            UNKNOWN -> "Unknown"
-            INVALID -> "Invalid"
-        }
-
-    val isTrusted: Boolean get() = this == TRUSTED
-}
-
-/** Alias kept for callers that use a shorter name. */
-typealias TrustStatus = ExtensionTrustStatus
-
-/** Alias kept for callers that use the Android-style "state" name. */
-typealias ExtensionTrustState = ExtensionTrustStatus
-
-/**
- * A pending explicit-trust request created when an install is blocked because the package signer is
- * unknown. The UI can display this request as a dialog and retry the install after trusting.
- */
-@Serializable
-data class ExtensionTrustRequest(
-    val pkg: String,
-    val fingerprints: List<String> = emptyList(),
-    val filePath: String? = null,
-    val reason: String = "",
-    @kotlinx.serialization.Transient
-    val storeItem: ExtensionStoreItem? = null,
-)
-
-@Serializable
-private data class PersistedExtensionTrust(
-    val trusted: Map<String, List<String>> = emptyMap(),
-    val revoked: List<String> = emptyList(),
-)
 
 /**
  * Persistent extension signer trust store keyed by package id + signer certificate fingerprint.
@@ -82,21 +36,6 @@ class ExtensionTrustStore(
         const val PREF_KEY_TRUSTED_SIGNATURES = PREF_KEY_TRUSTED_EXTENSIONS
         const val PREF_KEY_TRUSTED_FINGERPRINTS = PREF_KEY_TRUSTED_EXTENSIONS
         const val PREF_KEY_REVOKED_EXTENSIONS = "extension.revoked_packages"
-
-        private val activeStore = AtomicReference<ExtensionTrustStore?>(null)
-
-        /** The most recently constructed store, used by Compose screens for default actions. */
-        fun active(): ExtensionTrustStore? = activeStore.get()
-
-        /** Test helper: forget the process-wide active store. */
-        fun clearActiveForTesting() {
-            activeStore.set(null)
-        }
-
-        /** Test helper: make this store the process-wide active store. */
-        fun setActiveForTesting(store: ExtensionTrustStore?) {
-            activeStore.set(store)
-        }
 
         /**
          * Normalizes a fingerprint to lowercase hex. Accepts the common repository formats
@@ -154,10 +93,6 @@ class ExtensionTrustStore(
     /** Pending explicit-trust request, if an install was blocked on an unknown signer. */
     val pendingTrustRequest: StateFlow<ExtensionTrustRequest?> = _pendingTrustRequest.asStateFlow()
 
-    init {
-        activeStore.set(this)
-    }
-
     @Synchronized
     fun snapshot(): ExtensionTrustSnapshot {
         val persisted = readPersisted()
@@ -167,34 +102,13 @@ class ExtensionTrustStore(
         )
     }
 
-    @Synchronized
-    fun getTrustedFingerprints(pkg: String): Set<String> =
-        snapshot().trusted[pkg].orEmpty()
-
     /** All packages with an explicit user trust entry. */
     @Synchronized
     fun getTrustedPackages(): Set<String> = snapshot().trusted.keys
 
     @Synchronized
-    fun getTrusted(pkg: String): Set<String> = getTrustedFingerprints(pkg)
-
-    @Synchronized
-    fun getAll(): Map<String, Set<String>> = snapshot().trusted
-
-    @Synchronized
-    fun getAllTrustedFingerprints(): Set<String> = snapshot().trusted.values.flatten().toSet()
-
-    val trusted: Map<String, Set<String>>
-        get() = snapshot().trusted
-
-    val trustedFingerprints: Map<String, Set<String>>
-        get() = snapshot().trusted
-
-    @get:JvmName("getRevokedSet")
-    val revoked: Set<String>
-        get() = snapshot().revoked
-
-    fun getRevoked(): Set<String> = snapshot().revoked
+    fun getTrustedFingerprints(pkg: String): Set<String> =
+        snapshot().trusted[pkg].orEmpty()
 
     @Synchronized
     fun isTrusted(pkg: String, fingerprint: String?): Boolean =
@@ -234,6 +148,13 @@ class ExtensionTrustStore(
         fingerprint: String?,
         trustedSigningKey: String?,
     ): Boolean = status(pkg, fingerprint, trustedSigningKey) == ExtensionTrustStatus.TRUSTED
+
+    private fun status(pkg: String, fingerprint: String?, trustedSigningKey: String?): ExtensionTrustStatus =
+        status(
+            pkg = pkg,
+            fingerprints = listOfNotNull(fingerprint?.takeIf { it.isNotBlank() }),
+            trustedSigningKeys = listOfNotNull(trustedSigningKey?.takeIf { it.isNotBlank() }),
+        )
 
     @Synchronized
     fun isRevoked(pkg: String): Boolean = pkg in readPersisted().revoked
@@ -305,22 +226,6 @@ class ExtensionTrustStore(
     @Synchronized
     fun getRevokedPackages(): Set<String> = readPersisted().revoked.toSet()
 
-    @get:JvmName("getTrustedPackagesSet")
-    val trustedPackages: Set<String>
-        get() = snapshot().trusted.keys
-
-    @get:JvmName("getRevokedPackagesSet")
-    val revokedPackages: Set<String>
-        get() = snapshot().revoked
-
-    fun trustFingerprint(pkg: String, fingerprint: String?) = trust(pkg, fingerprint)
-
-    fun trustPackage(pkg: String, fingerprint: String?) = trust(pkg, fingerprint)
-
-    fun revokePackage(pkg: String) = revoke(pkg)
-
-    fun revokeFingerprint(pkg: String, fingerprint: String?) = revoke(pkg, fingerprint)
-
     /**
      * Resolves trust status from signer [fingerprints], optional repository [trustedSigningKeys],
      * and the package-level revocation marker.
@@ -352,141 +257,6 @@ class ExtensionTrustStore(
         if (storeKeys.isNotEmpty() && normalized.any { it in storeKeys }) return ExtensionTrustStatus.TRUSTED
         return ExtensionTrustStatus.UNTRUSTED
     }
-
-    fun status(
-        pkg: String,
-        fingerprints: Collection<String>,
-        signatureValid: Boolean,
-    ): ExtensionTrustStatus = status(pkg, fingerprints, emptyList(), signatureValid)
-
-    fun status(
-        pkg: String,
-        fingerprints: Collection<String>,
-        trustedSigningKey: String?,
-        signatureValid: Boolean = true,
-    ): ExtensionTrustStatus = status(
-        pkg = pkg,
-        fingerprints = fingerprints,
-        trustedSigningKeys = listOfNotNull(trustedSigningKey?.takeIf { it.isNotBlank() }),
-        signatureValid = signatureValid,
-    )
-
-    fun status(
-        pkg: String,
-        fingerprint: String?,
-        signatureValid: Boolean,
-    ): ExtensionTrustStatus = status(pkg, fingerprint, null, signatureValid)
-
-    fun status(
-        pkg: String,
-        fingerprint: String?,
-        trustedSigningKey: String? = null,
-        signatureValid: Boolean = true,
-    ): ExtensionTrustStatus = status(
-        pkg = pkg,
-        fingerprints = listOfNotNull(fingerprint?.takeIf { it.isNotBlank() }),
-        trustedSigningKeys = listOfNotNull(trustedSigningKey?.takeIf { it.isNotBlank() }),
-        signatureValid = signatureValid,
-    )
-
-    fun getStatus(
-        pkg: String,
-        fingerprints: Collection<String>,
-        trustedSigningKeys: Collection<String> = emptyList(),
-        signatureValid: Boolean = true,
-    ): ExtensionTrustStatus = status(pkg, fingerprints, trustedSigningKeys, signatureValid)
-
-    fun getStatus(
-        pkg: String,
-        fingerprint: String?,
-        trustedSigningKey: String? = null,
-        signatureValid: Boolean = true,
-    ): ExtensionTrustStatus = status(pkg, fingerprint, trustedSigningKey, signatureValid)
-
-    fun getStatus(
-        pkg: String,
-        fingerprints: Collection<String>,
-        signatureValid: Boolean,
-    ): ExtensionTrustStatus = status(pkg, fingerprints, emptyList(), signatureValid)
-
-    fun getStatus(
-        pkg: String,
-        fingerprint: String?,
-        signatureValid: Boolean,
-    ): ExtensionTrustStatus = status(pkg, fingerprint, null, signatureValid)
-
-    fun getStatus(
-        pkg: String,
-        fingerprints: Collection<String>,
-        trustedSigningKey: String?,
-        signatureValid: Boolean = true,
-    ): ExtensionTrustStatus = status(pkg, fingerprints, trustedSigningKey, signatureValid)
-
-    fun trustStatus(
-        pkg: String,
-        fingerprints: Collection<String>,
-        trustedSigningKeys: Collection<String> = emptyList(),
-        signatureValid: Boolean = true,
-    ): ExtensionTrustStatus = status(pkg, fingerprints, trustedSigningKeys, signatureValid)
-
-    fun trustStatus(
-        pkg: String,
-        fingerprint: String?,
-        trustedSigningKey: String? = null,
-        signatureValid: Boolean = true,
-    ): ExtensionTrustStatus = status(pkg, fingerprint, trustedSigningKey, signatureValid)
-
-    fun trustStatus(
-        pkg: String,
-        fingerprints: Collection<String>,
-        signatureValid: Boolean,
-    ): ExtensionTrustStatus = status(pkg, fingerprints, emptyList(), signatureValid)
-
-    fun trustStatus(
-        pkg: String,
-        fingerprint: String?,
-        signatureValid: Boolean,
-    ): ExtensionTrustStatus = status(pkg, fingerprint, null, signatureValid)
-
-    fun trustStatus(
-        pkg: String,
-        fingerprints: Collection<String>,
-        trustedSigningKey: String?,
-        signatureValid: Boolean = true,
-    ): ExtensionTrustStatus = status(pkg, fingerprints, trustedSigningKey, signatureValid)
-
-    fun getTrustStatus(
-        pkg: String,
-        fingerprints: Collection<String>,
-        trustedSigningKeys: Collection<String> = emptyList(),
-        signatureValid: Boolean = true,
-    ): ExtensionTrustStatus = status(pkg, fingerprints, trustedSigningKeys, signatureValid)
-
-    fun getTrustStatus(
-        pkg: String,
-        fingerprints: Collection<String>,
-        signatureValid: Boolean,
-    ): ExtensionTrustStatus = status(pkg, fingerprints, emptyList(), signatureValid)
-
-    fun getTrustStatus(
-        pkg: String,
-        fingerprint: String?,
-        trustedSigningKey: String? = null,
-        signatureValid: Boolean = true,
-    ): ExtensionTrustStatus = status(pkg, fingerprint, trustedSigningKey, signatureValid)
-
-    fun getTrustStatus(
-        pkg: String,
-        fingerprint: String?,
-        signatureValid: Boolean,
-    ): ExtensionTrustStatus = status(pkg, fingerprint, null, signatureValid)
-
-    fun getTrustStatus(
-        pkg: String,
-        fingerprints: Collection<String>,
-        trustedSigningKey: String?,
-        signatureValid: Boolean = true,
-    ): ExtensionTrustStatus = status(pkg, fingerprints, trustedSigningKey, signatureValid)
 
     fun getTrustStatus(extension: InstalledExtension): ExtensionTrustStatus = statusFor(extension)
 
@@ -544,24 +314,7 @@ class ExtensionTrustStore(
     }
 
     @Synchronized
-    private fun readPersisted(): PersistedExtensionTrust {
-        val raw = preferenceStore.property(storageKey) ?: return PersistedExtensionTrust()
-        // Accept a legacy bare map format: {"pkg":["fingerprint"]}. The primary format has
-        // reserved "trusted"/"revoked" keys and is decoded below.
-        try {
-            val legacy = json.decodeFromString<Map<String, List<String>>>(raw)
-            if (!legacy.containsKey("trusted") && !legacy.containsKey("revoked")) {
-                return PersistedExtensionTrust(trusted = legacy)
-            }
-        } catch (_: Exception) {
-            // Not the legacy format; fall through to the primary schema.
-        }
-        return try {
-            json.decodeFromString<PersistedExtensionTrust>(raw)
-        } catch (_: Exception) {
-            PersistedExtensionTrust()
-        }
-    }
+    private fun readPersisted(): PersistedExtensionTrust = decodePersistedTrust(preferenceStore, storageKey, json)
 
     @Synchronized
     private fun writePersisted(value: PersistedExtensionTrust) {

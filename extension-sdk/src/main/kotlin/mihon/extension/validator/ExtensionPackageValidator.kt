@@ -3,6 +3,7 @@ package mihon.extension.validator
 import kotlinx.serialization.json.Json
 import mihon.extension.model.ExtensionManifest
 import mihon.extension.model.SourceDescriptor
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.InputStream
 import java.util.zip.ZipEntry
@@ -93,8 +94,7 @@ object ExtensionPackageValidator {
         return file.inputStream().use { validatePackageStream(it) }
     }
 
-    fun validatePackageStream(inputStream: InputStream): ExtensionManifest {
-        val zip = ZipInputStream(inputStream)
+    fun validatePackageStream(inputStream: InputStream): ExtensionManifest = ZipInputStream(inputStream).use { zip ->
         var manifestBytes: ByteArray? = null
         var entryCount = 0
         var totalExpandedBytes = 0L
@@ -114,15 +114,16 @@ object ExtensionPackageValidator {
             }
 
             if (!entry.isDirectory) {
-                val bytes = zip.readBytes()
-                totalExpandedBytes += bytes.size
-                if (totalExpandedBytes > MAX_EXPANDED_BYTES) {
-                    throw ExtensionValidationException(
-                        "Package exceeds maximum expanded size ($MAX_EXPANDED_BYTES bytes)",
-                    )
-                }
+                // Stream the entry instead of inflating it into memory: a compression bomb must hit
+                // the limit while being read, not after the whole entry has been allocated.
+                val (size, bytes) = readEntry(
+                    input = zip,
+                    remaining = MAX_EXPANDED_BYTES - totalExpandedBytes,
+                    capture = name == "manifest.json",
+                )
+                totalExpandedBytes += size
 
-                if (name == "manifest.json") {
+                if (bytes != null) {
                     manifestBytes = bytes
                 }
             }
@@ -142,6 +143,28 @@ object ExtensionPackageValidator {
         }
 
         validateManifest(manifest)
-        return manifest
+        manifest
+    }
+
+    /**
+     * Reads one entry with an expansion bound. Returns the consumed size and, when [capture] is set,
+     * the entry bytes; other entries are streamed and discarded without a large allocation.
+     */
+    private fun readEntry(input: InputStream, remaining: Long, capture: Boolean): Pair<Long, ByteArray?> {
+        val buffer = ByteArray(16 * 1024)
+        val captured = if (capture) ByteArrayOutputStream() else null
+        var total = 0L
+        while (true) {
+            val read = input.read(buffer)
+            if (read < 0) break
+            total += read
+            if (total > remaining) {
+                throw ExtensionValidationException(
+                    "Package exceeds maximum expanded size ($MAX_EXPANDED_BYTES bytes)",
+                )
+            }
+            captured?.write(buffer, 0, read)
+        }
+        return total to captured?.toByteArray()
     }
 }

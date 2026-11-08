@@ -109,14 +109,14 @@ class DesktopHistoryServiceTest {
     }
 
     @Test
-    fun `loads initial history items and groups them`() = runBlocking {
+    fun `loads initial history items and groups them`(): Unit = runBlocking {
         val state = awaitState { !it.isLoading && it.rawCount == 2 }
         state.rawCount shouldBe 2
         state.groups.isNotEmpty() shouldBe true
     }
 
     @Test
-    fun `setQuery filters history items by search query`() = runBlocking {
+    fun `setQuery filters history items by search query`(): Unit = runBlocking {
         awaitState { !it.isLoading && it.rawCount == 2 }
 
         service.setQuery("Bleach")
@@ -129,7 +129,7 @@ class DesktopHistoryServiceTest {
     }
 
     @Test
-    fun `deleteItem deletes single history record`() = runBlocking {
+    fun `deleteItem deletes single history record`(): Unit = runBlocking {
         awaitState { !it.isLoading && it.rawCount == 2 }
 
         service.deleteItem(chapterId1)
@@ -138,7 +138,7 @@ class DesktopHistoryServiceTest {
     }
 
     @Test
-    fun `clearAll removes all history records`() = runBlocking {
+    fun `clearAll removes all history records`(): Unit = runBlocking {
         awaitState { !it.isLoading && it.rawCount == 2 }
 
         service.clearAll()
@@ -148,7 +148,7 @@ class DesktopHistoryServiceTest {
     }
 
     @Test
-    fun `restoreItem restores previously deleted history item`() = runBlocking {
+    fun `restoreItem restores previously deleted history item`(): Unit = runBlocking {
         val initial = awaitState { !it.isLoading && it.rawCount == 2 }
         val itemToRestore = initial.groups.flatMap { it.items }.first { it.chapterId == chapterId1 }
 

@@ -1,69 +1,26 @@
 package mihon.desktop.extension
 
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withContext
-import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import mihon.desktop.preferences.DesktopPreferenceStore
-import mihon.desktop.updates.DesktopAppUpdateService
 import mihon.extension.model.ExtensionManifest
-import mihon.extension.validator.ExtensionPackageValidator
+import mihon.extension.network.withTlsFallback
 import mihon.extension.validator.ExtensionValidationException
 import okhttp3.OkHttpClient
-import okhttp3.Request
 import java.io.File
-import java.io.FileOutputStream
-import java.io.IOException
-import java.security.MessageDigest
 
 /** Thrown when the extension package itself could not be downloaded (network or HTTP failure). */
 class ExtensionDownloadException(message: String, cause: Throwable? = null) :
     ExtensionValidationException(message, cause)
 
-@Serializable
-data class InstalledExtension(
-    val pkg: String,
-    val manifest: ExtensionManifest,
-    val installDir: String,
-    val packageFile: String,
-    val installedAt: Long,
-    val repoUrl: String = "",
-    val iconPath: String? = null,
-    val isEnabled: Boolean = true,
-    /** Last (primary) verified signer certificate SHA-256 fingerprint, or "" when unsigned. */
-    val signatureFingerprint: String = "",
-    /** All verified signer certificate SHA-256 fingerprints, or empty when unsigned. */
-    val signatureFingerprints: List<String> = emptyList(),
-    /** Repository signing key that was used to trust this package, if any. */
-    val signingKey: String = "",
-    /** Trust state recorded at install time. Prefer the live [ExtensionTrustStore] when available. */
-    val trustStatus: ExtensionTrustStatus = ExtensionTrustStatus.UNKNOWN,
-) {
-    val signerFingerprint: String get() = signatureFingerprint
-    val signerFingerprints: List<String> get() = signatureFingerprints
-    val signatureHash: String get() = signatureFingerprint
-    val fingerprint: String get() = signatureFingerprint
-    val trustedFingerprints: List<String> get() = signatureFingerprints
-    val trustState: ExtensionTrustStatus get() = trustStatus
-    val isTrusted: Boolean get() = trustStatus == ExtensionTrustStatus.TRUSTED
-    val trusted: Boolean get() = isTrusted
-    val isUntrusted: Boolean get() = trustStatus == ExtensionTrustStatus.UNTRUSTED
-}
-
 class DesktopExtensionInstaller(
     val installRoot: File,
     val preferenceStore: DesktopPreferenceStore,
     policyProvider: () -> DesktopNetworkPolicy = { DesktopNetworkPolicy() },
-    private val httpClient: OkHttpClient = OkHttpClient.Builder()
+    internal val httpClient: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
         .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
         .callTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
@@ -76,7 +33,7 @@ class DesktopExtensionInstaller(
     /** Alias constructor parameter for callers/tests that name the fake verifier `verifier`. */
     verifier: ExtensionVerifier? = null,
     /** Signing keys trusted without a prompt (official keiyoushi by default, like Mihon). */
-    private val officialSigningKeys: Set<String> = OFFICIAL_SIGNING_KEYS,
+    internal val officialSigningKeys: Set<String> = OFFICIAL_SIGNING_KEYS,
 ) {
     private val lifecycleMutex = Mutex()
 
@@ -86,6 +43,7 @@ class DesktopExtensionInstaller(
     val verifier: ExtensionVerifier get() = signatureVerifier
     val trustStore: ExtensionTrustStore = trustStore
     val extensionTrustStore: ExtensionTrustStore get() = trustStore
+
     companion object {
         // SHA-256 signing certificate fingerprint of the official keiyoushi extensions
         // (keiyoushi repo.json meta.signingKeyFingerprint, matches their published APKs).
@@ -95,11 +53,12 @@ class DesktopExtensionInstaller(
 
         const val PREF_KEY_PENDING_CLEANUP = "extension.pending_cleanup"
         const val PREF_KEY_INSTALLED_EXTENSIONS = "extension.installed_list"
+        const val PREF_KEY_INSTALLED_EXTENSIONS_CORRUPT = "extension.installed_list.corrupt"
         const val PREF_KEY_TRUSTED_EXTENSIONS = ExtensionTrustStore.PREF_KEY_TRUSTED_EXTENSIONS
         const val PREF_KEY_REVOKED_EXTENSIONS = ExtensionTrustStore.PREF_KEY_REVOKED_EXTENSIONS
     }
 
-    private val json = Json {
+    internal val json = Json {
         ignoreUnknownKeys = true
         isLenient = true
         prettyPrint = true
@@ -112,24 +71,22 @@ class DesktopExtensionInstaller(
         if (!installRoot.exists()) {
             installRoot.mkdirs()
         }
-        retryPendingCleanup()
+        this.retryPendingCleanupInternal()
     }
 
     @Synchronized
     fun getInstalledExtensions(): List<InstalledExtension> {
         cachedInstalledExtensions?.let { return it }
         val raw = preferenceStore.property(PREF_KEY_INSTALLED_EXTENSIONS) ?: return emptyList()
-        val decoded = try {
-            json.decodeFromString<List<InstalledExtension>>(raw)
-        } catch (_: Exception) {
-            emptyList()
+        val decoded = decodeInstalledExtensions(raw, json) { corrupt ->
+            preferenceStore.update { setProperty(PREF_KEY_INSTALLED_EXTENSIONS_CORRUPT, corrupt) }
         }
         cachedInstalledExtensions = decoded
         return decoded
     }
 
     @Synchronized
-    private fun saveInstalledExtensions(list: List<InstalledExtension>) {
+    internal fun saveInstalledExtensions(list: List<InstalledExtension>) {
         val raw = json.encodeToString(list)
         preferenceStore.update {
             setProperty(PREF_KEY_INSTALLED_EXTENSIONS, raw)
@@ -159,56 +116,8 @@ class DesktopExtensionInstaller(
      * One-time repair for extensions installed before icons were extracted: takes icon.png from the
      * installed package when present, otherwise asks [fetchRemote] (repo icon). Returns how many were fixed.
      */
-    suspend fun backfillMissingIcons(fetchRemote: suspend (InstalledExtension) -> ByteArray?): Int {
-        val missing = withContext(Dispatchers.IO) {
-            getInstalledExtensions().filter { ext -> ext.iconPath.isNullOrBlank() || !File(ext.iconPath).isFile }
-        }
-        if (missing.isEmpty()) return 0
-        val resolved = mutableMapOf<String, String>()
-        for (ext in missing) {
-            val bytes = withContext(Dispatchers.IO) { iconFromPackage(File(ext.packageFile)) }
-                ?: runCatching { fetchRemote(ext) }.getOrNull()?.let {
-                    mihon.desktop.extension.compat.ApkIconExtractor.toPng(it)
-                        ?: it
-                }
-                ?: continue
-            val target = File(ext.installDir, "icon.png")
-            val ok = withContext(Dispatchers.IO) {
-                runCatching {
-                    val tmp = File(ext.installDir, "icon.png.tmp")
-                    tmp.writeBytes(bytes)
-                    java.nio.file.Files.move(
-                        tmp.toPath(),
-                        target.toPath(),
-                        java.nio.file.StandardCopyOption.REPLACE_EXISTING,
-                    )
-                }.isSuccess
-            }
-            if (ok) resolved[ext.pkg] = target.absolutePath
-        }
-        if (resolved.isEmpty()) return 0
-        withLifecycleLock {
-            withContext(Dispatchers.IO) {
-                saveInstalledExtensions(
-                    getInstalledExtensions().map { ext -> resolved[ext.pkg]?.let { ext.copy(iconPath = it) } ?: ext },
-                )
-            }
-        }
-        return resolved.size
-    }
-
-    private fun iconFromPackage(packageFile: File): ByteArray? = runCatching {
-        if (!packageFile.isFile) return null
-        java.util.zip.ZipFile(packageFile).use { zip ->
-            val entry = zip.getEntry("icon.png") ?: zip.getEntry("icon.jpg") ?: zip.getEntry("assets/icon.png")
-            entry?.let { e -> zip.getInputStream(e).use { it.readBytes() } }
-                ?: if (zip.getEntry("AndroidManifest.xml") != null) {
-                    mihon.desktop.extension.compat.ApkIconExtractor.extract(zip)
-                } else {
-                    null
-                }
-        }
-    }.getOrNull()?.takeIf { it.isNotEmpty() }
+    suspend fun backfillMissingIcons(fetchRemote: suspend (InstalledExtension) -> ByteArray?): Int =
+        backfillMissingIconsInternal(fetchRemote)
 
     suspend fun downloadAndInstall(
         downloadUrl: String,
@@ -220,68 +129,17 @@ class DesktopExtensionInstaller(
         explicitTrust: Boolean = false,
         trustUnknown: Boolean = false,
         onDownloadComplete: () -> Unit = {},
-    ): InstalledExtension = withContext(Dispatchers.IO) {
-        val request = Request.Builder()
-            .url(downloadUrl)
-            .header("User-Agent", "MihonW/${DesktopAppUpdateService.CURRENT_VERSION}")
-            .build()
-        val tempFile = File.createTempFile("mext_dl_", ".mext")
-        try {
-            coroutineScope {
-                val call = httpClient.newCall(request)
-                val download = async(Dispatchers.IO) {
-                    try {
-                        call.execute().use { response ->
-                            if (!response.isSuccessful) {
-                                throw ExtensionDownloadException(
-                                    "Failed to download extension package: HTTP ${response.code}",
-                                )
-                            }
-                            FileOutputStream(tempFile).use { out ->
-                                val input = response.body.byteStream()
-                                val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-                                while (true) {
-                                    currentCoroutineContext().ensureActive()
-                                    val count = input.read(buffer)
-                                    if (count < 0) break
-                                    out.write(buffer, 0, count)
-                                }
-                            }
-                        }
-                    } catch (failure: IOException) {
-                        // Closing a cancelled socket must remain cancellation, not an install error.
-                        currentCoroutineContext().ensureActive()
-                        throw failure
-                    }
-                }
-                try {
-                    download.await()
-                } catch (cancelled: CancellationException) {
-                    // Covers both header and body waits. The scope joins the writer before
-                    // the outer finally deletes its temporary file (also on Windows).
-                    call.cancel()
-                    throw cancelled
-                }
-            }
-
-            currentCoroutineContext().ensureActive()
-            onDownloadComplete()
-            installFromLocalFile(
-                file = tempFile,
-                expectedSha256 = expectedSha256,
-                repoUrl = repoUrl,
-                storeItem = storeItem,
-                trustOnInstall = trustOnInstall,
-                allowUntrusted = allowUntrusted,
-                explicitTrust = explicitTrust,
-                trustUnknown = trustUnknown,
-            )
-        } finally {
-            if (tempFile.exists()) {
-                tempFile.delete()
-            }
-        }
-    }
+    ): InstalledExtension = downloadAndInstallInternal(
+        downloadUrl = downloadUrl,
+        expectedSha256 = expectedSha256,
+        repoUrl = repoUrl,
+        storeItem = storeItem,
+        trustOnInstall = trustOnInstall,
+        allowUntrusted = allowUntrusted,
+        explicitTrust = explicitTrust,
+        trustUnknown = trustUnknown,
+        onDownloadComplete = onDownloadComplete,
+    )
 
     suspend fun installFromLocalFile(
         file: File,
@@ -292,214 +150,16 @@ class DesktopExtensionInstaller(
         allowUntrusted: Boolean = false,
         explicitTrust: Boolean = false,
         trustUnknown: Boolean = false,
-    ): InstalledExtension = withLifecycleLock {
-        installFromLocalFileUnlocked(
-            file,
-            expectedSha256,
-            repoUrl,
-            storeItem,
-            trustOnInstall,
-            allowUntrusted,
-            explicitTrust,
-            trustUnknown,
-        )
-    }
-
-    private suspend fun installFromLocalFileUnlocked(
-        file: File,
-        expectedSha256: String? = null,
-        repoUrl: String = "",
-        storeItem: ExtensionStoreItem? = null,
-        trustOnInstall: Boolean = false,
-        allowUntrusted: Boolean = false,
-        explicitTrust: Boolean = false,
-        trustUnknown: Boolean = false,
-    ): InstalledExtension = withContext(Dispatchers.IO) {
-        if (!file.exists() || !file.isFile) {
-            throw ExtensionValidationException("Extension package file does not exist: ${file.absolutePath}")
-        }
-
-        // A new install attempt supersedes any previous trust prompt.
-        trustStore.clearPendingTrustRequest()
-
-        // 1. Verify every known SHA-256 (explicit argument and/or store index digest).
-        val expectedHashes = buildList {
-            expectedSha256?.takeIf { it.isNotBlank() }?.let { add(it.trim()) }
-            storeItem?.sha256?.takeIf { it.isNotBlank() }?.let { add(it.trim()) }
-        }.distinct()
-        if (expectedHashes.isNotEmpty()) {
-            val actualSha256 = computeSha256(file)
-            expectedHashes.forEach { expected ->
-                if (!actualSha256.equals(expected, ignoreCase = true)) {
-                    throw ExtensionValidationException(
-                        "SHA-256 mismatch: expected '$expected', but computed '$actualSha256'",
-                    )
-                }
-            }
-        }
-
-        // 2. Verify the v1 JAR/APK signature before conversion changes the package bytes.
-        val verification = try {
-            signatureVerifier.verify(file)
-        } catch (e: ExtensionValidationException) {
-            throw e
-        } catch (e: Exception) {
-            throw ExtensionSignatureException("Failed to verify extension signature: ${e.message}", e)
-        }
-        if (!verification.valid || verification.v2V3Only) {
-            throw ExtensionSignatureException(
-                verification.error ?: "APK Signature Scheme v2/v3-only packages are not supported",
-            )
-        }
-        val signerFingerprints = verification.fingerprints
-            .map { ExtensionTrustStore.normalizeFingerprint(it) }
-            .filter { it.isNotEmpty() }
-            .distinct()
-
-        // 3. Validate package and parse manifest (converting Tachiyomi APK/JAR to .mext if needed)
-        val effectivePackageFile: File
-        var manifest: ExtensionManifest
-        var tempConvertedMext: File? = null
-        if (mihon.desktop.extension.compat.TachiyomiExtensionConverter.isTachiyomiPackage(file)) {
-            val convertedFile = File.createTempFile("mext_conv_", ".mext")
-            tempConvertedMext = convertedFile
-            try {
-                manifest =
-                    mihon.desktop.extension.compat.TachiyomiExtensionConverter.convertToMext(
-                        file,
-                        convertedFile,
-                        storeItem,
-                    )
-            } catch (error: Throwable) {
-                convertedFile.delete()
-                throw error
-            }
-            effectivePackageFile = convertedFile
-        } else {
-            manifest = ExtensionPackageValidator.validatePackage(file)
-            effectivePackageFile = file
-        }
-
-        try {
-            // 4. Enforce signature trust policy before writing anything to the install root.
-            val installedExtension = getInstalledExtensions().find { it.pkg == manifest.id }
-            val installedFingerprints = buildSet {
-                installedExtension?.signatureFingerprints.orEmpty().forEach {
-                    add(ExtensionTrustStore.normalizeFingerprint(it))
-                }
-                installedExtension?.signatureFingerprint?.let { add(ExtensionTrustStore.normalizeFingerprint(it)) }
-                installedExtension?.signingKey?.let { add(ExtensionTrustStore.normalizeFingerprint(it)) }
-            }.filter { it.isNotEmpty() }.toSet()
-            enforceTrustPolicy(
-                file = file,
-                pkg = manifest.id,
-                signerFingerprints = signerFingerprints,
-                storeItem = storeItem,
-                installedFingerprints = installedFingerprints,
-                explicitTrust = trustOnInstall || allowUntrusted || explicitTrust || trustUnknown ||
-                    storeItem?.trustOnInstall == true,
-            )
-
-            // Persist a matching repository signing key so trust survives restarts and later
-            // repository fetches can compare against a local, user-visible trust entry.
-            val storeSigningKey = ExtensionTrustStore.normalizeFingerprint(storeItem?.signingKey)
-            if (storeSigningKey.isNotEmpty() && signerFingerprints.contains(storeSigningKey)) {
-                trustStore.trust(manifest.id, storeSigningKey)
-            }
-            signerFingerprints.filter { it in officialSigningKeys }.forEach { trustStore.trust(manifest.id, it) }
-
-            if (tempConvertedMext != null && storeItem?.sources.isNullOrEmpty()) {
-                val runtimeSources = DesktopSourceManager.probeInstalledPackage(
-                    this@DesktopExtensionInstaller,
-                    effectivePackageFile,
-                    manifest.id,
-                )
-                manifest =
-                    mihon.desktop.extension.compat.TachiyomiExtensionConverter.replaceSourceIdentities(
-                        effectivePackageFile,
-                        manifest,
-                        runtimeSources,
-                    )
-            }
-
-            // Stage every byte before touching a usable installation (the input may itself be installed).
-            val targetDir = File(installRoot, manifest.id)
-            val stagedDir = java.nio.file.Files.createTempDirectory(
-                installRoot.toPath(),
-                ".stage-${manifest.id}-",
-            ).toFile()
-            val backupDir = File(installRoot, ".backup-${manifest.id}-${java.util.UUID.randomUUID()}")
-            var oldMoved = false
-            var published = false
-            var committed = false
-            try {
-                val stagedPackage = File(stagedDir, "${manifest.id}.mext")
-                effectivePackageFile.copyTo(stagedPackage)
-                ExtensionPackageValidator.validatePackage(stagedPackage)
-                var hasIcon = false
-                java.util.zip.ZipFile(stagedPackage).use { zip ->
-                    val entry = zip.getEntry("icon.png") ?: zip.getEntry("icon.jpg") ?: zip.getEntry("assets/icon.png")
-                    if (entry != null) {
-                        zip.getInputStream(entry).use { input ->
-                            File(stagedDir, "icon.png").outputStream().use { input.copyTo(it) }
-                        }
-                        hasIcon = true
-                    }
-                }
-                DesktopSourceManager.releaseInstalledPackage(this@DesktopExtensionInstaller, manifest.id)
-                if (targetDir.exists()) {
-                    java.nio.file.Files.move(targetDir.toPath(), backupDir.toPath())
-                    oldMoved = true
-                }
-                java.nio.file.Files.move(stagedDir.toPath(), targetDir.toPath())
-                published = true
-                val targetPackageFile = File(targetDir, "${manifest.id}.mext")
-                val iconPath = if (hasIcon) File(targetDir, "icon.png").absolutePath else null
-
-                val installed = InstalledExtension(
-                    pkg = manifest.id,
-                    manifest = manifest,
-                    installDir = targetDir.absolutePath,
-                    packageFile = targetPackageFile.absolutePath,
-                    installedAt = System.currentTimeMillis(),
-                    repoUrl = repoUrl,
-                    iconPath = iconPath,
-                    isEnabled = installedExtension?.isEnabled ?: true,
-                    signatureFingerprint = signerFingerprints.lastOrNull().orEmpty(),
-                    signatureFingerprints = signerFingerprints,
-                    signingKey = ExtensionTrustStore.normalizeFingerprint(storeItem?.signingKey),
-                    trustStatus = ExtensionTrustStatus.TRUSTED,
-                )
-
-                val current = getInstalledExtensions().filter { it.pkg != manifest.id }
-                saveInstalledExtensions(current + installed)
-
-                committed = true
-                installed
-            } catch (error: Throwable) {
-                if (published && targetDir.exists() && !targetDir.deleteRecursively()) {
-                    error.addSuppressed(
-                        java.io.IOException(
-                            "Cannot remove failed replacement ${targetDir.absolutePath}; old package preserved at ${backupDir.absolutePath}",
-                        ),
-                    )
-                }
-                if (oldMoved && !targetDir.exists()) {
-                    try {
-                        java.nio.file.Files.move(backupDir.toPath(), targetDir.toPath())
-                    } catch (restoreError: Throwable) {
-                        error.addSuppressed(restoreError)
-                    }
-                }
-                throw error
-            } finally {
-                cleanupOrRemember(stagedDir)
-                if (committed) cleanupOrRemember(backupDir)
-            }
-        } finally {
-            tempConvertedMext?.delete()
-        }
-    }
+    ): InstalledExtension = installFromLocalFileInternal(
+        file = file,
+        expectedSha256 = expectedSha256,
+        repoUrl = repoUrl,
+        storeItem = storeItem,
+        trustOnInstall = trustOnInstall,
+        allowUntrusted = allowUntrusted,
+        explicitTrust = explicitTrust,
+        trustUnknown = trustUnknown,
+    )
 
     /** Alias for [installFromLocalFile]. */
     suspend fun installFromFile(
@@ -522,75 +182,10 @@ class DesktopExtensionInstaller(
         trustUnknown,
     )
 
-    suspend fun uninstall(pkg: String): Boolean = withLifecycleLock { uninstallUnlocked(pkg) }
+    suspend fun uninstall(pkg: String): Boolean = uninstallInternal(pkg)
 
-    private suspend fun uninstallUnlocked(pkg: String): Boolean = withContext(Dispatchers.IO) {
-        val current = getInstalledExtensions()
-        val target = current.find { it.pkg == pkg } ?: return@withContext false
-
-        DesktopSourceManager.releaseInstalledPackage(this@DesktopExtensionInstaller, pkg)
-        val targetDir = File(target.installDir)
-        val removedDir = File(installRoot, ".removed-$pkg-${java.util.UUID.randomUUID()}")
-        if (targetDir.exists()) java.nio.file.Files.move(targetDir.toPath(), removedDir.toPath())
-        try {
-            saveInstalledExtensions(current.filter { it.pkg != pkg })
-        } catch (error: Throwable) {
-            if (removedDir.exists()) java.nio.file.Files.move(removedDir.toPath(), targetDir.toPath())
-            throw error
-        }
-        cleanupOrRemember(removedDir)
-        true
-    }
-
-    private fun cleanupOrRemember(directory: File) {
-        if (!directory.exists() || directory.deleteRecursively()) return
-        val pending = runCatching {
-            json.decodeFromString<List<String>>(preferenceStore.property(PREF_KEY_PENDING_CLEANUP) ?: "[]")
-        }.getOrDefault(emptyList())
-        preferenceStore.update {
-            setProperty(
-                PREF_KEY_PENDING_CLEANUP,
-                json.encodeToString(
-                    (
-                        pending +
-                            directory.absolutePath
-                        ).distinct(),
-                ),
-            )
-        }
-    }
-
-    private fun retryPendingCleanup() {
-        val pending = runCatching {
-            json.decodeFromString<List<String>>(preferenceStore.property(PREF_KEY_PENDING_CLEANUP) ?: "[]")
-        }.getOrDefault(emptyList())
-        if (pending.isEmpty()) return
-        val root = installRoot.canonicalFile
-        val remaining = pending.filter { path ->
-            val directory = File(path)
-            val safe = directory.canonicalFile.parentFile == root &&
-                listOf(".stage-", ".backup-", ".removed-").any { directory.name.startsWith(it) }
-            safe && directory.exists() && !directory.deleteRecursively()
-        }
-        preferenceStore.update { setProperty(PREF_KEY_PENDING_CLEANUP, json.encodeToString(remaining)) }
-    }
-
-    suspend fun setExtensionEnabled(pkg: String, enabled: Boolean): Boolean = withLifecycleLock {
-        setExtensionEnabledUnlocked(pkg, enabled)
-    }
-
-    private suspend fun setExtensionEnabledUnlocked(pkg: String, enabled: Boolean): Boolean = withContext(
-        Dispatchers.IO,
-    ) {
-        val current = getInstalledExtensions()
-        val index = current.indexOfFirst { it.pkg == pkg }
-        if (index == -1) return@withContext false
-
-        val updated = current.toMutableList()
-        updated[index] = updated[index].copy(isEnabled = enabled)
-        saveInstalledExtensions(updated)
-        true
-    }
+    suspend fun setExtensionEnabled(pkg: String, enabled: Boolean): Boolean =
+        setExtensionEnabledInternal(pkg, enabled)
 
     fun getTrustedFingerprints(pkg: String): Set<String> = trustStore.getTrustedFingerprints(pkg)
 
@@ -607,137 +202,6 @@ class DesktopExtensionInstaller(
         getTrustStatus(pkg, fingerprint) == ExtensionTrustStatus.TRUSTED
 
     fun revokeAllExtensions() = trustStore.revokeAll()
-
-    /**
-     * Enforces the Android-style trust policy:
-     *  - a package signed by a known repository key or a previously trusted fingerprint installs;
-     *  - an unknown package requires explicit user trust (the Browse UI's "Trust & Install");
-     *  - a package whose signer mismatches a known key/fingerprint is always rejected;
-     *  - a revoked package must be explicitly trusted again, even when a repository key matches.
-     */
-    private fun enforceTrustPolicy(
-        file: File,
-        pkg: String,
-        signerFingerprints: List<String>,
-        storeItem: ExtensionStoreItem?,
-        installedFingerprints: Set<String> = emptySet(),
-        explicitTrust: Boolean,
-    ) {
-        val storeSigningKey = ExtensionTrustStore.normalizeFingerprint(storeItem?.signingKey)
-        val userTrusted = trustStore.getTrustedFingerprints(pkg)
-        val revoked = trustStore.isRevoked(pkg)
-        val storeMatches = signerFingerprints.isNotEmpty() &&
-            storeSigningKey.isNotEmpty() &&
-            storeSigningKey in signerFingerprints
-        val userMatches = signerFingerprints.isNotEmpty() && signerFingerprints.any { it in userTrusted }
-        val installedMatches = signerFingerprints.isNotEmpty() &&
-            installedFingerprints.any { it in signerFingerprints }
-        val hasInstalledIdentity = installedFingerprints.isNotEmpty()
-        val unsignedTrusted = signerFingerprints.isEmpty() && !revoked && "" in userTrusted
-        val expectedKnown = storeSigningKey.isNotEmpty() || userTrusted.isNotEmpty()
-
-        if (signerFingerprints.isEmpty()) {
-            when {
-                // A previously signed extension must not silently downgrade to an unsigned package.
-                hasInstalledIdentity -> throw ExtensionSignatureMismatchException(
-                    pkg = pkg,
-                    expectedFingerprints = installedFingerprints,
-                    actualFingerprints = emptyList(),
-                )
-                unsignedTrusted -> return
-                storeSigningKey.isNotEmpty() -> throw ExtensionSignatureMismatchException(
-                    pkg = pkg,
-                    expectedFingerprints = setOf(storeSigningKey),
-                    actualFingerprints = emptyList(),
-                )
-                userTrusted.isNotEmpty() -> throw ExtensionSignatureMismatchException(
-                    pkg = pkg,
-                    expectedFingerprints = userTrusted,
-                    actualFingerprints = emptyList(),
-                )
-                explicitTrust -> {
-                    trustStore.trustUnsigned(pkg)
-                    return
-                }
-                else -> requestTrustAndThrow(
-                    file = file,
-                    pkg = pkg,
-                    signerFingerprints = signerFingerprints,
-                    storeItem = storeItem,
-                    reason = "Extension package is unsigned and its signer is unknown",
-                )
-            }
-        }
-
-        // A known repository signing key must match the package, even when the installed
-        // extension fingerprint would otherwise allow the update.
-        if (storeSigningKey.isNotEmpty() && !storeMatches) {
-            throw ExtensionSignatureMismatchException(pkg, setOf(storeSigningKey), signerFingerprints)
-        }
-
-        // Updating an installed extension may not change its signer, even with explicit trust.
-        if (hasInstalledIdentity && !installedMatches) {
-            throw ExtensionSignatureMismatchException(
-                pkg = pkg,
-                expectedFingerprints = installedFingerprints,
-                actualFingerprints = signerFingerprints,
-            )
-        }
-
-        val officialMatches = signerFingerprints.any { it in officialSigningKeys }
-        if (storeMatches || userMatches || installedMatches || officialMatches) {
-            if (!revoked) return
-            if (explicitTrust) {
-                trustStore.trust(pkg, signerFingerprints)
-                return
-            }
-            requestTrustAndThrow(
-                file = file,
-                pkg = pkg,
-                signerFingerprints = signerFingerprints,
-                storeItem = storeItem,
-                reason = "Trust for this extension was revoked",
-            )
-        }
-
-        if (expectedKnown) {
-            val expected = buildSet {
-                addAll(userTrusted)
-                if (storeSigningKey.isNotEmpty()) add(storeSigningKey)
-            }
-            throw ExtensionSignatureMismatchException(pkg, expected, signerFingerprints)
-        }
-
-        if (explicitTrust) {
-            trustStore.trust(pkg, signerFingerprints)
-            return
-        }
-
-        requestTrustAndThrow(
-            file = file,
-            pkg = pkg,
-            signerFingerprints = signerFingerprints,
-            storeItem = storeItem,
-            reason = "Extension signer is unknown",
-        )
-    }
-
-    private fun requestTrustAndThrow(
-        file: File,
-        pkg: String,
-        signerFingerprints: List<String>,
-        storeItem: ExtensionStoreItem?,
-        reason: String,
-    ): Nothing {
-        trustStore.requestTrust(
-            pkg = pkg,
-            fingerprints = signerFingerprints,
-            filePath = file.absolutePath,
-            storeItem = storeItem,
-            reason = reason,
-        )
-        throw ExtensionTrustRequiredException(pkg, signerFingerprints, reason)
-    }
 
     /** Trusts all supplied signer fingerprints for [pkg]. */
     fun trustExtension(pkg: String, fingerprint: String?) = trustStore.trust(pkg, fingerprint)
@@ -775,16 +239,4 @@ class DesktopExtensionInstaller(
         trustedSigningKeys = listOfNotNull(signingKey?.takeIf { it.isNotBlank() }),
         signatureValid = signatureValid,
     )
-
-    private fun computeSha256(file: File): String {
-        val digest = MessageDigest.getInstance("SHA-256")
-        file.inputStream().use { input ->
-            val buffer = ByteArray(8192)
-            var bytesRead: Int
-            while (input.read(buffer).also { bytesRead = it } != -1) {
-                digest.update(buffer, 0, bytesRead)
-            }
-        }
-        return digest.digest().joinToString("") { "%02x".format(it) }
-    }
 }

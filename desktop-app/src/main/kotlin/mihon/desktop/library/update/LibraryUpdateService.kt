@@ -141,6 +141,9 @@ class LibraryUpdateService(
         // Notify user via Desktop Notification Service
         if (onReport != null) {
             runCatching { onReport.invoke(report) }
+                .onFailure {
+                    mihon.desktop.logging.DesktopLogger.warn("LibraryUpdate", "Update report listener failed", it)
+                }
         } else if (newChaptersTotal > 0) {
             val mangaCount = results.count { it.newChapters.isNotEmpty() }
             val firstManga = results.firstOrNull { it.newChapters.isNotEmpty() }?.title ?: "Manga"

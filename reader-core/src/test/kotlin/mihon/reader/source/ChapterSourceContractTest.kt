@@ -10,8 +10,10 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import mihon.reader.memory.BoundedReaderMemoryBudget
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry
+import org.junit.jupiter.api.Assumptions.assumeFalse
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+import java.nio.channels.FileChannel
 import java.nio.file.Files
 import java.nio.file.Path
 
@@ -82,6 +84,39 @@ class ChapterSourceContractTest {
             source.open(pages.single().id).use { input -> input.input.readBytes().isNotEmpty() shouldBe true }
             source.close()
             shouldThrow<ReaderFailure.SourceClosed> { source.pages() }
+        }
+    }
+
+    @Test
+    fun `tar page stream and chapter close release the archive file channel`() = runBlocking {
+        // forTesting overrides the NIO opener; on Windows the native handle path runs instead and
+        // is covered by ArchiveSafetyTest, so this POSIX-only check would never see a channel.
+        assumeFalse(System.getProperty("os.name").startsWith("Windows"), "POSIX NIO channel test")
+        TarCompression.entries.forEach { compression ->
+            val name = "unread-${compression.name.lowercase()}.tar"
+            ArchiveFixtures.writeCompressedTar(
+                temporaryDirectory.resolve(name),
+                compression,
+                listOf(TarArchiveEntry("page.png") to ArchiveFixtures.pageBytes),
+            )
+            val openedChannels = mutableListOf<FileChannel>()
+            val securePath = SecureLocalPath.forTesting(temporaryDirectory) {
+                FileChannel.open(it).also(openedChannels::add)
+            }
+            TarChapterSource(
+                ArchiveFixtures.asset(temporaryDirectory, name),
+                securePath = securePath,
+                compression = compression,
+            ).use { source ->
+                val page = source.open(source.pages().single().id)
+                openedChannels.last().isOpen shouldBe true
+                page.close()
+                openedChannels.map { it.isOpen } shouldBe listOf(false, false)
+                source.open(source.pages().single().id)
+                openedChannels.last().isOpen shouldBe true
+                source.close()
+                openedChannels.all { !it.isOpen } shouldBe true
+            }
         }
     }
 

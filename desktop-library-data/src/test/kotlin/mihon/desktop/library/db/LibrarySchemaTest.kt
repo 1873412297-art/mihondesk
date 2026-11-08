@@ -7,8 +7,8 @@ import org.junit.jupiter.api.Test
 
 class LibrarySchemaTest {
     @Test
-    fun `schema version includes per chapter download storage`() {
-        DesktopLibraryDatabase.Schema.version shouldBe 3L
+    fun `schema version includes category timestamps`() {
+        DesktopLibraryDatabase.Schema.version shouldBe 5L
     }
 
     @Test

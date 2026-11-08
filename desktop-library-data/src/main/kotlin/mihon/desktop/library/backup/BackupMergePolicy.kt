@@ -8,6 +8,11 @@ import mihon.desktop.library.model.HistoryRecord
 import mihon.desktop.library.model.MangaRecord
 import mihon.desktop.library.model.TrackingRecord
 import mihon.sync.core.merge.SyncMergePolicy
+import mihon.sync.core.merge.earliestNonzero
+import mihon.sync.core.merge.maxNullable
+import mihon.sync.core.merge.selectedNullableString
+import mihon.sync.core.merge.selectedString
+import mihon.sync.core.merge.trackingIncomingWins
 
 object BackupMergePolicy {
     fun mergeManga(
@@ -131,8 +136,18 @@ object BackupMergePolicy {
         readDuration = maxOf(existing.readDuration, incoming.readDuration),
     )
 
-    fun mergeTracking(existing: TrackingRecord, incoming: TrackingRecord): TrackingRecord {
-        val incomingWins = incoming.lastChapterRead > existing.lastChapterRead
+    fun mergeTracking(
+        existing: TrackingRecord,
+        incoming: TrackingRecord,
+        existingDeviceId: String = "",
+        incomingDeviceId: String = "",
+    ): TrackingRecord {
+        val incomingWins = trackingIncomingWins(
+            existingLastChapterRead = existing.lastChapterRead,
+            existingDeviceId = existingDeviceId,
+            incomingLastChapterRead = incoming.lastChapterRead,
+            incomingDeviceId = incomingDeviceId,
+        )
         val selected = if (incomingWins) incoming else existing
         return existing.copy(
             remoteId = selected.remoteId,
@@ -168,3 +183,10 @@ object BackupMergePolicy {
         return JsonArray(values.map(::JsonPrimitive)).toString()
     }
 }
+
+/** Sync apply call sites already hold both device ids; this keeps their merge call compact. */
+internal fun TrackingRecord.mergeWith(
+    incoming: TrackingRecord,
+    existingDeviceId: String,
+    incomingDeviceId: String,
+): TrackingRecord = BackupMergePolicy.mergeTracking(this, incoming, existingDeviceId, incomingDeviceId)

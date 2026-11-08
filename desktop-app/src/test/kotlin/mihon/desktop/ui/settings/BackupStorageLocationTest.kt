@@ -61,13 +61,14 @@ class BackupStorageLocationTest {
             println("PACKAGED_BACKUP_UI $origin")
         }
         val store = DesktopPreferenceStore(dir.resolve("preferences.properties"))
+        val presenter = SettingsPresenter(store, mihon.desktop.reader.DesktopReaderSettingsStore(store))
         setContent {
             ProvideDesktopStrings(language) {
                 MihonDesktopTheme(themeMode = if (dark) ThemeMode.Dark else ThemeMode.Light, isAmoled = dark) {
                     Surface(modifier = Modifier.requiredSize(width.dp, 500.dp).testTag("backup-location-render")) {
                         Box(Modifier.padding(24.dp)) {
                             var savedPath by remember { mutableStateOf("") }
-                            BackupStorageLocation(store, savedPath) { savedPath = it.backupStoragePath }
+                            BackupStorageLocation(presenter, savedPath) { savedPath = it.backupStoragePath }
                         }
                     }
                 }

@@ -60,6 +60,11 @@ fun main(args: Array<String>) {
         interactiveStartup = parsedCommand == DesktopCommand.LaunchUi
         PortableUpdateGuard.requireAllowed(executableDirectory, parsedCommand, System.getenv())
         val profile = DesktopProfileDirectories.resolve(args, System.getenv(), executableDirectory)
+        // Before any temp file or native-library extraction, so portable launches never touch %TEMP%.
+        mihon.desktop.platform.ProfileTemporaryDirectory.apply(
+            profile,
+            mihon.desktop.platform.PortableLayout.detect(args, executableDirectory).portable,
+        )
         DesktopLogger.init(profile.logs)
         DesktopLogger.info("Main", "Starting mihondesk with args: ${args.joinToString(" ")}")
         StartupTrace.mark("main() entered (JVM started)")
@@ -85,7 +90,7 @@ fun main(args: Array<String>) {
                     DesktopCommandRunner(activeRuntime, System.out).run(desktopCommand)
                 },
                 launchUi = { activeRuntime ->
-                    configureDesktopRendering()
+                    configureDesktopRendering(profile.root)
                     // Requests may arrive before the UI subscribes; keep a small buffer of the newest ones.
                     val forwarded = Channel<SingleInstanceRequest>(16, BufferOverflow.DROP_OLDEST)
                     val server = runCatching {
@@ -118,11 +123,13 @@ fun main(args: Array<String>) {
         DesktopLogger.error("Main", "Command line error: ${error.message}", error)
         DesktopCommandRunner.writeCommandLineError(System.out, error)
         error.exitCode
+    } catch (error: CancellationException) {
+        throw error
     } catch (e: Throwable) {
         DesktopLogger.error("Main", "Fatal startup error", e)
         e.printStackTrace(System.err)
         if (!reportStartupRecoveryFailure(e, interactiveStartup, System.out, DesktopStrings.resolve(startupLanguage))) {
-            DesktopCommandRunner.writeStartupFailure(System.out)
+            reportUnexpectedStartupFailure(e, interactiveStartup, System.out)
         }
         if (e is PortableUpdatePendingException) 75 else 1
     }
@@ -171,7 +178,7 @@ private fun launchUiWithStartupWindow(
     profileRoot: Path,
     startupPreferences: DesktopPreferences?,
 ): Int {
-    configureDesktopRendering()
+    configureDesktopRendering(profileRoot)
     // Requests may arrive before the UI subscribes; keep a small buffer of the newest ones.
     val forwarded = Channel<SingleInstanceRequest>(16, BufferOverflow.DROP_OLDEST)
     val server = runCatching {

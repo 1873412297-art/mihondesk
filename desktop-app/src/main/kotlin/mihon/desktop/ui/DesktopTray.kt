@@ -56,8 +56,9 @@ class DesktopTray(
                     val sharedIcon = SharedTrayIcon.acquire() ?: return@invokeLater
                     SharedTrayIcon.configure(strings.appName, popup, onShow)
                     trayIcon = sharedIcon
-                } catch (_: Throwable) {
-                    // Ignored if system tray installation fails
+                } catch (error: Throwable) {
+                    // The app works without a tray icon; log so a missing icon can be explained.
+                    mihon.desktop.logging.DesktopLogger.warn("Tray", "Unable to install tray icon", error)
                 }
             }
         }
@@ -67,7 +68,8 @@ class DesktopTray(
         EventQueue.invokeLater {
             try {
                 trayIcon?.displayMessage(title, message, TrayIcon.MessageType.INFO)
-            } catch (_: Throwable) {
+            } catch (error: Throwable) {
+                mihon.desktop.logging.DesktopLogger.warn("Tray", "Unable to show notification", error)
             }
         }
     }

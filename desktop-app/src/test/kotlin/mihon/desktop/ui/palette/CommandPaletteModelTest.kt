@@ -83,7 +83,7 @@ class CommandPaletteModelTest {
     }
 
     @Test
-    fun `blank or one-character queries do not hit the network`() = runBlocking {
+    fun `blank or one-character queries do not hit the network`(): Unit = runBlocking {
         var calls = 0
         val search = PaletteSourceSearch(
             sources = { listOf(SourceDescriptor(id = 1, name = "A", lang = "en", className = "A")) },

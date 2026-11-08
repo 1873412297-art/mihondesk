@@ -78,6 +78,7 @@ fun ReaderCanvas(
     webtoonMaxWidth: Int = 800,
     webtoonSidePadding: Int = 0,
     pageSizes: Map<PageId, PageSize> = emptyMap(),
+    panProvider: () -> ReaderPan = { state.pan },
     pageContent: ReaderPageContent = { _, pageIndex, contentModifier ->
         DefaultReaderPage(pageIndex, contentModifier)
     },
@@ -104,6 +105,7 @@ fun ReaderCanvas(
                     webtoonMaxWidth = webtoonMaxWidth,
                     webtoonSidePadding = webtoonSidePadding,
                     pageSizes = pageSizes,
+                    panProvider = panProvider,
                     modifier = Modifier.fillMaxSize().testTag("reader-continuous"),
                 )
             } else {
@@ -112,6 +114,7 @@ fun ReaderCanvas(
                     viewportWidth = maxWidth,
                     onAction = onAction,
                     pageSizes = pageSizes,
+                    panProvider = panProvider,
                     pageContent = pageContent,
                     modifier = Modifier.fillMaxSize().testTag("reader-paged"),
                 )
@@ -132,6 +135,7 @@ internal fun ReaderPageFrame(
     modifier: Modifier = Modifier,
     intrinsicSize: PageSize? = null,
     viewportTiling: Boolean = true,
+    livePan: () -> ReaderPan = { requestedPan },
 ) {
     val strings = LocalStrings.current
     val effectivePage = page.withIntrinsicSize(intrinsicSize)
@@ -173,10 +177,13 @@ internal fun ReaderPageFrame(
                     pageIndex,
                     Modifier
                         .requiredSize(width, height)
-                        .graphicsLayer(
-                            translationX = transform.pan.x,
-                            translationY = transform.pan.y,
-                        ),
+                        .graphicsLayer {
+                            // Gesture pan is applied in the draw phase; composition only sees the
+                            // committed pan, so a drag does not invalidate the page tree.
+                            val pan = livePan()
+                            translationX = pan.x
+                            translationY = pan.y
+                        },
                 )
             }
         }

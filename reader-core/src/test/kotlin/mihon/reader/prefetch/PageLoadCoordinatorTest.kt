@@ -254,7 +254,7 @@ class PageLoadCoordinatorTest {
     }
 
     @Test
-    fun `prefetch loads four pages ahead and one behind in priority order`() = runTest {
+    fun `prefetch loads five pages ahead and two behind in priority order`() = runTest {
         val harness = Harness(capacity = 4096)
         val coordinator = harness.coordinator(backgroundScope)
         val source = FakeChapterSource(1, 10)
@@ -265,10 +265,11 @@ class PageLoadCoordinatorTest {
         // coroutines-test version.
         runCurrent()
 
-        harness.decoder.producedNames() shouldBe listOf("p5.png", "p6.png", "p7.png", "p8.png", "p3.png")
+        harness.decoder.producedNames() shouldBe
+            listOf("p5.png", "p6.png", "p7.png", "p8.png", "p9.png", "p3.png", "p2.png")
         source.visibilityFor("p5.png").all { !it } shouldBe true
-        harness.cache.metrics.entryCount shouldBe 5
-        harness.budget.metrics shouldBe ReaderMemoryMetrics(4096, 0, 1280)
+        harness.cache.metrics.entryCount shouldBe 7
+        harness.budget.metrics shouldBe ReaderMemoryMetrics(4096, 0, 1792)
     }
 
     @Test
@@ -290,7 +291,7 @@ class PageLoadCoordinatorTest {
         runCurrent()
 
         harness.decoder.producedNames() shouldBe
-            listOf("p4.png", "p5.png", "p6.png", "p7.png", "p8.png", "p3.png")
+            listOf("p4.png", "p5.png", "p6.png", "p7.png", "p8.png", "p9.png", "p3.png", "p2.png")
         source.visibilityFor("p4.png").all { it } shouldBe true
         source.visibilityFor("p5.png").all { !it } shouldBe true
     }
@@ -345,18 +346,19 @@ class PageLoadCoordinatorTest {
         coordinator.updatePosition(3, listOf(source.pageId(3)), ReadingMode.SINGLE_LTR, NavigationDirection.FORWARD)
         runCurrent()
 
-        harness.decoder.decodeAttempts shouldBe 5
+        harness.decoder.decodeAttempts shouldBe 7
         harness.decoder.producedNames() shouldBe emptyList<String>()
         gate.complete(Unit)
         runCurrent()
 
-        harness.decoder.producedNames() shouldBe listOf("p5.png", "p6.png", "p7.png", "p8.png", "p3.png")
-        // Pressure relief may evict earlier unpinned prefetched tiles while the fifth decode
-        // waits for budget, but every requested page still completes within the ledger.
-        harness.cache.metrics.entryCount shouldBe 1
+        harness.decoder.producedNames() shouldBe
+            listOf("p5.png", "p6.png", "p7.png", "p8.png", "p9.png", "p3.png", "p2.png")
+        // Pressure relief may evict earlier unpinned prefetched tiles while later decodes wait
+        // for budget, but every requested page still completes within the ledger.
+        harness.cache.metrics.entryCount shouldBe 3
         (harness.decoder.peakLedgerBytes <= 1024) shouldBe true
         (harness.cache.metrics.highWaterBytes <= 1024) shouldBe true
-        harness.budget.metrics shouldBe ReaderMemoryMetrics(1024, 0, 256)
+        harness.budget.metrics shouldBe ReaderMemoryMetrics(1024, 0, 768)
     }
 
     @Test
@@ -484,7 +486,7 @@ class PageLoadCoordinatorTest {
         visible.await()
         runCurrent()
 
-        harness.decoder.producedNames() shouldBe listOf("p4.png", "p7.png", "p9.png", "p10.png")
+        harness.decoder.producedNames() shouldBe listOf("p4.png", "p6.png", "p7.png", "p9.png", "p10.png")
         harness.budget.metrics.reservedBytes shouldBe 0
     }
 
@@ -505,7 +507,7 @@ class PageLoadCoordinatorTest {
         probeGate.complete(Unit)
         runCurrent()
 
-        harness.decoder.producedNames() shouldBe listOf("p7.png", "p9.png", "p10.png")
+        harness.decoder.producedNames() shouldBe listOf("p6.png", "p7.png", "p9.png", "p10.png")
         harness.cache.get(TileKey(source.pageId(2), null, IntRect(0, 0, 4, 4))) shouldBe null
         harness.budget.metrics.reservedBytes shouldBe 0
 
@@ -524,24 +526,39 @@ class PageLoadCoordinatorTest {
 
         coordinator.updatePosition(3, listOf(source.pageId(3)), ReadingMode.SINGLE_LTR, NavigationDirection.FORWARD)
         runCurrent()
-        // The non-cancellable post-decode gate parks all five prefetch decodes.
-        harness.decoder.producedNames() shouldBe listOf("p5.png", "p6.png", "p7.png", "p8.png", "p3.png")
+        // The non-cancellable post-decode gate parks all seven prefetch decodes.
+        harness.decoder.producedNames() shouldBe
+            listOf("p5.png", "p6.png", "p7.png", "p8.png", "p9.png", "p3.png", "p2.png")
 
         coordinator.updatePosition(7, listOf(source.pageId(7)), ReadingMode.SINGLE_LTR, NavigationDirection.FORWARD)
         postDecode.complete(Unit)
         runCurrent()
 
-        // Every superseded tile surfaces cancellation at the post-decode checkpoint: the
-        // raster is flushed and the cache never sees it.
+        // Raster eviction is bounded: retained wanted tiles stay resident, cancelled ones flush.
         harness.decoder.producedImage(0).flushCount shouldBe 1
-        harness.decoder.producedImage(1).flushCount shouldBe 1
+        harness.decoder.producedImage(1).flushCount shouldBe 0
         harness.decoder.producedImage(3).flushCount shouldBe 1
-        harness.decoder.producedImage(4).flushCount shouldBe 1
-        harness.cache.get(TileKey(source.pageId(2), null, IntRect(0, 0, 4, 4))) shouldBe null
+        harness.decoder.producedImage(4).flushCount shouldBe 0
+        // p6..p9 remain wanted in the new window; cancelled p5/p8/p3/p2 are flushed and absent.
+        listOf(4, 7, 2, 1).forEach { index ->
+            harness.cache.get(TileKey(source.pageId(index), null, IntRect(0, 0, 4, 4))) shouldBe null
+        }
+        listOf(5, 6, 8, 9).forEach { index ->
+            (harness.cache.get(TileKey(source.pageId(index), null, IntRect(0, 0, 4, 4))) != null) shouldBe true
+        }
         harness.decoder.producedNames() shouldBe
-            listOf("p5.png", "p6.png", "p7.png", "p8.png", "p3.png", "p9.png", "p10.png")
-        harness.cache.metrics shouldBe CacheMetrics(768, 0, 3, 0, 8, 7, 0, 768)
-        harness.budget.metrics shouldBe ReaderMemoryMetrics(4096, 0, 768)
+            listOf(
+                "p5.png",
+                "p6.png",
+                "p7.png",
+                "p8.png",
+                "p9.png",
+                "p3.png",
+                "p2.png",
+                "p10.png",
+            )
+        harness.cache.metrics shouldBe CacheMetrics(1024, 0, 4, 4, 12, 8, 0, 1024)
+        harness.budget.metrics shouldBe ReaderMemoryMetrics(4096, 0, 1024)
 
         coordinator.loadVisible(source.pageId(2)).resident shouldBe true
     }
@@ -557,19 +574,19 @@ class PageLoadCoordinatorTest {
 
         coordinator.updatePosition(3, listOf(source.pageId(3)), ReadingMode.SINGLE_LTR, NavigationDirection.FORWARD)
         runCurrent()
-        harness.decoder.decodeAttempts shouldBe 5
+        harness.decoder.decodeAttempts shouldBe 7
 
-        // Backward plan from index 3 wants indexes 2, 1, and 0 ahead plus index 4 behind;
+        // Backward plan from index 3 wants five prior images plus two following images.
         // the other forward flights become obsolete mid-decode.
         coordinator.updatePosition(3, listOf(source.pageId(3)), ReadingMode.SINGLE_LTR, NavigationDirection.BACKWARD)
         runCurrent()
         gate.complete(Unit)
         runCurrent()
 
-        harness.decoder.producedNames() shouldBe listOf("p5.png", "p3.png", "p2.png", "p1.png")
-        harness.budget.metrics shouldBe ReaderMemoryMetrics(4096, 0, 1024)
+        harness.decoder.producedNames() shouldBe listOf("p5.png", "p6.png", "p3.png", "p2.png", "p1.png")
+        harness.budget.metrics shouldBe ReaderMemoryMetrics(4096, 0, 1280)
 
-        // Cancellation left no memoized error for the obsolete page.
+        // Cancellation left no memoized error for an obsolete page.
         coordinator.loadVisible(source.pageId(5)).resident shouldBe true
         harness.budget.metrics shouldBe ReaderMemoryMetrics(4096, 0, 1280)
     }
@@ -587,7 +604,7 @@ class PageLoadCoordinatorTest {
         harness.decoder.decodeGate = gate
         coordinator.updatePosition(0, listOf(sourceA.pageId(0)), ReadingMode.SINGLE_LTR, NavigationDirection.FORWARD)
         runCurrent()
-        harness.decoder.decodeAttempts shouldBe 5
+        harness.decoder.decodeAttempts shouldBe 6
 
         val sourceB = FakeChapterSource(2, 5)
         coordinator.openChapter(sourceB)
@@ -597,7 +614,7 @@ class PageLoadCoordinatorTest {
         // Old chapter prefetch never produced; the visible page was evicted and flushed.
         harness.decoder.producedNames() shouldBe listOf("p1.png")
         harness.decoder.producedImage(0).flushCount shouldBe 1
-        harness.cache.metrics shouldBe CacheMetrics(0, 0, 0, 0, 5, 5, 1, 256)
+        harness.cache.metrics shouldBe CacheMetrics(0, 0, 0, 0, 6, 6, 1, 256)
         harness.budget.metrics shouldBe ReaderMemoryMetrics(4096, 0, 0)
 
         val loaded = coordinator.loadVisible(sourceB.pageId(0))
@@ -715,27 +732,27 @@ class PageLoadCoordinatorTest {
 @OptIn(ExperimentalCoroutinesApi::class)
 class PrefetchPolicyTest {
     @Test
-    fun `single page forward plans four pages ahead and one behind`() {
+    fun `single page forward plans five pages ahead and two behind`() {
         PrefetchPolicy.plan(10, 3, ReadingMode.SINGLE_LTR, NavigationDirection.FORWARD) shouldBe
-            listOf(4, 5, 6, 7, 2)
+            listOf(4, 5, 6, 7, 8, 2, 1)
     }
 
     @Test
     fun `single page backward mirrors the forward plan`() {
         PrefetchPolicy.plan(10, 6, ReadingMode.SINGLE_RTL, NavigationDirection.BACKWARD) shouldBe
-            listOf(5, 4, 3, 2, 7)
+            listOf(5, 4, 3, 2, 1, 7, 8)
     }
 
     @Test
-    fun `dual page forward skips the visible spread and plans four images ahead`() {
+    fun `dual page forward skips the visible spread and plans five images ahead`() {
         PrefetchPolicy.plan(10, 2, ReadingMode.DUAL_LTR, NavigationDirection.FORWARD) shouldBe
-            listOf(4, 5, 6, 7, 1)
+            listOf(4, 5, 6, 7, 8, 1, 0)
     }
 
     @Test
     fun `dual page backward mirrors images and RTL matches LTR logically`() {
         PrefetchPolicy.plan(10, 6, ReadingMode.DUAL_RTL, NavigationDirection.BACKWARD) shouldBe
-            listOf(4, 3, 2, 1, 7)
+            listOf(4, 3, 2, 1, 0, 7, 8)
         PrefetchPolicy.plan(10, 4, ReadingMode.DUAL_RTL, NavigationDirection.FORWARD) shouldBe
             PrefetchPolicy.plan(10, 4, ReadingMode.DUAL_LTR, NavigationDirection.FORWARD)
     }
@@ -743,16 +760,16 @@ class PrefetchPolicyTest {
     @Test
     fun `continuous modes use single page units`() {
         PrefetchPolicy.plan(10, 3, ReadingMode.VERTICAL, NavigationDirection.FORWARD) shouldBe
-            listOf(4, 5, 6, 7, 2)
+            listOf(4, 5, 6, 7, 8, 2, 1)
         PrefetchPolicy.plan(10, 3, ReadingMode.WEBTOON, NavigationDirection.FORWARD) shouldBe
-            listOf(4, 5, 6, 7, 2)
+            listOf(4, 5, 6, 7, 8, 2, 1)
     }
 
     @Test
     fun `plan clamps at chapter edges`() {
         PrefetchPolicy.plan(3, 0, ReadingMode.SINGLE_LTR, NavigationDirection.FORWARD) shouldBe listOf(1, 2)
-        PrefetchPolicy.plan(3, 2, ReadingMode.SINGLE_LTR, NavigationDirection.FORWARD) shouldBe listOf(1)
-        PrefetchPolicy.plan(5, 4, ReadingMode.DUAL_LTR, NavigationDirection.FORWARD) shouldBe listOf(3)
+        PrefetchPolicy.plan(3, 2, ReadingMode.SINGLE_LTR, NavigationDirection.FORWARD) shouldBe listOf(1, 0)
+        PrefetchPolicy.plan(5, 4, ReadingMode.DUAL_LTR, NavigationDirection.FORWARD) shouldBe listOf(3, 2)
         PrefetchPolicy.plan(2, 0, ReadingMode.DUAL_LTR, NavigationDirection.FORWARD) shouldBe emptyList<Int>()
     }
 

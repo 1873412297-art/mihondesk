@@ -92,12 +92,7 @@ class AndroidBackupCodec private constructor(
             Files.newOutputStream(temp).sink().gzip().buffer().use { sink ->
                 sink.write(bytes)
             }
-            Files.move(
-                temp,
-                path,
-                java.nio.file.StandardCopyOption.REPLACE_EXISTING,
-                java.nio.file.StandardCopyOption.ATOMIC_MOVE,
-            )
+            mihon.desktop.library.util.moveReplacing(temp, path)
         } finally {
             Files.deleteIfExists(temp)
         }

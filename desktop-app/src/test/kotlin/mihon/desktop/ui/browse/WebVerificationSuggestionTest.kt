@@ -2,6 +2,9 @@ package mihon.desktop.ui.browse
 
 import io.kotest.matchers.shouldBe
 import mihon.desktop.i18n.UiText
+import mihon.desktop.i18n.english
+import mihon.desktop.i18n.simplified
+import mihon.desktop.i18n.traditional
 import mihon.extension.ipc.NetworkFailure
 import mihon.extension.ipc.NetworkFailureKind
 import org.junit.jupiter.api.Test

@@ -278,6 +278,70 @@ class ExtensionFilterHostTest {
         appliedGroup.state[1].shouldBeInstanceOf<MockTachiyomiTriState>().state shouldBe TFilter.TriState.STATE_EXCLUDE
     }
 
+    private class DuplicateNameTachiyomiSource : CatalogueSource {
+        override val id: Long = 9002L
+        override val name: String = "Duplicate Name Source"
+        override val lang: String = "en"
+        override val supportsLatest: Boolean = false
+
+        var lastSearchFilters: TFilterList? = null
+
+        override suspend fun getPopularManga(page: Int): TMangasPage = TMangasPage(emptyList(), false)
+
+        override suspend fun getLatestUpdates(page: Int): TMangasPage = TMangasPage(emptyList(), false)
+
+        override suspend fun getSearchManga(page: Int, query: String, filters: TFilterList): TMangasPage {
+            lastSearchFilters = filters
+            return TMangasPage(emptyList(), false)
+        }
+
+        override suspend fun getMangaUpdate(
+            manga: TSManga,
+            chapters: List<TSChapter>,
+            fetchDetails: Boolean,
+            fetchChapters: Boolean,
+        ): TSMangaUpdate = TSMangaUpdate(manga, chapters)
+
+        override suspend fun getPageList(chapter: TSChapter): List<TPage> = emptyList()
+
+        override fun getFilterList(): TFilterList = TFilterList(
+            MockTachiyomiGroupFilter("Tags", listOf(MockTachiyomiCheckBox("Same", false))),
+            MockTachiyomiGroupFilter("Tags", listOf(MockTachiyomiCheckBox("Same", false))),
+            MockTachiyomiGroupFilter(
+                "Genres",
+                listOf(MockTachiyomiCheckBox("Dup", false), MockTachiyomiCheckBox("Dup", false)),
+            ),
+        )
+    }
+
+    @Test
+    fun `tachiyomi filters sharing a name each receive their own state`(): Unit = runBlocking {
+        val engine = ExtensionHostEngine(BrokeredHttpClient { null })
+        val source = DuplicateNameTachiyomiSource()
+        engine.registerSource(TachiyomiCatalogueSourceAdapter(source))
+
+        val selected = FilterList(
+            Filter.Group("Tags", listOf(Filter.CheckBox("Same", true))),
+            Filter.Group("Tags", listOf(Filter.CheckBox("Same", false))),
+            Filter.Group("Genres", listOf(Filter.CheckBox("Dup", false), Filter.CheckBox("Dup", true))),
+        )
+        val response = engine.handleRequest(
+            IpcRequest(
+                requestId = 1,
+                command = IpcCommands.SEARCH_MANGA,
+                payloadJson = json.encodeToString(SearchPayload(9002L, 1, "", encodeFilterList(selected))),
+            ),
+        )
+        response.success shouldBe true
+
+        val groups = source.lastSearchFilters!!.filterIsInstance<MockTachiyomiGroupFilter>()
+        groups.map { group -> group.state.map { (it as MockTachiyomiCheckBox).state } } shouldBe listOf(
+            listOf(true),
+            listOf(false),
+            listOf(false, true),
+        )
+    }
+
     private class NoFiltersCapturingSource : WindowsCatalogueSource {
         override val id: Long = 5006L
         override val name: String = "No Filters Source"

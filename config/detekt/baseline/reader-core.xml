@@ -1,0 +1,14 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<SmellBaseline>
+  <ManuallySuppressedIssues />
+  <CurrentIssues>
+    <ID>LongMethod:ApngPageDecoder.kt:ApngPageDecoder$private suspend fun decode: DecodedTile</ID>
+    <ID>LongMethod:DefaultReaderSessionActions.kt:internal suspend fun DefaultReaderSession.openLocked</ID>
+    <ID>LongMethod:ImageIoPageDecoder.kt:ImageIoPageDecoder$private suspend fun decodeGifFrame: DecodedTile</ID>
+    <ID>SwallowedException:EpubChapterSource.kt:error: Exception</ID>
+    <ID>SwallowedException:ImageIoPageDecoderSupport.kt:overflow: ArithmeticException</ID>
+    <ID>SwallowedException:PageLoadCoordinatorFlights.kt:cancel: CancellationException</ID>
+    <ID>SwallowedException:SecureLocalPath.kt:SecureLocalPath$error: Exception</ID>
+    <ID>SwallowedException:WeightedTileCache.kt:WeightedTileCache$cancel: CancellationException</ID>
+  </CurrentIssues>
+</SmellBaseline>

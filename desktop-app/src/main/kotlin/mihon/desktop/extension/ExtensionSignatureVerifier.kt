@@ -1,5 +1,4 @@
 package mihon.desktop.extension
-
 import com.android.apksig.ApkVerifier
 import mihon.extension.validator.ExtensionValidationException
 import java.io.File
@@ -8,92 +7,6 @@ import java.io.RandomAccessFile
 import java.security.MessageDigest
 import java.security.cert.X509Certificate
 import java.util.jar.JarFile
-
-/**
- * Thrown when an extension package has a malformed, invalid, or unsupported signature.
- *
- * APK packages using only APK Signature Scheme v2/v3 are verified with apksig; a malformed or
- * tampered APK Signing Block is reported with this exception.
- */
-open class ExtensionSignatureException(message: String, cause: Throwable? = null) :
-    ExtensionValidationException(message, cause)
-
-/** Thrown when a package signature is valid but the signer fingerprint is not trusted yet. */
-open class ExtensionTrustRequiredException(
-    val pkg: String,
-    val fingerprints: List<String>,
-    val reason: String = "Extension signature is not trusted",
-) : ExtensionValidationException(
-    "$reason: $pkg (signer fingerprints: ${fingerprints.ifEmpty { listOf("UNSIGNED") }.joinToString()}). " +
-        "Explicitly trust this package to install it.",
-)
-
-/** Thrown when a package signer does not match a known key or a previously trusted fingerprint. */
-open class ExtensionSignatureMismatchException(
-    val pkg: String,
-    val expectedFingerprints: Set<String>,
-    val actualFingerprints: List<String>,
-) : ExtensionValidationException(
-    "Extension signature mismatch for '$pkg': expected one of " +
-        "${expectedFingerprints.ifEmpty { setOf("<unknown>") }.joinToString()}, but package was signed by " +
-        actualFingerprints.ifEmpty { listOf("<unsigned>") }.joinToString(),
-)
-
-/** Alias used by callers that model a validly signed but not-yet-trusted package. */
-typealias ExtensionUntrustedException = ExtensionSignatureMismatchException
-
-/** Broad alias for any trust-related install rejection. */
-typealias ExtensionTrustException = ExtensionValidationException
-
-/** Alias for callers that name the malformed-signature failure after verification. */
-typealias ExtensionSignatureVerificationException = ExtensionSignatureException
-
-/** Alias for the signature verification result. */
-typealias SignatureVerificationResult = ExtensionSignatureVerification
-
-/** Alias for the pluggable signature verifier contract. */
-typealias SignatureVerifier = ExtensionVerifier
-
-/**
- * Result of inspecting an extension package's v1 JAR/APK signature.
- *
- * [valid] describes whether the package could be parsed/verified. An unsigned package is valid
- * (it simply has no signer identity), whereas a package with broken signatures is invalid.
- */
-data class ExtensionSignatureVerification(
-    val fingerprints: List<String> = emptyList(),
-    val hasV1Signature: Boolean = false,
-    val hasApkSigningBlock: Boolean = false,
-    val valid: Boolean = true,
-    val error: String? = null,
-) {
-    val signed: Boolean get() = fingerprints.isNotEmpty()
-    val isSigned: Boolean get() = signed
-    val isValid: Boolean get() = valid
-    val signerFingerprints: List<String> get() = fingerprints
-    val signatureFingerprints: List<String> get() = fingerprints
-    val sha256Fingerprints: List<String> get() = fingerprints
-    val certificateFingerprints: List<String> get() = fingerprints
-    val primaryFingerprint: String? get() = fingerprints.lastOrNull()
-    val sha256: String? get() = primaryFingerprint
-    val errorMessage: String? get() = error
-    val failureReason: String? get() = error
-
-    /** True when the APK carries an APK Signing Block but no verifiable v1 JAR signature. */
-    val v2V3Only: Boolean get() = hasApkSigningBlock && fingerprints.isEmpty() && !hasV1Signature
-    val isV2V3Only: Boolean get() = v2V3Only
-
-    fun requireValid() {
-        if (!valid || v2V3Only) {
-            throw ExtensionSignatureException(error ?: "Extension signature verification failed")
-        }
-    }
-}
-
-/** Pluggable verifier contract. Tests may inject a fake verifier. */
-fun interface ExtensionVerifier {
-    fun verify(file: File): ExtensionSignatureVerification
-}
 
 /**
  * Extracts and verifies v1 JAR and v2/v3 APK signer certificate SHA-256 fingerprints.
@@ -117,6 +30,8 @@ open class ExtensionSignatureVerifier : ExtensionVerifier {
 
         val fingerprints = LinkedHashSet<String>()
         var hasV1SignatureFiles = false
+        val unsignedEntries = mutableListOf<String>()
+        var signedEntryFingerprints: Set<String>? = null
 
         try {
             JarFile(file, true).use { jar ->
@@ -139,15 +54,20 @@ open class ExtensionSignatureVerifier : ExtensionVerifier {
                         )
                     }
 
-                    val codeSigners = entry.codeSigners
-                    if (codeSigners != null) {
-                        for (signer in codeSigners) {
-                            // The signer certificate is the first certificate in the path; the rest
-                            // are the CA chain and are not part of the package signer identity.
-                            val x509 = signer.signerCertPath.certificates.firstOrNull() as? X509Certificate
-                            if (x509 != null) {
-                                fingerprints += sha256Hex(x509.encoded)
-                            }
+                    val entryFingerprints = signerFingerprints(entry)
+                    if (entryFingerprints.isEmpty()) {
+                        if (!isJarMetadataFile(entry.name)) unsignedEntries += entry.name
+                    } else {
+                        fingerprints += entryFingerprints
+                        val previous = signedEntryFingerprints
+                        if (previous == null) {
+                            signedEntryFingerprints = entryFingerprints
+                        } else if (previous != entryFingerprints) {
+                            return invalid(
+                                "Package entries are signed by different signer certificates",
+                                hasSigningBlock,
+                                hasV1SignatureFiles,
+                            )
                         }
                     }
                 }
@@ -197,6 +117,15 @@ open class ExtensionSignatureVerifier : ExtensionVerifier {
             )
         }
 
+        if (unsignedEntries.isNotEmpty()) {
+            return invalid(
+                "Package contains unsigned entries (e.g. '${unsignedEntries.first()}'); " +
+                    "partially signed packages are not trusted.",
+                hasSigningBlock,
+                hasV1SignatureFiles,
+            )
+        }
+
         return ExtensionSignatureVerification(
             fingerprints = fingerprints.toList(),
             hasV1Signature = hasV1SignatureFiles,
@@ -208,17 +137,25 @@ open class ExtensionSignatureVerifier : ExtensionVerifier {
     /** Returns signer fingerprints, throwing for invalid or v2/v3-only packages. */
     fun extractSignerFingerprints(file: File): List<String> = verifyOrThrow(file).fingerprints
 
-    fun extractFingerprints(file: File): List<String> = extractSignerFingerprints(file)
+    /**
+     * Signer identity of one archive entry. Empty when the entry is not covered by a v1 signature;
+     * a package may not mix signed and unsigned entries.
+     */
+    private fun signerFingerprints(entry: java.util.jar.JarEntry): Set<String> {
+        val signers = entry.codeSigners ?: return emptySet()
+        val result = LinkedHashSet<String>()
+        for (signer in signers) {
+            // The signer certificate is the first certificate in the path; the rest are the CA chain.
+            val x509 = signer.signerCertPath.certificates.firstOrNull() as? X509Certificate
+            if (x509 != null) result += sha256Hex(x509.encoded)
+        }
+        return result
+    }
 
-    fun extract(file: File): List<String> = extractSignerFingerprints(file)
-
-    fun getSignerFingerprints(file: File): List<String> = extractSignerFingerprints(file)
-
-    fun verifySignatures(file: File): ExtensionSignatureVerification = verify(file)
-
-    fun fingerprint(file: File): String? = extractSignerFingerprints(file).lastOrNull()
-
-    fun signerFingerprint(file: File): String? = fingerprint(file)
+    private fun isJarMetadataFile(name: String): Boolean =
+        name.equals("META-INF/MANIFEST.MF", ignoreCase = true) ||
+            name.startsWith("META-INF/SIG-", ignoreCase = true) ||
+            isV1SignatureFile(name)
 
     fun verifyOrThrow(file: File): ExtensionSignatureVerification {
         val result = verify(file)
@@ -227,8 +164,6 @@ open class ExtensionSignatureVerifier : ExtensionVerifier {
         }
         return result
     }
-
-    fun requireValid(file: File): ExtensionSignatureVerification = verifyOrThrow(file)
 
     /**
      * Verifies APK Signature Scheme v2/v3 with apksig and returns the signer certificate SHA-256s.
@@ -287,21 +222,8 @@ open class ExtensionSignatureVerifier : ExtensionVerifier {
 
         override fun verify(file: File): ExtensionSignatureVerification = ExtensionSignatureVerifier().verify(file)
 
-        fun extractSignerFingerprints(file: File): List<String> =
-            ExtensionSignatureVerifier().extractSignerFingerprints(file)
-
         fun extractFingerprints(file: File): List<String> =
-            ExtensionSignatureVerifier().extractFingerprints(file)
-
-        fun extract(file: File): List<String> = ExtensionSignatureVerifier().extract(file)
-
-        fun verifyOrThrow(file: File): ExtensionSignatureVerification =
-            ExtensionSignatureVerifier().verifyOrThrow(file)
-
-        fun verifySignatures(file: File): ExtensionSignatureVerification =
-            ExtensionSignatureVerifier().verifySignatures(file)
-
-        fun fingerprint(file: File): String? = ExtensionSignatureVerifier().fingerprint(file)
+            ExtensionSignatureVerifier().extractSignerFingerprints(file)
 
         fun isV1SignatureFile(name: String): Boolean {
             if (!name.startsWith("META-INF/", ignoreCase = true)) return false

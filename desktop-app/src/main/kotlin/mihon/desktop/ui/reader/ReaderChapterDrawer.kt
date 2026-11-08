@@ -49,6 +49,7 @@ import androidx.compose.ui.unit.dp
 import mihon.desktop.i18n.LocalStrings
 import mihon.desktop.i18n.UiText
 import mihon.desktop.i18n.text
+import mihon.desktop.ui.common.trackTextInputFocus
 
 /**
  * Material 3 chapter drawer for in-reader chapter browsing, search, and navigation.
@@ -171,6 +172,7 @@ fun ReaderChapterDrawer(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp, vertical = 6.dp)
+                            .trackTextInputFocus()
                             .testTag("reader-drawer-search"),
                         placeholder = {
                             Text(strings.readerChapterDrawerSearch, style = MaterialTheme.typography.bodyMedium)

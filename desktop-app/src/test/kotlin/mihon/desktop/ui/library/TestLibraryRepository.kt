@@ -123,6 +123,9 @@ internal class TestLibraryRepository : LibraryRepository, LibraryMutationPort {
     override fun findChapter(mangaId: Long, url: String): ChapterRecord? =
         chapters.values.firstOrNull { it.mangaId == mangaId && it.url == url }
 
+    override fun chaptersForManga(mangaId: Long): List<ChapterRecord> =
+        chapters.values.filter { it.mangaId == mangaId }
+
     override fun insertChapter(value: ChapterRecord): Long {
         val chapterId = if (value.id == 0L) nextId++ else value.id
         chapters[chapterId] = value.copy(id = chapterId)

@@ -54,4 +54,34 @@ class DownloadOrphanCleanupTest {
         report.deletedChaptersCount shouldBe 1
         Files.exists(orphan) shouldBe true
     }
+
+    @Test
+    fun `keeps a legacy title folder after the library manga was renamed`() {
+        val disk = DownloadDiskProvider(tempDir.resolve("downloads"))
+        val manga = MangaRecord(id = 1, sourceId = 100, url = "/a", title = "New Title", favorite = true)
+        val legacyChapter = disk.downloadsDir.resolve("100").resolve("Old Title").resolve("Chapter 1")
+        chapterWithPage(legacyChapter)
+
+        val report = DownloadCacheCleaner.deleteDownloadsNotInLibrary(
+            manga = listOf(manga),
+            diskProvider = disk,
+            registeredChapterPaths = setOf(legacyChapter),
+        )
+
+        report.deletedChaptersCount shouldBe 0
+        Files.exists(legacyChapter) shouldBe true
+    }
+
+    @Test
+    fun `keeps a legacy title folder that looks like the id layout`() {
+        val disk = DownloadDiskProvider(tempDir.resolve("downloads"))
+        val manga = MangaRecord(id = 7, sourceId = 100, url = "/a", title = "manga-42", favorite = true)
+        val legacyChapter = disk.downloadsDir.resolve("100").resolve("manga-42").resolve("Chapter 1")
+        chapterWithPage(legacyChapter)
+
+        val report = DownloadCacheCleaner.deleteDownloadsNotInLibrary(listOf(manga), disk)
+
+        report.deletedChaptersCount shouldBe 0
+        Files.exists(legacyChapter) shouldBe true
+    }
 }

@@ -12,6 +12,11 @@ import mihon.desktop.extension.DesktopExtensionInstaller
 import mihon.desktop.extension.DesktopNetworkHelper
 import mihon.desktop.extension.DesktopSourceManager
 import mihon.desktop.extension.WindowsExtensionProcessManager
+import mihon.desktop.extension.findSourceDescriptor
+import mihon.desktop.extension.getChapterList
+import mihon.desktop.extension.getMangaDetails
+import mihon.desktop.extension.getPopular
+import mihon.desktop.extension.searchManga
 import mihon.desktop.library.db.DesktopLibraryDatabaseFactory
 import mihon.desktop.library.model.ChapterRecord
 import mihon.desktop.library.model.MangaRecord

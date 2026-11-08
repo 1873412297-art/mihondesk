@@ -105,7 +105,11 @@ object DatabaseMigrationSnapshot {
                     totalBytes += Files.size(path)
                 }
             }
-        } catch (_: Throwable) {}
+        } catch (error: java.io.IOException) {
+            // Only feeds the settings summary; report what was counted before the failure.
+            System.getLogger("DatabaseMigrationSnapshot")
+                .log(System.Logger.Level.WARNING, "Cannot list migration snapshots in $directory", error)
+        }
         return SnapshotInfo(count, totalBytes, directory)
     }
 

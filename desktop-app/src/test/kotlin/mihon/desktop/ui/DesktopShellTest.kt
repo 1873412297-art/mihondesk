@@ -34,6 +34,7 @@ class DesktopShellTest {
         railSelectionFor(DesktopDestination.Stats) shouldBe DesktopDestination.History
         railSelectionFor(DesktopDestination.About) shouldBe DesktopDestination.Settings
         railSelectionFor(DesktopDestination.Library) shouldBe DesktopDestination.Library
+        railSelectionFor(DesktopDestination.Downloads) shouldBe DesktopDestination.Downloads
         mihon.desktop.ui.common.ContentDensity.parse("compact") shouldBe mihon.desktop.ui.common.ContentDensity.Compact
         mihon.desktop.ui.common.ContentDensity.parse(null) shouldBe mihon.desktop.ui.common.ContentDensity.Standard
         mihon.desktop.ui.common.NavRailState.resolve(userCollapsed = false, narrow = true, overlayOpen = false) shouldBe
@@ -51,10 +52,9 @@ class DesktopShellTest {
     @Test
     fun `menu toggle collapses the wide rail and has no density button`() =
         androidx.compose.ui.test.runDesktopComposeUiTest(width = 1400, height = 800) {
-            mihon.desktop.ui.common.DesktopLayoutPrefs.bind(null)
             setContent {
                 Box(modifier = Modifier.requiredSize(1400.dp, 800.dp)) {
-                    DesktopShell(selected = DesktopDestination.Library, onDestinationSelected = {})
+                    TestDesktopShell(selected = DesktopDestination.Library, onDestinationSelected = {})
                 }
             }
             onNodeWithTag("desktop-density-toggle").assertDoesNotExist()
@@ -69,10 +69,9 @@ class DesktopShellTest {
     @OptIn(ExperimentalTestApi::class)
     @Test
     fun `narrow window auto collapses the rail and expands as overlay`() = runComposeUiTest {
-        mihon.desktop.ui.common.DesktopLayoutPrefs.bind(null)
         setContent {
             Box(modifier = Modifier.requiredSize(1000.dp, 700.dp)) {
-                DesktopShell(selected = DesktopDestination.Library, onDestinationSelected = {})
+                TestDesktopShell(selected = DesktopDestination.Library, onDestinationSelected = {})
             }
         }
         onNodeWithTag(DESKTOP_NAVIGATION_RAIL_TEST_TAG).getBoundsInRoot().width shouldBe RAIL_COLLAPSED_WIDTH
@@ -117,7 +116,7 @@ class DesktopShellTest {
     fun `standalone details render without a selected library row even on wide desktop`() = runComposeUiTest {
         setContent {
             Box(modifier = Modifier.requiredSize(1400.dp, 900.dp)) {
-                DesktopShell(
+                TestDesktopShell(
                     selected = DesktopDestination.Library,
                     onDestinationSelected = {},
                     libraryState = LibraryUiState(loading = false, selectedMangaId = null),
@@ -147,7 +146,7 @@ class DesktopShellTest {
         }
         setContent {
             Box(modifier = Modifier.requiredSize(1100.dp, 1200.dp)) {
-                DesktopShell(
+                TestDesktopShell(
                     selected = DesktopDestination.Downloads,
                     onDestinationSelected = {},
                     downloadsQueue = queue,
@@ -172,7 +171,7 @@ class DesktopShellTest {
     fun `Library destination renders the real library screen`() = runComposeUiTest {
         setContent {
             Box(modifier = Modifier.requiredSize(1280.dp, 800.dp)) {
-                DesktopShell(
+                TestDesktopShell(
                     selected = DesktopDestination.Library,
                     onDestinationSelected = {},
                     libraryState = LibraryUiState(loading = false),
@@ -188,7 +187,7 @@ class DesktopShellTest {
     fun `selected headline has positive bounds beside the navigation rail`() = runComposeUiTest {
         setContent {
             Box(modifier = Modifier.requiredSize(1280.dp, 800.dp)) {
-                DesktopShell(
+                TestDesktopShell(
                     selected = DesktopDestination.Settings,
                     onDestinationSelected = {},
                 )
@@ -210,7 +209,7 @@ class DesktopShellTest {
     fun `Downloads destination renders downloads screen`() = runComposeUiTest {
         setContent {
             Box(modifier = Modifier.requiredSize(800.dp, 600.dp)) {
-                DesktopShell(
+                TestDesktopShell(
                     selected = DesktopDestination.Downloads,
                     onDestinationSelected = {},
                 )
@@ -225,7 +224,7 @@ class DesktopShellTest {
     fun `Updates destination renders updates screen`() = runComposeUiTest {
         setContent {
             Box(modifier = Modifier.requiredSize(800.dp, 600.dp)) {
-                DesktopShell(
+                TestDesktopShell(
                     selected = DesktopDestination.Updates,
                     onDestinationSelected = {},
                 )
@@ -240,7 +239,7 @@ class DesktopShellTest {
     fun `Stats destination renders stats screen`() = runComposeUiTest {
         setContent {
             Box(modifier = Modifier.requiredSize(1000.dp, 700.dp)) {
-                DesktopShell(
+                TestDesktopShell(
                     selected = DesktopDestination.Stats,
                     onDestinationSelected = {},
                     statsData = mihon.desktop.stats.DesktopStatsData(isLoading = false),
@@ -256,7 +255,7 @@ class DesktopShellTest {
     fun `Incognito mode shows banner in DesktopShell`() = runComposeUiTest {
         setContent {
             Box(modifier = Modifier.requiredSize(800.dp, 600.dp)) {
-                DesktopShell(
+                TestDesktopShell(
                     selected = DesktopDestination.Library,
                     onDestinationSelected = {},
                     incognitoMode = true,
@@ -274,7 +273,7 @@ class DesktopShellTest {
 
         setContent {
             Box(modifier = Modifier.requiredSize(800.dp, 700.dp)) {
-                DesktopShell(
+                TestDesktopShell(
                     selected = DesktopDestination.Library,
                     onDestinationSelected = {},
                     onLockNow = { lockRequested = true },
@@ -291,7 +290,7 @@ class DesktopShellTest {
     fun `lock now button is hidden when app lock is not configured`() = runComposeUiTest {
         setContent {
             Box(modifier = Modifier.requiredSize(1280.dp, 800.dp)) {
-                DesktopShell(
+                TestDesktopShell(
                     selected = DesktopDestination.Library,
                     onDestinationSelected = {},
                 )
@@ -307,7 +306,7 @@ class DesktopShellTest {
         setContent {
             Box(modifier = Modifier.requiredSize(1100.dp, 760.dp)) {
                 var isUpcomingOpen by remember { mutableStateOf(false) }
-                DesktopShell(
+                TestDesktopShell(
                     selected = DesktopDestination.Updates,
                     onDestinationSelected = {},
                     isUpcomingOpen = isUpcomingOpen,
@@ -340,7 +339,6 @@ class DesktopShellTest {
     @OptIn(ExperimentalTestApi::class)
     @Test
     fun `no page shows the old strip or a continue reading row`() = runComposeUiTest {
-        mihon.desktop.ui.common.DesktopLayoutPrefs.bind(null)
         val today = listOf(
             mihon.desktop.ui.home.TodayMangaUpdates(
                 1,
@@ -352,7 +350,7 @@ class DesktopShellTest {
         var selected by mutableStateOf(DesktopDestination.Library)
         setContent {
             Box(modifier = Modifier.requiredSize(1000.dp, 700.dp)) {
-                DesktopShell(
+                TestDesktopShell(
                     selected = selected,
                     onDestinationSelected = {},
                     homeToday = today,
@@ -374,11 +372,10 @@ class DesktopShellTest {
     @OptIn(ExperimentalTestApi::class)
     @Test
     fun `history and stats begin with their page header and switch via header buttons`() = runComposeUiTest {
-        mihon.desktop.ui.common.DesktopLayoutPrefs.bind(null)
         var selected by mutableStateOf(DesktopDestination.History)
         setContent {
             Box(modifier = Modifier.requiredSize(1000.dp, 700.dp)) {
-                DesktopShell(selected = selected, onDestinationSelected = { selected = it })
+                TestDesktopShell(selected = selected, onDestinationSelected = { selected = it })
             }
         }
         onNodeWithTag("history-segments").assertDoesNotExist()

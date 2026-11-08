@@ -4,13 +4,11 @@ import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
-import mihon.desktop.library.model.LocalMangaRecord
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
 import java.nio.file.Path
-import java.sql.Connection
 import java.sql.DriverManager
 
 class DesktopLibraryDatabaseMigrationTest {
@@ -169,50 +167,6 @@ class DesktopLibraryDatabaseMigrationTest {
             DesktopLibraryDatabaseFactory.open(file)
         }
         Files.exists(tempDir.resolve("migration-backups")) shouldBe false
-    }
-
-    @Test
-    fun `version two download keeps its original root after migration and later root changes`() {
-        val file = tempDir.resolve("download-roots.db")
-        createVersionTwoDownloadFixture(file)
-        withConnection(file) { connection ->
-            userVersion(connection) shouldBe 2L
-            hasTable(connection, "local_chapter_storage") shouldBe false
-        }
-
-        DesktopLibraryDatabaseFactory.open(file).use { repository ->
-            repository.insertLocalManga(LocalMangaRecord(1, "C:/downloads/new", "", 2))
-            requireNotNull(repository.chapterAsset(1)).storageRoot shouldBe Path.of("C:/downloads/original")
-            repository.checkIntegrity() shouldBe listOf("ok")
-        }
-        DesktopLibraryDatabaseFactory.open(file).use { repository ->
-            requireNotNull(repository.chapterAsset(1)).storageRoot shouldBe Path.of("C:/downloads/original")
-        }
-    }
-
-    @Test
-    fun `failed per chapter storage migration rolls back the table and version`() {
-        val file = tempDir.resolve("download-roots-rollback.db")
-        createVersionTwoDownloadFixture(file)
-        shouldThrow<DesktopLibraryDatabaseOpenException.MigrationFailed> {
-            DesktopLibraryDatabaseFactory.open(file) { sql ->
-                if (sql.contains(
-                        "INSERT OR IGNORE INTO local_chapter_storage",
-                    )
-                ) {
-                    error("injected storage migration failure")
-                }
-            }
-        }
-        withConnection(file) { connection ->
-            userVersion(connection) shouldBe 2L
-            hasTable(connection, "local_chapter_storage") shouldBe false
-            queryString(connection, "SELECT storage_path FROM local_manga_entry WHERE manga_id = 1") shouldBe
-                "C:/downloads/original"
-        }
-        DesktopLibraryDatabaseFactory.open(file).use { repository ->
-            requireNotNull(repository.chapterAsset(1)).storageRoot shouldBe Path.of("C:/downloads/original")
-        }
     }
 
     @Test
@@ -395,107 +349,6 @@ class DesktopLibraryDatabaseMigrationTest {
             userVersion(connection) shouldBe DesktopLibraryDatabase.Schema.version
             hasTable(connection, "library_metadata") shouldBe true
             queryString(connection, "SELECT title FROM manga WHERE id = 1") shouldBe "Preserved Manga"
-        }
-    }
-}
-
-/**
- * Builds a v1-shaped fixture: the current create schema without the baseline migration's
- * metadata table, with user_version pinned to 1. This mirrors a database created by the
- * pre-migration desktop build.
- */
-private fun createVersionOneFixture(file: Path) {
-    JdbcSqliteDriver("jdbc:sqlite:${file.toAbsolutePath()}").use { driver ->
-        DesktopLibraryDatabase.Schema.create(driver)
-        driver.execute(null, "DROP TABLE local_chapter_storage", 0)
-        driver.execute(null, "DROP TABLE library_metadata", 0)
-        driver.execute(null, "PRAGMA user_version = 1", 0)
-    }
-    withConnection(file) { connection ->
-        connection.createStatement().use { statement ->
-            statement.executeUpdate(
-                "INSERT INTO manga(source_id, url, title) VALUES (7, '/migrated', 'Preserved Manga')",
-            )
-            statement.executeUpdate(
-                "INSERT INTO chapter(manga_id, url, name, read, last_page_read) " +
-                    "VALUES (1, '/migrated/1', 'Preserved Chapter', 1, 3)",
-            )
-            statement.executeUpdate(
-                "INSERT INTO category(name, sort_order) VALUES ('Preserved Category', 1)",
-            )
-            statement.executeUpdate("INSERT INTO manga_category(manga_id, category_id) VALUES (1, 1)")
-            statement.executeUpdate(
-                "INSERT INTO history(chapter_id, last_read, read_duration) VALUES (1, 123456789, 42)",
-            )
-        }
-    }
-}
-
-private fun createVersionTwoDownloadFixture(file: Path) {
-    createVersionOneFixture(file)
-    JdbcSqliteDriver("jdbc:sqlite:${file.toAbsolutePath()}").use { driver ->
-        DesktopLibraryDatabase.Schema.migrate(driver, 1L, 2L)
-        driver.execute(null, "PRAGMA user_version = 2", 0)
-    }
-    withConnection(file) { connection ->
-        connection.execute("INSERT INTO local_manga_entry VALUES (1, 'C:/downloads/original', '', 1)")
-        connection.execute("INSERT INTO local_chapter_asset VALUES (1, 'Chapter 1', 'DIRECTORY', 123, 1)")
-    }
-}
-
-private fun <T> withConnection(path: Path, block: (Connection) -> T): T =
-    DriverManager.getConnection("jdbc:sqlite:${path.toAbsolutePath()}").use(block)
-
-private fun Connection.execute(sql: String) {
-    createStatement().use { it.execute(sql) }
-}
-
-private fun userVersion(connection: Connection): Long = queryLong(connection, "PRAGMA user_version")
-
-private fun hasTable(connection: Connection, name: String): Boolean =
-    connection.prepareStatement(
-        "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?",
-    ).use { statement ->
-        statement.setString(1, name)
-        statement.executeQuery().use { rows ->
-            check(rows.next())
-            rows.getLong(1) > 0L
-        }
-    }
-
-private fun queryString(connection: Connection, sql: String): String? =
-    connection.createStatement().use { statement ->
-        statement.executeQuery(sql).use { rows ->
-            if (rows.next()) rows.getString(1) else null
-        }
-    }
-
-private fun queryLong(connection: Connection, sql: String): Long =
-    connection.createStatement().use { statement ->
-        statement.executeQuery(sql).use { rows ->
-            check(rows.next()) { "Expected a row for query: $sql" }
-            rows.getLong(1)
-        }
-    }
-
-private fun snapshots(file: Path): List<Path> =
-    Files.list(file.parent.resolve("migration-backups")).use { entries ->
-        entries.filter { it.fileName.toString().endsWith(".db") }.toList()
-    }
-
-private fun databaseRows(file: Path): Map<String, List<List<String?>>> = withConnection(file) { connection ->
-    val tables = connection.createStatement().use { statement ->
-        statement.executeQuery("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'").use {
-            buildList { while (it.next()) add(it.getString(1)) }
-        }
-    }
-    tables.associateWith { table ->
-        connection.createStatement().use { statement ->
-            statement.executeQuery("SELECT * FROM \"$table\"").use { rows ->
-                buildList {
-                    while (rows.next()) add((1..rows.metaData.columnCount).map { rows.getString(it) })
-                }.sortedBy { it.toString() }
-            }
         }
     }
 }

@@ -15,6 +15,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import mihon.desktop.extension.DesktopSourceManager
 import mihon.desktop.extension.builtin.BundledLocalSource
+import mihon.desktop.extension.registerBuiltinSource
 import mihon.desktop.library.model.ImportReport
 import mihon.desktop.library.model.LibraryChapter
 import mihon.desktop.library.model.LibraryManga

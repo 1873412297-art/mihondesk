@@ -36,7 +36,7 @@ class TarChapterSource(
                 val entry = archive.nextEntry ?: break
                 validateTarEntry(entry)
                 if (entry.name == wanted.rawName) {
-                    return boundedInput(archive, entry.size, chargeChapterBudget = false)
+                    return boundedInput(archive, entry.size, chargeChapterBudget = false, onClose = archive::close)
                 }
             }
             throw ReaderFailure.PageNotFound(wanted.logicalName)

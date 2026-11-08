@@ -30,6 +30,8 @@ class MangaOnlineCache(
     private val scope: CoroutineScope,
     private val catalog: ReaderChapterCatalog,
     private val sourceFactory: ChapterSourceFactory,
+    private val pageListCache: mihon.desktop.extension.OnlinePageListCache =
+        mihon.desktop.extension.OnlinePageListCache(),
     private val maxBytes: Long = OnlinePageCacheFiles.MAX_MANGA_BYTES,
 ) {
     private data class Window(
@@ -66,7 +68,7 @@ class MangaOnlineCache(
                 if (droppedAsset != null) {
                     scope.launch {
                         withContext(NonCancellable) {
-                            runCatching { job?.join() }
+                            job?.join()
                             deleteChapterFiles(droppedAsset)
                         }
                     }
@@ -88,7 +90,7 @@ class MangaOnlineCache(
         withContext(NonCancellable) {
             running.forEach { job -> runCatching { job.join() } }
             OnlinePageCacheFiles.mangaDirectory(root, mangaId).deleteRecursively()
-            OnlineChapterSource.discardSharedPages(mangaId)
+            pageListCache.discardManga(mangaId)
         }
     }
 
@@ -100,7 +102,7 @@ class MangaOnlineCache(
         windows.clear()
         seenAssets.clear()
         OnlinePageCacheFiles.sweep(root)
-        mangaIds.forEach(OnlineChapterSource::discardSharedPages)
+        mangaIds.forEach(pageListCache::discardManga)
     }
 
     private fun startPrefetch(asset: ReaderChapterAsset, tail: Boolean) {
@@ -143,12 +145,13 @@ class MangaOnlineCache(
             } else {
                 pages
             }
-            for (page in targets) {
+            targets.forEachIndexed { index, page ->
                 coroutineContext.ensureActive()
                 val window = windows[asset.mangaId] ?: return
                 if (asset.chapterId !in window.ids) return
                 trim(window)
-                if (asset.chapterId == window.next && overBudget(asset.mangaId)) return
+                val budgetDue = index % BUDGET_CHECK_INTERVAL_PAGES == 0
+                if (budgetDue && asset.chapterId == window.next && overBudget(asset.mangaId)) return
                 source.open(page.id).close()
             }
         } finally {
@@ -168,14 +171,18 @@ class MangaOnlineCache(
         }
         try {
             val dir = OnlinePageCacheFiles.mangaDirectory(root, window.mangaId)
-            while (OnlinePageCacheFiles.directoryBytes(dir) > maxBytes) {
-                val extras = cache.cachedImageFiles().sortedBy { file ->
+            var cachedBytes = OnlinePageCacheFiles.directoryBytes(dir)
+            if (cachedBytes <= maxBytes) return
+            val candidates = cache.cachedImageFiles()
+                .sortedBy { file ->
                     file.name.substringAfterLast('_').substringBefore('.').toIntOrNull() ?: 0
-                }.dropLast(
-                    OnlinePageCacheFiles.PREVIOUS_TAIL_PAGES,
-                )
-                val victim = extras.firstOrNull() ?: break
-                victim.delete()
+                }
+                .dropLast(OnlinePageCacheFiles.PREVIOUS_TAIL_PAGES)
+                .iterator()
+            while (cachedBytes > maxBytes && candidates.hasNext()) {
+                val victim = candidates.next()
+                val victimBytes = victim.length()
+                if (victim.delete()) cachedBytes -= victimBytes
             }
         } finally {
             source.close()
@@ -195,3 +202,6 @@ class MangaOnlineCache(
         }
     }
 }
+
+/** Budget directory walks are expensive; checking every page defeated the prefetch loop. */
+private const val BUDGET_CHECK_INTERVAL_PAGES = 4

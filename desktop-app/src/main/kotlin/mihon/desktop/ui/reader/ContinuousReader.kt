@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.distinctUntilChanged
 import mihon.reader.model.PageId
 import mihon.reader.model.ReaderLayout
+import mihon.reader.model.ReaderPan
 import mihon.reader.model.ReaderPosition
 import mihon.reader.model.ReaderViewport
 import mihon.reader.model.ReadingMode
@@ -47,6 +48,7 @@ internal fun ContinuousReader(
     webtoonMaxWidth: Int = 800,
     webtoonSidePadding: Int = 0,
     pageSizes: Map<PageId, PageSize> = emptyMap(),
+    panProvider: () -> ReaderPan = { state.pan },
 ) {
     val initialAnchor = state.viewportAnchor
     val listState = key(state.chapterId) {
@@ -156,6 +158,7 @@ internal fun ContinuousReader(
                         scaleMode = scaleMode,
                         zoom = state.zoom,
                         requestedPan = state.pan,
+                        livePan = panProvider,
                         pageContent = pageContent,
                         modifier = Modifier.fillMaxWidth().height(itemHeight),
                         intrinsicSize = intrinsicSize,

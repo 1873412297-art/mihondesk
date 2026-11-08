@@ -17,6 +17,10 @@ import kotlinx.coroutines.runBlocking
 import mihon.desktop.extension.DesktopSourceManager
 import mihon.desktop.extension.WindowsExtensionProcessManager
 import mihon.desktop.extension.builtin.BundledMangaDexSource
+import mihon.desktop.extension.ensureSourceLoaded
+import mihon.desktop.extension.getFilterList
+import mihon.desktop.extension.registerBuiltinSource
+import mihon.desktop.extension.searchManga
 import mihon.extension.model.SourceDescriptor
 import mihon.extension.source.model.Filter
 import mihon.extension.source.model.FilterList

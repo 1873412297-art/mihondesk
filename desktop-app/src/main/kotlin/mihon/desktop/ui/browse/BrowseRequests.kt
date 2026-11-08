@@ -8,7 +8,7 @@ import mihon.extension.model.SourceDescriptor
 import mihon.extension.source.model.SManga
 
 /** Lets code outside Browse (the Ctrl+K palette) open a source manga inside the Browse tab. */
-object BrowseRequests {
+class BrowseRequests {
     private val _pending = MutableStateFlow<BrowseNavigationState?>(null)
     val pending: StateFlow<BrowseNavigationState?> = _pending.asStateFlow()
 

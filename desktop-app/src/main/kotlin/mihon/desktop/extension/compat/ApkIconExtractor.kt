@@ -275,8 +275,8 @@ object ApkIconExtractor {
         ) {
             return bytes
         }
-        org.jetbrains.skia.Image.makeFromEncoded(bytes)
-            .encodeToData(org.jetbrains.skia.EncodedImageFormat.PNG)
-            ?.bytes
+        org.jetbrains.skia.Image.makeFromEncoded(bytes).use { image ->
+            image.encodeToData(org.jetbrains.skia.EncodedImageFormat.PNG)?.use { it.bytes }
+        }
     }.getOrNull()
 }

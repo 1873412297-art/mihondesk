@@ -81,7 +81,12 @@ class GoogleDriveSyncService(
         if (stateStore.lastSyncAt() <= 0L) return@withContext true
         val watermark = stateStore.getLastPushWatermark()
         val repo = localRepository()
-        !repo.exportDelta(watermark).isEmpty || repo.exportTombstones(watermark).isNotEmpty()
+        val delta = repo.exportDelta(watermark)
+        val categoriesChanged = repo.categoriesFingerprint()
+            ?.let { it != stateStore.getCategoriesFingerprint() } ?: false
+        // Categories are exported in full every time; only a changed fingerprint makes them dirty.
+        !delta.copy(categories = emptyList()).isEmpty || categoriesChanged ||
+            repo.exportTombstones(watermark).isNotEmpty()
     }
 
     suspend fun signIn(): Boolean {
@@ -95,8 +100,9 @@ class GoogleDriveSyncService(
         return try {
             val tokens = authorizer()
             if (tokens.refreshToken.isNullOrBlank()) throw DriveAuthException("Google returned no refresh token")
+            val keepWatermarks = vault.hadUnreadableToken()
             vault.save(tokens)
-            stateStore.reset()
+            if (!keepWatermarks) stateStore.reset()
             _state.update { it.copy(signedIn = true, busy = GoogleDriveBusy.IDLE, lastSyncAt = 0, lastSummary = "") }
             true
         } catch (e: CancellationException) {
@@ -116,7 +122,10 @@ class GoogleDriveSyncService(
 
     suspend fun signOut() = mutex.withLock {
         requestJob?.cancel()
-        vault.load()?.let { t -> runCatching { revoker(t.refreshToken ?: t.accessToken) } }
+        vault.load()?.let { t ->
+            runCatching { revoker(t.refreshToken ?: t.accessToken) }
+                .onFailure { mihon.desktop.logging.DesktopLogger.debug("GoogleDrive", "Token revoke failed", it) }
+        }
         vault.clear()
         stateStore.reset()
         _state.update {
@@ -135,7 +144,8 @@ class GoogleDriveSyncService(
     override suspend fun syncNow(): SyncReport? = mutex.withLock {
         if (!config.isConfigured || !_state.value.signedIn) return@withLock null
         val tokens = vault.load() ?: run {
-            _state.update { it.copy(signedIn = false, error = GoogleDriveError.AUTH_EXPIRED) }
+            val error = if (vault.hadUnreadableToken()) GoogleDriveError.CORRUPT else GoogleDriveError.AUTH_EXPIRED
+            _state.update { it.copy(signedIn = false, error = error) }
             return@withLock null
         }
         _state.update { it.copy(busy = GoogleDriveBusy.SYNCING, error = null, errorDetail = null) }
@@ -153,7 +163,21 @@ class GoogleDriveSyncService(
             val now = clock()
             val pushed = if (report.pushedChangeset != null) 1 else 0
             val summary = "↓${report.pulledChangesetCount} ↑$pushed · ${report.totalChanged}"
-            stateStore.recordSync(now, summary)
+            try {
+                stateStore.recordSync(now, summary)
+                localRepository().categoriesFingerprint()?.let { stateStore.setCategoriesFingerprint(it) }
+            } catch (cancelled: CancellationException) {
+                _state.update { it.copy(busy = GoogleDriveBusy.IDLE) }
+                throw cancelled
+            } catch (error: Exception) {
+                // The remote sync succeeded; a local state-write failure must not leave the UI
+                // spinning. The next sync simply re-reads/re-pushes from the older watermark.
+                mihon.desktop.logging.DesktopLogger.warn(
+                    "GoogleDrive",
+                    "Sync succeeded but its local state could not be saved",
+                    error,
+                )
+            }
             _state.update { it.copy(busy = GoogleDriveBusy.IDLE, lastSyncAt = now, lastSummary = summary) }
         } else {
             val cause = recorder.lastError

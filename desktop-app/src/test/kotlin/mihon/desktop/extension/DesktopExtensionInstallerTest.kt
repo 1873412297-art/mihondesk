@@ -476,7 +476,7 @@ class DesktopExtensionInstallerTest {
     @Test
     fun `reconcileInstalledExtensions removes missing package files from preferences`(
         @TempDir tempDir: Path,
-    ) = runBlocking {
+    ): Unit = runBlocking {
         val installRoot = tempDir.resolve("installed").toFile()
         val prefStore = DesktopPreferenceStore(tempDir.resolve("prefs.properties"))
         val installer = DesktopExtensionInstaller(installRoot, prefStore)
@@ -519,7 +519,7 @@ class DesktopExtensionInstallerTest {
     @Test
     fun `installed extensions list is cached in memory and refreshed on save and reconcile`(
         @TempDir tempDir: Path,
-    ) = runBlocking {
+    ): Unit = runBlocking {
         val installRoot = tempDir.resolve("installed").toFile()
         val prefStore = DesktopPreferenceStore(tempDir.resolve("prefs.properties"))
         val installer = DesktopExtensionInstaller(installRoot, prefStore)

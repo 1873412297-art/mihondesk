@@ -524,4 +524,37 @@ class ExtensionHostEngineTest {
             request.cancel()
         }
     }
+
+    @Test
+    fun `closing engine releases loaders and rejects later requests`(@TempDir tempDir: Path): Unit = runBlocking {
+        val manifest = mihon.extension.model.ExtensionManifest(
+            "ext.close",
+            "Close",
+            "1.0.0",
+            1,
+            1.4,
+            "en",
+            sources = listOf(SourceDescriptor(1001L, "Test", "en", CountingSourceFactory::class.java.name)),
+        )
+        val mext = tempDir.resolve("close.mext").toFile()
+        val work = tempDir.resolve("work").toFile()
+        val classFile = tempDir.resolve("Factory.class").toFile()
+        classFile.writeBytes(CountingSourceFactory::class.java.readResourceBytes())
+        java.util.jar.JarOutputStream(mext.outputStream()).use { jar ->
+            jar.putNextEntry(java.util.zip.ZipEntry("manifest.json"))
+            jar.write(json.encodeToString(manifest).toByteArray())
+            jar.closeEntry()
+            jar.putNextEntry(java.util.zip.ZipEntry("extension.jar"))
+            val classEntry = java.util.jar.JarEntry(CountingSourceFactory::class.java.binaryResourceName())
+            jar.putNextEntry(classEntry)
+            jar.write(classFile.readBytes())
+            jar.closeEntry()
+        }
+        val engine = ExtensionHostEngine(BrokeredHttpClient { null })
+        engine.loadExtension(mext, work)
+        engine.close()
+        engine.close()
+        java.io.File(work, "extension.jar").delete() shouldBe true
+        engine.handleRequest(IpcRequest(30, IpcCommands.GET_SOURCES)).success shouldBe false
+    }
 }

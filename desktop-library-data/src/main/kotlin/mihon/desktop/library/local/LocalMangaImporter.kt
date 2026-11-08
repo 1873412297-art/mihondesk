@@ -14,6 +14,7 @@ import mihon.desktop.library.model.MangaRecord
 import mihon.desktop.library.repository.LibraryMutationPort
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.concurrent.locks.ReentrantReadWriteLock
 
 const val LOCAL_SOURCE_ID = 0L
 
@@ -34,6 +35,9 @@ class LocalMangaImporter private constructor(
     private val checkpoint: LocalImportCheckpoint,
     @Suppress("UNUSED_PARAMETER") construction: LocalImporterConstruction,
 ) {
+    /** Imports share the read side; the startup orphan scan takes the write side. */
+    private val orphanCleanupLock = ReentrantReadWriteLock()
+
     constructor(mutations: LibraryMutationPort) : this(
         mutations,
         LocalImportScanner(),
@@ -50,68 +54,80 @@ class LocalMangaImporter private constructor(
     ) : this(mutations, scanner, stager, checkpoint, LocalImporterConstruction.TEST)
 
     fun import(sourceDirectory: Path, localLibraryRoot: Path, nowMillis: Long): ImportReport {
-        val manifest = scanner.scan(sourceDirectory)
-        checkpoint.afterScan(manifest)
-        if (scanner.scan(manifest.sourceRoot) != manifest) {
-            rejectImport("source changed after scan callback")
-        }
-        val existing = mutations.findLocalMangaByManifest(manifest.sha256)
-        if (existing != null) {
-            val existingPath = validateExistingLocalManga(existing, manifest, localLibraryRoot)
-            return mutations.transaction {
-                val current = findLocalMangaByManifest(manifest.sha256)
-                    ?: rejectImport("local manga registration disappeared during import")
-                if (current.mangaId != existing.mangaId || Path.of(current.storagePath) != existingPath) {
-                    rejectImport("local manga registration changed during import")
-                }
-                register(manifest, existingPath, nowMillis, current) {
-                    checkpoint.beforeReport()
-                    validateExistingLocalManga(current, manifest, localLibraryRoot)
+        val readLock = orphanCleanupLock.readLock()
+        readLock.lock()
+        try {
+            val manifest = scanner.scan(sourceDirectory)
+            checkpoint.afterScan(manifest)
+            if (scanner.scan(manifest.sourceRoot) != manifest) {
+                rejectImport("source changed after scan callback")
+            }
+            val existing = mutations.findLocalMangaByManifest(manifest.sha256)
+            if (existing != null) {
+                val existingPath = validateExistingLocalManga(existing, manifest, localLibraryRoot)
+                return mutations.transaction {
+                    val current = findLocalMangaByManifest(manifest.sha256)
+                        ?: rejectImport("local manga registration disappeared during import")
+                    if (current.mangaId != existing.mangaId || Path.of(current.storagePath) != existingPath) {
+                        rejectImport("local manga registration changed during import")
+                    }
+                    register(manifest, existingPath, nowMillis, current) {
+                        checkpoint.beforeReport()
+                        validateExistingLocalManga(current, manifest, localLibraryRoot)
+                    }
                 }
             }
-        }
 
-        val staged = stager.stage(manifest, localLibraryRoot)
-        staged.use {
-            var promotedByThisImport = false
-            val report = mutations.transaction {
-                val concurrent = findLocalMangaByManifest(manifest.sha256)
-                val storagePath = if (concurrent == null) {
-                    if (findManga(LOCAL_SOURCE_ID, mangaUrl(manifest)) != null) {
-                        rejectImport("local manga identity already exists without a local registration")
-                    }
-                    val promotedPath = staged.promote()
-                    promotedByThisImport = true
-                    checkpoint.afterPromotion(promotedPath)
-                    staged.reverifyPromoted()
-                    promotedPath
-                } else {
-                    validateExistingLocalManga(concurrent, manifest, localLibraryRoot)
-                }
-                register(manifest, storagePath, nowMillis, concurrent) {
-                    checkpoint.beforeReport()
-                    if (promotedByThisImport) {
+            val staged = stager.stage(manifest, localLibraryRoot)
+            staged.use {
+                var promotedByThisImport = false
+                val report = mutations.transaction {
+                    val concurrent = findLocalMangaByManifest(manifest.sha256)
+                    val storagePath = if (concurrent == null) {
+                        if (findManga(LOCAL_SOURCE_ID, mangaUrl(manifest)) != null) {
+                            rejectImport("local manga identity already exists without a local registration")
+                        }
+                        val promotedPath = staged.promote()
+                        promotedByThisImport = true
+                        checkpoint.afterPromotion(promotedPath)
                         staged.reverifyPromoted()
+                        promotedPath
                     } else {
-                        checkNotNull(concurrent)
                         validateExistingLocalManga(concurrent, manifest, localLibraryRoot)
                     }
+                    register(manifest, storagePath, nowMillis, concurrent) {
+                        checkpoint.beforeReport()
+                        if (promotedByThisImport) {
+                            staged.reverifyPromoted()
+                        } else {
+                            checkNotNull(concurrent)
+                            validateExistingLocalManga(concurrent, manifest, localLibraryRoot)
+                        }
+                    }
                 }
+                if (promotedByThisImport) staged.markCommitted()
+                return report
             }
-            if (promotedByThisImport) staged.markCommitted()
-            return report
+        } finally {
+            readLock.unlock()
         }
     }
 
     fun cleanupOrphans(localLibraryRoot: Path) {
-        val retained = mutations.importedMangaStoragePaths().mapTo(mutableSetOf()) { storagePath ->
-            try {
-                Path.of(storagePath)
-            } catch (error: RuntimeException) {
-                throw LocalImportRejected("invalid local manga storage path in database", error)
+        val writeLock = orphanCleanupLock.writeLock()
+        writeLock.lock()
+        try {
+            val retained = mutations.importedMangaStoragePaths().mapTo(mutableSetOf()) { storagePath ->
+                try {
+                    Path.of(storagePath)
+                } catch (error: RuntimeException) {
+                    throw LocalImportRejected("invalid local manga storage path in database", error)
+                }
             }
+            stager.cleanupOrphans(localLibraryRoot, retained)
+        } finally {
+            writeLock.unlock()
         }
-        stager.cleanupOrphans(localLibraryRoot, retained)
     }
 
     private fun validateExistingLocalManga(

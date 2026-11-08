@@ -69,7 +69,7 @@ class DesktopSyncSchedulerTriggerTest {
     }
 
     @Test
-    fun `bursts of requests coalesce into one sync recorded in the activity center`() = runBlocking {
+    fun `bursts of requests coalesce into one sync recorded in the activity center`(): Unit = runBlocking {
         val runtime = DesktopRuntime.forTesting()
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         try {
@@ -97,7 +97,7 @@ class DesktopSyncSchedulerTriggerTest {
     }
 
     @Test
-    fun `requests are ignored while Drive is not signed in`() = runBlocking {
+    fun `requests are ignored while Drive is not signed in`(): Unit = runBlocking {
         val runtime = DesktopRuntime.forTesting()
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         try {
@@ -120,7 +120,7 @@ class DesktopSyncSchedulerTriggerTest {
     }
 
     @Test
-    fun `failed syncs show the reason and retry from the activity center`() = runBlocking {
+    fun `failed syncs show the reason and retry from the activity center`(): Unit = runBlocking {
         val runtime = DesktopRuntime.forTesting()
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         try {

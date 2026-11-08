@@ -18,7 +18,7 @@ import java.util.zip.ZipOutputStream
 
 object TachiyomiExtensionConverter {
 
-    private val json = Json {
+    internal val json = Json {
         prettyPrint = true
         ignoreUnknownKeys = true
     }
@@ -358,94 +358,5 @@ object TachiyomiExtensionConverter {
 
         mihon.extension.validator.ExtensionPackageValidator.validatePackage(targetMextFile)
         return manifest
-    }
-
-    /** Keep runtime IDs and languages while retaining the APK entry factory for the next load. */
-    // Superclass and interfaces of a type for ASM frame merging. Android framework classes are not on the
-    // desktop classpath; extensions often reference them only in branches that never run on desktop, so
-    // they merge as plain objects. The class still fails lazily if that code path is really executed.
-    internal fun frameParents(type: String, loader: ClassLoader): Pair<String?, List<String>> {
-        val stream = loader.getResourceAsStream("$type.class")
-        if (stream == null) {
-            require(type.startsWith("android/") || type.startsWith("androidx/")) {
-                "Unsupported extension dependency while computing JVM frames: $type"
-            }
-            return "java/lang/Object" to emptyList()
-        }
-        return stream.use {
-            org.objectweb.asm.ClassReader(it).let { reader ->
-                reader.superName to
-                    reader.interfaces.toList()
-            }
-        }
-    }
-
-    internal fun rejectInvalidConstructorLowering(bytes: ByteArray, sourceName: String) {
-        val node = org.objectweb.asm.tree.ClassNode()
-        org.objectweb.asm.ClassReader(bytes).accept(node, org.objectweb.asm.ClassReader.SKIP_DEBUG)
-        for (method in node.methods) {
-            val instructions = method.instructions.toArray().filter { it.opcode >= 0 }
-            for (window in instructions.windowed(4)) {
-                val allocation = window[0] as? org.objectweb.asm.tree.TypeInsnNode ?: continue
-                val constructor = window[2] as? org.objectweb.asm.tree.MethodInsnNode ?: continue
-                val assignment = window[3] as? org.objectweb.asm.tree.FieldInsnNode ?: continue
-                require(
-                    !(
-                        allocation.opcode == org.objectweb.asm.Opcodes.NEW && allocation.desc == "java/lang/Object" &&
-                            window[1].opcode == org.objectweb.asm.Opcodes.DUP && constructor.name == "<init>" &&
-                            constructor.owner == "java/lang/Object" &&
-                            assignment.opcode == org.objectweb.asm.Opcodes.PUTSTATIC &&
-                            assignment.desc != "Ljava/lang/Object;"
-                        ),
-                ) {
-                    "Unsupported DEX constructor lowering in $sourceName: ${node.name}.${method.name}; " +
-                        "converter created Object for ${assignment.desc}"
-                }
-            }
-        }
-    }
-
-    /** Keep runtime IDs and languages while retaining the APK entry factory for the next load. */
-    fun replaceSourceIdentities(
-        packageFile: File,
-        manifest: ExtensionManifest,
-        sources: List<SourceDescriptor>,
-    ): ExtensionManifest {
-        require(sources.isNotEmpty()) { "Extension did not expose any sources" }
-        val entryClass = manifest.sources.first().className
-        val resolved = manifest.copy(sources = sources.distinctBy { it.id }.map { it.copy(className = entryClass) })
-        mihon.extension.validator.ExtensionPackageValidator.validateManifest(resolved)
-        val replacement = File.createTempFile("mext_identity_", ".mext", packageFile.parentFile)
-        try {
-            ZipFile(packageFile).use { zip ->
-                ZipOutputStream(replacement.outputStream()).use { output ->
-                    zip.entries().asSequence().forEach { entry ->
-                        output.putNextEntry(ZipEntry(entry.name))
-                        if (entry.name == "manifest.json") {
-                            output.write(json.encodeToString(resolved).toByteArray())
-                        } else if (!entry.isDirectory) {
-                            zip.getInputStream(entry).use { it.copyTo(output) }
-                        }
-                        output.closeEntry()
-                    }
-                }
-            }
-            mihon.extension.validator.ExtensionPackageValidator.validatePackage(replacement)
-            java.nio.file.Files.move(
-                replacement.toPath(),
-                packageFile.toPath(),
-                java.nio.file.StandardCopyOption.REPLACE_EXISTING,
-            )
-        } finally {
-            replacement.delete()
-        }
-        return resolved
-    }
-
-    internal fun generateSourceId(name: String, lang: String): Long {
-        val key = "${name.lowercase()}/$lang/1"
-        val bytes = MessageDigest.getInstance("MD5").digest(key.toByteArray())
-        val buffer = ByteBuffer.wrap(bytes).order(ByteOrder.BIG_ENDIAN)
-        return buffer.long and Long.MAX_VALUE
     }
 }

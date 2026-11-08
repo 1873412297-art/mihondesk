@@ -58,8 +58,8 @@ class DesktopNotificationService(
                     NotificationType.ERROR -> MessageType.ERROR
                 }
                 icon.displayMessage(title, visibleMessage, messageType)
-            } catch (_: Throwable) {
-                // Ignore tray display error
+            } catch (error: Exception) {
+                mihon.desktop.logging.DesktopLogger.warn("Notification", "Cannot show tray notification", error)
             }
         }
     }

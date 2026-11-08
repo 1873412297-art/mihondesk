@@ -37,4 +37,8 @@ class AppDirectoryResolver(
         }
         return AppDirectories(root.toAbsolutePath().normalize())
     }
+
+    /** Resolves from a detected [PortableLayout], so `portable-data/` is honoured as the root. */
+    fun resolve(layout: PortableLayout, explicitRoot: Path? = null): AppDirectories =
+        resolve(layout.mode, explicitRoot ?: layout.root)
 }

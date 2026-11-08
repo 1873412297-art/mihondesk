@@ -104,7 +104,16 @@ class DesktopSyncScheduler(
     suspend fun checkAndRunAutoSync(): SyncReport? = syncMutex.withLock {
         val drive = activeBackend()?.takeIf { it.isReady() } ?: return@withLock null
         val prefs = preferenceStore.load()
-        val dirty = runCatching { drive.hasLocalChanges() }.getOrDefault(false)
+        val dirty = runCatching { drive.hasLocalChanges() }
+            .onFailure {
+                // A failed dirty check must not look like "no local changes": sync anyway.
+                mihon.desktop.logging.DesktopLogger.warn(
+                    "DesktopSyncScheduler",
+                    "Cannot check for local sync changes; syncing anyway",
+                    it,
+                )
+            }
+            .getOrDefault(true)
         if (shouldAutoSync(true, prefs.syncIntervalMinutes, prefs.lastSyncEpochMillis, clock(), dirty)) {
             performTracked(drive)
         } else {
@@ -228,8 +237,8 @@ class DesktopSyncScheduler(
                     ),
                 )
             }
-        } catch (_: Exception) {
-            // Ignore DB report persistence error
+        } catch (error: Exception) {
+            mihon.desktop.logging.DesktopLogger.warn("Sync", "Failed to persist sync report", error)
         }
 
         val summary = if (report.success) {

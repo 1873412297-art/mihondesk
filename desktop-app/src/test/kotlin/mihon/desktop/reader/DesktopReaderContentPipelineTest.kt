@@ -104,7 +104,7 @@ class DesktopReaderContentPipelineTest {
     }
 
     @Test
-    fun `visible load and four ahead one behind prefetch share one coordinator`() = runTest {
+    fun `visible load and five ahead two behind prefetch share one coordinator`() = runTest {
         val source = CountingSource(asset(7), pageCount = 8)
         val cache = WeightedTileCache(4L * 1024L * 1024L)
         val budget = BoundedReaderMemoryBudget(4L * 1024L * 1024L) { cache.relievePressure() }
@@ -129,7 +129,7 @@ class DesktopReaderContentPipelineTest {
         pipeline.loadVisible(source.pages[1].id)?.close()
         runCurrent()
 
-        source.openedIndexes.distinct().sorted().shouldContainExactly(0, 1, 2, 3, 4, 5)
+        source.openedIndexes.distinct().sorted().shouldContainExactly(0, 1, 2, 3, 4, 5, 6)
         val visibleOpenCount = source.openedIndexes.count { it == 1 }
         pipeline.loadVisible(source.pages[1].id)?.close()
         source.openedIndexes.count { it == 1 } shouldBe visibleOpenCount
@@ -268,6 +268,41 @@ class DesktopReaderContentPipelineTest {
     }
 
     @Test
+    fun `extended prefetch decodes the sampled page instead of caching a full raster`() = runTest {
+        val source = CountingSource(asset(7), pageCount = 2, imageBytes = png(8, 4))
+        val cache = WeightedTileCache(4096)
+        val budget = BoundedReaderMemoryBudget(4096) { cache.relievePressure() }
+        val pipeline = DesktopReaderContentPipeline(
+            decoder = ImageIoPageDecoder(budget),
+            cache = cache,
+            scope = backgroundScope,
+            sourceFactory = ChapterSourceFactory { error("no adjacent chapter expected") },
+            maxFullPagePixels = 8,
+            preloadPages = { 1 },
+        )
+        pipeline.open(source)
+        pipeline.updatePosition(
+            ReaderContentPosition(
+                0,
+                listOf(source.pages[0].id),
+                ReadingMode.SINGLE_LTR,
+                NavigationDirection.FORWARD,
+                foreground = true,
+                contentVisible = true,
+            ),
+        )
+        waitForOpened(source, expected = setOf(0, 1)) { runCurrent() }
+
+        val frame = pipeline.loadTile(source.pages[1].id, frameIndex = 0)
+        frame.tile.tile.image.width shouldBe 4
+        frame.tile.tile.image.height shouldBe 2
+        frame.tile.tile.outputReservation.byteCount shouldBe 32L
+        pipeline.close()
+        budget.close()
+        cache.close()
+    }
+
+    @Test
     fun `custom preload window shrinks prefetch below the core default`() = runTest {
         val source = CountingSource(asset(7), pageCount = 12)
         val cache = WeightedTileCache(4L * 1024L * 1024L)
@@ -294,7 +329,7 @@ class DesktopReaderContentPipelineTest {
         pipeline.loadVisible(source.pages[1].id)?.close()
         runCurrent()
 
-        // Visible 1, one ahead (2), one behind (0) - the core's four-ahead prefetch is cancelled.
+        // Visible 1, one ahead (2), one behind (0) - the core default prefetch is cancelled.
         waitForOpened(source, expected = setOf(0, 1, 2)) { runCurrent() }
         source.openedIndexes.distinct().sorted().shouldContainExactly(listOf(0, 1, 2))
         pipeline.close()

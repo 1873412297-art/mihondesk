@@ -1,0 +1,158 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<SmellBaseline>
+  <ManuallySuppressedIssues />
+  <CurrentIssues>
+    <ID>EmptyCatchBlock:DesktopTray.kt:DesktopTray${ }</ID>
+    <ID>EmptyCatchBlock:WindowsAppContainerLauncher.kt:WindowsAppContainerLauncher.Companion${ }</ID>
+    <ID>LongMethod:ActivityCenterButton.kt:@Composable fun ActivityCenterButton</ID>
+    <ID>LongMethod:ActivityCenterButton.kt:@Composable private fun ActivityRow</ID>
+    <ID>LongMethod:AppUpdateCard.kt:@OptIn(ExperimentalLayoutApi::class) @Composable fun AppUpdateCard</ID>
+    <ID>LongMethod:AxmlManifestParser.kt:AxmlManifestParser$private fun parseBinaryAxml: TachiyomiManifestInfo</ID>
+    <ID>LongMethod:BackgroundSettingsCard.kt:@Composable internal fun BackgroundSettingsCard</ID>
+    <ID>LongMethod:BackupOptionsDialog.kt:@Composable fun BackupOptionsDialog</ID>
+    <ID>LongMethod:BackupRestoreDialog.kt:@Composable internal fun BackupRestoreDialog</ID>
+    <ID>LongMethod:BackupStorageLocation.kt:@Composable internal fun BackupStorageLocation</ID>
+    <ID>LongMethod:BatchMigrationRunner.kt:BatchMigrationRunner$suspend fun runBatchMigration</ID>
+    <ID>LongMethod:BrowseContentView.kt:@Composable fun BrowseContentView</ID>
+    <ID>LongMethod:LocalMangaDetailContent.kt:@Composable fun LocalMangaDetailContent</ID>
+    <ID>LongMethod:BrowsePresenterGlobalSearch.kt:internal fun BrowsePresenter.performGlobalSearch</ID>
+    <ID>LongMethod:BrowsePresenterRefresh.kt:internal fun BrowsePresenter.refresh</ID>
+    <ID>LongMethod:BrowsePresenterMigration.kt:internal suspend fun BrowsePresenter.performMigrationInternal: Long</ID>
+    <ID>LongMethod:BrowseScreen.kt:@Composable fun BrowseScreen</ID>
+    <ID>LongMethod:ExtensionItemRow.kt:@Composable internal fun ExtensionItemRow</ID>
+    <ID>LongMethod:BrowseExtensionsView.kt:@Composable internal fun ExtensionsListView</ID>
+    <ID>LongMethod:SourceListItem.kt:@Composable internal fun SourceListItem</ID>
+    <ID>LongMethod:BrowseSourcesView.kt:@Composable internal fun SourcesListView</ID>
+    <ID>LongMethod:BrowseSourceScreen.kt:@Composable fun BrowseSourceScreen</ID>
+    <ID>LongMethod:BrowseMangaCard.kt:@OptIn(ExperimentalComposeUiApi::class) @Composable internal fun BrowseMangaCard</ID>
+    <ID>LongMethod:CategoryDialog.kt:@Composable fun ManageCategoriesDialog</ID>
+    <ID>LongMethod:ChapterSettingsDialog.kt:@Composable fun ChapterSettingsDialog</ID>
+    <ID>LongMethod:ChapterSettingsDialogs.kt:@Composable fun ScanlatorFilterDialog</ID>
+    <ID>LongMethod:ContinuousReader.kt:@Composable internal fun ContinuousReader</ID>
+    <ID>LongMethod:CookieManagerDialog.kt:@Composable fun CookieManagerDialog</ID>
+    <ID>LongMethod:DecodedReaderPage.kt:@Composable fun DecodedReaderPage</ID>
+    <ID>LongMethod:DesktopAppUpdateService.kt:DesktopAppUpdateService$suspend fun downloadAsset: Boolean</ID>
+    <ID>LongMethod:DesktopCommandRunner.kt:DesktopCommandRunner$fun run: Int</ID>
+    <ID>LongMethod:ReaderAssetVerification.kt:internal suspend fun PackagedReaderVerifier.verifyAsset: AssetVerification</ID>
+    <ID>LongMethod:ReaderVerificationFlow.kt:internal suspend fun PackagedReaderVerifier.verifyInternal: ReaderVerificationSummary</ID>
+    <ID>LongMethod:DownloadEngine.kt:DownloadEngine$internal suspend fun processDownload</ID>
+    <ID>LongMethod:DownloadStartupRecovery.kt:DownloadStartupRecovery$fun recoverMissing: DesktopDownload</ID>
+    <ID>LongMethod:DesktopImageLoaderNetwork.kt:internal suspend fun DesktopImageLoader.loadFromNetwork: ImageBitmap?</ID>
+    <ID>LongMethod:DesktopImageLoaderLocal.kt:internal suspend fun DesktopImageLoader.loadFull: ImageBitmap?</ID>
+    <ID>LongMethod:DesktopLockScreen.kt:@Composable fun DesktopLockScreen</ID>
+    <ID>LongMethod:DesktopNetworkHelper.kt:DesktopNetworkHelper$private suspend fun execute: NetworkResponse</ID>
+    <ID>LongMethod:DesktopPreferenceStore.kt:DesktopPreferenceStore$@Synchronized fun load: DesktopPreferences</ID>
+    <ID>LongMethod:DesktopPreferenceStore.kt:DesktopPreferenceStore$@Synchronized fun save</ID>
+    <ID>LongMethod:DesktopReaderSettingsStore.kt:DesktopReaderSettingsStore$fun load: DesktopReaderSettings</ID>
+    <ID>LongMethod:DesktopRuntimeFactory.kt:DesktopRuntimeFactory$internal fun create: DesktopRuntime</ID>
+    <ID>LongMethod:DesktopShell.kt:@Composable internal fun DesktopShell</ID>
+    <ID>LongMethod:DesktopShellRail.kt:@Composable internal fun DesktopRail</ID>
+    <ID>LongMethod:DesktopStatsService.kt:DesktopStatsService$suspend fun computeStats: DesktopStatsData</ID>
+    <ID>LongMethod:DesktopSyncScheduler.kt:DesktopSyncScheduler$private suspend fun record</ID>
+    <ID>LongMethod:DesktopWebViewRequests.kt:suspend fun DesktopWebViewManager.handleExtensionRequest: mihon.extension.ipc.WebViewResponse</ID>
+    <ID>LongMethod:DesktopWebViewManager.kt:DesktopWebViewManager.BrowserSession$internal fun launch</ID>
+    <ID>LongMethod:DexConstructorNormalizer.kt:DexConstructorNormalizer$fun normalize</ID>
+    <ID>LongMethod:DownloadIndicator.kt:@Composable fun DownloadIndicator</ID>
+    <ID>LongMethod:DownloadsScreenGroups.kt:@Composable internal fun DownloadGroupHeader</ID>
+    <ID>LongMethod:DownloadsScreen.kt:@Composable private fun DownloadGroupHeader</ID>
+    <ID>LongMethod:DownloadsScreen.kt:@OptIn(ExperimentalLayoutApi::class) @Composable fun DownloadsScreen</ID>
+    <ID>LongMethod:DuplicateMangaDialog.kt:@Composable fun DuplicateMangaDialog</ID>
+    <ID>LongMethod:EditMangaInfoDialog.kt:@Composable fun EditMangaInfoDialog</ID>
+    <ID>LongMethod:ExtensionSignatureVerifier.kt:ExtensionSignatureVerifier$override fun verify: ExtensionSignatureVerification</ID>
+    <ID>LongMethod:ExtensionStoreService.kt:ExtensionStoreService$fun parseIndex: List&lt;ExtensionStoreItem&gt;</ID>
+    <ID>LongMethod:ExtensionStoreParsing.kt:internal fun ExtensionStoreService.parseNetworkStore: List&lt;ExtensionStoreItem&gt;</ID>
+    <ID>LongMethod:FirstRunSplash.kt:@Composable fun StartupSplash</ID>
+    <ID>LongMethod:GlobalSearchScreen.kt:@Composable fun GlobalSearchScreen</ID>
+    <ID>LongMethod:GoogleDriveSettingsSection.kt:@Composable internal fun GoogleDriveSyncCard</ID>
+    <ID>LongMethod:HistoryScreen.kt:@Composable fun HistoryScreen</ID>
+    <ID>LongMethod:HistoryRows.kt:@Composable internal fun HistoryItemRow</ID>
+    <ID>LongMethod:LibraryBatchActionBar.kt:@Composable fun LibraryBatchActionBar</ID>
+    <ID>LongMethod:LibraryFilterDialog.kt:@Composable fun LibraryFilterDialog</ID>
+    <ID>LongMethod:LibraryScreen.kt:@Composable fun LibraryScreen</ID>
+    <ID>LongMethod:LibraryMangaCards.kt:@Composable internal fun ComfortableMangaCard</ID>
+    <ID>LongMethod:LibraryMangaCards.kt:@Composable internal fun CompactMangaCard</ID>
+    <ID>LongMethod:LibraryMangaCards.kt:@Composable internal fun CoverOnlyMangaCard</ID>
+    <ID>LongMethod:LibraryEmptyState.kt:@Composable internal fun EmptyState</ID>
+    <ID>LongMethod:LibraryContent.kt:@Composable internal fun LibraryContent</ID>
+    <ID>LongMethod:LibraryDialogs.kt:@Composable internal fun LibraryMangaContextMenu</ID>
+    <ID>LongMethod:LibraryPane.kt:@Composable internal fun LibraryPane</ID>
+    <ID>LongMethod:LibraryListMangaItem.kt:@Composable internal fun ListMangaItem</ID>
+    <ID>LongMethod:LibraryUpdateScheduler.kt:LibraryUpdateScheduler$private suspend fun runUpdateInternal: LibraryUpdateReport?</ID>
+    <ID>LongMethod:LibraryUpdateService.kt:LibraryUpdateService$suspend fun updateLibrary: LibraryUpdateReport</ID>
+    <ID>LongMethod:Main.kt:fun main</ID>
+    <ID>LongMethod:MainAppWindow.kt:@Composable fun ApplicationScope.MainAppWindow</ID>
+    <ID>LongMethod:MangaBottomActionMenu.kt:@Composable fun MangaBottomActionMenu</ID>
+    <ID>LongMethod:MangaCover.kt:@Composable fun MangaCover</ID>
+    <ID>LongMethod:MangaCoverDialog.kt:@Composable fun MangaCoverDialog</ID>
+    <ID>LongMethod:MangaDetailScreen.kt:@Composable fun MangaDetailScreen</ID>
+    <ID>LongMethod:MangaDetailChapterRow.kt:@Composable internal fun ChapterRow</ID>
+    <ID>LongMethod:MangaNotesDialog.kt:@Composable fun MangaNotesDialog</ID>
+    <ID>LongMethod:MigrateSourceScreen.kt:@Composable fun MigrateSourceScreen</ID>
+    <ID>LongMethod:MigrateSourceDialogs.kt:@Composable internal fun BatchMigrateDialog</ID>
+    <ID>LongMethod:MigrateSourceDialogs.kt:@Composable internal fun BatchMigrationReportDialog</ID>
+    <ID>LongMethod:MigrateSourceMangaDialog.kt:@Composable internal fun MigrateMangaDialog</ID>
+    <ID>LongMethod:NetworkSettingsCard.kt:@Composable fun NetworkSettingsCard</ID>
+    <ID>LongMethod:OnboardingDialog.kt:@OptIn(ExperimentalMaterial3Api::class) @Composable fun OnboardingDialog</ID>
+    <ID>LongMethod:OnboardingSteps.kt:@OptIn(ExperimentalMaterial3Api::class) @Composable internal fun StepBackupAndStorage</ID>
+    <ID>LongMethod:OnboardingSteps.kt:@OptIn(ExperimentalMaterial3Api::class) @Composable internal fun StepLanguageAndTheme</ID>
+    <ID>LongMethod:OnlineChapterSource.kt:OnlineChapterSource$override suspend fun open: BoundedPageInput</ID>
+    <ID>LongMethod:OnlineMangaSyncService.kt:OnlineMangaSyncService$private suspend fun syncOnlineManga: Long</ID>
+    <ID>LongMethod:PackagedCodecPageDecoder.kt:PackagedCodecPageDecoder$private suspend fun decode: DecodedTile</ID>
+    <ID>LongMethod:PagedReader.kt:@Composable internal fun PagedReader</ID>
+    <ID>LongMethod:ReaderChapterDrawer.kt:@Composable fun ReaderChapterDrawer</ID>
+    <ID>LongMethod:ReaderChapterNavigator.kt:@Composable internal fun ReaderChapterNavigator</ID>
+    <ID>LongMethod:ReaderChapterTransition.kt:@Composable fun ReaderChapterTransitionSurface</ID>
+    <ID>LongMethod:ReaderChapterTransition.kt:@Composable private fun TransitionChapterRow</ID>
+    <ID>LongMethod:ReaderChrome.kt:@Composable @OptIn(ExperimentalComposeUiApi::class) internal fun ReaderChrome</ID>
+    <ID>LongMethod:ReaderChromeMenus.kt:@Composable internal fun ReaderShortcutsDialog</ID>
+    <ID>LongMethod:ReaderGesture.kt:@Composable @OptIn(ExperimentalComposeUiApi::class) internal fun ReaderGestureArea</ID>
+    <ID>LongMethod:ReaderPageActionsDialog.kt:@Composable fun ReaderPageActionsDialog</ID>
+    <ID>LongMethod:ReaderScreen.kt:@Composable @OptIn(ExperimentalComposeUiApi::class) fun ReaderScreen</ID>
+    <ID>LongMethod:ReaderSettingsPages.kt:@Composable internal fun GeneralSettingsPage</ID>
+    <ID>LongMethod:ReadingSettingsOverrideDialog.kt:@Composable fun ReadingSettingsOverrideDialog</ID>
+    <ID>LongMethod:SettingsScreen.kt:@Composable fun SettingsScreen</ID>
+    <ID>LongMethod:TrackingSettingsPane.kt:@Composable fun TrackerCard</ID>
+    <ID>LongMethod:AdvancedSettingsPane.kt:@Composable internal fun AdvancedSettingsPane</ID>
+    <ID>LongMethod:AppearanceSettingsPane.kt:@Composable internal fun AppearanceSettingsPane</ID>
+    <ID>LongMethod:BackupSettingsPane.kt:@Composable internal fun BackupSettingsPane</ID>
+    <ID>LongMethod:DownloadsSettingsPane.kt:@Composable internal fun DownloadsSettingsPane</ID>
+    <ID>LongMethod:GeneralSettingsPane.kt:@Composable internal fun GeneralSettingsPane</ID>
+    <ID>LongMethod:LibrarySettingsPane.kt:@Composable internal fun LibrarySettingsPane</ID>
+    <ID>LongMethod:ReaderSettingsPane.kt:@Composable internal fun ReaderSettingsPane</ID>
+    <ID>LongMethod:SecuritySettingsPane.kt:@Composable internal fun SecuritySettingsPane</ID>
+    <ID>LongMethod:SettingsSearchResultsPane.kt:@Composable internal fun SettingsSearchResultsPane</ID>
+    <ID>LongMethod:TrackingSettingsPane.kt:@Composable internal fun TrackingSettingsPane</ID>
+    <ID>LongMethod:ShortcutSettingsPane.kt:@Composable internal fun ShortcutCaptureDialog</ID>
+    <ID>LongMethod:ShortcutSettingsPane.kt:@Composable internal fun ShortcutSettingsPane</ID>
+    <ID>LongMethod:ShortcutSettingsPane.kt:@OptIn(ExperimentalLayoutApi::class) @Composable private fun ShortcutScopeCard</ID>
+    <ID>LongMethod:SmartBorderCropper.kt:SmartBorderCropper$fun detectCropRect: CropRect?</ID>
+    <ID>LongMethod:SourceFilterDialog.kt:@OptIn(ExperimentalLayoutApi::class) @Composable fun SourceFilterDialog</ID>
+    <ID>LongMethod:SourceFilterDialog.kt:@OptIn(ExperimentalLayoutApi::class) @Composable private fun FilterItem</ID>
+    <ID>LongMethod:SourcePreferencesScreen.kt:@OptIn(ExperimentalMaterial3Api::class) @Composable fun SourcePreferencesScreen</ID>
+    <ID>LongMethod:SourceWebPageDialog.kt:@Composable fun SourceWebPageDialog</ID>
+    <ID>LongMethod:StatsScreen.kt:@Composable fun StatsScreen</ID>
+    <ID>LongMethod:TachiyomiExtensionConverter.kt:TachiyomiExtensionConverter$private fun convertUncached: ExtensionManifest</ID>
+    <ID>LongMethod:TallImageSplitter.kt:TallImageSplitter$suspend fun split: TallImageSplitResult</ID>
+    <ID>LongMethod:ThemedDropdown.kt:@Composable fun ThemedDropdownSelect</ID>
+    <ID>LongMethod:TrackerLoginDialog.kt:@Composable fun TrackerLoginDialog</ID>
+    <ID>LongMethod:TrackingDialog.kt:@Composable fun TrackingDialog</ID>
+    <ID>LongMethod:TrackingDialog.kt:@Composable private fun EditTrackDetailsDialog</ID>
+    <ID>LongMethod:TrackingDialog.kt:@Composable private fun SearchTrackDialog</ID>
+    <ID>LongMethod:TrackingRecoveryNotice.kt:@Composable fun TrackingRecoveryNotice</ID>
+    <ID>LongMethod:UpcomingCalendar.kt:@Composable fun UpcomingCalendar</ID>
+    <ID>LongMethod:UpcomingFilterDialog.kt:@Composable fun UpcomingFilterDialog</ID>
+    <ID>LongMethod:UpcomingItem.kt:@Composable fun UpcomingItem</ID>
+    <ID>LongMethod:UpdatesScreen.kt:@Composable fun UpdatesScreen</ID>
+    <ID>LongMethod:UpdatesRows.kt:@Composable internal fun UpdateRow</ID>
+    <ID>LongMethod:WindowsAppContainerLauncher.kt:WindowsAppContainerLauncher$fun launch: Process</ID>
+    <ID>LongMethod:WindowsExtensionProcessManagerStart.kt:internal suspend fun WindowsExtensionProcessManager.startInternal</ID>
+    <ID>LongMethod:WindowsExtensionProcessManagerHost.kt:suspend fun WindowsExtensionProcessManager.loadExtensionInternal: List&lt;SourceDescriptor&gt;</ID>
+    <ID>SwallowedException:BatchMigrationRunner.kt:BatchMigrationRunner$e: CancellationException</ID>
+    <ID>SwallowedException:CodecWorkerProtocol.kt:CodecWorkerProtocol$error: ArithmeticException</ID>
+    <ID>SwallowedException:ComposeTileBridge.kt:ComposeTileBridge$cancelled: CancellationException</ID>
+    <ID>SwallowedException:DesktopAppUpdateService.kt:DesktopAppUpdateService$e: java.io.IOException</ID>
+    <ID>SwallowedException:DesktopAppUpdateService.kt:DesktopAppUpdateService.Companion$error: Exception</ID>
+    <ID>SwallowedException:DownloadDiskProvider.kt:DownloadDiskProvider$e: Exception</ID>
+    <ID>SwallowedException:OfflineTrackingQueue.kt:OfflineTrackingQueue$e: Exception</ID>
+  </CurrentIssues>
+</SmellBaseline>

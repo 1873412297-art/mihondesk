@@ -39,6 +39,31 @@ class DownloadCacheCleanerTest {
     }
 
     @Test
+    fun `clearImageCaches keeps the webview profile native libraries and temp directory`() {
+        val cacheRoot = tempDir.resolve("cache")
+        val covers = cacheRoot.resolve("covers")
+        val onlinePages = cacheRoot.resolve("online-pages")
+        val browser = cacheRoot.resolve("browser")
+        val skiko = cacheRoot.resolve("skiko")
+        val temp = cacheRoot.resolve("temp")
+        listOf(covers, onlinePages, browser, skiko, temp).forEach { Files.createDirectories(it) }
+        Files.writeString(covers.resolve("cover.img"), "12345")
+        Files.writeString(onlinePages.resolve("page.jpg"), "123")
+        Files.writeString(browser.resolve("Cookies"), "keep")
+        Files.writeString(skiko.resolve("libskiko.dylib"), "keep")
+        Files.writeString(temp.resolve("extract.tmp"), "keep")
+
+        val freed = DownloadCacheCleaner.clearImageCaches(cacheRoot)
+
+        freed shouldBe 8L
+        Files.exists(covers.resolve("cover.img")) shouldBe false
+        Files.exists(onlinePages.resolve("page.jpg")) shouldBe false
+        Files.exists(browser.resolve("Cookies")) shouldBe true
+        Files.exists(skiko.resolve("libskiko.dylib")) shouldBe true
+        Files.exists(temp.resolve("extract.tmp")) shouldBe true
+    }
+
+    @Test
     fun `clearImageDiskCache removes all files and calculates freed bytes`() {
         val cache = tempDir.resolve("cache")
         Files.createDirectories(cache.resolve("sub"))

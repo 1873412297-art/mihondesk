@@ -11,6 +11,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import mihon.desktop.extension.DesktopNetworkHelper
 import mihon.desktop.extension.DesktopSourceManager
+import mihon.desktop.extension.registerBuiltinSource
 import mihon.desktop.library.db.DesktopLibraryDatabaseFactory
 import mihon.desktop.library.model.ChapterRecord
 import mihon.desktop.library.model.MangaRecord

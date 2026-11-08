@@ -33,11 +33,12 @@ import java.util.Locale
 
 @Composable
 internal fun BackgroundSettingsCard(
-    preferences: DesktopPreferenceStore,
+    presenter: SettingsPresenter,
     scheduler: WindowsBackgroundScheduler?,
+    coordinator: BackgroundScheduleCoordinator,
     onPreferencesChanged: ((DesktopPreferences) -> Unit)?,
 ) {
-    var current by remember { mutableStateOf(preferences.load()) }
+    val current = presenter.preferences.value
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf(scheduler?.lastFailure) }
     val scope = rememberCoroutineScope()
@@ -75,7 +76,7 @@ internal fun BackgroundSettingsCard(
                     enabled = !busy && scheduler != null,
                     modifier = Modifier.testTag("background-tasks-switch"),
                     onCheckedChange = { enabled ->
-                        val original = preferences.load()
+                        val original = presenter.preferences.value
                         if (enabled && original.libraryUpdateIntervalHours <= 0 && original.backupIntervalHours <= 0) {
                             message = label(
                                 "Set an update or backup interval first; both are currently off.",
@@ -86,38 +87,26 @@ internal fun BackgroundSettingsCard(
                             busy = true
                             scope.launch {
                                 try {
-                                    val updated = withContext(Dispatchers.IO + NonCancellable) {
-                                        val results = requireNotNull(scheduler).reconcile(
-                                            enabled,
-                                            original.libraryUpdateIntervalHours,
-                                            original.backupIntervalHours,
-                                        )
-                                        check(results.values.all { it.exitCode == 0 }) {
-                                            results.values.filter { it.exitCode != 0 }.joinToString("\n") { it.output }
-                                        }
-                                        preferences.load().copy(
-                                            backgroundTasksEnabled = enabled,
-                                        ).also(preferences::save)
+                                    val schedule = original.libraryUpdateIntervalHours to original.backupIntervalHours
+                                    val failure = withContext(Dispatchers.IO + NonCancellable) {
+                                        coordinator.setEnabled(enabled, schedule)
                                     }
-                                    current = updated
-                                    onPreferencesChanged?.invoke(updated)
-                                    message = if (enabled) {
-                                        label("Background tasks enabled.", "后台任务已启用。", "背景工作已啟用。")
+                                    if (failure != null) {
+                                        message = failure
                                     } else {
-                                        label("Background tasks removed.", "后台任务已移除。", "背景工作已移除。")
+                                        val updated = presenter.updatePreferences {
+                                            it.copy(backgroundTasksEnabled = enabled)
+                                        }
+                                        onPreferencesChanged?.invoke(updated)
+                                        message = if (enabled) {
+                                            label("Background tasks enabled.", "后台任务已启用。", "背景工作已啟用。")
+                                        } else {
+                                            label("Background tasks removed.", "后台任务已移除。", "背景工作已移除。")
+                                        }
                                     }
                                 } catch (cancelled: CancellationException) {
                                     throw cancelled
                                 } catch (error: Exception) {
-                                    withContext(Dispatchers.IO + NonCancellable) {
-                                        runCatching {
-                                            scheduler?.reconcile(
-                                                original.backgroundTasksEnabled,
-                                                original.libraryUpdateIntervalHours,
-                                                original.backupIntervalHours,
-                                            )
-                                        }
-                                    }
                                     message = error.message
                                 } finally {
                                     busy = false

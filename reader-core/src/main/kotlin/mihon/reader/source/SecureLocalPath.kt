@@ -20,6 +20,9 @@ class SecureLocalPath(
     private val windowsAccess = if (isWindows()) WindowsNativePathAccess else null
     private val trustedRootIdentity: WindowsFileIdentity?
     private var windowsChannelOpener: (Path) -> WindowsNativeFileChannel = WindowsNativePathAccess::openFileChannel
+    private var nioChannelOpener: (Path) -> FileChannel = { path ->
+        FileChannel.open(path, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS)
+    }
     private var windowsDirectoryLister: (Path, Int) -> WindowsDirectorySnapshot =
         WindowsNativePathAccess::listDirectory
 
@@ -118,7 +121,7 @@ class SecureLocalPath(
         val before = validateNioWalk(resolved, expectDirectory = false)
         beforeOpen.beforeOpen(resolved)
         val channel = try {
-            FileChannel.open(resolved, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS)
+            nioChannelOpener(resolved)
         } catch (error: Exception) {
             throw ReaderFailure.UnsafePath(relativePath.toString(), error.message ?: "cannot securely open file")
         }
@@ -199,6 +202,9 @@ class SecureLocalPath(
     }
 
     internal companion object {
+        fun forTesting(trustedRoot: Path, opener: (Path) -> FileChannel): SecureLocalPath =
+            SecureLocalPath(trustedRoot).also { it.nioChannelOpener = opener }
+
         fun forWindowsTesting(
             trustedRoot: Path,
             opener: (Path) -> WindowsNativeFileChannel,

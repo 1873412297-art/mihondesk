@@ -20,27 +20,27 @@ class DesktopPreloadPolicyTest {
     @Test
     fun `expanded window reaches further ahead nearest first`() {
         DesktopPreloadPolicy.plan(20, 5, ReadingMode.SINGLE_LTR, NavigationDirection.FORWARD, 6) shouldBe
-            listOf(6, 7, 8, 9, 10, 11, 4)
+            listOf(6, 7, 8, 9, 10, 11, 4, 3)
     }
 
     @Test
     fun `shrunk window prefetches fewer pages`() {
         DesktopPreloadPolicy.plan(20, 5, ReadingMode.SINGLE_LTR, NavigationDirection.FORWARD, 1) shouldBe
-            listOf(6, 4)
+            listOf(6, 4, 3)
     }
 
     @Test
     fun `window clamps at chapter edges`() {
         DesktopPreloadPolicy.plan(8, 6, ReadingMode.SINGLE_LTR, NavigationDirection.FORWARD, 10) shouldBe
-            listOf(7, 5)
+            listOf(7, 5, 4)
     }
 
     @Test
     fun `dual page modes skip the spread partner then count ahead pages`() {
         DesktopPreloadPolicy.plan(20, 5, ReadingMode.DUAL_LTR, NavigationDirection.FORWARD, 2) shouldBe
-            listOf(7, 8, 4)
+            listOf(7, 8, 4, 3)
         DesktopPreloadPolicy.plan(20, 5, ReadingMode.DUAL_LTR, NavigationDirection.BACKWARD, 2) shouldBe
-            listOf(3, 2, 6)
+            listOf(3, 2, 6, 7)
     }
 
     @Test

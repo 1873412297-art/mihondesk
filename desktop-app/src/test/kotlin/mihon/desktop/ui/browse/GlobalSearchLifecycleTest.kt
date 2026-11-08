@@ -14,6 +14,9 @@ import kotlinx.coroutines.withTimeout
 import mihon.desktop.extension.DesktopExtensionInstaller
 import mihon.desktop.extension.DesktopSourceManager
 import mihon.desktop.extension.ExtensionStoreService
+import mihon.desktop.extension.getSources
+import mihon.desktop.extension.registerBuiltinSource
+import mihon.desktop.extension.setSourceEnabled
 import mihon.desktop.library.db.DesktopLibraryDatabaseFactory
 import mihon.desktop.preferences.DesktopPreferenceStore
 import mihon.extension.source.WindowsCatalogueSource

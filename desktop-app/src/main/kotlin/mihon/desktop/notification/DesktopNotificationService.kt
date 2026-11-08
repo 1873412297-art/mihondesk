@@ -141,8 +141,8 @@ class WindowsDesktopNotificationService(
                 try {
                     val msgType = if (isError) TrayIcon.MessageType.ERROR else TrayIcon.MessageType.INFO
                     icon.displayMessage(title, message, msgType)
-                } catch (_: Exception) {
-                    // Ignore tray display failure
+                } catch (error: Exception) {
+                    mihon.desktop.logging.DesktopLogger.warn("Notification", "Cannot show tray notification", error)
                 }
             }
         }

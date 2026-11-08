@@ -52,9 +52,7 @@ data class DuplicateMangaDialogState(
  * Normalizes a title for duplicate detection. Case, whitespace and punctuation are ignored,
  * while letters (including CJK) and digits are preserved.
  */
-fun normalizeDuplicateTitle(title: String): String = title
-    .lowercase(Locale.ROOT)
-    .filter { it.isLetterOrDigit() }
+fun normalizeDuplicateTitle(title: String): String = mihon.desktop.ui.common.normalizeMangaTitle(title)
 
 /**
  * Returns duplicate groups keyed by normalized title. Only titles that appear under more than

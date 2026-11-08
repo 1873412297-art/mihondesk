@@ -1,6 +1,7 @@
 package mihon.desktop.extension
 
 import mihon.desktop.extension.compat.TachiyomiExtensionConverter
+import mihon.desktop.extension.compat.generateSourceId
 import mihon.desktop.library.model.MangaRecord
 
 /**
@@ -60,14 +61,3 @@ object MissingSourceResolver {
         }
     }
 }
-
-fun findMissingSources(
-    mangas: List<MangaRecord>,
-    installedSourceIds: Set<Long>,
-    available: List<ExtensionStoreItem>,
-): List<MissingSourceInfo> = MissingSourceResolver.findMissingSources(mangas, installedSourceIds, available)
-
-suspend fun ensureAvailableExtensions(
-    storeService: ExtensionStoreService?,
-    cached: List<ExtensionStoreItem> = emptyList(),
-): List<ExtensionStoreItem> = MissingSourceResolver.ensureAvailableExtensions(storeService, cached)

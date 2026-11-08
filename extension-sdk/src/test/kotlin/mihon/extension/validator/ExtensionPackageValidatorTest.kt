@@ -166,6 +166,29 @@ class ExtensionPackageValidatorTest {
     }
 
     @Test
+    fun `validatePackageStream rejects an entry that expands past the limit while streaming`() {
+        val output = ByteArrayOutputStream()
+        ZipOutputStream(output).use { zip ->
+            zip.putNextEntry(ZipEntry("assets/bomb.bin"))
+            val chunk = ByteArray(64 * 1024)
+            var written = 0L
+            while (written <= ExtensionPackageValidator.MAX_EXPANDED_BYTES) {
+                zip.write(chunk)
+                written += chunk.size
+            }
+            zip.closeEntry()
+            zip.putNextEntry(ZipEntry("manifest.json"))
+            zip.write(json.encodeToString(sampleManifest()).encodeToByteArray())
+            zip.closeEntry()
+        }
+
+        val ex = assertThrows<ExtensionValidationException> {
+            ExtensionPackageValidator.validatePackageStream(ByteArrayInputStream(output.toByteArray()))
+        }
+        ex.message shouldContain "maximum expanded size"
+    }
+
+    @Test
     fun `filter list allows iteration and state mutations`() {
         val textFilter = Filter.Text("Author", "")
         val checkFilter = Filter.CheckBox("Completed", false)

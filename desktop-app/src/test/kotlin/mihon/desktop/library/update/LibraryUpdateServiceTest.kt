@@ -3,6 +3,7 @@ package mihon.desktop.library.update
 import kotlinx.coroutines.runBlocking
 import mihon.desktop.extension.DesktopSourceManager
 import mihon.desktop.extension.OnlineMangaSyncService
+import mihon.desktop.extension.registerBuiltinSource
 import mihon.desktop.library.db.DesktopLibraryDatabaseFactory
 import mihon.desktop.library.model.CategoryRecord
 import mihon.desktop.library.model.ChapterRecord

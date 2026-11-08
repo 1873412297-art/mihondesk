@@ -10,7 +10,6 @@ import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -38,10 +37,10 @@ class MangaUpdatesTracker(
                 },
                 authenticated = false,
             )
-            val session = login.muObj("context")?.muString("session_token")
+            val session = login.objField("context")?.stringField("session_token")
                 ?: throw TrackerApiException("MangaUpdates did not return a session")
             val profile = getJson("/v1/account/profile", session)
-            setLoggedIn(true, profile.muString("username") ?: user, session)
+            setLoggedIn(true, profile.stringField("username") ?: user, session)
             true
         } catch (error: CancellationException) {
             throw error
@@ -72,17 +71,17 @@ class MangaUpdatesTracker(
             authenticated = false,
         )
         return root["results"]?.jsonArray.orEmpty().mapNotNull { entry ->
-            val record = (entry as? JsonObject)?.muObj("record") ?: return@mapNotNull null
-            val remoteId = record.muLong("series_id") ?: return@mapNotNull null
-            val title = record.muString("title")?.takeIf(String::isNotBlank) ?: return@mapNotNull null
+            val record = (entry as? JsonObject)?.objField("record") ?: return@mapNotNull null
+            val remoteId = record.longField("series_id") ?: return@mapNotNull null
+            val title = record.stringField("title")?.takeIf(String::isNotBlank) ?: return@mapNotNull null
             TrackSearchResult(
                 id,
                 remoteId,
                 title,
-                record.muLong("latest_chapter") ?: 0L,
-                record.muObj("image")?.muObj("url")?.muString("original").orEmpty(),
-                record.muString("url").orEmpty(),
-                record.muString("description").orEmpty(),
+                record.longField("latest_chapter") ?: 0L,
+                record.objField("image")?.objField("url")?.stringField("original").orEmpty(),
+                record.stringField("url").orEmpty(),
+                record.stringField("description").orEmpty(),
             )
         }
     }
@@ -94,12 +93,12 @@ class MangaUpdatesTracker(
         } catch (e: TrackerHttpException) {
             if (e.code == 404) return null else throw e
         }
-        val rating = runCatching { getJson("/v1/series/${track.remoteId}/rating").muDouble("rating") }.getOrNull()
+        val rating = runCatching { getJson("/v1/series/${track.remoteId}/rating").doubleField("rating") }.getOrNull()
         return track.copy(
             libraryId = track.remoteId,
-            lastChapterRead = item.muObj("status")?.muDouble("chapter") ?: 0.0,
+            lastChapterRead = item.objField("status")?.doubleField("chapter") ?: 0.0,
             score = rating ?: 0.0,
-            status = item.muLong("list_id")?.toDesktopStatus() ?: track.status,
+            status = item.longField("list_id")?.toDesktopStatus() ?: track.status,
         )
     }
 
@@ -148,10 +147,6 @@ class MangaUpdatesTracker(
     }
 }
 
-private fun JsonObject.muObj(name: String) = this[name] as? JsonObject
-private fun JsonObject.muString(name: String) = this[name]?.jsonPrimitive?.content
-private fun JsonObject.muLong(name: String) = muString(name)?.toLongOrNull()
-private fun JsonObject.muDouble(name: String) = muString(name)?.toDoubleOrNull()
 private fun Long.toDesktopStatus() = when (this) {
     0L -> TrackStatus.READING.value
     1L -> TrackStatus.PLAN_TO_READ.value

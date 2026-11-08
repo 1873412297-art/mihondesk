@@ -65,10 +65,9 @@ object DesktopProfileDirectories {
                 throw CommandLineException("--data-dir contains an invalid path", "--data-dir", error)
             }
         }
-        val portable = "--portable" in args || Files.exists(executableDirectory.resolve(".portable"))
         return AppDirectoryResolver(
             environment["APPDATA"]?.takeIf { it.isNotBlank() }?.let(Path::of),
             executableDirectory,
-        ).resolve(if (portable) DistributionMode.Portable else DistributionMode.Installed, explicit)
+        ).resolve(PortableLayout.detect(args, executableDirectory), explicit)
     }
 }
