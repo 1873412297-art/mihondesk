@@ -59,6 +59,13 @@ class IpcSession(
                         val response = try {
                             onRequest?.invoke(message)
                                 ?: IpcResponse(message.requestId, false, error = "No request handler registered")
+                        } catch (timeout: TimeoutCancellationException) {
+                            IpcResponse(
+                                message.requestId,
+                                false,
+                                error = "Request '${message.command}' timed out: ${timeout.message}",
+                                errorKind = "Timeout",
+                            )
                         } catch (cancelled: CancellationException) {
                             throw cancelled
                         } catch (error: Exception) {
@@ -80,6 +87,12 @@ class IpcSession(
                                     false,
                                     error = "No callback handler registered",
                                 )
+                        } catch (timeout: TimeoutCancellationException) {
+                            IpcCallbackResponse(
+                                message.requestId,
+                                false,
+                                error = "Callback '${message.callbackType}' timed out: ${timeout.message}",
+                            )
                         } catch (cancelled: CancellationException) {
                             throw cancelled
                         } catch (error: Exception) {

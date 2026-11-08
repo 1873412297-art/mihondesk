@@ -74,8 +74,9 @@ class AppUpdatePresenter(
                     is UpdateCheckResult.CheckFailed ->
                         AppUpdateState(AppUpdatePhase.Failed, retryAfterSeconds = result.retryAfterSeconds)
                 }
-            } catch (_: CancellationException) {
+            } catch (cancelled: CancellationException) {
                 mutableState.value = AppUpdateState(AppUpdatePhase.Cancelled)
+                throw cancelled
             }
         }
     }
@@ -110,8 +111,9 @@ class AppUpdatePresenter(
                     savedFile = destination.takeIf { saved },
                     verifiedSha256 = checksum.takeIf { saved },
                 )
-            } catch (_: CancellationException) {
+            } catch (cancelled: CancellationException) {
                 mutableState.value = state.value.copy(phase = AppUpdatePhase.Cancelled)
+                throw cancelled
             } catch (e: UpdateRateLimitedException) {
                 mutableState.value = state.value.copy(
                     phase = AppUpdatePhase.Failed,
@@ -153,11 +155,12 @@ class AppUpdatePresenter(
                 mutableState.value = state.value.copy(phase = AppUpdatePhase.Exiting)
                 prepared.commit()
                 onExit()
-            } catch (_: CancellationException) {
-                runCatching { prepared?.abort() }
+            } catch (cancelled: CancellationException) {
+                abortPrepared(prepared)
                 mutableState.value = state.value.copy(phase = AppUpdatePhase.Cancelled)
+                throw cancelled
             } catch (_: Exception) {
-                runCatching { prepared?.abort() }
+                abortPrepared(prepared)
                 mutableState.value = state.value.copy(
                     phase = AppUpdatePhase.Ready,
                     installFailed = true,
@@ -169,5 +172,11 @@ class AppUpdatePresenter(
 
     suspend fun shutdown() {
         operation?.cancelAndJoin()
+    }
+
+    /** Rolls back a staged update; a failed rollback is logged because the next start may find it. */
+    private fun abortPrepared(prepared: PreparedAppUpdate?) {
+        runCatching { prepared?.abort() }
+            .onFailure { mihon.desktop.logging.DesktopLogger.warn("AppUpdate", "Unable to abort prepared update", it) }
     }
 }

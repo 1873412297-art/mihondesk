@@ -35,7 +35,7 @@ class BatchMigrationStateMachineTest {
     )
 
     @Test
-    fun `starts idle and completes when list is empty`() = runBlocking {
+    fun `starts idle and completes when list is empty`(): Unit = runBlocking {
         val runner = BatchMigrationRunner(scope, stringsProvider = { EnglishStrings })
         runner.state.value shouldBe BatchMigrationState.Idle
 
@@ -55,7 +55,7 @@ class BatchMigrationStateMachineTest {
     }
 
     @Test
-    fun `migrates matching manga and records successes`() = runBlocking {
+    fun `migrates matching manga and records successes`(): Unit = runBlocking {
         val runner = BatchMigrationRunner(scope, stringsProvider = { EnglishStrings })
         val manga1 = sampleManga(1L, "One Piece")
         val manga2 = sampleManga(2L, "Frieren")
@@ -82,7 +82,7 @@ class BatchMigrationStateMachineTest {
     }
 
     @Test
-    fun `does not halt on single failures and collects failures report`() = runBlocking {
+    fun `does not halt on single failures and collects failures report`(): Unit = runBlocking {
         val runner = BatchMigrationRunner(scope, stringsProvider = { EnglishStrings })
         val manga1 = sampleManga(1L, "One Piece")
         val manga2 = sampleManga(2L, "Unknown Title")
@@ -129,7 +129,7 @@ class BatchMigrationStateMachineTest {
     }
 
     @Test
-    fun `cancellation stops running batch and transitions to cancelled completed state`() = runBlocking {
+    fun `cancellation stops running batch and transitions to cancelled completed state`(): Unit = runBlocking {
         val runner = BatchMigrationRunner(scope, stringsProvider = { EnglishStrings })
         val manga1 = sampleManga(1L, "One Piece")
         val manga2 = sampleManga(2L, "Bleach")
@@ -162,7 +162,7 @@ class BatchMigrationStateMachineTest {
     }
 
     @Test
-    fun `reset returns state to Idle`() = runBlocking {
+    fun `reset returns state to Idle`(): Unit = runBlocking {
         val runner = BatchMigrationRunner(scope, stringsProvider = { EnglishStrings })
         runner.runBatchMigration(
             mangas = listOf(sampleManga(1L, "One Piece")),
@@ -178,7 +178,7 @@ class BatchMigrationStateMachineTest {
     }
 
     @Test
-    fun `start while a batch is running returns the active job instead of interleaving`() = runBlocking {
+    fun `start while a batch is running returns the active job instead of interleaving`(): Unit = runBlocking {
         val runner = BatchMigrationRunner(scope, stringsProvider = { EnglishStrings })
         val migrated = mutableListOf<String>()
 
@@ -212,7 +212,7 @@ class BatchMigrationStateMachineTest {
     }
 
     @Test
-    fun `start after the previous batch finished launches a new job`() = runBlocking {
+    fun `start after the previous batch finished launches a new job`(): Unit = runBlocking {
         val runner = BatchMigrationRunner(scope, stringsProvider = { EnglishStrings })
         val migrated = mutableListOf<String>()
 

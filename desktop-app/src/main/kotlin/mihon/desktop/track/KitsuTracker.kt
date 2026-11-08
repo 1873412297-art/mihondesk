@@ -1,13 +1,9 @@
 package mihon.desktop.track
 
 import kotlinx.coroutines.CancellationException
-import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import okhttp3.FormBody
 import okhttp3.OkHttpClient
@@ -43,7 +39,7 @@ class KitsuTracker(
             val account = graphQl(CURRENT_ACCOUNT_QUERY, buildJsonObject { }, accessToken)
                 .dataObject("currentAccount")
                 ?: throw TrackerApiException("Kitsu did not return the current account")
-            val displayName = account.objectValue("profile")?.stringValue("name")
+            val displayName = account.strictObjField("profile")?.safeStringField("name")
             setLoggedIn(true, displayName, accessToken)
             true
         } catch (error: CancellationException) {
@@ -62,7 +58,7 @@ class KitsuTracker(
     override suspend fun search(query: String): List<TrackSearchResult> {
         val response = graphQl(SEARCH_QUERY, buildJsonObject { put("query", query) }, token)
         return response.dataObject("searchMangaByTitle")
-            ?.arrayValue("nodes")
+            ?.arrayField("nodes")
             .orEmpty()
             .mapNotNull { it as? JsonObject }
             .mapNotNull(::toSearchResult)
@@ -73,18 +69,18 @@ class KitsuTracker(
         val manga = graphQl(FIND_QUERY, buildJsonObject { put("remoteId", track.remoteId) }, token)
             .dataObject("findMangaById")
             ?: return null
-        val entry = manga.objectValue("myLibraryEntry") ?: return null
+        val entry = manga.strictObjField("myLibraryEntry") ?: return null
         return track.copy(
-            libraryId = entry.stringValue("id")?.toLongOrNull() ?: track.libraryId,
-            title = manga.objectValue("titles")?.stringValue("preferred") ?: track.title,
-            totalChapters = manga.longValue("chapterCount") ?: track.totalChapters,
-            lastChapterRead = entry.longValue("progress")?.toDouble() ?: track.lastChapterRead,
-            score = entry.longValue("rating")?.toDouble() ?: track.score,
-            status = entry.stringValue("status")?.toTrackStatus()?.value ?: track.status,
-            startedReadingDate = entry.stringValue("startedAt").toEpochMillisOrZero(),
-            finishedReadingDate = entry.stringValue("finishedAt").toEpochMillisOrZero(),
-            private = entry.booleanValue("private") ?: track.private,
-            trackingUrl = manga.stringValue("slug")?.let { "$KITSU_MANGA_URL$it" } ?: track.trackingUrl,
+            libraryId = entry.safeStringField("id")?.toLongOrNull() ?: track.libraryId,
+            title = manga.strictObjField("titles")?.safeStringField("preferred") ?: track.title,
+            totalChapters = manga.safeLongField("chapterCount") ?: track.totalChapters,
+            lastChapterRead = entry.safeLongField("progress")?.toDouble() ?: track.lastChapterRead,
+            score = entry.safeLongField("rating")?.toDouble() ?: track.score,
+            status = entry.safeStringField("status")?.toTrackStatus()?.value ?: track.status,
+            startedReadingDate = entry.safeStringField("startedAt").toEpochMillisOrZero(),
+            finishedReadingDate = entry.safeStringField("finishedAt").toEpochMillisOrZero(),
+            private = entry.safeBoolField("private") ?: track.private,
+            trackingUrl = manga.safeStringField("slug")?.let { "$KITSU_MANGA_URL$it" } ?: track.trackingUrl,
         )
     }
 
@@ -104,10 +100,10 @@ class KitsuTracker(
         )
         val operation = if (track.libraryId > 0L) "update" else "create"
         val entry = payload.dataObject("libraryEntry")
-            ?.objectValue(operation)
-            ?.objectValue("libraryEntry")
+            ?.strictObjField(operation)
+            ?.strictObjField("libraryEntry")
             ?: throw TrackerApiException("Kitsu did not return a library entry")
-        return track.copy(libraryId = entry.stringValue("id")?.toLongOrNull() ?: track.libraryId)
+        return track.copy(libraryId = entry.safeStringField("id")?.toLongOrNull() ?: track.libraryId)
     }
 
     private suspend fun requestPasswordToken(username: String, password: String): String {
@@ -124,7 +120,7 @@ class KitsuTracker(
             )
             .build()
         return oauth.execute(request).let { body ->
-            defaultTrackerJson.parseToJsonElement(body).jsonObject.stringValue("access_token")
+            defaultTrackerJson.parseToJsonElement(body).jsonObject.safeStringField("access_token")
                 ?: throw TrackerApiException("Kitsu did not return an access token")
         }
     }
@@ -148,17 +144,19 @@ class KitsuTracker(
     }
 
     private fun toSearchResult(manga: JsonObject): TrackSearchResult? {
-        val remoteId = manga.stringValue("id")?.toLongOrNull() ?: return null
-        val title = manga.objectValue("titles")?.stringValue("preferred").orEmpty()
+        val remoteId = manga.safeStringField("id")?.toLongOrNull() ?: return null
+        val title = manga.strictObjField("titles")?.safeStringField("preferred").orEmpty()
         if (title.isBlank()) return null
         return TrackSearchResult(
             trackerId = id,
             remoteId = remoteId,
             title = title,
-            totalChapters = manga.longValue("chapterCount") ?: 0L,
-            coverUrl = manga.objectValue("posterImage")?.objectValue("original")?.stringValue("url").orEmpty(),
-            trackingUrl = manga.stringValue("slug")?.let { "$KITSU_MANGA_URL$it" }.orEmpty(),
-            summary = manga.objectValue("description")?.stringValue("en").orEmpty(),
+            totalChapters = manga.safeLongField("chapterCount") ?: 0L,
+            coverUrl = manga.strictObjField(
+                "posterImage",
+            )?.strictObjField("original")?.safeStringField("url").orEmpty(),
+            trackingUrl = manga.safeStringField("slug")?.let { "$KITSU_MANGA_URL$it" }.orEmpty(),
+            summary = manga.strictObjField("description")?.safeStringField("en").orEmpty(),
         )
     }
 
@@ -187,12 +185,7 @@ class KitsuTracker(
     }
 }
 
-private fun JsonObject.dataObject(name: String): JsonObject? = objectValue("data")?.objectValue(name)
-private fun JsonObject.objectValue(name: String): JsonObject? = this[name]?.jsonObject
-private fun JsonObject.arrayValue(name: String): JsonArray? = this[name]?.jsonArray
-private fun JsonObject.stringValue(name: String): String? = (this[name] as? JsonPrimitive)?.content
-private fun JsonObject.longValue(name: String): Long? = stringValue(name)?.toLongOrNull()
-private fun JsonObject.booleanValue(name: String): Boolean? = stringValue(name)?.toBooleanStrictOrNull()
+private fun JsonObject.dataObject(name: String): JsonObject? = strictObjField("data")?.strictObjField(name)
 private fun String?.toEpochMillisOrZero(): Long =
     this?.let { runCatching { Instant.parse(it).toEpochMilli() }.getOrDefault(0L) } ?: 0L
 private fun String.toTrackStatus(): TrackStatus? = when (this) {

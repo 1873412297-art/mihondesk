@@ -20,6 +20,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.runBlocking
 import mihon.desktop.DesktopRuntime
 import mihon.desktop.extension.ExtensionStoreService
+import mihon.desktop.extension.registerBuiltinSource
 import mihon.desktop.ui.UI_TEST_TIMEOUT
 import mihon.desktop.ui.library.LibraryPresenter
 import mihon.desktop.ui.library.MangaDetailActions

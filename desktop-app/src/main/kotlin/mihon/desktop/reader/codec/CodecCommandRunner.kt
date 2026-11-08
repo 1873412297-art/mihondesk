@@ -45,6 +45,7 @@ object ProcessCodecCommandRunner : CodecCommandRunner {
             this["MAGICK_CONFIGURE_PATH"] = codecHome.toString()
             this["MAGICK_OCL_DEVICE"] = "OFF"
             this["PATH"] = codecHome.toString()
+            putAll(mihon.desktop.platform.ProfileTemporaryDirectory.childEnvironment())
         }
         val process = try {
             startProcess(processBuilder)

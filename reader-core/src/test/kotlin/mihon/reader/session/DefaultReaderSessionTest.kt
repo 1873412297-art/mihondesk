@@ -1,6 +1,7 @@
 package mihon.reader.session
 
 import io.kotest.assertions.throwables.shouldThrow
+import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -107,6 +108,26 @@ class DefaultReaderSessionTest {
         session.state.value.loadState.shouldBeInstanceOf<ReaderLoadState.Loading>()
         pipeline.chapterCloses shouldBe 1
         source.closeRequests shouldBe 1
+    }
+
+    @Test
+    fun `cancel without flush returns the cleanup job that closes the chapter source`() = runTest {
+        val asset = asset(chapterId = 7, lastPageRead = 0)
+        val source = FakeSource(asset, pages(7, 3))
+        val session = DefaultReaderSession(
+            scope = backgroundScope,
+            catalog = catalog(asset),
+            sourceFactory = ChapterSourceFactory { source },
+            progressSink = ReaderProgressSink { ProgressWriteResult.APPLIED },
+            generationSource = AtomicReaderGenerationSource(),
+        )
+        session.open(7)
+        runCurrent()
+
+        session.cancelWithoutFlush().join()
+
+        source.closeRequests shouldBe 1
+        session.state.value.loadState shouldBe ReaderLoadState.Closed
     }
 
     @Test
@@ -283,6 +304,81 @@ class DefaultReaderSessionTest {
         session.state.value.cacheMetrics shouldBe pipeline.cacheMetrics
         pipeline.chapterCloses shouldBe 1
         pipeline.closed shouldBe 1
+    }
+
+    @Test
+    fun `a failed chapter open clears the previous chapter and retries the attempted chapter`() = runTest {
+        val first = asset(chapterId = 7, lastPageRead = 0)
+        val attempted = asset(chapterId = 99, lastPageRead = 0)
+        var failAttempt = true
+        val session = DefaultReaderSession(
+            scope = backgroundScope,
+            catalog = object : ReaderChapterCatalog {
+                override fun chapterAsset(chapterId: Long) = when (chapterId) {
+                    7L -> first
+                    99L -> attempted
+                    else -> null
+                }
+
+                override fun adjacentReadableChapter(
+                    chapterId: Long,
+                    direction: mihon.reader.source.ChapterDirection,
+                ): ReaderChapterAsset? = null
+            },
+            sourceFactory = ChapterSourceFactory { requested ->
+                if (requested.chapterId == 99L && failAttempt) {
+                    failAttempt = false
+                    error("source unavailable")
+                }
+                FakeSource(requested, pages(requested.chapterId, 2))
+            },
+            progressSink = ReaderProgressSink { ProgressWriteResult.APPLIED },
+            generationSource = AtomicReaderGenerationSource(),
+        )
+
+        session.open(7)
+        runCurrent()
+        session.state.value.chapterId shouldBe 7L
+
+        session.open(99)
+        runCurrent()
+
+        val failed = session.state.value
+        failed.loadState.shouldBeInstanceOf<ReaderLoadState.Failed>()
+        failed.chapterId shouldBe 99L
+        failed.pages.shouldBeEmpty()
+        failed.selectedIndex shouldBe 0
+
+        // The retry may carry a stale page id from the old chapter; it must still reopen chapter 99.
+        session.retry(PageId("7", "page-0.jpg"))
+        runCurrent()
+
+        val reopened = session.state.value
+        reopened.loadState shouldBe ReaderLoadState.Ready
+        reopened.chapterId shouldBe 99L
+        reopened.pages.size shouldBe 2
+    }
+
+    @Test
+    fun `a malformed action does not kill the reader action consumer`() = runTest {
+        val asset = asset(chapterId = 7, lastPageRead = 0)
+        val source = FakeSource(asset, pages(7, 3))
+        val session = DefaultReaderSession(
+            scope = backgroundScope,
+            catalog = catalog(asset),
+            sourceFactory = ChapterSourceFactory { source },
+            progressSink = ReaderProgressSink { ProgressWriteResult.APPLIED },
+            generationSource = AtomicReaderGenerationSource(),
+        )
+
+        session.open(7)
+        runCurrent()
+        session.dispatch(ReaderAction.SetPageIntrinsicSize(source.descriptors[0].id, width = 0, height = 0))
+        runCurrent()
+        session.dispatch(ReaderAction.SelectPage(1))
+        runCurrent()
+
+        session.state.value.selectedIndex shouldBe 1
     }
 
     @Test

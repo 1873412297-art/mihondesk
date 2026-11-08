@@ -1,0 +1,15 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<SmellBaseline>
+  <ManuallySuppressedIssues />
+  <CurrentIssues>
+    <ID>LongMethod:AndroidBackupExporter.kt:AndroidBackupExporter$private fun createSnapshot: AndroidBackup</ID>
+    <ID>LongMethod:AndroidBackupImporter.kt:AndroidBackupImporter$private fun LibraryMutationPort.mergeCategoriesSourcesMangaChildrenAndPreferences</ID>
+    <ID>LongMethod:AndroidBackupValidator.kt:AndroidBackupValidator$fun validate: ValidatedAndroidBackup</ID>
+    <ID>LongMethod:BackupMergePolicy.kt:BackupMergePolicy$fun mergeManga: MangaRecord</ID>
+    <ID>LongMethod:LocalImportStager.kt:LocalImportStager$fun stage: StagedLocalManga</ID>
+    <ID>LongMethod:LocalMangaImporter.kt:LocalMangaImporter$private fun LibraryMutationPort.register: ImportReport</ID>
+    <ID>LongMethod:SqlDelightSyncApply.kt:internal suspend fun SqlDelightSyncLocalRepository.applyChangesetInternal: SyncApplyResult</ID>
+    <ID>LongMethod:SqlDelightSyncLocalRepository.kt:SqlDelightSyncLocalRepository$override suspend fun exportDelta: EntityDelta</ID>
+    <ID>SwallowedException:LocalImportSecurity.kt:error: FileAlreadyExistsException</ID>
+  </CurrentIssues>
+</SmellBaseline>

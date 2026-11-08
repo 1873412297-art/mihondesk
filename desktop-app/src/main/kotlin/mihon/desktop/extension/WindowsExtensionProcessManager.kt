@@ -56,249 +56,67 @@ enum class HostProcessState {
 
 open class WindowsExtensionProcessManager(
     val workingDirectory: File,
-    private val customCommand: List<String>? = null,
-    private val memoryLimitBytes: Long = 1024L * 1024L * 1024L,
-    private val onBrokerHttp: (suspend (BrokerHttpRequest) -> BrokerHttpResponse)? = null,
-    private val scope: CoroutineScope = CoroutineScope(Dispatchers.IO + Job()),
-    private val sourceSessionFile: File? = null,
-    private val networkHelper: DesktopNetworkHelper? = null,
-    private val onWebView: (
+    internal val customCommand: List<String>? = null,
+    internal val memoryLimitBytes: Long = 1024L * 1024L * 1024L,
+    internal val onBrokerHttp: (suspend (BrokerHttpRequest) -> BrokerHttpResponse)? = null,
+    internal val scope: CoroutineScope = CoroutineScope(Dispatchers.IO + Job()),
+    internal val sourceSessionFile: File? = null,
+    internal val networkHelper: DesktopNetworkHelper? = null,
+    internal val onWebView: (
         suspend (
             mihon.extension.ipc.WebViewRequest,
         ) -> mihon.extension.ipc.WebViewResponse
     )? = null,
-    private val isolatedLeaf: Boolean = false,
+    internal val isolatedLeaf: Boolean = false,
 ) : Closeable {
 
-    private val json = Json {
+    internal val json = Json {
         ignoreUnknownKeys = true
         isLenient = true
     }
 
-    private val mutex = Mutex()
-    private val routingMutex = Mutex()
-    private val packageHosts = java.util.concurrent.ConcurrentHashMap<String, WindowsExtensionProcessManager>()
-    private val packageFiles = java.util.concurrent.ConcurrentHashMap<String, File>()
-    private val sourceHosts = java.util.concurrent.ConcurrentHashMap<Long, WindowsExtensionProcessManager>()
-    private val routesPackages: Boolean get() = Platform.isWindows() && !isolatedLeaf
+    internal val mutex = Mutex()
+    internal val routingMutex = Mutex()
+    internal val packageHosts = java.util.concurrent.ConcurrentHashMap<String, WindowsExtensionProcessManager>()
+    internal val packageFiles = java.util.concurrent.ConcurrentHashMap<String, File>()
+    internal val sourceHosts = java.util.concurrent.ConcurrentHashMap<Long, WindowsExtensionProcessManager>()
+    internal val routesPackages: Boolean get() = Platform.isWindows() && !isolatedLeaf
 
-    private fun routedHost(sourceId: Long): WindowsExtensionProcessManager? = if (routesPackages) {
-        sourceHosts[sourceId] ?: throw IpcException("No isolated host registered for source $sourceId")
-    } else {
-        null
-    }
+    @Volatile
     var state: HostProcessState = HostProcessState.STOPPED
-        private set
+        internal set
 
+    @Volatile
     var lastExitCode: Int? = null
-        private set
+        internal set
 
+    @Volatile
     var epoch: Long = 0L
-        private set
+        internal set
 
-    private var process: Process? = null
-    private var sandboxLauncher: WindowsAppContainerLauncher? = null
-    private val hostWorkingDirectory: File
-        get() = if (Platform.isWindows()) File(workingDirectory, "sandbox-data") else workingDirectory
-    private var jobObject: WindowsJobObject? = null
-    private var session: IpcSession? = null
-    private val brokerPackages = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
-    private val brokerSources = java.util.concurrent.ConcurrentHashMap<Long, String>()
+    @Volatile
+    internal var closed: Boolean = false
 
-    private var lastStderr: String = ""
-        private set
+    @Volatile
+    internal var process: Process? = null
 
-    open suspend fun start() = mutex.withLock {
-        if (state == HostProcessState.RUNNING && process?.isAlive == true && session != null) return@withLock
-        if (state == HostProcessState.RUNNING) {
-            closeInternal()
-            state = HostProcessState.CRASHED
-        }
-        if (state == HostProcessState.CRASHED) {
-            closeInternal()
-        }
-        state = HostProcessState.STARTING
-        mihon.desktop.logging.DesktopLogger.info(
-            "ExtensionHost",
-            "Starting extension host in ${hostWorkingDirectory.name}",
-        )
-        lastExitCode = null
-        lastStderr = ""
+    @Volatile
+    internal var sandboxLauncher: WindowsAppContainerLauncher? = null
+    internal val hostWorkingDirectory: File
+        get() = extensionHostSandboxDirectory(workingDirectory)
 
-        hostWorkingDirectory.mkdirs()
+    @Volatile
+    internal var jobObject: WindowsJobObject? = null
 
-        val command = customCommand ?: buildDefaultCommand()
-        val stderrLog = File(hostWorkingDirectory, "extension-host-stderr.log")
-        val proc = if (Platform.isWindows() && WindowsAppContainerLauncher.isSupported()) {
-            // Session cookies and headers remain exclusively in the parent HTTP broker.
-            val environment = emptyMap<String, String>()
-            val launcher = WindowsAppContainerLauncher(hostWorkingDirectory, memoryLimitBytes)
-            sandboxLauncher = launcher
-            try {
-                kotlinx.coroutines.withContext(Dispatchers.IO) { launcher.launch(command, environment) }
-            } catch (
-                cancelled: CancellationException,
-            ) {
-                launcher.close()
-                sandboxLauncher = null
-                state = HostProcessState.STOPPED
-                throw cancelled
-            } catch (error: Throwable) {
-                mihon.desktop.logging.DesktopLogger.error(
-                    "ExtensionHost",
-                    "Isolated extension host launch failed: ${error.message}",
-                    error,
-                )
-                sandboxLauncher = null
-                state = HostProcessState.CRASHED
-                throw IpcException("Isolated extension host launch failed: ${error.message}", error)
-            }
-        } else {
-            ProcessBuilder(command).directory(hostWorkingDirectory).redirectError(stderrLog).apply {
-                environment().remove("MIHON_SOURCE_SESSION_FILE")
-                sourceSessionFile?.let { environment()["MIHON_SOURCE_SESSION_FILE"] = it.absolutePath }
-            }.start()
-        }
-        this.process = proc
-        val ipc = IpcSession(
-            input = proc.inputStream,
-            output = proc.outputStream,
-            onCallback = { callback ->
-                if (callback.callbackType == IpcCallbacks.BROKER_HTTP) {
-                    val received = json.decodeFromString<BrokerHttpRequest>(callback.payloadJson)
-                    // Detached extension coroutines/OkHttp dispatchers can lose thread-local identity.
-                    // Only a dedicated, authenticated package process may supply the missing owner.
-                    val request = received.copy(
-                        extensionId = received.extensionId ?: if (isolatedLeaf) brokerPackages.singleOrNull() else null,
-                    )
-                    val permitted = networkHelper == null || (
-                        request.extensionId != null && request.extensionId in brokerPackages &&
-                            (request.sourceId == null || brokerSources[request.sourceId] == request.extensionId)
-                        )
-                    val response = if (!permitted) {
-                        BrokerHttpResponse(403, error = "Unregistered extension network identity")
-                    } else {
-                        onBrokerHttp?.invoke(request) ?: BrokerHttpResponse(
-                            statusCode = 503,
-                            error = "Brokered HTTP handler not configured in process manager",
-                        )
-                    }
-                    IpcCallbackResponse(
-                        requestId = callback.requestId,
-                        success = true,
-                        payloadJson = json.encodeToString(prepareBrokerResponse(response)),
-                    )
-                } else if (callback.callbackType == "webview") {
-                    val request = json.decodeFromString<mihon.extension.ipc.WebViewRequest>(callback.payloadJson)
-                    val permitted =
-                        request.extensionId in brokerPackages && brokerSources[request.sourceId] == request.extensionId
-                    val response = if (!permitted) {
-                        mihon.extension.ipc.WebViewResponse(false, error = "Unregistered extension WebView identity")
-                    } else {
-                        onWebView?.invoke(request)
-                            ?: mihon.extension.ipc.WebViewResponse(false, error = "WebView handler is not configured")
-                    }
-                    IpcCallbackResponse(callback.requestId, success = true, payloadJson = json.encodeToString(response))
-                } else {
-                    IpcCallbackResponse(
-                        requestId = callback.requestId,
-                        success = false,
-                        error = "Unknown callback '${callback.callbackType}'",
-                    )
-                }
-            },
-        )
-        this.session = ipc
+    @Volatile
+    internal var session: IpcSession? = null
+    internal val brokerPackages = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+    internal val brokerSources = java.util.concurrent.ConcurrentHashMap<Long, String>()
 
-        scope.launch(Dispatchers.IO) {
-            val code = proc.waitFor()
-            lastExitCode = code
-            lastStderr = readStderrTail(stderrLog)
-            if (process === proc && (state == HostProcessState.RUNNING || state == HostProcessState.STARTING)) {
-                mihon.desktop.logging.DesktopLogger.error(
-                    "ExtensionHost",
-                    "Extension host process terminated with code $code; stderr: $lastStderr",
-                )
-                state = HostProcessState.CRASHED
-                try {
-                    ipc.close()
-                } catch (_: Exception) {}
-            }
-        }
+    internal var lastStderr: String = ""
+        internal set
 
-        try {
-            val pong = ipc.sendRequest(IpcCommands.PING, timeoutMillis = 10_000L)
-            if (pong != "pong") {
-                throw IpcException("Unexpected ping response from extension host: $pong")
-            }
-            state = HostProcessState.RUNNING
-            mihon.desktop.logging.DesktopLogger.info(
-                "ExtensionHost",
-                "Extension host running in ${hostWorkingDirectory.name} (pid=${proc.pid()})",
-            )
-            epoch++
-        } catch (cancelled: CancellationException) {
-            closeInternal()
-            state = HostProcessState.STOPPED
-            throw cancelled
-        } catch (e: Exception) {
-            closeInternal()
-            // Give a moment for stderr to flush to file
-            kotlinx.coroutines.delay(300)
-            lastStderr = readStderrTail(stderrLog)
-            state = HostProcessState.CRASHED
-            val stderrInfo = if (lastStderr.isNotEmpty()) "\nStderr: $lastStderr" else ""
-            mihon.desktop.logging.DesktopLogger.error(
-                "ExtensionHost",
-                "Failed to establish IPC handshake with extension host: ${e.message}$stderrInfo",
-                e,
-            )
-            throw IpcException("Failed to establish IPC handshake with extension host: ${e.message}$stderrInfo", e)
-        }
-    }
-
-    private fun readStderrTail(file: File, maxBytes: Int = 16384): String {
-        if (!file.exists()) return ""
-        return try {
-            java.io.RandomAccessFile(file, "r").use { raf ->
-                val length = raf.length()
-                val seekPos = maxOf(0L, length - maxBytes)
-                raf.seek(seekPos)
-                val buffer = ByteArray((length - seekPos).toInt())
-                raf.readFully(buffer)
-                String(buffer, Charsets.UTF_8).trim().takeLast(8192)
-            }
-        } catch (_: Exception) {
-            ""
-        }
-    }
-
-    private suspend fun ensureRunningSession(): IpcSession {
-        if (state != HostProcessState.RUNNING) {
-            start()
-        }
-        return ensureRunning()
-    }
-
-    private fun ensureRunning(): IpcSession {
-        val proc = process
-        if (proc != null && !proc.isAlive) {
-            state = HostProcessState.CRASHED
-            throw IpcException("Extension host process is dead (exitCode=${proc.exitValue()})")
-        }
-        return session ?: throw IpcException("Extension host is not running (state=$state)")
-    }
-
-    suspend fun ping(): Boolean {
-        return try {
-            val session = ensureRunningSession()
-            session.sendRequest(IpcCommands.PING, timeoutMillis = 5_000L) == "pong"
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (_: Exception) {
-            false
-        }
-    }
+    open suspend fun start() = startInternal()
 
     open suspend fun loadExtension(packageFile: File): List<SourceDescriptor> =
         loadExtensionInternal(packageFile, null)
@@ -311,80 +129,6 @@ open class WindowsExtensionProcessManager(
             return loadExtension(packageFile)
         }
         return loadExtensionInternal(packageFile, validatedManifest)
-    }
-
-    private suspend fun loadExtensionInternal(
-        packageFile: File,
-        validatedManifest: ExtensionManifest?,
-    ): List<SourceDescriptor> {
-        if (routesPackages) {
-            val manifest = validatedManifest
-                ?: mihon.extension.validator.ExtensionPackageValidator.validatePackage(packageFile)
-            return routingMutex.withLock {
-                packageHosts[manifest.id]?.let { existing ->
-                    val current = existing.getSources()
-                    val sources = if (current.isNotEmpty()) current else existing.loadExtension(packageFile, manifest)
-                    registerRoutes(existing, sources)
-                    return@withLock sources
-                }
-                val key = java.security.MessageDigest.getInstance("SHA-256").digest(manifest.id.toByteArray())
-                    .joinToString("") { "%02x".format(it) }
-                val child = WindowsExtensionProcessManager(
-                    workingDirectory = File(workingDirectory, "isolated-extensions/$key"),
-                    customCommand = customCommand,
-                    memoryLimitBytes = memoryLimitBytes,
-                    onBrokerHttp = onBrokerHttp,
-                    sourceSessionFile = sourceSessionFile,
-                    networkHelper = networkHelper,
-                    onWebView = onWebView,
-                    isolatedLeaf = true,
-                )
-                try {
-                    val sources = child.loadExtension(packageFile, manifest)
-                    registerRoutes(child, sources)
-                    packageHosts[manifest.id] = child
-                    packageFiles[manifest.id] = packageFile
-                    sources
-                } catch (failure: Throwable) {
-                    child.close()
-                    throw failure
-                }
-            }
-        }
-        val session = ensureRunningSession()
-        val manifest = validatedManifest
-            ?: mihon.extension.validator.ExtensionPackageValidator.validatePackage(packageFile)
-        brokerPackages.add(manifest.id)
-        networkHelper?.registerExtensionDomains(manifest.id, ExtensionPackageDomains.resolve(packageFile, manifest))
-        manifest.sources.forEach { source ->
-            brokerSources[source.id] = manifest.id
-            networkHelper?.registerSourceOwner(source.id, manifest.id)
-        }
-        val payload = LoadExtensionPayload(
-            packagePath = if (Platform.isWindows()) {
-                val packages = File(hostWorkingDirectory, "packages").apply { mkdirs() }
-                packageFile.copyTo(File(packages, "${manifest.id}.wext"), overwrite = true).absolutePath
-            } else {
-                packageFile.absolutePath
-            },
-            workingDir = File(hostWorkingDirectory, manifest.id).absolutePath,
-        )
-        val res = session.sendRequest(IpcCommands.LOAD_EXTENSION, json.encodeToString(payload))
-        return json.decodeFromString<List<SourceDescriptor>>(res).also { sources ->
-            sources.forEach { source ->
-                brokerSources[source.id] = manifest.id
-                networkHelper?.registerSourceOwner(source.id, manifest.id)
-            }
-        }
-    }
-
-    private fun registerRoutes(host: WindowsExtensionProcessManager, sources: List<SourceDescriptor>) {
-        check(sources.none { sourceHosts[it.id]?.let { owner -> owner !== host } == true }) {
-            "Source identity is already owned by another extension host"
-        }
-        val ids = sources.mapTo(hashSetOf()) { it.id }
-        sourceHosts.entries.removeIf { it.value === host && it.key !in ids }
-        sources.forEach { sourceHosts[it.id] = host }
     }
 
     open suspend fun unloadExtension(pkg: String) {
@@ -402,28 +146,19 @@ open class WindowsExtensionProcessManager(
             }
             return
         }
-        if (state == HostProcessState.RUNNING) {
-            ensureRunning().sendRequest(IpcCommands.UNLOAD_EXTENSION, json.encodeToString(UnloadExtensionPayload(pkg)))
-        }
-        brokerPackages.remove(pkg)
-        brokerSources.entries.removeIf { it.value == pkg }
-        networkHelper?.unregisterExtensionDomains(pkg)
-    }
-
-    private fun prepareBrokerResponse(response: BrokerHttpResponse): BrokerHttpResponse {
-        val encoded = response.bodyBase64 ?: return response
-        if (encoded.length <= 4 * 1024 * 1024) return response
-        val bytes = java.util.Base64.getDecoder().decode(encoded)
-        require(bytes.size <= 64 * 1024 * 1024) { "Broker response exceeds 64 MiB" }
-        val directory = File(hostWorkingDirectory, "broker-responses").apply { mkdirs() }
-        val file = File(directory, "broker-${java.util.UUID.randomUUID()}.bin")
         try {
-            file.writeBytes(bytes)
-        } catch (error: Exception) {
-            file.delete()
-            throw error
+            if (state == HostProcessState.RUNNING) {
+                ensureRunning().sendRequest(
+                    IpcCommands.UNLOAD_EXTENSION,
+                    json.encodeToString(UnloadExtensionPayload(pkg)),
+                )
+            }
+        } finally {
+            // Local ownership must be released even when the host is crashed or restarting.
+            brokerPackages.remove(pkg)
+            brokerSources.entries.removeIf { it.value == pkg }
+            networkHelper?.unregisterExtensionDomains(pkg)
         }
-        return response.copy(body = null, bodyBase64 = null, bodyFileName = file.name)
     }
 
     open suspend fun getSources(): List<SourceDescriptor> {
@@ -582,143 +317,15 @@ open class WindowsExtensionProcessManager(
         setSourcePreference(sourceId, key, StringPreferenceValueDto(value))
     }
 
-    suspend fun restart() {
-        closeInternal()
-        state = HostProcessState.STOPPED
-        start()
-    }
-
-    private fun closeInternal() {
-        packageHosts.values.forEach { host ->
-            try {
-                host.close()
-            } catch (error: Throwable) {
-                mihon.desktop.logging.DesktopLogger.warn(
-                    "ExtensionHost",
-                    "Failed to close an isolated extension host during shutdown: ${error.message}",
-                    error,
-                )
-            }
-        }
-        packageHosts.clear()
-        packageFiles.clear()
-        sourceHosts.clear()
-        val proc = process
-        process = null
-
-        try {
-            proc?.destroyForcibly()
-        } catch (_: Exception) {}
-
-        try {
-            jobObject?.terminate(0)
-            jobObject?.close()
-        } catch (_: Exception) {}
-        jobObject = null
-
-        try {
-            proc?.waitFor(5, java.util.concurrent.TimeUnit.SECONDS)
-        } catch (_: Exception) {}
-
-        try {
-            session?.close()
-        } catch (_: Exception) {}
-        session = null
-        try {
-            sandboxLauncher?.close()
-        } catch (error: Throwable) {
-            mihon.desktop.logging.DesktopLogger.warn(
-                "ExtensionHost",
-                "Failed to release the sandbox launcher during shutdown: ${error.message}",
-                error,
-            )
-        }
-        sandboxLauncher = null
-        brokerPackages.clear()
-        brokerSources.clear()
-        File(hostWorkingDirectory, "broker-responses").listFiles()?.filter {
-            it.isFile && it.name.matches(BROKER_RESPONSE_REGEX)
-        }?.forEach { it.delete() }
-        File(hostWorkingDirectory, "page-images").listFiles()?.filter {
-            it.isFile && it.name.matches(PAGE_IMAGE_REGEX)
-        }?.forEach { it.delete() }
-    }
-
     override fun close() {
+        closed = true
         closeInternal()
         state = HostProcessState.STOPPED
         scope.cancel()
     }
 
-    private fun buildDefaultCommand(): List<String> {
-        val currentCommand = ProcessHandle.current().info().command().orElse(null)
-        val isPackagedExe = currentCommand != null &&
-            !currentCommand.endsWith("java.exe", ignoreCase = true) &&
-            !currentCommand.endsWith("javaw.exe", ignoreCase = true) &&
-            !currentCommand.endsWith("java", ignoreCase = true)
-
-        if (isPackagedExe) {
-            return listOf(
-                currentCommand,
-                "--extension-host",
-                "--stdio",
-            )
-        }
-
-        val javaBin = currentCommand ?: run {
-            val javaHome = System.getProperty("java.home")
-            val isWindows = Platform.isWindows()
-            val ext = if (isWindows) ".exe" else ""
-            "$javaHome/bin/java$ext"
-        }
-        val locations = mutableSetOf<String>()
-        fun addLocation(className: String) {
-            try {
-                val clazz = Class.forName(className)
-                val uri = clazz.protectionDomain?.codeSource?.location?.toURI()
-                if (uri != null) {
-                    locations.add(File(uri).absolutePath)
-                }
-            } catch (_: Exception) {}
-        }
-
-        addLocation("mihon.extension.host.MainKt")
-        addLocation("mihon.extension.source.WindowsSource")
-        addLocation("kotlin.Unit")
-        addLocation("kotlinx.coroutines.CoroutineScope")
-        addLocation("kotlinx.serialization.json.Json")
-        addLocation("org.jsoup.Jsoup")
-        addLocation("okhttp3.OkHttpClient")
-        addLocation("okio.ByteString")
-        addLocation("uy.kohesive.injekt.Injekt")
-        addLocation("rx.Observable")
-        addLocation("org.objectweb.asm.ClassReader")
-
-        val sysCp = System.getProperty("java.class.path") ?: ""
-        if (sysCp.isNotBlank()) {
-            sysCp.split(File.pathSeparator).forEach {
-                if (it.isNotBlank()) locations.add(File(it).absolutePath)
-            }
-        }
-
-        val cp = locations.joinToString(File.pathSeparator)
-        return listOf(
-            javaBin,
-            "-Xms16m",
-            "-Xmx128m",
-            "-XX:ReservedCodeCacheSize=32m",
-            "-XX:MaxMetaspaceSize=64m",
-            "-XX:+UseSerialGC",
-            "-Dfile.encoding=UTF-8",
-            "-cp",
-            cp,
-            "mihon.extension.host.MainKt",
-            "--stdio",
-        )
-    }
-
     companion object {
-        private val PAGE_IMAGE_REGEX = Regex("^page-[a-zA-Z0-9-]+\\.img$")
-        private val BROKER_RESPONSE_REGEX = Regex("^broker-[a-zA-Z0-9-]+\\.bin$")
+        internal val PAGE_IMAGE_REGEX = Regex("^page-[a-zA-Z0-9-]+\\.img$")
+        internal val BROKER_RESPONSE_REGEX = Regex("^broker-[a-zA-Z0-9-]+\\.bin$")
     }
 }

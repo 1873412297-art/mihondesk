@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.network
 import eu.kanade.tachiyomi.network.interceptor.CloudflareInterceptor
 import eu.kanade.tachiyomi.network.interceptor.UncaughtExceptionInterceptor
 import eu.kanade.tachiyomi.network.interceptor.UserAgentInterceptor
+import mihon.extension.network.withTlsFallback
 import okhttp3.Cookie
 import okhttp3.CookieJar
 import okhttp3.HttpUrl

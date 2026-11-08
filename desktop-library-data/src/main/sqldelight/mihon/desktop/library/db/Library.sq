@@ -61,6 +61,11 @@ CREATE TABLE category (
   flags INTEGER NOT NULL DEFAULT 0
 );
 
+CREATE TABLE category_sync (
+  category_id INTEGER NOT NULL PRIMARY KEY REFERENCES category(id) ON DELETE CASCADE,
+  last_modified_at INTEGER NOT NULL DEFAULT 0
+);
+
 CREATE TABLE manga_category (
   manga_id INTEGER NOT NULL REFERENCES manga(id) ON DELETE CASCADE,
   category_id INTEGER NOT NULL REFERENCES category(id) ON DELETE CASCADE,
@@ -444,6 +449,14 @@ ON CONFLICT(name) DO UPDATE SET
   sort_order=MAX(category.sort_order, excluded.sort_order),
   flags=(category.flags | excluded.flags);
 
+touchCategoryTimestamp:
+INSERT INTO category_sync(category_id, last_modified_at) VALUES (:category_id, :last_modified_at)
+ON CONFLICT(category_id) DO UPDATE SET
+  last_modified_at=MAX(category_sync.last_modified_at, excluded.last_modified_at);
+
+selectCategoryTimestamps:
+SELECT category_id, last_modified_at FROM category_sync;
+
 selectCategoryByName:
 SELECT * FROM category WHERE name = ? COLLATE NOCASE;
 
@@ -460,6 +473,11 @@ ON CONFLICT(chapter_id) DO UPDATE SET
 selectHistoryByChapter:
 SELECT * FROM history WHERE chapter_id = ?;
 
+selectHistoryForManga:
+SELECT history.* FROM history
+JOIN chapter ON chapter.id = history.chapter_id
+WHERE chapter.manga_id = ?;
+
 updateReaderChapterProgress:
 UPDATE chapter
 SET last_page_read = :last_page_read,
@@ -471,6 +489,14 @@ touchChapterLastModified:
 UPDATE chapter
 SET last_modified_at = MAX(last_modified_at, :last_modified_at)
 WHERE id = :chapter_id;
+
+touchMangaLastModified:
+UPDATE manga
+SET last_modified_at = MAX(last_modified_at, :last_modified_at)
+WHERE id = :manga_id;
+
+updateCategoryFlags:
+UPDATE category SET flags = :flags WHERE id = :id;
 
 accumulateReaderHistory:
 INSERT INTO history(chapter_id, last_read, read_duration)
@@ -544,6 +570,16 @@ selectLocalMangaStoragePathsBySource:
 SELECT local_manga_entry.storage_path FROM local_manga_entry
 JOIN manga ON manga.id = local_manga_entry.manga_id
 WHERE manga.source_id = ? ORDER BY local_manga_entry.storage_path;
+
+selectRegisteredChapterAssetPaths:
+SELECT COALESCE(local_chapter_storage.storage_path, local_manga_entry.storage_path) AS storage_path,
+       local_chapter_asset.relative_path AS relative_path
+FROM local_chapter_asset
+JOIN chapter ON chapter.id = local_chapter_asset.chapter_id
+JOIN manga ON manga.id = chapter.manga_id
+JOIN local_manga_entry ON local_manga_entry.manga_id = manga.id
+LEFT JOIN local_chapter_storage ON local_chapter_storage.chapter_id = local_chapter_asset.chapter_id
+WHERE manga.source_id != 0;
 
 insertLocalChapterAsset:
 INSERT INTO local_chapter_asset(chapter_id, relative_path, asset_kind, size_bytes, modified_at)

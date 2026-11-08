@@ -42,7 +42,7 @@ fun missingSourceActivity(
  * one-click "install extension" (when a configured repo has it) and "migrate" actions. Nothing is
  * installed until the user clicks; the click is routed to the Browse tab through [requests].
  */
-object MissingSourceAlerts {
+class MissingSourceAlerts {
     sealed interface Request {
         data class Install(val item: mihon.desktop.extension.ExtensionStoreItem) : Request
         data class Migrate(val sourceId: Long, val sourceName: String, val mangaCount: Int) : Request

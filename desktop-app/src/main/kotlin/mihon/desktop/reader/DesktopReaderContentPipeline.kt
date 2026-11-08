@@ -38,6 +38,7 @@ import mihon.reader.session.ReaderContentPipeline
 import mihon.reader.session.ReaderContentPosition
 import mihon.reader.source.ChapterSource
 import mihon.reader.source.ChapterSourceFactory
+import mihon.reader.source.usePageInput
 import java.util.concurrent.atomic.AtomicBoolean
 
 /** The session-owned production bridge from reader state to bounded decode/cache coordination. */
@@ -63,6 +64,15 @@ class DesktopReaderContentPipeline(
 
     override suspend fun open(source: ChapterSource): List<PageDescriptor> {
         check(!closed.get()) { "reader content pipeline is closed" }
+        // The shared cache outlives one coordinator. Evict the old chapter unless this is a reopen
+        // of the same unchanged asset (retry), where its decoded tiles are still valid.
+        val previousAsset = synchronized(lock) { chapterSource?.asset }
+        if (previousAsset != null) {
+            val sameAsset = previousAsset.chapterId == source.asset.chapterId &&
+                previousAsset.sizeBytes == source.asset.sizeBytes &&
+                previousAsset.modifiedAt == source.asset.modifiedAt
+            if (!sameAsset) cache.invalidateChapter(previousAsset.chapterId.toString())
+        }
         closeChapter()
         val next = newCoordinator()
         synchronized(lock) { coordinator = next }
@@ -207,6 +217,7 @@ class DesktopReaderContentPipeline(
     internal fun releaseRegionTiles(pageId: PageId) {
         val active = synchronized(lock) { coordinator } ?: return
         runCatching { active.retainVisibleRegions(pageId, emptySet()) }
+            .onFailure { mihon.desktop.logging.DesktopLogger.debug("Reader", "Failed to release region tiles", it) }
     }
 
     internal suspend fun loadAnimationLease(frameId: FrameId): AutoCloseable? {
@@ -289,11 +300,12 @@ class DesktopReaderContentPipeline(
             val key = extendedFullPageKey(pageId, metadata)
             val loaded = try {
                 cache.getOrLoad(key) {
-                    decoder.decodeFull(source.open(pageId), metadata, FrameId(pageId, 0))
+                    decoder.decodePrefetchedPage(source, pageId, metadata, key)
                 }
             } catch (cancelled: CancellationException) {
                 throw cancelled
-            } catch (_: Exception) {
+            } catch (error: Exception) {
+                mihon.desktop.logging.DesktopLogger.warn("Reader", "Page preload failed for ${pageId.entryName}", error)
                 synchronized(lock) { preloadFailures += pageId }
                 continue
             }
@@ -302,31 +314,15 @@ class DesktopReaderContentPipeline(
     }
 
     private suspend fun probeMetadata(source: ChapterSource, pageId: PageId): ImageMetadata? = try {
-        decoder.probe(source.open(pageId))
+        source.usePageInput(pageId) { decoder.probe(it) }
     } catch (cancelled: CancellationException) {
         throw cancelled
     } catch (_: Exception) {
         null
     }
 
-    /** Mirrors the coordinator's full-page tile key so prefetch and visible loads share tiles. */
-    private fun extendedFullPageKey(pageId: PageId, meta: ImageMetadata): TileKey {
-        var sampleSize = 1
-        if (!meta.isAnimated) {
-            while (
-                ((meta.width.toLong() + sampleSize - 1) / sampleSize) *
-                ((meta.height.toLong() + sampleSize - 1) / sampleSize) > maxFullPagePixels
-            ) {
-                sampleSize = Math.multiplyExact(sampleSize, 2)
-            }
-        }
-        return TileKey(
-            pageId = pageId,
-            frameId = if (meta.isAnimated) FrameId(pageId, 0) else null,
-            bounds = IntRect(0, 0, meta.width, meta.height),
-            sampleSize = sampleSize,
-        )
-    }
+    private fun extendedFullPageKey(pageId: PageId, meta: ImageMetadata): TileKey =
+        mihon.reader.image.fullPageTileKey(pageId, FrameId(pageId, 0), meta, maxFullPagePixels)
 
     private fun newCoordinator() = PageLoadCoordinator(
         decoder = decoder,
@@ -374,131 +370,3 @@ class DesktopReaderContentPipeline(
         const val DEFAULT_MAX_FULL_PAGE_PIXELS = 4L * 1024L * 1024L
     }
 }
-
-internal data class LoadedDesktopTile(
-    val tile: WeightedTileCache.LoadedTile,
-    val metadata: ImageMetadata,
-)
-
-/** Compose-facing content handle backed by the same coordinator used by its reader session. */
-class DesktopReaderContent internal constructor(
-    private val pipeline: DesktopReaderContentPipeline,
-    internal val bridge: ComposeTileBridge,
-    val pageSizes: IntrinsicPageSizeCache,
-    private val animationCoordinator: AnimationCoordinator,
-) : AnimationVisibilityReporter {
-    val selectedAnimationFrame: StateFlow<FrameId?> = animationCoordinator.selectedFrame
-
-    fun startAnimation(pageId: PageId, metadata: ImageMetadata) {
-        if (!metadata.isAnimated) return
-        animationCoordinator.start(
-            pageId,
-            AnimationProbe(metadata.frameCount, metadata.frameDurationsMillis),
-        )
-    }
-
-    fun stopAnimation(pageId: PageId) {
-        if (selectedAnimationFrame.value?.pageId == pageId) {
-            animationCoordinator.cancelForPageOrChapterChange()
-        }
-    }
-
-    override fun setContentVisible(visible: Boolean) {
-        animationCoordinator.setContentVisible(visible)
-    }
-
-    override fun setForeground(foreground: Boolean) {
-        animationCoordinator.setForeground(foreground)
-    }
-
-    suspend fun loadAnimatedFrame(frameId: FrameId): ReaderAnimatedFrame {
-        val loaded = pipeline.loadTile(frameId.pageId, frameId.frameIndex)
-        val lease = if (loaded.tile.resident) null else AutoCloseable { loaded.tile.tile.close() }
-        return ReaderAnimatedFrame(loaded.tile.tile.key, loaded.tile.tile.image, lease)
-    }
-
-    suspend fun loadFrame(
-        pageId: PageId,
-        frameIndex: Int,
-        cropBorders: Boolean = false,
-    ): DesktopReaderPageFrame = withContext(Dispatchers.IO) {
-        val loaded = pipeline.loadTile(pageId, frameIndex)
-        try {
-            val imageToBridge = if (cropBorders) {
-                SmartBorderCropper.crop(loaded.tile.tile.image)
-            } else {
-                loaded.tile.tile.image
-            }
-            val wasCropped = imageToBridge.width != loaded.tile.tile.image.width ||
-                imageToBridge.height != loaded.tile.tile.image.height
-            val sourceKey = loaded.tile.tile.key
-            val bridgeKey = if (wasCropped) {
-                sourceKey.copy(bounds = IntRect(1, 1, loaded.metadata.width, loaded.metadata.height))
-            } else {
-                sourceKey
-            }
-            val displayMetadata = if (wasCropped) {
-                loaded.metadata.copy(
-                    width = Math.multiplyExact(imageToBridge.width, sourceKey.sampleSize),
-                    height = Math.multiplyExact(imageToBridge.height, sourceKey.sampleSize),
-                )
-            } else {
-                loaded.metadata
-            }
-            pageSizes.record(pageId, displayMetadata)
-            DesktopReaderPageFrame(bridge.acquire(bridgeKey, imageToBridge), displayMetadata)
-        } finally {
-            if (!loaded.tile.resident) loaded.tile.tile.close()
-        }
-    }
-
-    suspend fun loadRegionTiles(
-        pageId: PageId,
-        visibleBounds: IntRect,
-        sampleSize: Int,
-    ): DesktopReaderTileSet = withContext(Dispatchers.IO) {
-        val loaded = pipeline.loadRegionTiles(pageId, visibleBounds, sampleSize)
-        val bridged = ArrayList<DesktopReaderTile>(loaded.size)
-        try {
-            loaded.forEach { item ->
-                bridged += DesktopReaderTile(
-                    bounds = item.tile.tile.key.bounds,
-                    tile = bridge.acquire(item.tile.tile.key, item.tile.tile.image),
-                )
-            }
-            DesktopReaderTileSet(bridged)
-        } catch (failure: Throwable) {
-            bridged.forEach { it.close() }
-            throw failure
-        } finally {
-            loaded.filterNot { it.tile.resident }.forEach { it.tile.tile.close() }
-        }
-    }
-
-    fun releaseRegionTiles(pageId: PageId) {
-        pipeline.releaseRegionTiles(pageId)
-    }
-}
-
-data class DesktopReaderPageFrame(
-    val tile: ComposeTileBridge.BridgeTile,
-    val metadata: ImageMetadata,
-)
-
-data class DesktopReaderTile(
-    val bounds: IntRect,
-    val tile: ComposeTileBridge.BridgeTile,
-) : AutoCloseable {
-    override fun close() = tile.close()
-}
-
-class DesktopReaderTileSet(
-    val tiles: List<DesktopReaderTile>,
-) : AutoCloseable {
-    override fun close() = tiles.forEach { it.close() }
-}
-
-data class DesktopReaderHandle(
-    val session: mihon.reader.session.ReaderSession,
-    val content: DesktopReaderContent,
-)

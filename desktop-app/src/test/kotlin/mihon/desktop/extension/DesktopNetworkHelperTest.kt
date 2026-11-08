@@ -1,6 +1,7 @@
 package mihon.desktop.extension
 
 import com.sun.net.httpserver.HttpServer
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.runBlocking
 import mihon.extension.ipc.BrokerHttpRequest
@@ -8,7 +9,10 @@ import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.io.TempDir
 import java.net.InetSocketAddress
+import java.nio.file.Files
+import java.nio.file.Path
 
 class DesktopNetworkHelperTest {
 
@@ -32,6 +36,23 @@ class DesktopNetworkHelperTest {
     @AfterEach
     fun tearDown() {
         server.stop(0)
+    }
+
+    @Test
+    fun `spilled request bodies are read only from the configured broker temp area`(@TempDir tempDir: Path) {
+        val brokerTemp = tempDir.resolve("broker-temp")
+        Files.createDirectories(brokerTemp)
+        val helper = DesktopNetworkHelper(brokerTempRoot = brokerTemp)
+
+        val inside = Files.createTempFile(brokerTemp, "mihon-broker-", ".bin")
+        Files.writeString(inside, "payload")
+        helper.readSpilledBody(inside.toString()) shouldBe "payload".toByteArray()
+
+        val wrongPrefix = Files.createTempFile(brokerTemp, "other-", ".bin")
+        shouldThrow<IllegalArgumentException> { helper.readSpilledBody(wrongPrefix.toString()) }
+
+        val outside = Files.createTempFile(tempDir, "mihon-broker-", ".bin")
+        shouldThrow<IllegalArgumentException> { helper.readSpilledBody(outside.toString()) }
     }
 
     @Test

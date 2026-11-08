@@ -7,17 +7,25 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 import mihon.desktop.reader.DesktopReaderContent
 import mihon.desktop.reader.DesktopReaderPageFrame
 import mihon.desktop.reader.DesktopReaderTileSet
 import mihon.reader.model.PageId
 import kotlin.math.roundToInt
+
+/** Pan/zoom changes the visible bounds every frame; wait for the gesture to settle before decoding. */
+private const val TILE_RELOAD_DEBOUNCE_MILLIS = 60L
 
 @Composable
 internal fun TiledReaderPage(
@@ -29,11 +37,17 @@ internal fun TiledReaderPage(
     modifier: Modifier,
 ) {
     var tileSet by remember(pageId) { mutableStateOf<DesktopReaderTileSet?>(null) }
-    LaunchedEffect(content, pageId, context.visibleImageBounds, context.sampleSize) {
-        val replacement = content.loadRegionTiles(pageId, context.visibleImageBounds, context.sampleSize)
-        val previous = tileSet
-        tileSet = replacement
-        previous?.close()
+    val latestContext = rememberUpdatedState(context)
+    LaunchedEffect(content, pageId) {
+        snapshotFlow { latestContext.value.visibleImageBounds to latestContext.value.sampleSize }
+            .distinctUntilChanged()
+            .debounce(TILE_RELOAD_DEBOUNCE_MILLIS)
+            .collectLatest { (bounds, sampleSize) ->
+                val replacement = content.loadRegionTiles(pageId, bounds, sampleSize)
+                val previous = tileSet
+                tileSet = replacement
+                previous?.close()
+            }
     }
     DisposableEffect(content, pageId) {
         onDispose {

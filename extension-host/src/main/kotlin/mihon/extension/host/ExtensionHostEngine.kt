@@ -50,21 +50,22 @@ import java.util.zip.ZipFile
 
 class ExtensionHostEngine(
     val httpClient: BrokeredHttpClient,
-) {
-    private val sourceRegistryLock = Any()
-    private val json = Json {
+) : AutoCloseable {
+    internal val sourceRegistryLock = Any()
+    internal val json = Json {
         ignoreUnknownKeys = true
         isLenient = true
     }
 
-    private val loadedSources = ConcurrentHashMap<Long, WindowsSource>()
-    private val extensionSources = ConcurrentHashMap<String, Set<Long>>()
-    private val extensionLoaders = ConcurrentHashMap<String, ExtensionClassLoader>()
-    private val sourcePreferenceModels = ConcurrentHashMap<Long, SourcePreferenceModel>()
+    internal val loadedSources = ConcurrentHashMap<Long, WindowsSource>()
+    internal val extensionSources = ConcurrentHashMap<String, Set<Long>>()
+    internal val extensionLoaders = ExtensionLoaderRegistry()
+    internal val sourcePreferenceModels = ConcurrentHashMap<Long, SourcePreferenceModel>()
 
-    private val activeSourceJobs = mutableMapOf<String, MutableSet<kotlinx.coroutines.Job>>()
-    private val sourceContexts = ConcurrentHashMap<Long, ExtensionExecutionContext.Identity>()
-    private val preferenceContext: android.content.Context
+    internal val activeSourceJobs = mutableMapOf<String, MutableSet<kotlinx.coroutines.Job>>()
+    internal val sourceContexts = ConcurrentHashMap<Long, ExtensionExecutionContext.Identity>()
+    internal val closed = java.util.concurrent.atomic.AtomicBoolean()
+    internal val preferenceContext: android.content.Context
         get() = ExtensionExecutionContext.currentApplication()
     init {
         if (System.getProperty("http.agent").isNullOrBlank()) {
@@ -93,18 +94,6 @@ class ExtensionHostEngine(
         }
     }
 
-    private inline fun <reified T : Any> registerInjektSingleton(factory: () -> T) {
-        try {
-            Injekt.get<T>()
-        } catch (_: Exception) {
-            try {
-                Injekt.addSingleton(factory())
-            } catch (_: Exception) {
-                // A concurrent host initialization may have registered the same dependency.
-            }
-        }
-    }
-
     fun registerSource(source: WindowsSource) {
         synchronized(sourceRegistryLock) {
             loadedSources[source.id] = source
@@ -114,7 +103,14 @@ class ExtensionHostEngine(
 
     fun loadExtension(packageFile: File, workingDir: File): List<SourceDescriptor> {
         val manifest = ExtensionPackageValidator.validatePackage(packageFile)
+        // Reloading a package must not expose classes/assets removed from the new version.
+        extensionLoaders.closeAndRemove(manifest.id)
         workingDir.mkdirs()
+        // android-data holds the extension's persisted preferences/context and must survive reloads.
+        workingDir.listFiles()?.filterNot { it.name == "android-data" }?.forEach { old ->
+            runCatching { old.deleteRecursively() }
+                .onFailure { System.err.println("Cannot clear stale extension file ${old.name}: ${it.message}") }
+        }
 
         // Unpack classes / jars from .mext
         val extractedJars = mutableListOf<File>()
@@ -125,7 +121,7 @@ class ExtensionHostEngine(
                 if (!entry.isDirectory &&
                     (entry.name.endsWith(".jar") || entry.name.endsWith(".class") || entry.name.startsWith("assets/"))
                 ) {
-                    val dest = File(workingDir, entry.name)
+                    val dest = extensionEntryFile(workingDir, entry.name)
                     dest.parentFile?.mkdirs()
                     zip.getInputStream(entry).use { input ->
                         dest.outputStream().use { output ->
@@ -174,19 +170,11 @@ class ExtensionHostEngine(
             synchronized(sourceRegistryLock) {
                 activeSourceJobs.remove(manifest.id)?.forEach { it.cancel() }
                 val previousSourceIds = extensionSources.remove(manifest.id).orEmpty()
-                previousSourceIds.forEach {
-                    loadedSources.remove(it)
-                    sourcePreferenceModels.remove(it)
-                    sourceContexts.remove(it)
-                }
+                discardSources(previousSourceIds)
                 loadedSources.putAll(newSources)
                 newSources.keys.forEach { sourceContexts[it] = identity.copy(sourceId = it) }
                 extensionSources[manifest.id] = newSources.keys
-                extensionLoaders.put(manifest.id, loader)?.let { previous ->
-                    runCatching {
-                        previous.close()
-                    }.onFailure { System.err.println("Old extension loader could not close: ${it.message}") }
-                }
+                extensionLoaders.replace(manifest.id, loader)
             }
             return if (loadedDescriptors.isNotEmpty()) loadedDescriptors else manifest.sources
         } catch (failure: Throwable) {
@@ -195,14 +183,34 @@ class ExtensionHostEngine(
         }
     }
 
-    private fun getCatalogueSource(sourceId: Long): WindowsCatalogueSource {
+    private fun discardSources(sourceIds: Set<Long>) {
+        sourceIds.forEach {
+            loadedSources.remove(it)
+            sourcePreferenceModels.remove(it)
+            sourceContexts.remove(it)
+        }
+    }
+
+    override fun close() {
+        if (!closed.compareAndSet(false, true)) return
+        synchronized(sourceRegistryLock) {
+            activeSourceJobs.values.flatten().forEach { it.cancel() }
+            activeSourceJobs.clear()
+            discardSources(extensionSources.values.flatten().toSet())
+            extensionSources.clear()
+            sourcePreferenceModels.clear()
+            extensionLoaders.close()
+        }
+    }
+
+    internal fun getCatalogueSource(sourceId: Long): WindowsCatalogueSource {
         val source = synchronized(sourceRegistryLock) { loadedSources[sourceId] }
             ?: throw IllegalArgumentException("Source with ID $sourceId not found")
         return source as? WindowsCatalogueSource
             ?: throw IllegalArgumentException("Source $sourceId does not implement WindowsCatalogueSource")
     }
 
-    private fun sourceBaseUrl(source: WindowsSource): String? = runCatching {
+    internal fun sourceBaseUrl(source: WindowsSource): String? = runCatching {
         when (source) {
             is mihon.extension.source.WindowsHttpSource -> source.baseUrl
             is TachiyomiCatalogueSourceAdapter -> (source.delegate as? HttpSource)?.baseUrl
@@ -213,16 +221,12 @@ class ExtensionHostEngine(
     fun unloadExtension(pkg: String) {
         synchronized(sourceRegistryLock) {
             activeSourceJobs.remove(pkg)?.forEach { it.cancel() }
-            extensionSources.remove(pkg).orEmpty().forEach {
-                loadedSources.remove(it)
-                sourcePreferenceModels.remove(it)
-                sourceContexts.remove(it)
-            }
-            extensionLoaders.remove(pkg)?.close()
+            discardSources(extensionSources.remove(pkg).orEmpty())
+            extensionLoaders.closeAndRemove(pkg)
         }
     }
 
-    private inline fun <reified T> decodePayload(request: IpcRequest, element: JsonElement?): T {
+    internal inline fun <reified T> decodePayload(request: IpcRequest, element: JsonElement?): T {
         return if (element != null) {
             json.decodeFromJsonElement<T>(element)
         } else {
@@ -258,228 +262,6 @@ class ExtensionHostEngine(
                     }
                 }
             }
-        }
-    }
-
-    private suspend fun handleBoundRequest(request: IpcRequest, payloadElement: JsonElement? = null): IpcResponse {
-        return try {
-            when (request.command) {
-                IpcCommands.PING -> IpcResponse(request.requestId, success = true, payloadJson = "pong")
-
-                IpcCommands.LOAD_EXTENSION -> {
-                    val payload = decodePayload<LoadExtensionPayload>(request, payloadElement)
-                    val sources = loadExtension(File(payload.packagePath), File(payload.workingDir))
-                    IpcResponse(request.requestId, success = true, payloadJson = json.encodeToString(sources))
-                }
-
-                IpcCommands.UNLOAD_EXTENSION -> {
-                    val payload = decodePayload<mihon.extension.ipc.UnloadExtensionPayload>(request, payloadElement)
-                    unloadExtension(payload.pkg)
-                    IpcResponse(request.requestId, success = true)
-                }
-
-                IpcCommands.GET_SOURCES -> {
-                    val descriptors = synchronized(sourceRegistryLock) {
-                        loadedSources.map { (registeredId, source) ->
-                            SourceDescriptor(
-                                registeredId,
-                                source.name,
-                                source.lang,
-                                source::class.java.name,
-                                source.supportsLatest,
-                                sourceBaseUrl(source),
-                            )
-                        }
-                    }
-                    IpcResponse(request.requestId, success = true, payloadJson = json.encodeToString(descriptors))
-                }
-
-                IpcCommands.GET_POPULAR -> {
-                    val payload = decodePayload<GetPagePayload>(request, payloadElement)
-                    val catalogue = getCatalogueSource(payload.sourceId)
-                    val mangasPage = catalogue.getPopularManga(payload.page)
-                    IpcResponse(request.requestId, success = true, payloadJson = json.encodeToString(mangasPage))
-                }
-
-                IpcCommands.GET_LATEST -> {
-                    val payload = decodePayload<GetPagePayload>(request, payloadElement)
-                    val catalogue = getCatalogueSource(payload.sourceId)
-                    val mangasPage = catalogue.getLatestUpdates(payload.page)
-                    IpcResponse(request.requestId, success = true, payloadJson = json.encodeToString(mangasPage))
-                }
-
-                IpcCommands.SEARCH_MANGA -> {
-                    val payload = decodePayload<SearchPayload>(request, payloadElement)
-                    val catalogue = getCatalogueSource(payload.sourceId)
-                    val requestedFilters = decodeFilterList(payload.filtersJson)
-                    val mangasPage = if (catalogue is TachiyomiCatalogueSourceAdapter) {
-                        catalogue.searchMangaWithFilters(payload.page, payload.query, requestedFilters)
-                    } else {
-                        // Empty payloads keep the legacy "no filters" behavior. Non-empty payloads
-                        // are applied to the source's own filter instances so custom subclasses
-                        // (and any behavior they carry) survive the round trip. If the source
-                        // exposes no filters, use the decoded payload as-is.
-                        val sourceFilters = catalogue.getFilterList()
-                        val filters = when {
-                            requestedFilters.isEmpty() -> FilterList()
-                            sourceFilters.isEmpty() -> requestedFilters
-                            else -> sourceFilters.applyStateFrom(requestedFilters)
-                        }
-                        catalogue.searchManga(payload.page, payload.query, filters)
-                    }
-                    IpcResponse(request.requestId, success = true, payloadJson = json.encodeToString(mangasPage))
-                }
-
-                IpcCommands.GET_MANGA_DETAILS -> {
-                    val payload = decodePayload<MangaPayload>(request, payloadElement)
-                    val catalogue = getCatalogueSource(payload.sourceId)
-                    val manga = json.decodeFromString<SManga>(payload.mangaJson)
-                    val details = catalogue.getMangaDetails(manga)
-                    IpcResponse(request.requestId, success = true, payloadJson = json.encodeToString(details))
-                }
-
-                IpcCommands.GET_CHAPTER_LIST -> {
-                    val payload = decodePayload<MangaPayload>(request, payloadElement)
-                    val catalogue = getCatalogueSource(payload.sourceId)
-                    val manga = json.decodeFromString<SManga>(payload.mangaJson)
-                    val chapters = catalogue.getChapterList(manga)
-                    IpcResponse(request.requestId, success = true, payloadJson = json.encodeToString(chapters))
-                }
-
-                IpcCommands.GET_PAGE_LIST -> {
-                    val payload = decodePayload<ChapterPayload>(request, payloadElement)
-                    val catalogue = getCatalogueSource(payload.sourceId)
-                    val chapter = json.decodeFromString<SChapter>(payload.chapterJson)
-                    val pages = catalogue.getPageList(chapter)
-                    IpcResponse(request.requestId, success = true, payloadJson = json.encodeToString(pages))
-                }
-
-                IpcCommands.GET_IMAGE -> {
-                    val payload = decodePayload<ImagePayload>(request, payloadElement)
-                    val source = getCatalogueSource(payload.sourceId)
-                    val image = if (source is WindowsImageSource) {
-                        val bytes = source.getImage(payload.page)
-                        val directory = File("page-images").apply { mkdirs() }
-                        val file = java.nio.file.Files.createTempFile(directory.toPath(), "page-", ".img").toFile()
-                        try {
-                            file.writeBytes(bytes)
-                        } catch (error: Exception) {
-                            file.delete()
-                            throw error
-                        }
-                        ImageFilePayload(file.name)
-                    } else {
-                        ImageFilePayload()
-                    }
-                    IpcResponse(request.requestId, success = true, payloadJson = json.encodeToString(image))
-                }
-
-                IpcCommands.GET_FILTER_LIST -> {
-                    val payload = decodePayload<SourcePayload>(request, payloadElement)
-                    val catalogue = getCatalogueSource(payload.sourceId)
-                    val filterList = if (catalogue is TachiyomiCatalogueSourceAdapter) {
-                        catalogue.getIpcFilterList()
-                    } else {
-                        catalogue.getFilterList()
-                    }
-                    IpcResponse(request.requestId, success = true, payloadJson = encodeFilterList(filterList))
-                }
-
-                IpcCommands.GET_SOURCE_PREFERENCES -> {
-                    val payload = decodePayload<SourcePayload>(request, payloadElement)
-                    val source = loadedSources[payload.sourceId]
-                        ?: throw IllegalArgumentException("Source with ID ${payload.sourceId} not found")
-                    val configurable = source.configurableSourceOrNull()
-                    val response = if (configurable == null) {
-                        SourcePreferencesDto(sourceId = payload.sourceId, supported = false)
-                    } else {
-                        val model = sourcePreferenceModels.computeIfAbsent(payload.sourceId) {
-                            SourcePreferenceModel(configurable, preferenceContext)
-                        }
-                        SourcePreferencesDto(
-                            sourceId = payload.sourceId,
-                            supported = true,
-                            definitions = model.definitions(),
-                        )
-                    }
-                    IpcResponse(
-                        request.requestId,
-                        success = true,
-                        payloadJson = encodeSourcePreferences(response),
-                    )
-                }
-
-                IpcCommands.SET_SOURCE_PREFERENCE -> {
-                    val payload = decodePayload<SetSourcePreferencePayload>(request, payloadElement)
-                    val source = loadedSources[payload.sourceId]
-                        ?: throw IllegalArgumentException("Source with ID ${payload.sourceId} not found")
-                    val configurable = source.configurableSourceOrNull()
-                        ?: throw IllegalArgumentException(
-                            "Source with ID ${payload.sourceId} does not implement ConfigurableSource",
-                        )
-                    val model = sourcePreferenceModels.computeIfAbsent(payload.sourceId) {
-                        SourcePreferenceModel(configurable, preferenceContext)
-                    }
-                    val updatedValue = model.set(payload.key, payload.value)
-                    IpcResponse(
-                        request.requestId,
-                        success = true,
-                        payloadJson = encodeSourcePreferenceValue(updatedValue),
-                    )
-                }
-
-                else -> IpcResponse(request.requestId, success = false, error = "Unknown command '${request.command}'")
-            }
-        } catch (e: Throwable) {
-            if (e is kotlinx.coroutines.CancellationException) throw e
-            if (e is VirtualMachineError || e is ThreadDeath) throw e
-            System.err.println("Extension request failed: ${request.command}")
-            e.printStackTrace(System.err)
-            val unwrapped = generateSequence(e) { it.cause }.firstOrNull {
-                it !is java.lang.reflect.InvocationTargetException &&
-                    it !is java.util.concurrent.ExecutionException
-            } ?: e
-            val errorKind = unwrapped::class.java.simpleName
-            IpcResponse(
-                request.requestId,
-                success = false,
-                error = formatErrorMessage(unwrapped),
-                networkFailure = e.findNetworkFailure(),
-                errorKind = errorKind,
-            )
-        }
-    }
-
-    private fun formatErrorMessage(e: Throwable): String {
-        val className = e::class.java.simpleName
-        val topFrame = e.stackTrace.firstOrNull { frame ->
-            val name = frame.className
-            !name.startsWith("mihon.extension.host.ExtensionHostEngine") &&
-                !name.startsWith("kotlinx.coroutines.") &&
-                !name.startsWith("java.lang.reflect.") &&
-                !name.startsWith("jdk.internal.")
-        } ?: e.stackTrace.firstOrNull()
-
-        val location = if (topFrame != null) {
-            val fileAndLine = if (topFrame.fileName != null && topFrame.lineNumber > 0) {
-                "(${topFrame.fileName}:${topFrame.lineNumber})"
-            } else if (topFrame.fileName != null) {
-                "(${topFrame.fileName})"
-            } else {
-                ""
-            }
-            " at ${topFrame.className}.${topFrame.methodName}$fileAndLine"
-        } else {
-            ""
-        }
-
-        val message = e.message
-        return if (message.isNullOrBlank()) {
-            "$className$location"
-        } else if (message.startsWith(className)) {
-            "$message$location"
-        } else {
-            "$className: $message$location"
         }
     }
 }

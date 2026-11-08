@@ -1,6 +1,8 @@
 package mihon.desktop.ui.settings
 
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -30,7 +32,19 @@ class BackgroundSettingsCardTest {
         preferences.save(preferences.load().copy(language = AppLanguage.SimplifiedChinese))
         val calls = CopyOnWriteArrayList<List<String>>()
         val scheduler = scheduler(calls)
-        setContent { MaterialTheme { BackgroundSettingsCard(preferences, scheduler, null) } }
+        setContent {
+            MaterialTheme {
+                val scope = rememberCoroutineScope()
+                BackgroundSettingsCard(
+                    SettingsPresenter(preferences, mihon.desktop.reader.DesktopReaderSettingsStore(preferences)),
+                    scheduler,
+                    remember(scheduler) {
+                        BackgroundScheduleCoordinator(scheduler, scope, 0 to 0, initiallyEnabled = false)
+                    },
+                    null,
+                )
+            }
+        }
         onNodeWithTag("background-tasks-switch").performClick()
         onNodeWithText("请先设置书库更新或自动备份周期，当前两项均已关闭。").assertExists()
         assertFalse(preferences.load().backgroundTasksEnabled)
@@ -46,7 +60,19 @@ class BackgroundSettingsCardTest {
         preferences.save(preferences.load().copy(backupIntervalHours = 24))
         val calls = CopyOnWriteArrayList<List<String>>()
         val scheduler = scheduler(calls)
-        setContent { MaterialTheme { BackgroundSettingsCard(preferences, scheduler, null) } }
+        setContent {
+            MaterialTheme {
+                val scope = rememberCoroutineScope()
+                BackgroundSettingsCard(
+                    SettingsPresenter(preferences, mihon.desktop.reader.DesktopReaderSettingsStore(preferences)),
+                    scheduler,
+                    remember(scheduler) {
+                        BackgroundScheduleCoordinator(scheduler, scope, 0 to 0, initiallyEnabled = false)
+                    },
+                    null,
+                )
+            }
+        }
         assertFalse(preferences.load().backgroundTasksEnabled)
         onNodeWithTag("background-tasks-switch").performClick()
         waitUntil(timeoutMillis = 5_000) { preferences.load().backgroundTasksEnabled }

@@ -55,18 +55,21 @@ class DesktopReaderFactory(
         online = onlineChapters,
         onlineStorageRoot = onlineCacheDir.toPath().toAbsolutePath().normalize(),
     )
+    private val onlinePageLists = mihon.desktop.extension.OnlinePageListCache()
     val sourceFactory: ChapterSourceFactory = DesktopChapterSourceFactory(
         local = LocalChapterSourceFactory(memoryBudget),
         onlineChapters = onlineChapters,
         sourceManager = sourceManager,
         networkHelper = networkHelper,
         onlineCacheDir = onlineCacheDir,
+        pageListCache = onlinePageLists,
     )
     val mangaOnlineCache = MangaOnlineCache(
         root = onlineCacheDir,
         scope = applicationScope,
         catalog = catalog,
         sourceFactory = sourceFactory,
+        pageListCache = onlinePageLists,
     )
     val decoder: PageDecoder = CompositePageDecoder(
         imageIo = ImageIoPageDecoder(memoryBudget),
@@ -258,10 +261,13 @@ class DesktopReaderFactory(
             }
         }
 
-        override fun cancelWithoutFlush() {
-            delegate.cancelWithoutFlush()
-            synchronized(lock) { sessions.remove(this) }
-            scope.coroutineContext[Job]?.cancel()
+        override fun cancelWithoutFlush(): Job {
+            val cleanup = delegate.cancelWithoutFlush()
+            cleanup.invokeOnCompletion {
+                synchronized(lock) { sessions.remove(this) }
+                scope.coroutineContext[Job]?.cancel()
+            }
+            return cleanup
         }
     }
 }

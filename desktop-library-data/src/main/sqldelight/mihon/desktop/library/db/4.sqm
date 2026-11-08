@@ -1,0 +1,4 @@
+CREATE TABLE IF NOT EXISTS category_sync (
+  category_id INTEGER NOT NULL PRIMARY KEY REFERENCES category(id) ON DELETE CASCADE,
+  last_modified_at INTEGER NOT NULL DEFAULT 0
+);

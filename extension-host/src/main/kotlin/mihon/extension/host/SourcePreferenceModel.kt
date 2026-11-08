@@ -47,13 +47,13 @@ internal fun WindowsSource.configurableSourceOrNull(): ConfigurableSource? = whe
  *    `OnPreferenceChangeListener`s) instead of only writing to `SharedPreferences`.
  */
 internal class SourcePreferenceModel(
-    private val source: ConfigurableSource,
-    private val context: Context,
+    internal val source: ConfigurableSource,
+    internal val context: Context,
 ) {
-    private val preferences: SharedPreferences = source.getSourcePreferences()
-    private val screen: PreferenceScreen = PreferenceScreen(context).also { source.setupPreferenceScreen(it) }
+    internal val preferences: SharedPreferences = source.getSourcePreferences()
+    internal val screen: PreferenceScreen = PreferenceScreen(context).also { source.setupPreferenceScreen(it) }
 
-    private val preferencesByKey: Map<String, Preference> = buildList {
+    internal val preferencesByKey: Map<String, Preference> = buildList {
         for (index in 0 until screen.getPreferenceCount()) {
             screen.getPreference(index)?.let { collect(it, this) }
         }
@@ -314,116 +314,5 @@ internal class SourcePreferenceModel(
         val values = entryValues?.map { it.toString() } ?: labels
         if (labels.isEmpty() || labels.size != values.size) return emptyList()
         return labels.zip(values).map { (label, value) -> SourcePreferenceOptionDto(label, value) }
-    }
-
-    private fun orderValues(values: List<String>, options: List<SourcePreferenceOptionDto>): List<String> {
-        if (options.isEmpty()) return values
-        val selected = values.toSet()
-        val ordered = options.map { it.value }.filter { it in selected }
-        val extras = values.filter { value -> options.none { it.value == value } }
-        return ordered + extras
-    }
-
-    private fun convertValue(type: SourcePreferenceTypeDto, incoming: SourcePreferenceValueDto): Any {
-        return when (type) {
-            SourcePreferenceTypeDto.BOOLEAN -> when (incoming) {
-                is BooleanPreferenceValueDto -> incoming.value
-                is StringPreferenceValueDto -> incoming.value.toBooleanStrictOrNull()
-                    ?: throw IllegalArgumentException("Expected a boolean source preference value")
-                else -> throw IllegalArgumentException("Expected a boolean source preference value")
-            }
-            SourcePreferenceTypeDto.STRING -> when (incoming) {
-                is StringPreferenceValueDto -> incoming.value
-                is SelectPreferenceValueDto -> incoming.value
-                is IntPreferenceValueDto -> incoming.value.toString()
-                is LongPreferenceValueDto -> incoming.value.toString()
-                is FloatPreferenceValueDto -> incoming.value.toString()
-                is BooleanPreferenceValueDto -> incoming.value.toString()
-                is UnknownPreferenceValueDto -> incoming.value.orEmpty()
-                else -> throw IllegalArgumentException("Expected a string source preference value")
-            }
-            SourcePreferenceTypeDto.INT -> when (incoming) {
-                is IntPreferenceValueDto -> incoming.value
-                is LongPreferenceValueDto -> incoming.value.toInt()
-                is FloatPreferenceValueDto -> incoming.value.toInt()
-                is StringPreferenceValueDto -> incoming.value.toIntOrNull()
-                    ?: throw IllegalArgumentException("Expected an int source preference value")
-                else -> throw IllegalArgumentException("Expected an int source preference value")
-            }
-            SourcePreferenceTypeDto.LONG -> when (incoming) {
-                is LongPreferenceValueDto -> incoming.value
-                is IntPreferenceValueDto -> incoming.value.toLong()
-                is FloatPreferenceValueDto -> incoming.value.toLong()
-                is StringPreferenceValueDto -> incoming.value.toLongOrNull()
-                    ?: throw IllegalArgumentException("Expected a long source preference value")
-                else -> throw IllegalArgumentException("Expected a long source preference value")
-            }
-            SourcePreferenceTypeDto.FLOAT -> when (incoming) {
-                is FloatPreferenceValueDto -> incoming.value
-                is IntPreferenceValueDto -> incoming.value.toFloat()
-                is LongPreferenceValueDto -> incoming.value.toFloat()
-                is StringPreferenceValueDto -> incoming.value.toFloatOrNull()
-                    ?: throw IllegalArgumentException("Expected a float source preference value")
-                else -> throw IllegalArgumentException("Expected a float source preference value")
-            }
-            SourcePreferenceTypeDto.SELECT -> when (incoming) {
-                is SelectPreferenceValueDto -> incoming.value
-                is StringPreferenceValueDto -> incoming.value
-                is IntPreferenceValueDto -> incoming.value.toString()
-                is LongPreferenceValueDto -> incoming.value.toString()
-                is FloatPreferenceValueDto -> incoming.value.toString()
-                is ListPreferenceValueDto -> incoming.value.firstOrNull().orEmpty()
-                else -> throw IllegalArgumentException("Expected a select source preference value")
-            }
-            SourcePreferenceTypeDto.LIST -> when (incoming) {
-                is ListPreferenceValueDto -> incoming.value.toSet()
-                is StringPreferenceValueDto -> incoming.value.split(',').map {
-                    it.trim()
-                }.filter { it.isNotEmpty() }.toSet()
-                is SelectPreferenceValueDto -> setOf(incoming.value)
-                else -> throw IllegalArgumentException("Expected a list source preference value")
-            }
-            SourcePreferenceTypeDto.UNKNOWN ->
-                throw IllegalArgumentException("Unknown source preference types are read-only")
-        }
-    }
-
-    private fun persist(type: SourcePreferenceTypeDto, key: String, value: Any) {
-        if (key.isBlank()) throw IllegalArgumentException("Cannot persist a source preference without a key")
-        val editor = preferences.edit()
-        when (type) {
-            SourcePreferenceTypeDto.BOOLEAN -> editor.putBoolean(key, value as Boolean)
-            SourcePreferenceTypeDto.STRING, SourcePreferenceTypeDto.SELECT -> editor.putString(key, value.toString())
-            SourcePreferenceTypeDto.INT -> editor.putInt(key, value as Int)
-            SourcePreferenceTypeDto.LONG -> editor.putLong(key, value as Long)
-            SourcePreferenceTypeDto.FLOAT -> editor.putFloat(key, value as Float)
-            SourcePreferenceTypeDto.LIST -> {
-                @Suppress("UNCHECKED_CAST")
-                editor.putStringSet(key, value as Set<String>)
-            }
-            SourcePreferenceTypeDto.UNKNOWN -> throw IllegalArgumentException(
-                "Unknown source preference types are read-only",
-            )
-        }
-        editor.apply()
-    }
-
-    private fun applyToPreference(preference: Preference, type: SourcePreferenceTypeDto, value: Any) {
-        when (preference) {
-            is CheckBoxPreference -> preference.isChecked = value as Boolean
-            is SwitchPreferenceCompat -> preference.isChecked = value as Boolean
-            is EditTextPreference -> preference.text = value.toString()
-            is ListPreference -> preference.value = value as String
-            is MultiSelectListPreference -> {
-                @Suppress("UNCHECKED_CAST")
-                preference.values = (value as Set<String>)
-            }
-            else -> {
-                // Unknown/custom preferences are read-only and never reach this branch.
-                if (type != SourcePreferenceTypeDto.UNKNOWN) {
-                    throw IllegalArgumentException("Unsupported source preference class ${preference::class.java.name}")
-                }
-            }
-        }
     }
 }

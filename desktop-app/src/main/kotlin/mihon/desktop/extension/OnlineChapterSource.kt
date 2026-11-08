@@ -32,6 +32,7 @@ open class OnlineChapterSource(
     private val networkHelper: DesktopNetworkHelper,
     private val cacheDir: File,
     expansionBudget: ChapterExpansionBudget = ChapterExpansionBudget(),
+    private val pageListCache: OnlinePageListCache = OnlinePageListCache(),
 ) : ManagedChapterSource(asset, expansionBudget), OnlineImageCache {
 
     constructor(
@@ -42,6 +43,7 @@ open class OnlineChapterSource(
         networkHelper: DesktopNetworkHelper,
         cacheDir: File,
         expansionBudget: ChapterExpansionBudget = ChapterExpansionBudget(),
+        pageListCache: OnlinePageListCache = OnlinePageListCache(),
     ) : this(
         asset = asset,
         sourceId = sourceId,
@@ -50,6 +52,7 @@ open class OnlineChapterSource(
         networkHelper = networkHelper,
         cacheDir = cacheDir,
         expansionBudget = expansionBudget,
+        pageListCache = pageListCache,
     )
 
     internal var cachedPages: List<Page>? = null
@@ -65,10 +68,10 @@ open class OnlineChapterSource(
         checkOpenAndCancellation()
         // Warmup and the chapter that actually opens are different source instances, and the
         // page list is the call that waits on the site. Keep it so the handoff does not fetch again.
-        val key = pageListKey(asset.mangaId, sourceId, chapter.url)
+        val key = OnlinePageListCache.pageListKey(asset.mangaId, sourceId, chapter.url)
         val list = (
-            cachedPages ?: sharedPageLists[key] ?: sourceManager.getPageList(sourceId, chapter).also { fetched ->
-                rememberSharedPages(key, fetched)
+            cachedPages ?: pageListCache.get(key) ?: sourceManager.getPageList(sourceId, chapter).also { fetched ->
+                pageListCache.remember(key, fetched)
             }
             ).mapIndexed { index, page -> page.copy(index = index) }.also { cachedPages = it }
         entries = list.map { page ->
@@ -165,7 +168,7 @@ open class OnlineChapterSource(
 
     override fun deleteCachedImages() {
         chapterImageFiles().forEach { file -> java.nio.file.Files.deleteIfExists(file.toPath()) }
-        discardSharedChapter(asset.mangaId, sourceId, chapter.url)
+        pageListCache.discardChapter(asset.mangaId, sourceId, chapter.url)
     }
 
     private fun cacheFile(index: Int): File =
@@ -180,28 +183,9 @@ open class OnlineChapterSource(
     companion object {
         private val PAGE_INDEX = Regex("page_(\\d+)\\.[a-z0-9]+")
 
-        internal fun pageListKey(mangaId: Long, sourceId: Long, chapterUrl: String): String =
-            "$mangaId\n$sourceId\n$chapterUrl"
-
-        internal fun discardSharedPages(mangaId: Long) {
-            val prefix = "$mangaId\n"
-            sharedPageLists.keys.filter { it.startsWith(prefix) }.forEach(sharedPageLists::remove)
-        }
-
-        internal fun discardSharedChapter(mangaId: Long, sourceId: Long, chapterUrl: String) {
-            sharedPageLists.remove(pageListKey(mangaId, sourceId, chapterUrl))
-        }
         private const val MAX_IMAGE_BYTES = 64L * 1024 * 1024
-        private const val MAX_SHARED_PAGE_LISTS = 24
-        private val sharedPageLists = java.util.concurrent.ConcurrentHashMap<String, List<Page>>()
         private val cacheLocks = Array(64) { Mutex() }
 
-        private fun rememberSharedPages(key: String, pages: List<Page>) {
-            if (sharedPageLists.size >= MAX_SHARED_PAGE_LISTS && !sharedPageLists.containsKey(key)) {
-                sharedPageLists.keys.firstOrNull()?.let(sharedPageLists::remove)
-            }
-            sharedPageLists[key] = pages
-        }
         private fun cacheLock(file: File): Mutex = cacheLocks[
             (file.absolutePath.hashCode() and Int.MAX_VALUE) %
                 cacheLocks.size,

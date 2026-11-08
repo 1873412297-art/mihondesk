@@ -24,6 +24,7 @@ import mihon.desktop.reader.ReaderPageTransition
 import mihon.reader.layout.PageGrouping
 import mihon.reader.model.PageDescriptor
 import mihon.reader.model.PageId
+import mihon.reader.model.ReaderPan
 import mihon.reader.model.ReadingMode
 import mihon.reader.session.ReaderAction
 import mihon.reader.session.ReaderState
@@ -76,8 +77,19 @@ internal fun PagedReader(
     modifier: Modifier = Modifier,
     pageSizes: Map<PageId, PageSize> = emptyMap(),
     pageTransition: ReaderPageTransition = LocalReaderPageTransition.current,
+    panProvider: () -> ReaderPan = { state.pan },
 ) {
-    val targetSpread = state.visibleSpread(pageSizes)
+    val targetSpread = remember(
+        state.pages,
+        state.selectedIndex,
+        state.mode,
+        state.coverOffset,
+        state.dualPageSplit,
+        state.dualPageRotateToFit,
+        pageSizes,
+    ) {
+        state.visibleSpread(pageSizes)
+    }
     val visiblePageIds = targetSpread.pages.map { it.id }.distinct().ifEmpty {
         targetSpread.pageIndices.mapNotNull { index -> state.pages.getOrNull(index)?.id }
     }
@@ -253,6 +265,7 @@ internal fun PagedReader(
                         pageSizes = pageSizes,
                         pageContent = pageContent,
                         modifier = Modifier.fillMaxSize(),
+                        panProvider = panProvider,
                     )
                 }
             }
@@ -268,6 +281,7 @@ private fun ReaderSpreadView(
     pageSizes: Map<PageId, PageSize>,
     pageContent: ReaderPageContent,
     modifier: Modifier = Modifier,
+    panProvider: () -> ReaderPan = { state.pan },
 ) {
     val displayPages = if (spread.pages.isNotEmpty()) {
         spread.pages
@@ -287,6 +301,7 @@ private fun ReaderSpreadView(
                     scaleMode = state.scaleMode,
                     zoom = state.zoom,
                     requestedPan = state.pan,
+                    livePan = panProvider,
                     pageContent = pageContent,
                     modifier = Modifier.weight(1f).fillMaxHeight(),
                     intrinsicSize = intrinsicSize,
@@ -305,6 +320,7 @@ private fun ReaderSpreadView(
                 scaleMode = state.scaleMode,
                 zoom = state.zoom,
                 requestedPan = state.pan,
+                livePan = panProvider,
                 pageContent = pageContent,
                 modifier = if (state.mode.isDualPage) {
                     Modifier.width(viewportWidth / 2).fillMaxHeight()

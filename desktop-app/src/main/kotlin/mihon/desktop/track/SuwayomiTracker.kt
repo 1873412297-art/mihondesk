@@ -9,7 +9,6 @@ import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import okhttp3.Credentials
 import okhttp3.OkHttpClient
@@ -67,12 +66,12 @@ class SuwayomiTracker(
         track.remoteId,
     )?.let { manga ->
         track.copy(
-            title = manga.sString("title") ?: track.title,
-            totalChapters = manga.sObj("chapters")?.sLong("totalCount") ?: track.totalChapters,
-            lastChapterRead = manga.sObj("latestReadChapter")?.sDouble("chapterNumber") ?: 0.0,
-            status = when (manga.sLong("unreadCount")) {
+            title = manga.stringField("title") ?: track.title,
+            totalChapters = manga.objField("chapters")?.longField("totalCount") ?: track.totalChapters,
+            lastChapterRead = manga.objField("latestReadChapter")?.doubleField("chapterNumber") ?: 0.0,
+            status = when (manga.longField("unreadCount")) {
                 0L -> TrackStatus.COMPLETED.value
-                manga.sObj("chapters")?.sLong("totalCount") -> TrackStatus.PLAN_TO_READ.value
+                manga.objField("chapters")?.longField("totalCount") -> TrackStatus.PLAN_TO_READ.value
                 else -> TrackStatus.READING.value
             },
             trackingUrl = "${requireBase()}/manga/${track.remoteId}",
@@ -81,10 +80,10 @@ class SuwayomiTracker(
 
     override suspend fun updateRemote(track: DesktopTrackRecord): DesktopTrackRecord {
         val chapters = graphQl(UNREAD_QUERY, buildJsonObject { put("mangaId", track.remoteId) })
-            .sObj("chapters")?.get("nodes")?.jsonArray.orEmpty()
+            .objField("chapters")?.get("nodes")?.jsonArray.orEmpty()
             .mapNotNull { it as? JsonObject }
-            .filter { (it.sDouble("chapterNumber") ?: Double.MAX_VALUE) <= track.lastChapterRead + 0.001 }
-            .mapNotNull { it.sLong("id") }
+            .filter { (it.doubleField("chapterNumber") ?: Double.MAX_VALUE) <= track.lastChapterRead + 0.001 }
+            .mapNotNull { it.longField("id") }
         graphQl(
             MARK_QUERY,
             buildJsonObject {
@@ -105,7 +104,7 @@ class SuwayomiTracker(
         buildJsonObject {
             put("mangaId", id)
         },
-    ).sObj("manga")
+    ).objField("manga")
     private suspend fun graphQl(
         query: String,
         variables: JsonObject,
@@ -127,20 +126,20 @@ class SuwayomiTracker(
         val text = TrackerHttpClient(requireBase(), client, requestTimeoutMillis).execute(builder.build())
         val root = defaultTrackerJson.parseToJsonElement(text).jsonObject
         if ((root["errors"] as? JsonArray)?.isNotEmpty() == true) throw TrackerApiException("Suwayomi API error")
-        return root.sObj("data") ?: throw TrackerApiException("Suwayomi response did not contain data")
+        return root.objField("data") ?: throw TrackerApiException("Suwayomi response did not contain data")
     }
     private fun requireBase() = baseUrl ?: throw TrackerApiException("Not logged in to Suwayomi")
     private fun JsonObject.toSearch(): TrackSearchResult? {
-        val mangaId = sLong("id") ?: return null
-        val title = sString("title") ?: return null
+        val mangaId = longField("id") ?: return null
+        val title = stringField("title") ?: return null
         return TrackSearchResult(
             id,
             mangaId,
             title,
-            sObj("chapters")?.sLong("totalCount") ?: 0L,
-            "${requireBase()}/${sString("thumbnailUrl").orEmpty().trimStart('/')}",
+            objField("chapters")?.longField("totalCount") ?: 0L,
+            "${requireBase()}/${stringField("thumbnailUrl").orEmpty().trimStart('/')}",
             "${requireBase()}/manga/$mangaId",
-            sString("description").orEmpty(),
+            stringField("description").orEmpty(),
         )
     }
     private companion object {
@@ -152,7 +151,3 @@ class SuwayomiTracker(
         private const val TRACK_QUERY = "mutation Track(\$mangaId: Int!) { trackProgress(input: {mangaId: \$mangaId}) { __typename } }"
     }
 }
-private fun JsonObject.sObj(name: String) = this[name] as? JsonObject
-private fun JsonObject.sString(name: String) = this[name]?.jsonPrimitive?.content
-private fun JsonObject.sLong(name: String) = sString(name)?.toLongOrNull()
-private fun JsonObject.sDouble(name: String) = sString(name)?.toDoubleOrNull()

@@ -21,6 +21,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import mihon.desktop.DesktopRuntime
 import mihon.desktop.extension.ExtensionStoreService
+import mihon.desktop.extension.registerBuiltinSource
 import mihon.desktop.ui.UI_TEST_TIMEOUT
 import mihon.extension.source.WindowsCatalogueSource
 import mihon.extension.source.model.FilterList

@@ -2,7 +2,6 @@ package mihon.desktop.image
 
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.asSkiaBitmap
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -10,17 +9,15 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
-import mihon.desktop.extension.withTlsFallback
+import mihon.desktop.extension.DesktopNetworkPolicy
+import mihon.desktop.logging.DesktopLogger
 import mihon.desktop.reader.codec.PackagedReaderCodec
+import mihon.extension.network.withTlsFallback
 import mihon.reader.image.ImageFormatDetector
 import mihon.reader.image.ReaderImageFormat
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import org.jetbrains.skia.EncodedImageFormat
 import org.jetbrains.skia.Image
-import org.jetbrains.skia.Rect
-import org.jetbrains.skia.SamplingMode
-import org.jetbrains.skia.Surface
 import java.io.IOException
 import java.net.URI
 import java.nio.file.Files
@@ -31,7 +28,6 @@ import java.util.Collections
 import java.util.LinkedHashMap
 import java.util.concurrent.TimeUnit
 import java.util.zip.ZipFile
-import kotlin.math.roundToInt
 
 val LocalImageLoader = staticCompositionLocalOf<DesktopImageLoader?> { null }
 val LocalCustomCoverManager = staticCompositionLocalOf<CustomCoverManager?> { null }
@@ -57,23 +53,22 @@ internal fun shouldRetryCoverFetch(statusOrNull: Int?, ioFailure: Boolean): Bool
 }
 
 class DesktopImageLoader(
-    private val diskCacheDir: Path,
-    policyProvider: () -> mihon.desktop.extension.DesktopNetworkPolicy = {
-        mihon.desktop.extension.DesktopNetworkPolicy()
-    },
-    private val client: OkHttpClient = OkHttpClient.Builder()
+    internal val diskCacheDir: Path,
+    policyProvider: () -> mihon.desktop.extension.DesktopNetworkPolicy = ::DesktopNetworkPolicy,
+    internal val client: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(20, TimeUnit.SECONDS)
         .proxySelector(mihon.desktop.extension.DesktopPolicyProxySelector(policyProvider))
+        .dns(mihon.desktop.extension.DesktopDns.following(policyProvider))
         .withTlsFallback(),
-    private val customCoverManager: CustomCoverManager? = null,
-    private val maxMemoryEntries: Int = 120,
+    internal val customCoverManager: CustomCoverManager? = null,
+    internal val maxMemoryEntries: Int = 120,
 ) {
-    private val networkSemaphore = Semaphore(6)
+    internal val networkSemaphore = Semaphore(6)
 
     /** Icons/assets on GitHub CDNs: fail fast and fan out, separate from manga cover traffic. */
-    private val mirrorSemaphore = Semaphore(8)
-    private val mirrorClient: OkHttpClient by lazy {
+    internal val mirrorSemaphore = Semaphore(8)
+    internal val mirrorClient: OkHttpClient by lazy {
         client.newBuilder()
             .connectTimeout(3, TimeUnit.SECONDS)
             .readTimeout(6, TimeUnit.SECONDS)
@@ -82,7 +77,8 @@ class DesktopImageLoader(
             .build()
     }
     internal val mirrorHealth = MirrorHealth(diskCacheDir.resolve("mirror-health.properties"))
-    private val memoryCache = Collections.synchronizedMap(
+    val coverFailures = mihon.desktop.image.CoverFailureRegistry()
+    internal val memoryCache = Collections.synchronizedMap(
         object : LinkedHashMap<String, ImageBitmap>(maxMemoryEntries, 0.75f, true) {
             override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, ImageBitmap>?): Boolean {
                 return size > maxMemoryEntries
@@ -108,11 +104,11 @@ class DesktopImageLoader(
             }
         }
         val full = loadFull(request) ?: return@withContext null
-        val scaled = downscale(full, maxSize)
+        val scaled = downscaleImage(full, maxSize)
         // Key is recomputed: a network load may just have created the source file it depends on.
         thumbnailKey(request, maxSize)?.let { key ->
             memoryCache["thumb_$key"] = scaled
-            writeThumbnail(thumbnailFile(key), scaled)
+            writeThumbnailJpeg(thumbnailFile(key), scaled)
         }
         scaled
     }
@@ -121,406 +117,7 @@ class DesktopImageLoader(
      * Cache identity for a thumbnail: the source plus its last-modified time, so replacing a cover
      * (custom cover, re-downloaded network image, edited local file) invalidates the old thumbnail.
      */
-    private fun thumbnailKey(request: ImageRequest, maxSize: Int): String? = try {
-        val custom = if (request.mangaId != null && customCoverManager != null) {
-            customCoverManager.getCustomCover(request.mangaId)
-        } else {
-            null
-        }
-        val uriStr = request.uri?.trim()
-        val source = when {
-            custom != null -> "custom:${request.mangaId}:${Files.getLastModifiedTime(custom).toMillis()}"
-            uriStr.isNullOrBlank() -> request.localMangaPath?.let { localSourceKey(it) }
-            uriStr.startsWith("http://", ignoreCase = true) || uriStr.startsWith("https://", ignoreCase = true) -> {
-                val disk = cdnMirrorCandidates(uriStr)
-                    .map { diskCacheDir.resolve("${sha256(it)}.img") }
-                    .firstOrNull { Files.isRegularFile(it) }
-                "net:$uriStr:${disk?.let { Files.getLastModifiedTime(it).toMillis() } ?: 0}"
-            }
-            else -> {
-                val path = if (uriStr.startsWith(
-                        "file://",
-                        ignoreCase = true,
-                    )
-                ) {
-                    Path.of(URI(uriStr))
-                } else {
-                    Path.of(uriStr)
-                }
-                localSourceKey(path)
-            }
-        }
-        source?.let { "$it@$maxSize" }
-    } catch (_: Exception) {
-        null
-    }
-
-    private fun localSourceKey(path: Path): String? =
-        if (Files.exists(path)) "file:${path.toAbsolutePath()}:${Files.getLastModifiedTime(path).toMillis()}" else null
-
-    private fun thumbnailFile(key: String): Path = diskCacheDir.resolve(THUMBNAIL_DIR).resolve("${sha256(key)}.jpg")
-
-    private fun downscale(bitmap: ImageBitmap, maxSize: Int): ImageBitmap {
-        val longest = maxOf(bitmap.width, bitmap.height)
-        if (longest <= maxSize) return bitmap
-        val scale = maxSize.toFloat() / longest
-        val w = (bitmap.width * scale).roundToInt().coerceAtLeast(1)
-        val h = (bitmap.height * scale).roundToInt().coerceAtLeast(1)
-        val source = Image.makeFromBitmap(bitmap.asSkiaBitmap())
-        val surface = Surface.makeRasterN32Premul(w, h)
-        surface.canvas.drawImageRect(
-            source,
-            Rect.makeWH(source.width.toFloat(), source.height.toFloat()),
-            Rect.makeWH(w.toFloat(), h.toFloat()),
-            SamplingMode.MITCHELL,
-            null,
-            true,
-        )
-        return surface.makeImageSnapshot().toComposeImageBitmap()
-    }
-
-    private fun writeThumbnail(target: Path, bitmap: ImageBitmap) {
-        try {
-            Files.createDirectories(target.parent)
-            val image = Image.makeFromBitmap(bitmap.asSkiaBitmap())
-            val data = image.encodeToData(EncodedImageFormat.JPEG, 88) ?: return
-            val tmp = Files.createTempFile(target.parent, "thumb-", ".tmp")
-            Files.write(tmp, data.bytes)
-            Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
-        } catch (_: Exception) {
-            // Thumbnail cache is best-effort.
-        }
-    }
-
-    private suspend fun loadFull(request: ImageRequest): ImageBitmap? {
-        // 1. Check custom cover first if mangaId is present
-        if (request.mangaId != null && customCoverManager != null) {
-            val custom = customCoverManager.getCustomCover(request.mangaId)
-            if (custom != null) {
-                val cacheKey = "custom_${request.mangaId}_${Files.getLastModifiedTime(custom).toMillis()}"
-                memoryCache[cacheKey]?.let { return it }
-                val bitmap = decodeFile(custom)
-                if (bitmap != null) {
-                    memoryCache[cacheKey] = bitmap
-                    return bitmap
-                }
-            }
-        }
-
-        // 2. Determine URI to load
-        val uriStr = request.uri?.trim()
-        if (uriStr.isNullOrBlank()) {
-            if (request.localMangaPath != null) {
-                return loadFromLocalManga(request.localMangaPath)
-            }
-            return null
-        }
-
-        val memKey = "uri_$uriStr"
-        memoryCache[memKey]?.let { return it }
-
-        // 3. Network URL
-        if (uriStr.startsWith("http://", ignoreCase = true) || uriStr.startsWith("https://", ignoreCase = true)) {
-            val candidates = cdnMirrorCandidates(uriStr)
-            if (candidates.size == 1) {
-                val bitmap = loadFromNetwork(uriStr, request.headers, request)
-                if (bitmap != null) memoryCache[memKey] = bitmap
-                return bitmap
-            }
-            // Any mirror already on disk wins before touching the network.
-            for (candidate in candidates) {
-                val cached = diskCacheDir.resolve("${sha256(candidate)}.img")
-                if (Files.isRegularFile(cached) && Files.size(cached) > 0) {
-                    decodeFile(cached)?.let {
-                        memoryCache[memKey] = it
-                        return it
-                    }
-                }
-            }
-            for (candidate in mirrorHealth.order(candidates)) {
-                val host = runCatching { URI(candidate).host }.getOrNull().orEmpty()
-                var ioFailed = false
-                val bitmap = loadFromNetwork(candidate, request.headers, request, fast = true) { ioFailed = true }
-                if (bitmap != null) {
-                    mirrorHealth.recordSuccess(host)
-                    memoryCache[memKey] = bitmap
-                    return bitmap
-                }
-                if (ioFailed) mirrorHealth.recordFailure(host)
-            }
-            return null
-        }
-
-        // 4. File URI or Path
-        val filePath = try {
-            if (uriStr.startsWith("file://", ignoreCase = true)) {
-                Path.of(URI(uriStr))
-            } else {
-                Path.of(uriStr)
-            }
-        } catch (_: Exception) {
-            null
-        }
-
-        if (filePath != null) {
-            val bitmap = loadFromLocalPath(filePath)
-            if (bitmap != null) {
-                memoryCache[memKey] = bitmap
-            }
-            return bitmap
-        }
-
-        if (request.localMangaPath != null) {
-            return loadFromLocalManga(request.localMangaPath)
-        }
-
-        return null
-    }
-
-    private fun loadFromLocalPath(path: Path): ImageBitmap? {
-        if (!Files.exists(path)) return null
-        if (Files.isDirectory(path)) {
-            return loadFromLocalManga(path)
-        }
-        val filename = path.fileName.toString().lowercase()
-        if (filename.endsWith(".cbz") || filename.endsWith(".zip")) {
-            return extractCoverFromArchive(path)
-        }
-        return decodeFile(path)
-    }
-
-    private fun loadFromLocalManga(mangaDirOrArchive: Path): ImageBitmap? {
-        if (!Files.exists(mangaDirOrArchive)) return null
-        if (Files.isRegularFile(mangaDirOrArchive)) {
-            return extractCoverFromArchive(mangaDirOrArchive)
-        }
-        val coverNames = listOf(
-            "cover.jpg", "cover.png", "cover.webp", "cover.jpeg", "cover.gif", "cover.avif",
-            "cover.heic", "cover.heif", "cover.jxl", "cover.bmp", "cover.tif", "cover.tiff", "Folder.jpg",
-        )
-        for (name in coverNames) {
-            val candidate = mangaDirOrArchive.resolve(name)
-            if (Files.isRegularFile(candidate)) {
-                return decodeFile(candidate)
-            }
-        }
-        try {
-            Files.list(mangaDirOrArchive).use { stream ->
-                val files = stream.toList().sortedBy { it.fileName.toString().lowercase() }
-                for (file in files) {
-                    val fn = file.fileName.toString().lowercase()
-                    if (isImageFile(fn)) {
-                        return decodeFile(file)
-                    } else if (fn.endsWith(".cbz") || fn.endsWith(".zip")) {
-                        val fromZip = extractCoverFromArchive(file)
-                        if (fromZip != null) return fromZip
-                    } else if (Files.isDirectory(file)) {
-                        val fromSub = loadFromLocalManga(file)
-                        if (fromSub != null) return fromSub
-                    }
-                }
-            }
-        } catch (_: Exception) {}
-        return null
-    }
-
-    private fun extractCoverFromArchive(zipPath: Path): ImageBitmap? {
-        try {
-            ZipFile(zipPath.toFile()).use { zip ->
-                val entries = zip.entries().asSequence()
-                    .filter { !it.isDirectory && isImageFile(it.name.lowercase()) }
-                    .sortedBy { it.name.lowercase() }
-                    .toList()
-                val first = entries.firstOrNull() ?: return null
-                zip.getInputStream(first).use { input ->
-                    val bytes = input.readAllBytes()
-                    return decodeBytes(bytes)
-                }
-            }
-        } catch (_: Exception) {
-            return null
-        }
-    }
-
-    private suspend fun loadFromNetwork(
-        url: String,
-        customHeaders: Map<String, String>,
-        request: ImageRequest? = null,
-        fast: Boolean = false,
-        onIoFailure: (() -> Unit)? = null,
-    ): ImageBitmap? {
-        val maxAttempt = if (fast) 0 else 2
-        val semaphore = if (fast) mirrorSemaphore else networkSemaphore
-        val httpClient = if (fast) mirrorClient else client
-        val hash = sha256(url)
-        val diskFile = diskCacheDir.resolve("$hash.img")
-
-        // Check disk cache
-        if (Files.isRegularFile(diskFile) && Files.size(diskFile) > 0) {
-            val cachedBitmap = decodeFile(diskFile)
-            if (cachedBitmap != null) return cachedBitmap
-            Files.deleteIfExists(diskFile)
-        }
-
-        val backoffs = listOf(300L, 900L)
-        for (attempt in 0..maxAttempt) {
-            if (attempt > 0) {
-                delay(backoffs[attempt - 1])
-            }
-            var shouldRetry = false
-            val bitmap = semaphore.withPermit {
-                try {
-                    val reqBuilder = Request.Builder().url(url)
-                    reqBuilder.header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) MihonW/1.0")
-                    customHeaders.forEach { (k, v) -> reqBuilder.header(k, v) }
-
-                    httpClient.newCall(reqBuilder.build()).execute().use { response ->
-                        if (!response.isSuccessful) {
-                            val code = response.code
-                            val retryable = shouldRetryCoverFetch(statusOrNull = code, ioFailure = false)
-                            if (retryable && attempt < maxAttempt) {
-                                debugLog("HTTP-$code $url (attempt $attempt, will retry)")
-                                shouldRetry = true
-                                return@withPermit null
-                            }
-                            debugLog("HTTP-$code $url")
-                            if (request?.mangaId != null) {
-                                CoverFailureRegistry.record(request.mangaId, url, code)
-                            }
-                            request?.onHttpError?.invoke(code)
-                            return@withPermit null
-                        }
-                        val body = response.body
-                        val bytes = body.bytes()
-                        if (bytes.isEmpty()) return@withPermit null
-
-                        val decoded = decodeBytes(bytes)
-                        if (decoded == null) {
-                            debugLog("DECODE-FAIL $url bytes=${bytes.size}")
-                            return@withPermit null
-                        }
-
-                        // Save to disk cache atomically
-                        val tmpFile = diskCacheDir.resolve("$hash.tmp")
-                        Files.write(tmpFile, bytes)
-                        Files.move(
-                            tmpFile,
-                            diskFile,
-                            StandardCopyOption.REPLACE_EXISTING,
-                            StandardCopyOption.ATOMIC_MOVE,
-                        )
-
-                        return@withPermit decoded
-                    }
-                } catch (c: CancellationException) {
-                    throw c
-                } catch (e: IOException) {
-                    if (shouldRetryCoverFetch(statusOrNull = null, ioFailure = true) && attempt < maxAttempt) {
-                        debugLog("FETCH-FAIL $url ${e.javaClass.name}: ${e.message} (attempt $attempt, will retry)")
-                        shouldRetry = true
-                        return@withPermit null
-                    }
-                    onIoFailure?.invoke()
-                    debugLog("FETCH-FAIL $url ${e.javaClass.name}: ${e.message}")
-                    return@withPermit null
-                } catch (e: Exception) {
-                    debugLog("FETCH-FAIL $url ${e.javaClass.name}: ${e.message}")
-                    return@withPermit null
-                }
-            }
-
-            if (bitmap != null) {
-                return bitmap
-            }
-            if (!shouldRetry) {
-                return null
-            }
-        }
-        return null
-    }
-
-    private fun debugLog(line: String) {
-        if (System.getenv("MIHON_IMAGE_DEBUG") == null) return
-        runCatching {
-            java.io.File(System.getenv("TEMP") ?: ".", "mihon-image-debug.log").appendText(
-                "[${java.time.LocalTime.now()}] $line\n",
-            )
-        }
-    }
-
-    private fun decodeFile(file: Path): ImageBitmap? {
-        return try {
-            val bytes = Files.readAllBytes(file)
-            decodeBytes(bytes)
-        } catch (_: Exception) {
-            null
-        }
-    }
-
-    private fun decodeBytes(bytes: ByteArray): ImageBitmap? {
-        if (bytes.isEmpty()) return null
-        val native = try {
-            val skiaImage = Image.makeFromEncoded(bytes)
-            skiaImage.toComposeImageBitmap()
-        } catch (_: Exception) {
-            null
-        }
-        if (native != null) return native
-
-        return when (ImageFormatDetector.detect(bytes)) {
-            ReaderImageFormat.AVIF,
-            ReaderImageFormat.HEIF,
-            ReaderImageFormat.JXL,
-            ReaderImageFormat.TIFF,
-            -> decodeWithPackagedCodec(bytes)
-            else -> null
-        }
-    }
-
-    /** Uses the same bundled ImageMagick runtime as the reader for formats Skia cannot decode. */
-    private fun decodeWithPackagedCodec(bytes: ByteArray): ImageBitmap? {
-        val executable = PackagedReaderCodec.executablePath()
-        if (!Files.isRegularFile(executable)) return null
-        val input = Files.createTempFile(diskCacheDir, "cover-", ".img")
-        val output = Files.createTempFile(diskCacheDir, "cover-", ".png")
-        val error = Files.createTempFile(diskCacheDir, "cover-", ".log")
-        return try {
-            Files.write(input, bytes)
-            val process = ProcessBuilder(
-                executable.toString(),
-                "-limit", "memory", "128MiB",
-                "-limit", "map", "0",
-                "-limit", "disk", "256MiB",
-                input.toString(),
-                "-auto-orient",
-                "-delete", "1--1",
-                "PNG:$output",
-            ).redirectError(error.toFile()).start()
-            if (!process.waitFor(30, TimeUnit.SECONDS)) {
-                process.destroyForcibly()
-                return null
-            }
-            if (process.exitValue() != 0 || Files.size(output) == 0L || Files.size(output) > MAX_FALLBACK_BYTES) {
-                return null
-            }
-            val png = Files.readAllBytes(output)
-            Image.makeFromEncoded(png).toComposeImageBitmap()
-        } catch (_: Exception) {
-            null
-        } finally {
-            Files.deleteIfExists(input)
-            Files.deleteIfExists(output)
-            Files.deleteIfExists(error)
-        }
-    }
-
-    private fun isImageFile(name: String): Boolean =
-        name.endsWith(".jpg") || name.endsWith(".jpeg") || name.endsWith(".png") ||
-            name.endsWith(".webp") || name.endsWith(".gif") || name.endsWith(".avif") ||
-            name.endsWith(".heic") || name.endsWith(".heif") || name.endsWith(".jxl") ||
-            name.endsWith(".bmp") || name.endsWith(".tif") || name.endsWith(".tiff")
-
-    private fun sha256(input: String): String {
+    internal fun sha256(input: String): String {
         val md = MessageDigest.getInstance("SHA-256")
         val bytes = md.digest(input.toByteArray(Charsets.UTF_8))
         return bytes.joinToString("") { "%02x".format(it) }
@@ -574,12 +171,14 @@ class DesktopImageLoader(
             Files.list(diskCacheDir).use { stream ->
                 stream.forEach { Files.deleteIfExists(it) }
             }
-        } catch (_: Exception) {}
+        } catch (error: java.io.IOException) {
+            mihon.desktop.logging.DesktopLogger.warn("ImageLoader", "Failed to clear image disk cache", error)
+        }
     }
 
     companion object {
         /** Sub-directory of the disk cache holding downscaled grid thumbnails. */
         const val THUMBNAIL_DIR = "thumbs"
-        private const val MAX_FALLBACK_BYTES = 64L * 1024L * 1024L
+        internal const val MAX_FALLBACK_BYTES = 64L * 1024L * 1024L
     }
 }

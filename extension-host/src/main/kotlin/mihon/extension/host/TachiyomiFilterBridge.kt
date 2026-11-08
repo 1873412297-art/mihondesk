@@ -52,12 +52,22 @@ private fun TFilter<*>.toSdkFilter(): SFilter<*>? = when (this) {
 }
 
 private fun TFilterList.applySdkState(filters: SFilterList): TFilterList {
-    val incomingByName = filters.filters.associateBy { it.name }
-    for (target in this) {
-        val incoming = incomingByName[target.name] ?: continue
-        target.applySdkState(incoming)
-    }
+    applyInOrder(this, filters.filters)
     return this
+}
+
+/**
+ * Pairs targets with incoming filters by name, consuming same-named entries in order. Extensions
+ * reuse names (several "Genre" groups, tag groups with identical labels), so a plain name map
+ * would hand every duplicate the state of the last one.
+ */
+private fun applyInOrder(targets: Iterable<*>, incoming: List<SFilter<*>>) {
+    val pending = incoming.groupByTo(HashMap()) { it.name }.mapValues { ArrayDeque(it.value) }
+    for (target in targets) {
+        if (target !is TFilter<*>) continue
+        val match = pending[target.name]?.removeFirstOrNull() ?: continue
+        target.applySdkState(match)
+    }
 }
 
 private fun TFilter<*>.applySdkState(incoming: SFilter<*>) {
@@ -70,14 +80,8 @@ private fun TFilter<*>.applySdkState(incoming: SFilter<*>) {
             val selection = incoming.state
             state = selection?.let { TFilter.Sort.Selection(it.index, it.ascending) }
         }
-        this is TFilter.Group<*> && incoming is SFilter.Group<*> -> {
-            val incomingChildren = incoming.state.filterIsInstance<SFilter<*>>().associateBy { it.name }
-            for (child in state) {
-                if (child is TFilter<*>) {
-                    incomingChildren[child.name]?.let { child.applySdkState(it) }
-                }
-            }
-        }
+        this is TFilter.Group<*> && incoming is SFilter.Group<*> ->
+            applyInOrder(state, incoming.state.filterIsInstance<SFilter<*>>())
     }
 }
 

@@ -69,11 +69,8 @@ fun Call.asObservableSuccess(): Observable<Response> {
 
 private suspend fun Call.await(callStack: Array<StackTraceElement>): Response {
     return suspendCancellableCoroutine { continuation ->
-        continuation.invokeOnCancellation {
-            try {
-                this.cancel()
-            } catch (_: Throwable) {}
-        }
+        // Call.cancel() is documented as safe to call at any time from any thread.
+        continuation.invokeOnCancellation { this.cancel() }
 
         this.enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {

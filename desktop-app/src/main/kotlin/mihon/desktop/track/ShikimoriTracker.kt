@@ -4,11 +4,8 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
-import kotlinx.serialization.json.putJsonObject
 import okhttp3.OkHttpClient
 import okhttp3.Request
 
@@ -28,8 +25,8 @@ class ShikimoriTracker(
         if (authToken.isBlank()) return false
         return try {
             val user = currentUser(authToken)
-            userId = user.string("id")
-            setLoggedIn(true, user.string("nickname"), authToken)
+            userId = user.stringField("id")
+            setLoggedIn(true, user.stringField("nickname"), authToken)
             !userId.isNullOrBlank()
         } catch (error: CancellationException) {
             throw error
@@ -48,21 +45,24 @@ class ShikimoriTracker(
 
     override suspend fun search(query: String): List<TrackSearchResult> {
         val variables = buildJsonObject { put("query", query.trim()) }
-        return graphQl(SEARCH_QUERY, variables).array("mangas").mapNotNull { (it as? JsonObject)?.toSearch() }
+        return graphQl(SEARCH_QUERY, variables).arrayFieldOrEmpty("mangas").mapNotNull {
+            (it as? JsonObject)?.toSearch()
+        }
     }
 
     override suspend fun findRemote(track: DesktopTrackRecord): DesktopTrackRecord? {
         val variables = buildJsonObject { put("id", track.remoteId.toString()) }
-        val manga = graphQl(FIND_QUERY, variables).array("mangas").firstOrNull() as? JsonObject ?: return null
-        val rate = manga.obj("userRate") ?: return null
+        val manga =
+            graphQl(FIND_QUERY, variables).arrayFieldOrEmpty("mangas").firstOrNull() as? JsonObject ?: return null
+        val rate = manga.objField("userRate") ?: return null
         return track.copy(
-            libraryId = rate.string("id")?.toLongOrNull() ?: track.libraryId,
-            title = manga.string("name") ?: track.title,
-            totalChapters = manga.long("chapters") ?: track.totalChapters,
-            lastChapterRead = rate.double("chapters") ?: track.lastChapterRead,
-            score = rate.double("score") ?: track.score,
-            status = rate.string("status")?.toTrackStatus() ?: track.status,
-            trackingUrl = manga.string("url")?.let(::absoluteUrl) ?: track.trackingUrl,
+            libraryId = rate.stringField("id")?.toLongOrNull() ?: track.libraryId,
+            title = manga.stringField("name") ?: track.title,
+            totalChapters = manga.longField("chapters") ?: track.totalChapters,
+            lastChapterRead = rate.doubleField("chapters") ?: track.lastChapterRead,
+            score = rate.doubleField("score") ?: track.score,
+            status = rate.stringField("status")?.toTrackStatus() ?: track.status,
+            trackingUrl = manga.stringField("url")?.let(::absoluteUrl) ?: track.trackingUrl,
         )
     }
 
@@ -85,16 +85,16 @@ class ShikimoriTracker(
             jsonRequestBody(payload.toString()),
         )
         val response = defaultTrackerJson.parseToJsonElement(http.execute(builder.build())).jsonObject
-        return track.copy(libraryId = response.long("id") ?: track.libraryId)
+        return track.copy(libraryId = response.longField("id") ?: track.libraryId)
     }
 
     private suspend fun currentUser(authToken: String = token.orEmpty()): JsonObject =
-        graphQl(CURRENT_USER_QUERY, buildJsonObject { }, authToken).obj("currentUser")
+        graphQl(CURRENT_USER_QUERY, buildJsonObject { }, authToken).objField("currentUser")
             ?: throw TrackerApiException("Shikimori did not return the current user")
 
     private suspend fun ensureUserId(): String {
         userId?.let { return it }
-        return currentUser().string("id")?.also { userId = it }
+        return currentUser().stringField("id")?.also { userId = it }
             ?: throw TrackerApiException("Shikimori did not return a user id")
     }
 
@@ -111,7 +111,7 @@ class ShikimoriTracker(
             ),
         ).jsonObject
         if ((root["errors"] as? JsonArray)?.isNotEmpty() == true) throw TrackerApiException("Shikimori API error")
-        return root.obj("data") ?: throw TrackerApiException("Shikimori response did not contain data")
+        return root.objField("data") ?: throw TrackerApiException("Shikimori response did not contain data")
     }
 
     private fun authenticated(path: String, authToken: String = token.orEmpty()): Request.Builder = Request.Builder()
@@ -124,16 +124,16 @@ class ShikimoriTracker(
     }
 
     private fun JsonObject.toSearch(): TrackSearchResult? {
-        val mangaId = long("id") ?: return null
-        val title = string("name")?.takeIf(String::isNotBlank) ?: return null
+        val mangaId = longField("id") ?: return null
+        val title = stringField("name")?.takeIf(String::isNotBlank) ?: return null
         return TrackSearchResult(
             id,
             mangaId,
             title,
-            long("chapters") ?: 0L,
-            obj("poster")?.string("mainUrl").orEmpty(),
-            string("url")?.let(::absoluteUrl).orEmpty(),
-            string("description").orEmpty(),
+            longField("chapters") ?: 0L,
+            objField("poster")?.stringField("mainUrl").orEmpty(),
+            stringField("url")?.let(::absoluteUrl).orEmpty(),
+            stringField("description").orEmpty(),
         )
     }
 
@@ -150,11 +150,6 @@ class ShikimoriTracker(
     }
 }
 
-private fun JsonObject.obj(name: String): JsonObject? = this[name] as? JsonObject
-private fun JsonObject.array(name: String): JsonArray = this[name]?.jsonArray ?: JsonArray(emptyList())
-private fun JsonObject.string(name: String): String? = this[name]?.jsonPrimitive?.content
-private fun JsonObject.long(name: String): Long? = string(name)?.toLongOrNull()
-private fun JsonObject.double(name: String): Double? = string(name)?.toDoubleOrNull()
 private fun String.toTrackStatus(): Long? = when (this) {
     "watching" -> TrackStatus.READING.value
     "completed" -> TrackStatus.COMPLETED.value

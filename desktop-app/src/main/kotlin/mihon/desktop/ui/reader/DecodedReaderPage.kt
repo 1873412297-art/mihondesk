@@ -71,7 +71,11 @@ fun DecodedReaderPage(
     // The animated frame renderer has no split/rotation transform. Keep the first decoded
     // frame for these pages so both halves retain their correct crop and reading order.
     val shouldAnimate = readerForeground && selectedPage == page.id && page.splitSide == null && !page.rotated
-    val selectedAnimationFrame by content.selectedAnimationFrame.collectAsState()
+    val selectedAnimationFrame = if (shouldAnimate) {
+        content.selectedAnimationFrame.collectAsState().value
+    } else {
+        null
+    }
     var frame by remember(page.id, cropBorders) { mutableStateOf<DesktopReaderPageFrame?>(null) }
     var failure by remember(page.id) { mutableStateOf<String?>(null) }
     // Bumped by the inline Retry button to re-run the decode for just this page.

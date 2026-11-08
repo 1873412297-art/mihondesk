@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.attribute.PosixFilePermissions
 
 private object XorCipher : TokenCipher {
     override fun protect(plain: ByteArray) = plain.map { (it.toInt() xor 0x5A).toByte() }.toByteArray()
@@ -35,7 +36,13 @@ class DriveTokenVaultTest {
     fun `corrupt file loads as signed out`() {
         val f = dir.resolve("tokens.bin")
         Files.write(f, byteArrayOf(1, 2, 3))
-        DriveTokenVault(f, XorCipher).load() shouldBe null
+        val vault = DriveTokenVault(f, XorCipher)
+        vault.load() shouldBe null
+        vault.hadUnreadableToken() shouldBe true
+        Files.exists(f) shouldBe false
+        Files.readAllBytes(f.resolveSibling("tokens.bin.corrupt")).toList() shouldBe listOf(1.toByte(), 2, 3)
+        vault.save(tokens)
+        vault.hadUnreadableToken() shouldBe false
     }
 
     @Test
@@ -45,5 +52,20 @@ class DriveTokenVaultTest {
         vault.save(tokens)
         String(Files.readAllBytes(dir.resolve("t.bin")), Charsets.ISO_8859_1) shouldNotContain "refresh-secret"
         vault.load() shouldBe tokens
+    }
+
+    @Test
+    fun `tokens are owner-only on posix even when a stale temp file was world readable`() {
+        val target = dir.resolve("tokens.bin")
+        assumeTrue("posix" in target.fileSystem.supportedFileAttributeViews())
+        val stale = dir.resolve("tokens.bin.tmp")
+        Files.write(stale, byteArrayOf(0))
+        Files.setPosixFilePermissions(stale, PosixFilePermissions.fromString("rw-rw-rw-"))
+
+        DriveTokenVault(target, OwnerOnlyFileCipher).save(tokens)
+
+        PosixFilePermissions.toString(Files.getPosixFilePermissions(target)) shouldBe "rw-------"
+        Files.exists(stale) shouldBe false
+        DriveTokenVault(target, OwnerOnlyFileCipher).load() shouldBe tokens
     }
 }

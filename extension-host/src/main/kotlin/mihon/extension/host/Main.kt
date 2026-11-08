@@ -55,7 +55,12 @@ fun main(args: Array<String>) {
                 read to write
             }
             pipeName != null -> openPipe(pipeName)
-            useStdio -> System.`in` to System.out
+            useStdio -> {
+                // Extensions commonly print debug output; it must never interleave with IPC frames.
+                val ipcOutput = System.out
+                System.setOut(System.err)
+                System.`in` to ipcOutput
+            }
             else -> {
                 System.err.println("Usage: extension-host [--pipe=\\\\.\\pipe\\<name> | --stdio]")
                 exitProcess(1)
@@ -83,8 +88,14 @@ fun main(args: Array<String>) {
             session.awaitTermination()
         } finally {
             session.close()
+            engine.close()
         }
     }
+    // The session ends when the parent closes the pipe (normal shutdown or a crash). Extension
+    // code leaves non-daemon threads behind (OkHttp dispatchers, executors), so returning from
+    // main would keep this process alive as an orphan; exit explicitly instead.
+    System.err.flush()
+    exitProcess(0)
 }
 
 private fun openPipe(pipeName: String): Pair<InputStream, OutputStream> {

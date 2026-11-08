@@ -1,5 +1,6 @@
 package mihon.desktop.extension
 
+import mihon.extension.network.TlsFallback
 import okhttp3.ConnectionSpec
 import okhttp3.OkHttpClient
 import okhttp3.Protocol
@@ -69,9 +70,9 @@ class TlsCompatibilityDiagnostic {
         for (host in hosts) {
             for ((name, route) in listOf("direct" to Proxy.NO_PROXY, "proxy" to proxy)) {
                 val cells = listOf(
-                    viaOkHttp(okhttp(route, DesktopTls.defaultSpecs, h2), host),
-                    viaOkHttp(okhttp(route, DesktopTls.defaultSpecs, h1), host),
-                    viaOkHttp(okhttp(route, DesktopTls.compatibleSpecs, h2), host),
+                    viaOkHttp(okhttp(route, TlsFallback.defaultSpecs, h2), host),
+                    viaOkHttp(okhttp(route, TlsFallback.defaultSpecs, h1), host),
+                    viaOkHttp(okhttp(route, TlsFallback.compatibleSpecs, h2), host),
                     viaJdk(route, host),
                 )
                 rows += "| $host | $name | ${cells.joinToString(" | ")} |"

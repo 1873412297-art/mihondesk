@@ -60,6 +60,8 @@ class BackupRestorePresenter(
                 terminal = try {
                     BackupRestoreState.Finished(restore(path, control))
                 } catch (_: CancellationException) {
+                    // Inside NonCancellable this can only be the restore's own cancel request
+                    // (control.cancel()), so it is a result, not scope cancellation to propagate.
                     BackupRestoreState.Cancelled
                 } catch (_: Exception) {
                     BackupRestoreState.Finished(ImportActionState.Failed("Backup restore failed"))

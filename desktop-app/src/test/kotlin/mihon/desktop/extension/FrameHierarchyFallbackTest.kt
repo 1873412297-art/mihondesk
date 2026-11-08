@@ -1,6 +1,7 @@
 package mihon.desktop.extension
 
 import mihon.desktop.extension.compat.TachiyomiExtensionConverter
+import mihon.desktop.extension.compat.frameParents
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test

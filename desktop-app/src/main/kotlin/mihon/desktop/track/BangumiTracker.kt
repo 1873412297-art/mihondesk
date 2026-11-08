@@ -7,7 +7,6 @@ import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -34,7 +33,7 @@ class BangumiTracker(
         if (authToken.isBlank()) return false
         return try {
             val me = getJson("/v0/me", authToken)
-            val account = me.bString("username") ?: throw TrackerApiException("Bangumi did not return an account")
+            val account = me.stringField("username") ?: throw TrackerApiException("Bangumi did not return an account")
             setLoggedIn(true, account, authToken)
             true
         } catch (error: CancellationException) {
@@ -63,27 +62,27 @@ class BangumiTracker(
         )
         return root["data"]?.jsonArray.orEmpty()
             .mapNotNull { it as? JsonObject }
-            .filter { it.bString("platform") in listOf(null, "漫画") }
+            .filter { it.stringField("platform") in listOf(null, "漫画") }
             .mapNotNull { subject ->
-                val remoteId = subject.bLong("id") ?: return@mapNotNull null
-                val original = subject.bString("name").orEmpty()
-                val translated = subject.bString("name_cn").orEmpty()
+                val remoteId = subject.longField("id") ?: return@mapNotNull null
+                val original = subject.stringField("name").orEmpty()
+                val translated = subject.stringField("name_cn").orEmpty()
                 val title = translated.ifBlank { original }.takeIf(String::isNotBlank) ?: return@mapNotNull null
                 TrackSearchResult(
                     id,
                     remoteId,
                     title,
-                    subject.bLong("eps") ?: 0L,
-                    subject.bObj("images")?.bString("common").orEmpty(),
+                    subject.longField("eps") ?: 0L,
+                    subject.objField("images")?.stringField("common").orEmpty(),
                     "https://bangumi.tv/subject/$remoteId",
-                    subject.bString("summary").orEmpty(),
+                    subject.stringField("summary").orEmpty(),
                 )
             }
     }
 
     override suspend fun findRemote(track: DesktopTrackRecord): DesktopTrackRecord? {
         requireLogin()
-        val account = username ?: getJson("/v0/me").bString("username")
+        val account = username ?: getJson("/v0/me").stringField("username")
             ?: throw TrackerApiException("Bangumi did not return an account")
         val collection = try {
             getJson("/v0/users/$account/collections/${track.remoteId}")
@@ -92,11 +91,11 @@ class BangumiTracker(
         }
         return track.copy(
             libraryId = track.remoteId,
-            lastChapterRead = collection.bDouble("ep_status") ?: 0.0,
-            totalChapters = collection.bObj("subject")?.bLong("eps") ?: track.totalChapters,
-            score = collection.bDouble("rate") ?: 0.0,
-            status = collection.bLong("type")?.toBangumiTrackStatus() ?: track.status,
-            private = collection.bString("private")?.toBooleanStrictOrNull() ?: track.private,
+            lastChapterRead = collection.doubleField("ep_status") ?: 0.0,
+            totalChapters = collection.objField("subject")?.longField("eps") ?: track.totalChapters,
+            score = collection.doubleField("rate") ?: 0.0,
+            status = collection.longField("type")?.toBangumiTrackStatus() ?: track.status,
+            private = collection.stringField("private")?.toBooleanStrictOrNull() ?: track.private,
             trackingUrl = "https://bangumi.tv/subject/${track.remoteId}",
         )
     }
@@ -135,10 +134,6 @@ class BangumiTracker(
     }
 }
 
-private fun JsonObject.bObj(name: String): JsonObject? = this[name] as? JsonObject
-private fun JsonObject.bString(name: String): String? = this[name]?.jsonPrimitive?.content
-private fun JsonObject.bLong(name: String): Long? = bString(name)?.toLongOrNull()
-private fun JsonObject.bDouble(name: String): Double? = bString(name)?.toDoubleOrNull()
 private fun Long.toBangumiTrackStatus(): Long? = when (this) {
     1L -> TrackStatus.PLAN_TO_READ.value
     2L -> TrackStatus.COMPLETED.value

@@ -29,6 +29,8 @@ data class DownloadPage(
     val progress: Float = 0f,
     val bytesWritten: Long = 0L,
     val error: String? = null,
+    /** Number of on-disk parts after a tall-image split; 1 when the page was stored as one file. */
+    val partCount: Int = 1,
 )
 
 @Serializable

@@ -17,6 +17,8 @@ class NetworkRequestScheduler(
     // several pages at once, so they share the host instead of waiting for a queue of three.
     private val totalLimit: Int = 12,
     private val hostLimit: Int = 6,
+    // Batch downloads are what trips a site's WAF; the reader keeps the full host allowance.
+    private val backgroundSourceLimit: Int = 3,
     private val clock: () -> Long = System::currentTimeMillis,
 ) : AutoCloseable {
     private class Waiter(val host: String, val owner: String, val priority: Int) {
@@ -34,7 +36,7 @@ class NetworkRequestScheduler(
     private var closed = false
 
     init {
-        require(totalLimit > 0 && hostLimit > 0)
+        require(totalLimit > 0 && hostLimit > 0 && backgroundSourceLimit > 0)
     }
 
     suspend fun <T> withPermit(host: String, owner: String, priority: Int, block: suspend () -> T): T {
@@ -71,6 +73,12 @@ class NetworkRequestScheduler(
             val eligible = waiting.filter { waiter ->
                 waiter.ready.isActive && waiter.host !in cooldowns &&
                     active.count { it.host == waiter.host } < hostLimit &&
+                    // One source (owner) downloading in the background is capped across all its hosts.
+                    (
+                        waiter.priority > RequestPriority.BACKGROUND ||
+                            active.count { it.owner == waiter.owner && it.priority == RequestPriority.BACKGROUND } <
+                            backgroundSourceLimit
+                        ) &&
                     // Keep one slot available for reading while downloads are active.
                     (
                         waiter.priority > RequestPriority.BACKGROUND || hostLimit == 1 ||

@@ -555,7 +555,7 @@ class DesktopSourceManagerTest {
     @Test
     fun `loadSource throws IllegalStateException and unloads package when package file is missing`(
         @TempDir tempDir: Path,
-    ) = runBlocking {
+    ): Unit = runBlocking {
         val source = SourceDescriptor(9123L, "MissingPkg", "en", "fixture.Source")
         val manifest = ExtensionManifest("ext.missingpkg", "MissingPkg", "1.0", 1, 1.4, "en", sources = listOf(source))
         val preferences = DesktopPreferenceStore(tempDir.resolve("preferences.properties"))
@@ -564,16 +564,21 @@ class DesktopSourceManagerTest {
         writeMext(file, manifest)
         val installed = installer.installFromLocalFile(file, trustOnInstall = true)
 
+        // A host that still holds the source keeps serving it, so the missing file only matters once
+        // the source must be reloaded; model that by having the host forget it.
+        var hostSources = listOf(source)
         val process = object : WindowsExtensionProcessManager(tempDir.resolve("host").toFile()) {
             override suspend fun start() {}
             override suspend fun loadExtension(packageFile: File): List<SourceDescriptor> = listOf(source)
-            override suspend fun getSources(): List<SourceDescriptor> = listOf(source)
+            override suspend fun getSources(): List<SourceDescriptor> = hostSources
         }
 
         DesktopSourceManager(installer, process, preferences).use { manager ->
             manager.loadSource(source.id)
 
             File(installed.packageFile).delete() shouldBe true
+            manager.loadSource(source.id) // still loaded in the host: keeps working
+            hostSources = emptyList()
 
             val ex = assertThrows<IllegalStateException> {
                 manager.loadSource(source.id)
@@ -585,7 +590,7 @@ class DesktopSourceManagerTest {
     @Test
     fun `withLoadedExtensionSource fails fast with actionable message when package file is missing`(
         @TempDir tempDir: Path,
-    ) = runBlocking {
+    ): Unit = runBlocking {
         val source = SourceDescriptor(9124L, "MissingRoute", "en", "fixture.Source")
         val manifest =
             ExtensionManifest("ext.missingroute", "MissingRoute", "1.0", 1, 1.4, "en", sources = listOf(source))

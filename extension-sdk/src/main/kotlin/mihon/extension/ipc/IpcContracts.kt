@@ -127,6 +127,8 @@ data class BrokerHttpRequest(
     val extensionId: String? = null,
     val sourceId: Long? = null,
     val bodyBase64: String? = null,
+    /** Oversized request bodies are spilled here instead of base64-encoding past the frame limit. */
+    val bodyFileName: String? = null,
     val headerValues: Map<String, List<String>> = emptyMap(),
     val priority: Int = RequestPriority.NORMAL,
 )

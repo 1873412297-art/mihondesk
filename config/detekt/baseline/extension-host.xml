@@ -1,0 +1,11 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<SmellBaseline>
+  <ManuallySuppressedIssues />
+  <CurrentIssues>
+    <ID>LongMethod:BrokerTransport.kt:BrokerTransport.TransportChain$override fun proceed: Response</ID>
+    <ID>LongMethod:ExtensionHostEngine.kt:ExtensionHostEngine$fun loadExtension: List&lt;SourceDescriptor&gt;</ID>
+    <ID>LongMethod:ExtensionHostRequests.kt:internal suspend fun ExtensionHostEngine.handleBoundRequest: IpcResponse</ID>
+    <ID>LongMethod:Main.kt:fun main</ID>
+    <ID>LongMethod:SourcePreferenceValues.kt:internal fun SourcePreferenceModel.convertValue: Any</ID>
+  </CurrentIssues>
+</SmellBaseline>

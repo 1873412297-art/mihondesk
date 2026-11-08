@@ -5,6 +5,8 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import mihon.desktop.logging.DesktopLogger
+import mihon.desktop.platform.moveReplacing
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
@@ -113,9 +115,20 @@ class OfflineTrackingQueue(
         return try {
             val text = Files.readString(queueFile)
             if (text.isBlank()) emptyList() else json.decodeFromString(text)
-        } catch (e: Exception) {
+        } catch (error: Exception) {
+            quarantineCorruptQueue(error)
             emptyList()
         }
+    }
+
+    /** Keeps a corrupt queue file for recovery instead of letting the next save overwrite it. */
+    private fun quarantineCorruptQueue(error: Exception) {
+        val corrupt = queueFile.resolveSibling("${queueFile.fileName}.corrupt")
+        DesktopLogger.warn("OfflineTracking", "Offline tracking queue is corrupt at $queueFile", error)
+        runCatching { Files.move(queueFile, corrupt, StandardCopyOption.REPLACE_EXISTING) }
+            .onFailure { moveError ->
+                DesktopLogger.warn("OfflineTracking", "Could not preserve corrupt queue $queueFile", moveError)
+            }
     }
 
     private fun saveUnsafe(items: List<QueuedTrackingUpdate>) {
@@ -126,6 +139,11 @@ class OfflineTrackingQueue(
         val temp = queueFile.resolveSibling("${queueFile.fileName}.tmp")
         val content = json.encodeToString(items)
         Files.writeString(temp, content)
-        Files.move(temp, queueFile, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
+        try {
+            // FAT and network volumes reject an atomic replace; keep the previous queue if both fail.
+            moveReplacing(temp, queueFile)
+        } finally {
+            Files.deleteIfExists(temp)
+        }
     }
 }

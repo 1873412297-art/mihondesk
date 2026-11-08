@@ -17,6 +17,7 @@ import mihon.desktop.extension.ExtensionStoreService
 import mihon.desktop.extension.InstalledExtension
 import mihon.desktop.extension.WindowsExtensionProcessManager
 import mihon.desktop.extension.builtin.BundledMangaDexSource
+import mihon.desktop.extension.registerBuiltinSource
 import mihon.desktop.library.db.DesktopLibraryDatabaseFactory
 import mihon.desktop.preferences.DesktopPreferenceStore
 import mihon.extension.model.ExtensionManifest

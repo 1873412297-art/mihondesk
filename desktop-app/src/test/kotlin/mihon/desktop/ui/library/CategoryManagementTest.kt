@@ -268,6 +268,7 @@ private class FakeCategoryLibrary : LibraryRepository, LibraryMutationPort {
     override fun insertManga(value: MangaRecord): Long = 0L
     override fun updateManga(value: MangaRecord) = Unit
     override fun findChapter(mangaId: Long, url: String): ChapterRecord? = null
+    override fun chaptersForManga(mangaId: Long): List<ChapterRecord> = emptyList()
     override fun insertChapter(value: ChapterRecord): Long = 0L
     override fun updateChapter(value: ChapterRecord) = Unit
 

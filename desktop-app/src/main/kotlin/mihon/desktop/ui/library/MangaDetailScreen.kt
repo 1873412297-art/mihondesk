@@ -1,106 +1,33 @@
 package mihon.desktop.ui.library
 
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.automirrored.rounded.ChromeReaderMode
-import androidx.compose.material.icons.automirrored.rounded.Label
-import androidx.compose.material.icons.automirrored.rounded.OpenInNew
-import androidx.compose.material.icons.automirrored.rounded.PlaylistAddCheck
-import androidx.compose.material.icons.rounded.Bookmark
-import androidx.compose.material.icons.rounded.BookmarkBorder
-import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.ContentCopy
-import androidx.compose.material.icons.rounded.Download
-import androidx.compose.material.icons.rounded.Edit
-import androidx.compose.material.icons.rounded.EditNote
-import androidx.compose.material.icons.rounded.Favorite
-import androidx.compose.material.icons.rounded.FavoriteBorder
-import androidx.compose.material.icons.rounded.MoreVert
-import androidx.compose.material.icons.rounded.PlayArrow
-import androidx.compose.material.icons.rounded.Refresh
-import androidx.compose.material.icons.rounded.Search
-import androidx.compose.material.icons.rounded.Settings
-import androidx.compose.material.icons.rounded.Sync
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExtendedFloatingActionButton
-import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.SuggestionChip
-import androidx.compose.material3.SuggestionChipDefaults
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onPreviewKeyEvent
-import androidx.compose.ui.input.key.type
-import androidx.compose.ui.input.pointer.isShiftPressed
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.launch
-import kotlinx.serialization.json.Json
-import mihon.desktop.category.DesktopCategory
-import mihon.desktop.download.DownloadStatus
 import mihon.desktop.extension.ExtensionStoreItem
 import mihon.desktop.i18n.LocalStrings
 import mihon.desktop.i18n.UiText
-import mihon.desktop.i18n.chapterCountLabel
-import mihon.desktop.i18n.locale
 import mihon.desktop.i18n.text
-import mihon.desktop.library.model.LibraryChapter
 import mihon.desktop.library.model.MangaReaderSettingsOverride
-import mihon.desktop.ui.common.DesktopTooltipBox
-import mihon.desktop.ui.common.DownloadIndicator
 import mihon.desktop.ui.common.MangaBackdropBanner
 import mihon.desktop.ui.common.formatNetworkErrorMessage
-import mihon.desktop.ui.common.onSecondaryClick
-import mihon.desktop.ui.common.trackTextInputFocus
 
 @Composable
 fun MangaDetailScreen(
@@ -222,29 +149,8 @@ fun MangaDetailScreen(
                 }
 
                 val displayedChapterItems = androidx.compose.runtime.remember(chapterItems, chapterSearchQuery) {
-                    if (chapterSearchQuery.isBlank()) {
-                        chapterItems
-                    } else {
-                        chapterItems.filter { item ->
-                            when (item) {
-                                is ChapterListItem.Chapter -> {
-                                    item.label.contains(chapterSearchQuery, ignoreCase = true) ||
-                                        item.chapter.name.contains(chapterSearchQuery, ignoreCase = true) ||
-                                        (
-                                            item.chapter.scanlator?.contains(
-                                                chapterSearchQuery,
-                                                ignoreCase = true,
-                                            ) == true
-                                            ) ||
-                                        item.chapter.chapterNumber.toString().contains(chapterSearchQuery)
-                                }
-                                is ChapterListItem.MissingCount -> false
-                                is ChapterListItem.VolumeHeader -> false
-                            }
-                        }
-                    }
+                    filterChapterItems(chapterItems, chapterSearchQuery)
                 }
-
                 val nextChapterToRead = androidx.compose.runtime.remember(state.chapters) {
                     nextChapterToRead(state.chapters)
                 }
@@ -277,909 +183,116 @@ fun MangaDetailScreen(
                                     .padding(start = 24.dp, end = 12.dp, top = 14.dp, bottom = 24.dp),
                                 verticalArrangement = Arrangement.spacedBy(16.dp),
                             ) {
-                                val shareableLink = remember(manga.url, sourceBaseUrl) {
-                                    when {
-                                        manga.url.startsWith("http") -> manga.url
-                                        sourceBaseUrl != null -> sourceBaseUrl + manga.url
-                                        else -> null
-                                    }
-                                }
-                                val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
-                                val snackbarHostState = mihon.desktop.ui.common.LocalSnackbarHostState.current
-                                val copyLink: () -> Unit = {
-                                    shareableLink?.let { link ->
-                                        clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(link))
-                                        coroutineScope.launch {
-                                            snackbarHostState?.showSnackbar(strings.mangaDetailLinkCopied)
-                                        }
-                                    }
-                                }
-                                val openBrowser: () -> Unit = {
-                                    mihon.desktop.platform.DesktopBrowserHelper.openInBrowser(manga.url)
-                                }
-                                // One row: 编辑信息 and 进度记录 overflow into ⋯ first when space runs out.
-                                val rowActions = buildList {
-                                    onToggleLibrary?.let { toggleLibrary ->
-                                        val icon =
-                                            if (manga.favorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder
-                                        val label = if (manga.favorite) {
-                                            strings.mangaDetailInLibrary
-                                        } else {
-                                            strings.mangaDetailAddToLibrary
-                                        }
-                                        add(
-                                            OverflowAction(
-                                                "library",
-                                                6,
-                                                label,
-                                                icon,
-                                                !isLibraryActionRunning,
-                                                toggleLibrary,
-                                            ) {
-                                                DetailActionButton(
-                                                    label,
-                                                    icon,
-                                                    toggleLibrary,
-                                                    "manga-detail-library-button",
-                                                    enabled = !isLibraryActionRunning,
-                                                )
-                                            },
-                                        )
-                                    }
-                                    onRefreshSource?.let { refreshSource ->
-                                        add(
-                                            OverflowAction(
-                                                "refresh",
-                                                5,
-                                                strings.browseRefresh,
-                                                Icons.Rounded.Refresh,
-                                                !isRefreshingSource,
-                                                refreshSource,
-                                            ) {
-                                                DetailActionButton(
-                                                    strings.browseRefresh,
-                                                    Icons.Rounded.Refresh,
-                                                    refreshSource,
-                                                    "manga-detail-refresh-button",
-                                                    enabled = !isRefreshingSource,
-                                                )
-                                            },
-                                        )
-                                    }
-                                    add(
-                                        OverflowAction(
-                                            "edit-info",
-                                            0,
-                                            strings.mangaDetailEditInfo,
-                                            Icons.Rounded.Edit,
-                                            onClick = onEditInfo,
-                                        ) {
-                                            DetailActionButton(
-                                                strings.mangaDetailEditInfo,
-                                                Icons.Rounded.Edit,
-                                                onEditInfo,
-                                                "manga-detail-edit-info-button",
-                                            )
-                                        },
-                                    )
-                                    add(
-                                        OverflowAction(
-                                            "categories",
-                                            4,
-                                            strings.mangaDetailCategories,
-                                            Icons.AutoMirrored.Rounded.Label,
-                                            onClick = onEditCategories,
-                                        ) {
-                                            DetailActionButton(
-                                                strings.mangaDetailCategories,
-                                                Icons.AutoMirrored.Rounded.Label,
-                                                onEditCategories,
-                                                "manga-detail-edit-categories-button",
-                                            )
-                                        },
-                                    )
-                                    if (manga.url.startsWith("http")) {
-                                        add(
-                                            OverflowAction(
-                                                "open-browser",
-                                                3,
-                                                strings.openInBrowser,
-                                                Icons.AutoMirrored.Rounded.OpenInNew,
-                                                onClick = openBrowser,
-                                            ) {
-                                                DetailActionButton(
-                                                    strings.openInBrowser,
-                                                    Icons.AutoMirrored.Rounded.OpenInNew,
-                                                    openBrowser,
-                                                    "manga-detail-open-browser-button",
-                                                )
-                                            },
-                                        )
-                                    }
-                                    if (shareableLink != null) {
-                                        add(
-                                            OverflowAction(
-                                                "copy-link",
-                                                2,
-                                                strings.mangaDetailCopyLink,
-                                                Icons.Rounded.ContentCopy,
-                                                onClick = copyLink,
-                                            ) {
-                                                DetailActionButton(
-                                                    strings.mangaDetailCopyLink,
-                                                    Icons.Rounded.ContentCopy,
-                                                    copyLink,
-                                                    "manga-detail-copy-link-button",
-                                                )
-                                            },
-                                        )
-                                    }
-                                    add(
-                                        OverflowAction(
-                                            "tracking",
-                                            1,
-                                            strings.mangaDetailTracking,
-                                            Icons.Rounded.Sync,
-                                            onClick = onOpenTracking,
-                                        ) {
-                                            DetailActionButton(
-                                                strings.mangaDetailTracking,
-                                                Icons.Rounded.Sync,
-                                                onOpenTracking,
-                                                "manga-detail-open-tracking-button",
-                                                tonal = true,
-                                            )
-                                        },
-                                    )
-                                }
-                                OverflowActionRow(
-                                    actions = rowActions,
-                                    moreLabel = strings.text(mihon.desktop.i18n.UiText.More),
-                                    modifier = Modifier.fillMaxWidth().testTag("manga-detail-action-row"),
-                                    leading = if (showBack) {
-                                        {
-                                            TextButton(
-                                                onClick = onBack,
-                                                modifier = Modifier.testTag("manga-detail-back"),
-                                            ) {
-                                                Icon(
-                                                    imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                                                    contentDescription = null,
-                                                    modifier = Modifier.size(18.dp),
-                                                )
-                                                Spacer(Modifier.width(6.dp))
-                                                Text(strings.mangaDetailBack)
-                                            }
-                                        }
-                                    } else {
-                                        null
-                                    },
-                                    trailing = onClose?.let { close ->
-                                        {
-                                            mihon.desktop.ui.common.DesktopTooltipBox(tooltip = strings.dialogClose) {
-                                                IconButton(
-                                                    onClick = close,
-                                                    modifier = Modifier.testTag("library-detail-close"),
-                                                ) {
-                                                    Icon(Icons.Rounded.Close, contentDescription = strings.dialogClose)
-                                                }
-                                            }
-                                        }
-                                    },
+                                MangaDetailActionRow(
+                                    manga = manga,
+                                    strings = strings,
+                                    sourceBaseUrl = sourceBaseUrl,
+                                    showBack = showBack,
+                                    onBack = onBack,
+                                    onClose = onClose,
+                                    isLibraryActionRunning = isLibraryActionRunning,
+                                    isRefreshingSource = isRefreshingSource,
+                                    onToggleLibrary = onToggleLibrary,
+                                    onRefreshSource = onRefreshSource,
+                                    onEditInfo = onEditInfo,
+                                    onEditCategories = onEditCategories,
+                                    onOpenTracking = onOpenTracking,
                                 )
 
-                                state.missingSource?.let { missing ->
-                                    Surface(
-                                        modifier = Modifier.fillMaxWidth().testTag("missing-source-banner"),
-                                        shape = MaterialTheme.shapes.medium,
-                                        color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f),
-                                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f)),
-                                    ) {
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth().padding(16.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                        ) {
-                                            Column(
-                                                modifier = Modifier.weight(1f).padding(end = 16.dp),
-                                                verticalArrangement = Arrangement.spacedBy(4.dp),
-                                            ) {
-                                                val bannerTitle = if (missing.extension != null) {
-                                                    strings.missingSourceBannerTitle(
-                                                        extName = missing.extension.name.ifBlank {
-                                                            strings.missingSourceUnknownExtension
-                                                        },
-                                                        mangaCount = missing.mangaCount,
-                                                    )
-                                                } else {
-                                                    strings.missingSourceBannerNotFound
-                                                }
-                                                Text(
-                                                    text = bannerTitle,
-                                                    style = MaterialTheme.typography.bodyMedium,
-                                                    fontWeight = FontWeight.SemiBold,
-                                                    color = MaterialTheme.colorScheme.onErrorContainer,
-                                                )
-                                            }
-                                            if (missing.extension != null) {
-                                                Row(
-                                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                                    verticalAlignment = Alignment.CenterVertically,
-                                                ) {
-                                                    FilledTonalButton(
-                                                        onClick = { onInstallMissingSource(missing.extension) },
-                                                        modifier = Modifier.testTag("missing-source-install-btn"),
-                                                    ) {
-                                                        Text(strings.missingSourceBannerInstall)
-                                                    }
-                                                    TextButton(
-                                                        onClick = onIgnoreMissingSource,
-                                                        modifier = Modifier.testTag("missing-source-ignore-btn"),
-                                                    ) {
-                                                        Text(strings.missingSourceBannerIgnore)
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
+                                MissingSourceBanner(
+                                    state.missingSource,
+                                    strings,
+                                    onInstallMissingSource,
+                                    onIgnoreMissingSource,
+                                )
 
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(20.dp),
-                                    verticalAlignment = Alignment.Top,
-                                ) {
-                                    Column(
-                                        horizontalAlignment = Alignment.CenterHorizontally,
-                                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                                    ) {
-                                        androidx.compose.runtime.key(coverRefreshKey) {
-                                            Surface(
-                                                shape = MaterialTheme.shapes.medium,
-                                                tonalElevation = 4.dp,
-                                                shadowElevation = 8.dp,
-                                                modifier = Modifier
-                                                    .clip(MaterialTheme.shapes.medium)
-                                                    .clickable { isCoverDialogOpen = true }
-                                                    .testTag("manga-detail-cover-clickable"),
-                                            ) {
-                                                val detailCoverHeaders = remember(sourceBaseUrl, manga.thumbnailUrl) {
-                                                    mihon.desktop.ui.common.coverHeaders(
-                                                        sourceBaseUrl,
-                                                        manga.thumbnailUrl,
-                                                    )
-                                                }
-                                                val onCoverError = remember(onCoverLoadFailed) {
-                                                    { code: Int ->
-                                                        if (code == 403 || code == 404 || code == 410) {
-                                                            onCoverLoadFailed?.invoke(code)
-                                                        }
-                                                    }
-                                                }
-                                                mihon.desktop.ui.common.MangaCover(
-                                                    thumbnailUrl = manga.thumbnailUrl,
-                                                    mangaId = manga.id,
-                                                    contentDescription = manga.title,
-                                                    modifier = Modifier.width(140.dp).height(200.dp),
-                                                    shape = MaterialTheme.shapes.medium,
-                                                    headers = detailCoverHeaders,
-                                                    onCoverHttpError = onCoverError,
-                                                )
-                                            }
-                                        }
-                                        androidx.compose.material3.OutlinedButton(
-                                            onClick = {
-                                                val picked = chooseCoverImage(strings.text(UiText.ChooseCover))
-                                                if (picked != null) {
-                                                    customCoverManager?.setCustomCover(manga.id, picked)
-                                                    imageLoader?.clearMemoryCache()
-                                                    coverRefreshKey++
-                                                }
-                                            },
-                                            modifier = Modifier.testTag("manga-detail-change-cover-btn"),
-                                        ) {
-                                            Text(strings.mangaDetailChangeCover)
-                                        }
-                                        if (hasCustomCover) {
-                                            TextButton(
-                                                onClick = {
-                                                    customCoverManager?.removeCustomCover(manga.id)
-                                                    imageLoader?.clearMemoryCache()
-                                                    coverRefreshKey++
-                                                },
-                                                modifier = Modifier.testTag("manga-detail-reset-cover-btn"),
-                                            ) {
-                                                Text(strings.mangaDetailResetCover)
-                                            }
-                                        }
-                                    }
-
-                                    Column(
-                                        modifier = Modifier.weight(1f),
-                                        verticalArrangement = Arrangement.spacedBy(10.dp),
-                                    ) {
-                                        Text(
-                                            manga.title,
-                                            modifier = Modifier.testTag("manga-detail-title"),
-                                            style = MaterialTheme.typography.headlineMedium,
-                                            fontWeight = FontWeight.SemiBold,
-                                        )
-                                        MangaStatusBadge(manga.status, strings)
-                                        manga.author?.takeIf(String::isNotBlank)?.let {
-                                            MetadataLine(strings.mangaDetailAuthor, it)
-                                        }
-                                        manga.artist?.takeIf(String::isNotBlank)?.let {
-                                            MetadataLine(strings.mangaDetailArtist, it)
-                                        }
-                                        manga.description?.takeIf(String::isNotBlank)?.let {
-                                            ExpandableMangaDescription(it)
-                                        }
-                                        val genres = decodeGenres(manga.genreJson)
-                                        if (genres.isNotEmpty()) {
-                                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                                Text(
-                                                    strings.mangaDetailGenres,
-                                                    style = MaterialTheme.typography.labelLarge,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                )
-                                                // Retain for semantic & accessibility assertions
-                                                Text(
-                                                    text = genres.joinToString(" · "),
-                                                    modifier = Modifier.height(0.dp).alpha(0f),
-                                                )
-                                                FlowRow(
-                                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                                                ) {
-                                                    genres.forEach { genre ->
-                                                        SuggestionChip(
-                                                            onClick = {},
-                                                            label = {
-                                                                Text(
-                                                                    genre,
-                                                                    style = MaterialTheme.typography.labelSmall,
-                                                                )
-                                                            },
-                                                            shape = RoundedCornerShape(8.dp),
-                                                            border = null,
-                                                            colors = SuggestionChipDefaults.suggestionChipColors(
-                                                                containerColor =
-                                                                MaterialTheme.colorScheme.secondaryContainer.copy(
-                                                                    alpha = 0.55f,
-                                                                ),
-                                                                labelColor =
-                                                                MaterialTheme.colorScheme.onSecondaryContainer,
-                                                            ),
-                                                        )
-                                                    }
-                                                }
-                                            }
-                                        }
-                                        if (manga.categories.isNotEmpty()) {
-                                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                                Text(
-                                                    strings.mangaDetailCategories,
-                                                    style = MaterialTheme.typography.labelLarge,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                )
-                                                Text(
-                                                    text = manga.categories.joinToString(" · ") { it.name },
-                                                    style = MaterialTheme.typography.bodyLarge,
-                                                )
-                                            }
-                                        }
-                                        if (manga.notes.isNotBlank()) {
-                                            Row(
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                            ) {
-                                                Column(modifier = Modifier.weight(1f)) {
-                                                    MetadataLine(strings.mangaDetailNotes, manga.notes)
-                                                }
-                                                DesktopTooltipBox(text = strings.mangaNotesEdit) {
-                                                    IconButton(
-                                                        onClick = { isNotesDialogOpen = true },
-                                                        modifier = Modifier.testTag("manga-detail-edit-notes-btn"),
-                                                    ) {
-                                                        Icon(
-                                                            imageVector = Icons.Rounded.EditNote,
-                                                            contentDescription = strings.mangaNotesEdit,
-                                                            tint = MaterialTheme.colorScheme.primary,
-                                                        )
-                                                    }
-                                                }
-                                            }
-                                        } else {
-                                            TextButton(
-                                                onClick = { isNotesDialogOpen = true },
-                                                modifier = Modifier.testTag("manga-detail-add-notes-btn"),
-                                            ) {
-                                                Icon(
-                                                    imageVector = Icons.Rounded.EditNote,
-                                                    contentDescription = null,
-                                                    modifier = Modifier.size(16.dp),
-                                                )
-                                                Spacer(Modifier.width(6.dp))
-                                                Text(strings.mangaNotesTitle)
-                                            }
-                                        }
-                                    }
-                                }
+                                MangaDetailInfoRow(
+                                    manga = manga,
+                                    strings = strings,
+                                    sourceBaseUrl = sourceBaseUrl,
+                                    coverRefreshKey = coverRefreshKey,
+                                    hasCustomCover = hasCustomCover,
+                                    onCoverClick = { isCoverDialogOpen = true },
+                                    onCoverChanged = { coverRefreshKey++ },
+                                    onEditNotes = { isNotesDialogOpen = true },
+                                    onCoverLoadFailed = onCoverLoadFailed,
+                                )
 
                                 HorizontalDivider(modifier = Modifier.padding(top = 4.dp))
                                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically,
-                                    ) {
-                                        val countText = if (state.chapters.size == state.allChapters.size) {
-                                            "${strings.chapters} (${state.chapters.size})"
-                                        } else {
-                                            "${strings.chapters} (${state.chapters.size}/${state.allChapters.size})"
-                                        }
-                                        Text(countText, style = MaterialTheme.typography.titleLarge)
-
-                                        Row(
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                        ) {
-                                            var downloadMenuExpanded by remember { mutableStateOf(false) }
-                                            Box {
-                                                DesktopTooltipBox(text = strings.downloadChapter) {
-                                                    IconButton(
-                                                        onClick = { downloadMenuExpanded = true },
-                                                        modifier = Modifier.testTag(
-                                                            "manga-detail-download-menu-button",
-                                                        ),
-                                                    ) {
-                                                        Icon(
-                                                            imageVector = Icons.Rounded.Download,
-                                                            contentDescription = strings.downloadChapter,
-                                                            tint = MaterialTheme.colorScheme.primary,
-                                                        )
-                                                    }
-                                                }
-                                                DropdownMenu(
-                                                    expanded = downloadMenuExpanded,
-                                                    onDismissRequest = { downloadMenuExpanded = false },
-                                                ) {
-                                                    DropdownMenuItem(
-                                                        text = { Text(strings.downloadNext1) },
-                                                        onClick = {
-                                                            onDownloadBatch(1)
-                                                            downloadMenuExpanded = false
-                                                        },
-                                                        modifier = Modifier.testTag("manga-detail-download-next-1"),
-                                                    )
-                                                    DropdownMenuItem(
-                                                        text = { Text(strings.downloadNext5) },
-                                                        onClick = {
-                                                            onDownloadBatch(5)
-                                                            downloadMenuExpanded = false
-                                                        },
-                                                        modifier = Modifier.testTag("manga-detail-download-next-5"),
-                                                    )
-                                                    DropdownMenuItem(
-                                                        text = { Text(strings.downloadNext10) },
-                                                        onClick = {
-                                                            onDownloadBatch(10)
-                                                            downloadMenuExpanded = false
-                                                        },
-                                                        modifier = Modifier.testTag("manga-detail-download-next-10"),
-                                                    )
-                                                    DropdownMenuItem(
-                                                        text = { Text(strings.downloadNext25) },
-                                                        onClick = {
-                                                            onDownloadBatch(25)
-                                                            downloadMenuExpanded = false
-                                                        },
-                                                        modifier = Modifier.testTag("manga-detail-download-next-25"),
-                                                    )
-                                                    DropdownMenuItem(
-                                                        text = { Text(strings.downloadUnread) },
-                                                        onClick = {
-                                                            onDownloadBatch(null)
-                                                            downloadMenuExpanded = false
-                                                        },
-                                                        modifier = Modifier.testTag("manga-detail-download-unread"),
-                                                    )
-                                                    DropdownMenuItem(
-                                                        text = { Text(strings.downloadAll) },
-                                                        onClick = {
-                                                            onDownloadBatch(-1)
-                                                            downloadMenuExpanded = false
-                                                        },
-                                                        modifier = Modifier.testTag("manga-detail-download-all"),
-                                                    )
-                                                }
-                                            }
-
-                                            var sortMenuExpanded by remember { mutableStateOf(false) }
-                                            Box {
-                                                OutlinedButton(
-                                                    onClick = { sortMenuExpanded = true },
-                                                    modifier = Modifier.testTag("manga-detail-sort-button"),
-                                                ) {
-                                                    val sortLabel = when (state.chapterSortState.mode) {
-                                                        ChapterSortMode.SourceOrder -> strings.sortSourceOrder
-                                                        ChapterSortMode.ChapterNumber -> strings.sortChapterNumber
-                                                        ChapterSortMode.UploadDate -> strings.sortUploadDate
-                                                    }
-                                                    val dirArrow =
-                                                        if (state.chapterSortState.ascending) "▲" else "▼"
-                                                    Text("$sortLabel $dirArrow")
-                                                }
-                                                DropdownMenu(
-                                                    expanded = sortMenuExpanded,
-                                                    onDismissRequest = { sortMenuExpanded = false },
-                                                ) {
-                                                    ChapterSortMode.entries.forEach { mode ->
-                                                        val label = when (mode) {
-                                                            ChapterSortMode.SourceOrder -> strings.sortSourceOrder
-                                                            ChapterSortMode.ChapterNumber -> strings.sortChapterNumber
-                                                            ChapterSortMode.UploadDate -> strings.sortUploadDate
-                                                        }
-                                                        val isCurrentMode = state.chapterSortState.mode == mode
-                                                        DropdownMenuItem(
-                                                            text = {
-                                                                val mark = if (isCurrentMode) "✓ " else ""
-                                                                Text(mark + label)
-                                                            },
-                                                            onClick = {
-                                                                if (isCurrentMode) {
-                                                                    onChapterSortChange(
-                                                                        state.chapterSortState.copy(
-                                                                            ascending =
-                                                                            !state.chapterSortState.ascending,
-                                                                        ),
-                                                                    )
-                                                                } else {
-                                                                    onChapterSortChange(
-                                                                        state.chapterSortState.copy(mode = mode),
-                                                                    )
-                                                                }
-                                                                sortMenuExpanded = false
-                                                            },
-                                                        )
-                                                    }
-                                                }
-                                            }
-                                            Box(
-                                                modifier = Modifier
-                                                    .testTag("manga-detail-chapter-settings-button")
-                                                    .clickable(onClick = onOpenChapterSettings),
-                                            ) {
-                                                DesktopTooltipBox(text = strings.text(UiText.ChapterSettings)) {
-                                                    IconButton(
-                                                        onClick = onOpenChapterSettings,
-                                                        modifier = Modifier.testTag("chapter-settings-button"),
-                                                    ) {
-                                                        Icon(
-                                                            imageVector = Icons.Rounded.Settings,
-                                                            contentDescription = strings.text(UiText.ChapterSettings),
-                                                            tint = MaterialTheme.colorScheme.primary,
-                                                        )
-                                                    }
-                                                }
-                                            }
-                                            Box(
-                                                modifier = Modifier
-                                                    .testTag("manga-detail-reading-settings-button")
-                                                    .clickable(onClick = onOpenReadingSettings),
-                                            ) {
-                                                DesktopTooltipBox(text = strings.text(UiText.ReadingSettingsOverride)) {
-                                                    IconButton(
-                                                        onClick = onOpenReadingSettings,
-                                                        modifier = Modifier.testTag("reading-settings-override-button"),
-                                                    ) {
-                                                        Icon(
-                                                            imageVector = Icons.AutoMirrored.Rounded.ChromeReaderMode,
-                                                            contentDescription = strings.text(
-                                                                UiText.ReadingSettingsOverride,
-                                                            ),
-                                                            tint = MaterialTheme.colorScheme.primary,
-                                                        )
-                                                    }
-                                                }
-                                            }
-                                            DesktopTooltipBox(text = strings.text(UiText.SearchChapters)) {
-                                                IconButton(
-                                                    onClick = {
-                                                        isSearchingChapters = !isSearchingChapters
-                                                        if (!isSearchingChapters) chapterSearchQuery = ""
-                                                    },
-                                                    modifier = Modifier.testTag("chapter-search-toggle-button"),
-                                                ) {
-                                                    Icon(
-                                                        imageVector = Icons.Rounded.Search,
-                                                        contentDescription = strings.text(UiText.SearchChapters),
-                                                        tint = if (isSearchingChapters ||
-                                                            chapterSearchQuery.isNotEmpty()
-                                                        ) {
-                                                            MaterialTheme.colorScheme.primary
-                                                        } else {
-                                                            MaterialTheme.colorScheme.onSurfaceVariant
-                                                        },
-                                                    )
-                                                }
-                                            }
-                                            DesktopTooltipBox(text = strings.chapterBatchSelect) {
-                                                IconButton(
-                                                    onClick = {
-                                                        isSelectionMode = !isSelectionMode
-                                                        if (!isSelectionMode) selectedChapterIds = emptySet()
-                                                    },
-                                                    modifier = Modifier.testTag("chapter-selection-toggle-button"),
-                                                ) {
-                                                    Icon(
-                                                        imageVector = Icons.AutoMirrored.Rounded.PlaylistAddCheck,
-                                                        contentDescription = strings.chapterBatchSelect,
-                                                        tint = if (isSelectionMode || selectedChapterIds.isNotEmpty()) {
-                                                            MaterialTheme.colorScheme.primary
-                                                        } else {
-                                                            MaterialTheme.colorScheme.onSurfaceVariant
-                                                        },
-                                                    )
-                                                }
-                                            }
-                                        }
-                                    }
-
-                                    if (isSearchingChapters) {
-                                        OutlinedTextField(
-                                            value = chapterSearchQuery,
-                                            onValueChange = { chapterSearchQuery = it },
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(bottom = 8.dp)
-                                                .trackTextInputFocus()
-                                                .testTag("chapter-search-text-field"),
-                                            placeholder = {
-                                                Text(
-                                                    text = strings.mangaDetailSearchChaptersPlaceholder,
-                                                    style = MaterialTheme.typography.bodyMedium,
-                                                )
-                                            },
-                                            leadingIcon = {
-                                                Icon(
-                                                    imageVector = Icons.Rounded.Search,
-                                                    contentDescription = null,
-                                                    modifier = Modifier.size(18.dp),
-                                                )
-                                            },
-                                            trailingIcon = {
-                                                if (chapterSearchQuery.isNotEmpty()) {
-                                                    DesktopTooltipBox(text = strings.text(UiText.ClearSearch)) {
-                                                        IconButton(onClick = { chapterSearchQuery = "" }) {
-                                                            Icon(
-                                                                imageVector = Icons.Rounded.Close,
-                                                                contentDescription = strings.text(UiText.ClearSearch),
-                                                                modifier = Modifier.size(18.dp),
-                                                            )
-                                                        }
-                                                    }
-                                                }
-                                            },
-                                            singleLine = true,
-                                            shape = RoundedCornerShape(12.dp),
-                                        )
-                                    }
-
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    ) {
-                                        FilterChip(
-                                            selected = state.chapterFilterState.unread != TriStateFilter.Disabled,
-                                            onClick = {
-                                                onChapterFilterChange(
-                                                    state.chapterFilterState.copy(
-                                                        unread = state.chapterFilterState.unread.next(),
-                                                    ),
-                                                )
-                                            },
-                                            label = {
-                                                val text = when (state.chapterFilterState.unread) {
-                                                    TriStateFilter.Include -> strings.filterUnreadOnly
-                                                    TriStateFilter.Exclude -> strings.filterReadOnly
-                                                    TriStateFilter.Disabled -> strings.filterUnread
-                                                }
-                                                Text(text)
-                                            },
-                                            modifier = Modifier.testTag("chapter-filter-unread"),
-                                        )
-                                        FilterChip(
-                                            selected = state.chapterFilterState.downloaded != TriStateFilter.Disabled,
-                                            onClick = {
-                                                onChapterFilterChange(
-                                                    state.chapterFilterState.copy(
-                                                        downloaded = state.chapterFilterState.downloaded.next(),
-                                                    ),
-                                                )
-                                            },
-                                            label = {
-                                                val text = when (state.chapterFilterState.downloaded) {
-                                                    TriStateFilter.Include -> strings.filterDownloadedOnly
-                                                    TriStateFilter.Exclude -> strings.filterNotDownloadedOnly
-                                                    TriStateFilter.Disabled -> strings.filterDownloaded
-                                                }
-                                                Text(text)
-                                            },
-                                            modifier = Modifier.testTag("chapter-filter-downloaded"),
-                                        )
-                                        FilterChip(
-                                            selected = state.chapterFilterState.bookmarked != TriStateFilter.Disabled,
-                                            onClick = {
-                                                onChapterFilterChange(
-                                                    state.chapterFilterState.copy(
-                                                        bookmarked = state.chapterFilterState.bookmarked.next(),
-                                                    ),
-                                                )
-                                            },
-                                            label = {
-                                                val text = when (state.chapterFilterState.bookmarked) {
-                                                    TriStateFilter.Include -> strings.filterBookmarkedOnly
-                                                    TriStateFilter.Exclude -> strings.filterNotBookmarkedOnly
-                                                    TriStateFilter.Disabled -> strings.filterBookmarked
-                                                }
-                                                Text(text)
-                                            },
-                                            modifier = Modifier.testTag("chapter-filter-bookmarked"),
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                        if (displayedChapterItems.isEmpty() && chapterSearchQuery.isNotBlank()) {
-                            item(key = "detail-search-empty") {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(32.dp)
-                                        .testTag("chapter-search-empty"),
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    Text(
-                                        text = strings.readerChapterDrawerNoResults,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.outline,
-                                    )
-                                }
-                            }
-                        } else {
-                            items(displayedChapterItems, key = { it.key }) { item ->
-                                when (item) {
-                                    is ChapterListItem.Chapter -> ChapterRow(
-                                        chapter = item.chapter,
-                                        displayName = chapterDisplayLabel(
-                                            item.chapter,
-                                            state.chapterSettings.displayMode,
-                                            strings,
-                                        ),
-                                        availability = state.readerAvailability[item.chapter.id]
-                                            ?: ChapterReaderAvailability.RemoteOnly,
-                                        isDownloaded = state.downloadedChapterIds.contains(item.chapter.id),
-                                        download = state.chapterDownloads[item.chapter.id],
-                                        downloadsRunning = state.downloadsRunning,
+                                    MangaChapterToolbar(
+                                        state = state,
+                                        strings = strings,
+                                        isSearchingChapters = isSearchingChapters,
+                                        chapterSearchQuery = chapterSearchQuery,
                                         isSelectionMode = isSelectionMode,
-                                        isSelected = selectedChapterIds.contains(item.chapter.id),
+                                        selectedCount = selectedChapterIds.size,
+                                        onDownloadBatch = onDownloadBatch,
+                                        onChapterSortChange = onChapterSortChange,
+                                        onOpenChapterSettings = onOpenChapterSettings,
+                                        onOpenReadingSettings = onOpenReadingSettings,
+                                        onToggleSearch = {
+                                            isSearchingChapters = !isSearchingChapters
+                                            if (!isSearchingChapters) chapterSearchQuery = ""
+                                        },
                                         onToggleSelection = {
-                                            selectedChapterIds = if (selectedChapterIds.contains(item.chapter.id)) {
-                                                selectedChapterIds - item.chapter.id
-                                            } else {
-                                                selectedChapterIds + item.chapter.id
-                                            }
-                                            selectionAnchorId = item.chapter.id
-                                        },
-                                        onRangeSelect = {
-                                            isSelectionMode = true
-                                            selectedChapterIds = chapterRangeSelection(
-                                                displayedChapterItems
-                                                    .filterIsInstance<ChapterListItem.Chapter>()
-                                                    .map { it.chapter.id },
-                                                selectionAnchorId,
-                                                item.chapter.id,
-                                                selectedChapterIds,
-                                            )
-                                            selectionAnchorId = item.chapter.id
-                                        },
-                                        onReadChapter = {
-                                            if (isSelectionMode) {
-                                                selectedChapterIds = if (selectedChapterIds.contains(it)) {
-                                                    selectedChapterIds - it
-                                                } else {
-                                                    selectedChapterIds + it
-                                                }
-                                                selectionAnchorId = it
-                                            } else {
-                                                onReadChapter(it)
-                                            }
-                                        },
-                                        onToggleBookmark = { onToggleBookmark(item.chapter.id) },
-                                        onToggleRead = { onToggleRead(item.chapter.id) },
-                                        onMarkPreviousRead = { onMarkPreviousRead(item.chapter.id) },
-                                        onDownloadChapter = { onDownloadChapter(item.chapter.id) },
-                                        onDeleteDownload = { onDeleteDownload(item.chapter.id) },
-                                        onOpenInWebView = onOpenChapterInWebView?.let { handler ->
-                                            { handler(item.chapter.id) }
+                                            isSelectionMode = !isSelectionMode
+                                            if (!isSelectionMode) selectedChapterIds = emptySet()
                                         },
                                     )
-                                    is ChapterListItem.MissingCount -> MissingChapterIndicator(count = item.count)
-                                    is ChapterListItem.VolumeHeader -> VolumeHeaderRow(item)
+
+                                    ChapterFiltersBar(
+                                        state = state,
+                                        strings = strings,
+                                        isSearchingChapters = isSearchingChapters,
+                                        chapterSearchQuery = chapterSearchQuery,
+                                        onQueryChange = { chapterSearchQuery = it },
+                                        onChapterFilterChange = onChapterFilterChange,
+                                    )
                                 }
                             }
                         }
-                        item(key = "detail-bottom-space") {
-                            androidx.compose.foundation.layout.Spacer(Modifier.height(88.dp))
-                        }
-                    }
-
-                    if (nextChapterToRead != null && !isSelectionMode && selectedChapterIds.isEmpty()) {
-                        ExtendedFloatingActionButton(
-                            onClick = { onReadChapter(nextChapterToRead.id) },
-                            icon = {
-                                Icon(
-                                    imageVector = Icons.Rounded.PlayArrow,
-                                    contentDescription = null,
-                                )
-                            },
-                            text = {
-                                Text(
-                                    text = fabText,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            },
-                            modifier = Modifier
-                                .align(Alignment.BottomEnd)
-                                .padding(24.dp)
-                                .testTag("manga-detail-fab-read"),
+                        chapterListItems(
+                            displayedChapterItems = displayedChapterItems,
+                            chapterSearchQuery = chapterSearchQuery,
+                            state = state,
+                            strings = strings,
+                            isSelectionMode = isSelectionMode,
+                            selectedChapterIds = selectedChapterIds,
+                            selectionAnchorId = selectionAnchorId,
+                            onSelectedChapterIdsChange = { selectedChapterIds = it },
+                            onSelectionModeChange = { isSelectionMode = it },
+                            onSelectionAnchorChange = { selectionAnchorId = it },
+                            onReadChapter = onReadChapter,
+                            onToggleBookmark = onToggleBookmark,
+                            onToggleRead = onToggleRead,
+                            onMarkPreviousRead = onMarkPreviousRead,
+                            onDownloadChapter = onDownloadChapter,
+                            onDeleteDownload = onDeleteDownload,
+                            onOpenChapterInWebView = onOpenChapterInWebView,
                         )
                     }
 
-                    MangaBottomActionMenu(
+                    if (nextChapterToRead != null && !isSelectionMode && selectedChapterIds.isEmpty()) {
+                        NextChapterFab(
+                            text = fabText,
+                            onRead = { onReadChapter(nextChapterToRead.id) },
+                            modifier = Modifier.align(Alignment.BottomEnd).padding(24.dp),
+                        )
+                    }
+
+                    ChapterActionMenu(
                         visible = isSelectionMode || selectedChapterIds.isNotEmpty(),
-                        selectedCount = selectedChapterIds.size,
-                        totalCount = displayedChapterItems.count { it is ChapterListItem.Chapter },
-                        onSelectAll = {
-                            selectedChapterIds =
-                                displayedChapterItems.mapNotNull {
-                                    (it as? ChapterListItem.Chapter)?.chapter?.id
-                                }.toSet()
-                        },
-                        onInvertSelection = {
-                            val allIds = displayedChapterItems.mapNotNull {
-                                (it as? ChapterListItem.Chapter)?.chapter?.id
-                            }.toSet()
-                            selectedChapterIds = allIds - selectedChapterIds
-                        },
-                        onBookmarkClicked = {
-                            onBatchBookmarkChapters(selectedChapterIds, true)
-                        },
-                        onRemoveBookmarkClicked = {
-                            onBatchBookmarkChapters(selectedChapterIds, false)
-                        },
-                        onMarkAsReadClicked = {
-                            onBatchMarkChaptersRead(selectedChapterIds, true)
-                        },
-                        onMarkAsUnreadClicked = {
-                            onBatchMarkChaptersRead(selectedChapterIds, false)
-                        },
-                        onMarkPreviousAsReadClicked = if (selectedChapterIds.size == 1) {
-                            { onMarkPreviousRead(selectedChapterIds.first()) }
-                        } else {
-                            null
-                        },
-                        onDownloadClicked = {
-                            onBatchDownloadChapters(selectedChapterIds)
-                        },
-                        onDeleteClicked = if (selectedChapterIds.any { state.downloadedChapterIds.contains(it) }) {
-                            { onBatchDeleteDownloads(selectedChapterIds) }
-                        } else {
-                            null
-                        },
-                        onCloseClicked = {
+                        selectedChapterIds = selectedChapterIds,
+                        displayedChapterItems = displayedChapterItems,
+                        downloadedChapterIds = state.downloadedChapterIds,
+                        onSelectedChapterIdsChange = { selectedChapterIds = it },
+                        onBatchBookmarkChapters = onBatchBookmarkChapters,
+                        onBatchMarkChaptersRead = onBatchMarkChaptersRead,
+                        onMarkPreviousRead = onMarkPreviousRead,
+                        onBatchDownloadChapters = onBatchDownloadChapters,
+                        onBatchDeleteDownloads = onBatchDeleteDownloads,
+                        onCloseSelection = {
                             isSelectionMode = false
                             selectedChapterIds = emptySet()
                         },
@@ -1187,555 +300,32 @@ fun MangaDetailScreen(
                     )
                 }
 
-                if (isCoverDialogOpen) {
-                    MangaCoverDialog(
-                        mangaTitle = manga.title,
-                        thumbnailUrl = manga.thumbnailUrl,
-                        mangaId = manga.id,
-                        isCustomCover = hasCustomCover,
-                        headers = mihon.desktop.ui.common.coverHeaders(sourceBaseUrl, manga.thumbnailUrl),
-                        onDismissRequest = { isCoverDialogOpen = false },
-                        onChangeCover = {
-                            val picked = chooseCoverImage(strings.text(UiText.ChooseCover))
-                            if (picked != null) {
-                                customCoverManager?.setCustomCover(manga.id, picked)
-                                imageLoader?.clearMemoryCache()
-                                coverRefreshKey++
-                            }
-                        },
-                        onResetCover = {
-                            customCoverManager?.removeCustomCover(manga.id)
-                            imageLoader?.clearMemoryCache()
-                            coverRefreshKey++
-                        },
-                        coverFileProvider = {
-                            imageLoader?.getCoverFile(manga.id, manga.thumbnailUrl)
-                        },
-                    )
-                }
-
-                if (isNotesDialogOpen) {
-                    MangaNotesDialog(
-                        mangaTitle = manga.title,
-                        initialNotes = manga.notes,
-                        onDismissRequest = { isNotesDialogOpen = false },
-                        onSaveNotes = { newNotes ->
-                            onSaveMangaInfo(
-                                manga.title,
-                                manga.author,
-                                manga.artist,
-                                manga.description,
-                                decodeGenres(manga.genreJson),
-                                manga.status,
-                                newNotes,
-                            )
-                        },
-                    )
-                }
-
-                if (state.isEditInfoDialogOpen) {
-                    EditMangaInfoDialog(
-                        manga = manga,
-                        onDismissRequest = onDismissEditInfo,
-                        onSave = onSaveMangaInfo,
-                        onResetToSource = onResetMangaInfo,
-                    )
-                }
-                if (state.isChapterSettingsDialogOpen) {
-                    ChapterSettingsDialog(
-                        settings = state.chapterSettings,
-                        availableScanlators = state.availableScanlators,
-                        onDismissRequest = onDismissChapterSettings,
-                        onDisplayModeChange = onChapterDisplayModeChange,
-                        onSortModeChange = { mode, ascending ->
-                            onChapterSortChange(ChapterSortState(mode = mode, ascending = ascending))
-                        },
-                        onShowMissingChaptersChange = onShowMissingChaptersChange,
-                        onExcludedScanlatorsChange = onExcludedScanlatorsChange,
-                        onSetAsDefault = onSetChapterSettingsAsDefault,
-                        onResetToDefault = onResetChapterSettingsToDefault,
-                    )
-                }
-                if (state.isReadingSettingsDialogOpen) {
-                    ReadingSettingsOverrideDialog(
-                        currentOverride = state.readingSettingsOverride,
-                        onDismissRequest = onDismissReadingSettings,
-                        onSave = onSaveReadingSettings,
-                        onClear = onClearReadingSettings,
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun MissingChapterIndicator(count: Int) {
-    val strings = LocalStrings.current
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 24.dp, vertical = 2.dp)
-            .testTag("missing-chapter-indicator"),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        HorizontalDivider(modifier = Modifier.weight(1f))
-        Text(
-            text = strings.mangaDetailMissingChapters(count),
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        HorizontalDivider(modifier = Modifier.weight(1f))
-    }
-}
-
-@Composable
-private fun MangaStatusBadge(status: Long, strings: mihon.desktop.i18n.DesktopStrings) {
-    val (dotColor, label) = when (status) {
-        1L -> Color(0xFF4CAF50) to strings.mangaDetailStatusOngoing
-        2L -> MaterialTheme.colorScheme.primary to strings.mangaDetailStatusCompleted
-        3L -> MaterialTheme.colorScheme.error to strings.mangaDetailStatusLicensed
-        4L -> MaterialTheme.colorScheme.primary to strings.mangaDetailStatusPublishingFinished
-        5L -> MaterialTheme.colorScheme.error to strings.statsStatusCancelled
-        6L -> Color(0xFFF57C00) to strings.statsStatusHiatus
-        else -> MaterialTheme.colorScheme.outline to strings.mangaDetailStatusUnknown
-    }
-    Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = dotColor.copy(alpha = 0.12f),
-        border = BorderStroke(1.dp, dotColor.copy(alpha = 0.25f)),
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(7.dp)
-                    .clip(CircleShape)
-                    .background(dotColor),
-            )
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.Medium,
-                color = dotColor,
-            )
-        }
-    }
-}
-
-@Composable
-private fun ExpandableMangaDescription(description: String) {
-    val strings = LocalStrings.current
-    val cleanDescription = remember(description) {
-        description.replace(Regex("""\*\*([^*]+)\*\*"""), "$1")
-    }
-    var expanded by remember { mutableStateOf(false) }
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(MaterialTheme.shapes.small)
-            .clickable { expanded = !expanded },
-        verticalArrangement = Arrangement.spacedBy(2.dp),
-    ) {
-        Text(
-            strings.mangaDetailDescriptionLabel,
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Text(
-            text = cleanDescription,
-            style = MaterialTheme.typography.bodyMedium,
-            maxLines = if (expanded) Int.MAX_VALUE else 3,
-            overflow = TextOverflow.Ellipsis,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.88f),
-        )
-        if (cleanDescription.length > 120) {
-            Text(
-                text = if (expanded) strings.mangaDetailShowLess else strings.mangaDetailShowMore,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.padding(top = 2.dp),
-            )
-        }
-    }
-}
-
-@Composable
-private fun MetadataLine(label: String, value: String) {
-    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(value, style = MaterialTheme.typography.bodyLarge)
-    }
-}
-
-private fun mangaStatusLabel(status: Long, strings: mihon.desktop.i18n.DesktopStrings): String = when (status) {
-    1L -> strings.mangaDetailStatusOngoing
-    2L -> strings.mangaDetailStatusCompleted
-    else -> strings.mangaDetailStatusUnknown
-}
-
-@Composable
-private fun ChapterRow(
-    chapter: LibraryChapter,
-    displayName: String,
-    availability: ChapterReaderAvailability,
-    isDownloaded: Boolean,
-    download: ChapterDownloadProgress? = null,
-    downloadsRunning: Boolean = false,
-    isSelectionMode: Boolean = false,
-    isSelected: Boolean = false,
-    onToggleSelection: () -> Unit = {},
-    onRangeSelect: () -> Unit = onToggleSelection,
-    onReadChapter: (Long) -> Unit,
-    onToggleBookmark: () -> Unit,
-    onToggleRead: () -> Unit,
-    onMarkPreviousRead: () -> Unit,
-    onDownloadChapter: () -> Unit,
-    onDeleteDownload: () -> Unit,
-    onOpenInWebView: (() -> Unit)? = null,
-) {
-    val strings = mihon.desktop.i18n.LocalStrings.current
-    var menuExpanded by remember { mutableStateOf(false) }
-    val windowInfo = androidx.compose.ui.platform.LocalWindowInfo.current
-    val shiftHeld: () -> Boolean = { windowInfo.keyboardModifiers.isShiftPressed }
-    val chapterDateFormatter = remember(strings) {
-        java.time.format.DateTimeFormatter
-            .ofLocalizedDate(java.time.format.FormatStyle.MEDIUM)
-            .withLocale(strings.locale)
-    }
-    val rowBackground = if (isSelected) {
-        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
-    } else {
-        MaterialTheme.colorScheme.surfaceContainerLow
-    }
-
-    Surface(
-        modifier = Modifier.fillMaxWidth()
-            .padding(horizontal = 24.dp)
-            .testTag("chapter-row")
-            .clip(MaterialTheme.shapes.medium)
-            .onSecondaryClick { menuExpanded = true }
-            .clickable {
-                when {
-                    shiftHeld() -> onRangeSelect()
-                    isSelectionMode -> onToggleSelection()
-                    else -> onReadChapter(chapter.id)
-                }
-            }
-            .semantics(mergeDescendants = true) {},
-        color = rowBackground,
-        shape = MaterialTheme.shapes.medium,
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            if (isSelectionMode) {
-                Checkbox(
-                    checked = isSelected,
-                    onCheckedChange = { if (shiftHeld()) onRangeSelect() else onToggleSelection() },
-                    modifier = Modifier.testTag("chapter-select-${chapter.id}"),
+                MangaDetailDialogs(
+                    manga = manga,
+                    strings = strings,
+                    state = state,
+                    sourceBaseUrl = sourceBaseUrl,
+                    hasCustomCover = hasCustomCover,
+                    isCoverDialogOpen = isCoverDialogOpen,
+                    isNotesDialogOpen = isNotesDialogOpen,
+                    onDismissCover = { isCoverDialogOpen = false },
+                    onDismissNotes = { isNotesDialogOpen = false },
+                    onCoverChanged = { coverRefreshKey++ },
+                    onSaveMangaInfo = onSaveMangaInfo,
+                    onDismissEditInfo = onDismissEditInfo,
+                    onResetMangaInfo = onResetMangaInfo,
+                    onDismissChapterSettings = onDismissChapterSettings,
+                    onChapterSortChange = onChapterSortChange,
+                    onChapterDisplayModeChange = onChapterDisplayModeChange,
+                    onShowMissingChaptersChange = onShowMissingChaptersChange,
+                    onExcludedScanlatorsChange = onExcludedScanlatorsChange,
+                    onSetChapterSettingsAsDefault = onSetChapterSettingsAsDefault,
+                    onResetChapterSettingsToDefault = onResetChapterSettingsToDefault,
+                    onDismissReadingSettings = onDismissReadingSettings,
+                    onSaveReadingSettings = onSaveReadingSettings,
+                    onClearReadingSettings = onClearReadingSettings,
                 )
             }
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    if (chapter.bookmark) {
-                        Icon(
-                            imageVector = Icons.Rounded.Bookmark,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp),
-                            tint = MaterialTheme.colorScheme.primary,
-                        )
-                    }
-                    Text(
-                        displayName,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = if (chapter.read) FontWeight.Normal else FontWeight.SemiBold,
-                        color = if (chapter.read) {
-                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                        } else {
-                            MaterialTheme.colorScheme.onSurface
-                        },
-                    )
-                }
-                Text(
-                    chapterProgressLabel(chapter, strings, chapterDateFormatter),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-
-            DesktopTooltipBox(text = if (chapter.bookmark) strings.removeBookmark else strings.bookmarkChapter) {
-                IconButton(
-                    onClick = onToggleBookmark,
-                    modifier = Modifier.testTag("chapter-bookmark-button"),
-                ) {
-                    val color = if (chapter.bookmark) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    }
-                    Icon(
-                        imageVector = if (chapter.bookmark) Icons.Rounded.Bookmark else Icons.Rounded.BookmarkBorder,
-                        contentDescription = if (chapter.bookmark) strings.removeBookmark else strings.bookmarkChapter,
-                        tint = color,
-                    )
-                }
-            }
-
-            DesktopTooltipBox(text = if (isDownloaded) strings.deleteDownload else strings.downloadChapter) {
-                IconButton(
-                    onClick = {
-                        if (isDownloaded) onDeleteDownload() else onDownloadChapter()
-                    },
-                    modifier = Modifier.testTag("chapter-download-button"),
-                ) {
-                    DownloadIndicator(
-                        status = download?.status ?: if (isDownloaded) DownloadStatus.COMPLETED else null,
-                        progress = download?.progress ?: if (isDownloaded) 1f else 0f,
-                        isRunning = downloadsRunning,
-                        modifier = Modifier.testTag("chapter-download-indicator-${chapter.id}"),
-                    )
-                }
-            }
-
-            Box {
-                DesktopTooltipBox(text = strings.text(UiText.MoreOptions)) {
-                    IconButton(
-                        onClick = { menuExpanded = true },
-                        modifier = Modifier.testTag("chapter-more-button"),
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.MoreVert,
-                            contentDescription = strings.text(UiText.MoreOptions),
-                        )
-                    }
-                }
-                if (menuExpanded) {
-                    DropdownMenu(
-                        expanded = true,
-                        onDismissRequest = { menuExpanded = false },
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text(if (chapter.read) strings.markAsUnread else strings.markAsRead) },
-                            onClick = {
-                                onToggleRead()
-                                menuExpanded = false
-                            },
-                        )
-                        DropdownMenuItem(
-                            text = { Text(strings.markPreviousAsRead) },
-                            onClick = {
-                                onMarkPreviousRead()
-                                menuExpanded = false
-                            },
-                        )
-                        DropdownMenuItem(
-                            text = { Text(if (chapter.bookmark) strings.removeBookmark else strings.bookmarkChapter) },
-                            onClick = {
-                                onToggleBookmark()
-                                menuExpanded = false
-                            },
-                        )
-                        DropdownMenuItem(
-                            text = { Text(if (isDownloaded) strings.deleteDownload else strings.downloadChapter) },
-                            onClick = {
-                                if (isDownloaded) onDeleteDownload() else onDownloadChapter()
-                                menuExpanded = false
-                            },
-                        )
-                        if (onOpenInWebView != null) {
-                            DropdownMenuItem(
-                                text = { Text(strings.chapterOpenInWebView) },
-                                onClick = {
-                                    onOpenInWebView.invoke()
-                                    menuExpanded = false
-                                },
-                                modifier = Modifier.testTag("chapter-open-webview"),
-                            )
-                        }
-                    }
-                }
-            }
-
-            FilledTonalButton(
-                onClick = { onReadChapter(chapter.id) },
-                enabled = availability is ChapterReaderAvailability.Readable,
-                modifier = Modifier.testTag("chapter-reader-action"),
-            ) {
-                Text(chapterActionLabel(chapter, availability, strings))
-            }
         }
-    }
-}
-
-private fun chapterActionLabel(
-    chapter: LibraryChapter,
-    availability: ChapterReaderAvailability,
-    strings: mihon.desktop.i18n.DesktopStrings,
-): String = when (availability) {
-    ChapterReaderAvailability.Readable -> if (chapter.lastPageRead > 0L) {
-        strings.text(UiText.ContinuePage, chapter.lastPageRead)
-    } else {
-        strings.text(UiText.ReadChapter)
-    }
-    ChapterReaderAvailability.MissingLocalContent -> strings.text(UiText.LocateContent)
-    ChapterReaderAvailability.RemoteOnly -> strings.text(UiText.SourceSupportRequired)
-}
-
-@Composable
-private fun DetailLoading(showBack: Boolean, onBack: () -> Unit) {
-    val focusRequester = remember { FocusRequester() }
-    val strings = LocalStrings.current
-    LaunchedEffect(showBack) {
-        if (showBack) focusRequester.requestFocus()
-    }
-    Column(
-        Modifier.fillMaxSize().then(
-            if (showBack) {
-                Modifier.focusRequester(focusRequester).onPreviewKeyEvent {
-                    if (it.key == Key.Escape && it.type == KeyEventType.KeyUp) {
-                        onBack()
-                        true
-                    } else {
-                        false
-                    }
-                }.focusable()
-            } else {
-                Modifier
-            },
-        ),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        CircularProgressIndicator(modifier = Modifier.testTag("manga-detail-loading"))
-        if (showBack) {
-            TextButton(onClick = onBack, modifier = Modifier.testTag("manga-detail-back")) {
-                Text(strings.mangaDetailBack)
-            }
-        }
-    }
-}
-
-@Composable
-private fun DetailMessage(
-    message: String,
-    tag: String,
-    onBack: () -> Unit,
-    showBack: Boolean,
-    onRetry: (() -> Unit)?,
-) {
-    val strings = mihon.desktop.i18n.LocalStrings.current
-    Column(
-        modifier = Modifier.fillMaxSize().padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        Text(message, modifier = Modifier.testTag(tag), style = MaterialTheme.typography.bodyLarge)
-        onRetry?.let {
-            FilledTonalButton(onClick = it, modifier = Modifier.testTag("manga-detail-retry")) {
-                Text(strings.libraryRetry)
-            }
-        }
-        if (showBack) {
-            TextButton(onClick = onBack, modifier = Modifier.testTag("manga-detail-back")) {
-                Text(strings.mangaDetailBackToLibrary)
-            }
-        }
-    }
-}
-
-private fun chapterProgressLabel(
-    chapter: LibraryChapter,
-    strings: mihon.desktop.i18n.DesktopStrings,
-    dateFormatter: java.time.format.DateTimeFormatter,
-): String = buildList {
-    add(if (chapter.read) strings.filterRead else strings.filterUnread)
-    if (chapter.bookmark) add(strings.filterBookmarked)
-    if (chapter.dateUpload > 0L) {
-        val dateText = try {
-            java.time.Instant.ofEpochMilli(chapter.dateUpload)
-                .atZone(java.time.ZoneId.systemDefault())
-                .format(dateFormatter)
-        } catch (_: Exception) {
-            null
-        }
-        if (!dateText.isNullOrBlank()) add(dateText)
-    }
-    if (chapter.lastPageRead > 0) add(strings.browsePageNumber(chapter.lastPageRead.toInt()))
-    chapter.scanlator?.takeIf(String::isNotBlank)?.let { add(it) }
-}.joinToString(" · ")
-
-private fun decodeGenres(raw: String): List<String> = try {
-    Json.decodeFromString<List<String>>(raw)
-} catch (_: Exception) {
-    emptyList()
-}
-
-internal fun chooseCoverImage(title: String): java.nio.file.Path? {
-    val dialog = java.awt.FileDialog(null as java.awt.Frame?, title, java.awt.FileDialog.LOAD)
-    dialog.setFilenameFilter { _, name ->
-        val l = name.lowercase()
-        l.endsWith(".jpg") || l.endsWith(".jpeg") || l.endsWith(".png") || l.endsWith(".webp")
-    }
-    dialog.isVisible = true
-    val file = dialog.file ?: return null
-    val dir = dialog.directory ?: return null
-    return java.nio.file.Path.of(dir, file)
-}
-
-@Composable
-private fun VolumeHeaderRow(item: ChapterListItem.VolumeHeader) {
-    val strings = mihon.desktop.i18n.LocalStrings.current
-    val title = item.volume?.let { strings.text(mihon.desktop.i18n.UiText.ChapterVolumeLabel, it) }
-        ?: strings.text(mihon.desktop.i18n.UiText.ChapterVolumeNone)
-    androidx.compose.foundation.layout.Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 4.dp)
-            .testTag("chapter-volume-header-${item.volume ?: "none"}"),
-        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
-    ) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.primary,
-        )
-        androidx.compose.foundation.layout.Spacer(Modifier.width(8.dp))
-        Text(
-            text = strings.chapterCountLabel(item.chapterCount.toLong()),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-}
-
-@Composable
-private fun DetailActionButton(
-    label: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    onClick: () -> Unit,
-    tag: String,
-    enabled: Boolean = true,
-    tonal: Boolean = false,
-) {
-    val content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit = {
-        Icon(icon, contentDescription = null, modifier = Modifier.size(16.dp))
-        Spacer(Modifier.width(6.dp))
-        Text(label, maxLines = 1)
-    }
-    if (tonal) {
-        FilledTonalButton(onClick = onClick, enabled = enabled, modifier = Modifier.testTag(tag), content = content)
-    } else {
-        OutlinedButton(onClick = onClick, enabled = enabled, modifier = Modifier.testTag(tag), content = content)
     }
 }

@@ -1,6 +1,7 @@
 package mihon.desktop.track
 
 import kotlinx.coroutines.runBlocking
+import mihon.desktop.platform.CredentialStore
 import mihon.desktop.preferences.DesktopPreferenceStore
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -16,11 +17,21 @@ class DesktopTrackerStoreTest {
     @TempDir
     lateinit var tempDir: Path
 
+    // In-memory stand-in for the OS keychain. The default WindowsCredentialStore talks to the real
+    // Credential Manager, which is unavailable under a network/SSH logon (fails with 1312), so a
+    // unit test must inject its own store rather than reach for the machine's.
+    private class InMemoryCredentials : CredentialStore {
+        private val values = mutableMapOf<String, String>()
+        override fun read(target: String) = values[target]
+        override fun write(target: String, secret: String): Boolean = true.also { values[target] = secret }
+        override fun delete(target: String): Boolean = values.remove(target) != null
+    }
+
     @Test
     fun `tracker store persists credentials and restores login`() = runBlocking {
         val prefFile = tempDir.resolve("preferences.properties")
         val prefStore = DesktopPreferenceStore(prefFile)
-        val trackerStore = DesktopTrackerStore(prefStore)
+        val trackerStore = DesktopTrackerStore(prefStore, InMemoryCredentials())
 
         assertFalse(trackerStore.isLoggedIn(1L))
         assertNull(trackerStore.getLoginInfo(1L))
@@ -79,5 +90,41 @@ class DesktopTrackerStoreTest {
         assertTrue(trackerStore.isLoggedIn(2L))
         assertEquals("AniUser", trackerStore.getUsername(2L))
         assertEquals("oauth-token-12345", trackerStore.getAuthToken(2L))
+    }
+
+    @Test
+    fun `rejected credential write does not report a new login`() = runBlocking {
+        val preferences = DesktopPreferenceStore(tempDir.resolve("preferences.properties"))
+        val stored = InMemoryCredentials()
+        DesktopTrackerStore(preferences, stored).saveLogin(1L, "old", "old-token")
+        val store = DesktopTrackerStore(preferences, RejectingWrites(stored))
+        val tracker = TrackerTestFakeTracker(id = 1L)
+        val manager = DesktopTrackerManager(listOf(tracker), store = store)
+
+        assertTrue(tracker.isLoggedIn)
+        assertFalse(manager.login(1L, mapOf("username" to "new", "token" to "new-token")))
+        assertEquals("old", tracker.username)
+        assertEquals("old-token", tracker.persistenceToken)
+        assertEquals("old-token", store.getAuthToken(1L))
+        assertEquals("old", store.getUsername(1L))
+    }
+
+    @Test
+    fun `first login is rejected when the credential cannot be stored`() = runBlocking {
+        val preferences = DesktopPreferenceStore(tempDir.resolve("fresh-preferences.properties"))
+        val store = DesktopTrackerStore(preferences, RejectingWrites(InMemoryCredentials()))
+        val tracker = TrackerTestFakeTracker(id = 2L)
+        val manager = DesktopTrackerManager(listOf(tracker), store = store)
+
+        assertFalse(manager.login(2L, mapOf("token" to "new-token")))
+        assertFalse(tracker.isLoggedIn)
+        assertFalse(store.isLoggedIn(2L))
+        assertNull(store.getAuthToken(2L))
+    }
+
+    private class RejectingWrites(private val backing: CredentialStore) : CredentialStore {
+        override fun read(target: String): String? = backing.read(target)
+        override fun write(target: String, secret: String): Boolean = false
+        override fun delete(target: String): Boolean = backing.delete(target)
     }
 }

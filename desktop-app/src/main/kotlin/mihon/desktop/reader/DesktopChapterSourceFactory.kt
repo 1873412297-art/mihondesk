@@ -18,6 +18,8 @@ class DesktopChapterSourceFactory(
     private val sourceManager: DesktopSourceManager?,
     private val networkHelper: DesktopNetworkHelper?,
     private val onlineCacheDir: File,
+    private val pageListCache: mihon.desktop.extension.OnlinePageListCache =
+        mihon.desktop.extension.OnlinePageListCache(),
 ) : ChapterSourceFactory {
     override fun create(asset: ReaderChapterAsset): ChapterSource {
         if (asset.assetKind != ONLINE_CHAPTER_ASSET_KIND) return local.create(asset)
@@ -42,6 +44,7 @@ class DesktopChapterSourceFactory(
             sourceManager = manager,
             networkHelper = network,
             cacheDir = onlineCacheDir,
+            pageListCache = pageListCache,
         )
     }
 }

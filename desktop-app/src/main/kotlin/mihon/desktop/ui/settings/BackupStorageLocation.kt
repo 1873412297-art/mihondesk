@@ -32,7 +32,7 @@ import mihon.desktop.preferences.DesktopPreferences
 
 @Composable
 internal fun BackupStorageLocation(
-    preferenceStore: DesktopPreferenceStore,
+    presenter: SettingsPresenter,
     savedPath: String,
     onSaved: (DesktopPreferences) -> Unit,
 ) {
@@ -76,7 +76,7 @@ internal fun BackupStorageLocation(
                             error = validation.error
                             if (validation.error == null) {
                                 val updated = withContext(Dispatchers.IO) {
-                                    preferenceStore.updatePreferences { it.copy(backupStoragePath = validation.path) }
+                                    presenter.updatePreferences { it.copy(backupStoragePath = validation.path) }
                                 }
                                 draft = updated.backupStoragePath
                                 saved = true

@@ -165,7 +165,6 @@ class PackagedCodecPageDecoder(
     ): T = withContext(Dispatchers.IO) {
         Files.createDirectories(temporaryRoot)
         val work = Files.createTempDirectory(temporaryRoot, "request-")
-        var blockCompleted = false
         try {
             val encoded = work.resolve("page.$extension")
             input.use { bounded ->
@@ -177,14 +176,16 @@ class PackagedCodecPageDecoder(
                     }
                 }
             }
-            val result = block(encoded, work)
-            blockCompleted = true
-            result
+            block(encoded, work)
         } finally {
             try {
                 deleteTree(work)
             } catch (cleanup: Throwable) {
-                if (!blockCompleted) throw cleanup
+                mihon.desktop.logging.DesktopLogger.warn(
+                    "ReaderCodec",
+                    "Could not remove temporary page directory $work",
+                    cleanup,
+                )
             }
         }
     }

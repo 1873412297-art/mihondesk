@@ -94,6 +94,28 @@ object ExtensionSignatureTestFixtures {
         }
     }
 
+    /**
+     * Copies a signed archive entry-for-entry and appends an extra entry that no v1 signature
+     * covers. Entry contents are unchanged, so the original signers stay valid.
+     */
+    fun appendUnsignedEntry(source: File, target: File, entryName: String, bytes: ByteArray) {
+        ZipFile(source).use { zip ->
+            ZipOutputStream(FileOutputStream(target)).use { output ->
+                val enumeration = zip.entries()
+                while (enumeration.hasMoreElements()) {
+                    val entry = enumeration.nextElement()
+                    if (entry.isDirectory) continue
+                    output.putNextEntry(ZipEntry(entry.name).apply { time = entry.time })
+                    zip.getInputStream(entry).use { it.copyTo(output) }
+                    output.closeEntry()
+                }
+                output.putNextEntry(ZipEntry(entryName))
+                output.write(bytes)
+                output.closeEntry()
+            }
+        }
+    }
+
     /** Rewrites [source] with [entryName] replaced by [replacement], leaving signature files intact. */
     fun tamperJar(source: File, target: File, entryName: String, replacement: ByteArray) {
         val entries = mutableListOf<Triple<String, ByteArray, Long>>()

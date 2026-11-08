@@ -5,7 +5,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import mihon.desktop.extension.DesktopNetworkPolicy
 import mihon.desktop.extension.DesktopPolicyProxySelector
-import mihon.desktop.extension.withTlsFallback
+import mihon.extension.network.withTlsFallback
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Protocol
@@ -37,6 +37,7 @@ internal fun defaultTrackerHttpClient(
     // are terminated mid-request ("unexpected end of stream"); trackers gain nothing from h2.
     .protocols(listOf(Protocol.HTTP_1_1))
     .proxySelector(DesktopPolicyProxySelector(policyProvider))
+    .dns(mihon.desktop.extension.DesktopDns.following(policyProvider))
     .addInterceptor { chain ->
         val request = chain.request()
         if (request.header("User-Agent") == null) {

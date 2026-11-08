@@ -119,6 +119,28 @@ class ExtensionSignatureVerifierTest {
     }
 
     @Test
+    fun `rejects a signed jar with an appended unsigned entry`(@TempDir tempDir: Path) {
+        val fixture = ExtensionSignatureTestFixtures.createSignedJar(tempDir.resolve("signed.jar").toFile())
+        assumeTrue(fixture != null, "JDK keytool/jarsigner are not available")
+        val tampered = tempDir.resolve("partially-signed.jar").toFile()
+
+        ExtensionSignatureTestFixtures.appendUnsignedEntry(
+            source = fixture!!.file,
+            target = tampered,
+            entryName = "classes.jar",
+            bytes = "unsigned payload".toByteArray(),
+        )
+
+        val result = ExtensionSignatureVerifier().verify(tampered)
+        result.valid shouldBe false
+        result.error shouldNotBe null
+        result.error!!.shouldContainIgnoringCase("unsigned")
+        assertThrows<ExtensionSignatureException> {
+            ExtensionSignatureVerifier().extractSignerFingerprints(tampered)
+        }
+    }
+
+    @Test
     fun `normalizes fingerprints from hex base64 and separators`() {
         val fingerprint = "aa11bb22cc33dd44ee55ff66aa77bb88cc99dd00ee11ff22aa33bb44cc55dd66"
         ExtensionTrustStore.normalizeFingerprint(fingerprint.uppercase()) shouldBe fingerprint

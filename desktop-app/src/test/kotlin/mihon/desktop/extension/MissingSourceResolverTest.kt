@@ -108,14 +108,14 @@ class MissingSourceResolverTest {
     }
 
     @Test
-    fun `ensureAvailableExtensions returns cached items without network call`() = runBlocking {
+    fun `ensureAvailableExtensions returns cached items without network call`(): Unit = runBlocking {
         val cached = listOf(storeItem("ext.cached", "Cached Ext"))
         val result = MissingSourceResolver.ensureAvailableExtensions(null, cached)
         result shouldBe cached
     }
 
     @Test
-    fun `ensureAvailableExtensions handles null store service gracefully`() = runBlocking {
+    fun `ensureAvailableExtensions handles null store service gracefully`(): Unit = runBlocking {
         val result = MissingSourceResolver.ensureAvailableExtensions(null, emptyList())
         result shouldBe emptyList()
     }

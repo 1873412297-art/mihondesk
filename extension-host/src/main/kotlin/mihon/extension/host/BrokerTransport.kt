@@ -145,6 +145,16 @@ class BrokerTransport(
             }
             val buffer = Buffer()
             request.body?.writeTo(buffer)
+            val bodyBytes = if (request.body != null) buffer.readByteArray() else null
+            var spilled: java.io.File? = null
+            val bodyBase64 = bodyBytes?.takeIf { it.size <= MAX_INLINE_BODY_BYTES }?.let {
+                Base64.getEncoder().encodeToString(it)
+            }
+            val bodyFileName = if (bodyBytes != null && bodyBase64 == null) {
+                spillBody(bodyBytes).also { spilled = it }.absolutePath
+            } else {
+                null
+            }
             val payload =
                 BrokerHttpRequest(
                     request.method,
@@ -152,7 +162,8 @@ class BrokerTransport(
                     extensionId = extensionId,
                     sourceId = sourceId,
                     priority = ExtensionExecutionContext.currentPriority(),
-                    bodyBase64 = request.body?.let { Base64.getEncoder().encodeToString(buffer.readByteArray()) },
+                    bodyBase64 = bodyBase64,
+                    bodyFileName = bodyFileName,
                     headerValues = request.headers.newBuilder().apply {
                         request.body?.contentType()?.let { set("Content-Type", it.toString()) }
                     }.build().toMultimap(),
@@ -178,6 +189,8 @@ class BrokerTransport(
                 }
             } catch (error: CancellationException) {
                 throw IOException("Canceled", error)
+            } finally {
+                spilled?.delete()
             }
             if (call().isCanceled()) throw IOException("Canceled")
             if (result.error != null) throw IOException(result.error)
@@ -203,4 +216,23 @@ class BrokerTransport(
                 .body(bytes.toResponseBody(headers["Content-Type"]?.toMediaTypeOrNull())).build()
         }
     }
+}
+
+/** Bodies above this size are spilled to a temp file; base64 would exceed the 16 MiB IPC frame limit. */
+private const val MAX_INLINE_BODY_BYTES = 6 * 1024 * 1024
+
+/**
+ * Writes a request body where the parent broker can read it. Sandboxed and portable hosts get a
+ * dedicated directory from the parent; without it, fall back to the host's own temp directory.
+ */
+private fun spillBody(bytes: ByteArray): java.io.File {
+    val directory = System.getenv("MIHON_BROKER_TEMP_DIR")?.takeIf(String::isNotBlank)?.let { java.io.File(it) }
+    val file = if (directory != null) {
+        directory.mkdirs()
+        java.io.File.createTempFile("mihon-broker-", ".bin", directory)
+    } else {
+        java.io.File.createTempFile("mihon-broker-", ".bin")
+    }
+    file.writeBytes(bytes)
+    return file
 }

@@ -41,6 +41,24 @@ internal fun reportStartupRecoveryFailure(
             UiText.UpgradeFailedTitle
         }
         runCatching { showMessage(strings.text(title), message) }
+            .onFailure {
+                mihon.desktop.logging.DesktopLogger.warn("Startup", "Unable to show startup error dialog", it)
+            }
+    }
+    return true
+}
+
+internal fun reportUnexpectedStartupFailure(error: Throwable, interactive: Boolean, output: OutputStream): Boolean {
+    DesktopCommandRunner.writeStartupFailure(output, "UNEXPECTED")
+    if (interactive) {
+        val message = buildString {
+            append(error.message ?: error::class.java.name)
+            append("\n\nSee the mihon.log file in the application log directory for details.")
+        }
+        runCatching { showDatabaseUpgradeMessage("mihondesk could not start", message) }
+            .onFailure {
+                mihon.desktop.logging.DesktopLogger.warn("Startup", "Unable to show startup error dialog", it)
+            }
     }
     return true
 }

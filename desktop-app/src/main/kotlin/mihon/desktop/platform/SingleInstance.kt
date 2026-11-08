@@ -142,6 +142,12 @@ class SingleInstanceServer private constructor(
                 break
             } catch (error: IOException) {
                 DesktopLogger.warn("SingleInstance", "Accept failed: ${error.message}")
+                try {
+                    Thread.sleep(ACCEPT_RETRY_DELAY_MILLIS)
+                } catch (interrupted: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                    break
+                }
                 continue
             }
             client.use(::serve)
@@ -173,6 +179,7 @@ class SingleInstanceServer private constructor(
     }
 
     override fun close() {
+        // Best-effort cleanup; a failure here is not actionable.
         runCatching { socket.close() }
         // Only remove the endpoint we published; a newer instance may have replaced it.
         runCatching {
@@ -350,3 +357,6 @@ enum class ForwardedFileKind {
         }
     }
 }
+
+/** Keeps a persistent accept() failure from spinning a core at 100%. */
+private const val ACCEPT_RETRY_DELAY_MILLIS = 250L

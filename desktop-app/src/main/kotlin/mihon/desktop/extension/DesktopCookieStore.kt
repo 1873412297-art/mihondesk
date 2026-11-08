@@ -3,6 +3,7 @@ package mihon.desktop.extension
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import mihon.desktop.logging.DesktopLogger
 import okhttp3.Cookie
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -111,8 +112,9 @@ class DesktopCookieStore(
                     memoryMap[normalizeDomain(config.domain)] = config
                 }
             }
-        } catch (_: Exception) {
-            // Safe fallback if file corrupted
+        } catch (error: Exception) {
+            // Start empty rather than fail login flows, but leave a trace of the lost cookies.
+            DesktopLogger.warn("CookieStore", "Unable to read saved cookies", error)
         }
     }
 
@@ -125,8 +127,9 @@ class DesktopCookieStore(
             val temp = storagePath.resolveSibling("${storagePath.fileName}.tmp")
             Files.writeString(temp, content)
             Files.move(temp, storagePath, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
-        } catch (_: Exception) {
-            // Ignore disk write failure
+        } catch (error: Exception) {
+            // Cookies stay in memory for this session; without a log they would silently vanish on restart.
+            DesktopLogger.warn("CookieStore", "Unable to save cookies", error)
         }
     }
 

@@ -19,6 +19,7 @@ interface LibraryMutationPort {
     fun insertManga(value: MangaRecord): Long
     fun updateManga(value: MangaRecord)
     fun findChapter(mangaId: Long, url: String): ChapterRecord?
+    fun chaptersForManga(mangaId: Long): List<ChapterRecord>
     fun insertChapter(value: ChapterRecord): Long
     fun updateChapter(value: ChapterRecord)
 

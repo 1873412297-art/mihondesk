@@ -4,6 +4,7 @@ import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+import java.nio.file.Files
 import java.nio.file.Path
 
 class FileDriveSyncStateStoreTest {
@@ -28,5 +29,24 @@ class FileDriveSyncStateStoreTest {
         b.nextCursor() shouldBe 3L
         b.reset()
         b.getLastPushWatermark() shouldBe 0L
+    }
+
+    @Test
+    fun `corrupt state is quarantined instead of being overwritten with zeros`(): Unit = runBlocking {
+        val f = dir.resolve("gdrive/sync-state.json")
+        Files.createDirectories(f.parent)
+        Files.writeString(f, "{not json")
+        val store = FileDriveSyncStateStore(f) { "dev" }
+
+        store.getLastPushWatermark() shouldBe 0L
+
+        val quarantine = f.resolveSibling("sync-state.json.corrupt")
+        Files.exists(quarantine) shouldBe true
+        Files.readString(quarantine) shouldBe "{not json"
+        Files.exists(f) shouldBe false
+
+        store.setLastPushWatermark(42)
+        store.getLastPushWatermark() shouldBe 42L
+        Files.readString(quarantine) shouldBe "{not json"
     }
 }

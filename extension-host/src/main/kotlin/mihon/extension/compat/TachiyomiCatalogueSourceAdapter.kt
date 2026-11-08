@@ -164,7 +164,10 @@ class TachiyomiCatalogueSourceAdapter(
                     }
                     else -> {}
                 }
-            } catch (_: Exception) {}
+            } catch (error: Exception) {
+                // Extensions may reject out-of-range state; keep the extension's default for that filter.
+                System.err.println("Filter '${sf.name}' rejected restored state: ${error.message}")
+            }
         }
         return sourceFilters
     }

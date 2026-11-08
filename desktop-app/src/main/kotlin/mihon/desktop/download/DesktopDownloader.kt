@@ -1,27 +1,16 @@
 package mihon.desktop.download
 
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.sync.withPermit
 import mihon.desktop.extension.DesktopNetworkHelper
 import mihon.desktop.extension.WindowsExtensionProcessManager
 import mihon.desktop.library.model.LibraryChapter
@@ -29,12 +18,8 @@ import mihon.desktop.library.model.LibraryManga
 import mihon.desktop.library.model.MangaDetails
 import mihon.desktop.library.repository.LibraryMutationPort
 import mihon.extension.source.model.Page
-import mihon.extension.source.model.SChapter
-import java.io.IOException
-import java.nio.file.Files
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
-import java.util.concurrent.atomic.AtomicReference
 
 class DesktopDownloader(
     val store: DownloadStore,
@@ -68,175 +53,102 @@ class DesktopDownloader(
     val storageError: StateFlow<String?> = _storageError.asStateFlow()
     private var lastClaimedSource: Long? = null
 
-    private val debouncePersistJob = AtomicReference<Job?>(null)
+    private val persistence = DownloadQueuePersistence(
+        store = store,
+        scope = scope,
+        queue = { _queueState.value },
+        onSaved = { _storageError.value = null },
+        onFailure = ::onPersistFailure,
+    )
 
-    private fun persistQueueImmediate() = synchronized(persistenceLock) {
-        debouncePersistJob.getAndSet(null)?.cancel()
-        try {
-            store.save(_queueState.value)
-            _storageError.value = null
-        } catch (error: Exception) {
-            _storageError.value = "下载队列无法保存，已停止调度：${error.message}"
-            _isRunning.value = false
-            downloadJob?.cancel()
-            throw error
-        }
+    private val editor = DownloadQueueEditor(_queueState, persistence, ::start, ::pause, ::resume, ::cancel)
+
+    private fun onPersistFailure(error: Exception) {
+        _storageError.value = "下载队列无法保存，已停止调度：${error.message}"
+        if (::control.isInitialized) control.stopScheduling()
     }
 
-    private fun persistQueue() = persistQueueImmediate()
-
-    private fun scheduleDebouncedPersist() {
-        if (debouncePersistJob.get() != null) return
-        val job = scope.launch {
-            delay(500)
-            debouncePersistJob.set(null)
-            synchronized(persistenceLock) {
-                try {
-                    store.save(_queueState.value)
-                    _storageError.value = null
-                } catch (error: Exception) {
-                    _storageError.value = "下载队列无法保存，已停止调度：${error.message}"
-                    _isRunning.value = false
-                    downloadJob?.cancel()
-                }
-            }
-        }
-        if (!debouncePersistJob.compareAndSet(null, job)) {
-            job.cancel()
-        }
-    }
+    private lateinit var control: DownloadControl
 
     private val activeDownloadJobs = ConcurrentHashMap<Long, Job>()
     private val pendingCleanupJobs = ConcurrentHashMap<Long, Job>()
     private val sessionBytes = AtomicLong(0L)
     private val sessionGeneration = AtomicLong(0L)
-    private var downloadJob: Job? = null
-    private var sessionStartedAt = 0L
 
-    val startupRecoveryJob: Job?
+    private val engine = DownloadEngine(
+        diskProvider = diskProvider,
+        networkHelper = networkHelper,
+        sourceManager = sourceManager,
+        processManager = processManager,
+        mutationPort = mutationPort,
+        pageListFetcher = pageListFetcher,
+        pageParallelism = pageParallelism,
+        tallImageSplitter = tallImageSplitter,
+        queueState = _queueState,
+        persistence = persistence,
+        sessionBytes = sessionBytes,
+        sessionStartedAt = { control.sessionStartedAtMillis() },
+        onSpeed = { _speedBytesPerSec.value = it },
+        onCompleted = onDownloadCompleted,
+        onProgress = onDownloadProgress,
+    )
+
+    private val libraryOps = DownloadLibraryOperations(
+        diskProvider = diskProvider,
+        mutationPort = mutationPort,
+        queueState = _queueState,
+        persistence = persistence,
+        onError = { message -> _storageError.value = message },
+    )
 
     init {
-        val restored = store.restore()
-        diskProvider.adoptLegacyDownloads(restored)
-        _queueState.value = restored
-        startupRecoveryJob = if (restored.any { it.status == DownloadStatus.COMPLETED }) {
-            scope.launch(Dispatchers.IO) {
-                var changed = false
-                _queueState.update { currentList ->
-                    currentList.map { download ->
-                        if (download.status == DownloadStatus.COMPLETED) {
-                            val recovered = recoverMissingFiles(download)
-                            if (recovered != download) {
-                                changed = true
-                                recovered
-                            } else {
-                                download
-                            }
-                        } else {
-                            download
-                        }
-                    }
-                }
-                if (changed) persistQueueImmediate()
-            }
-        } else {
-            null
-        }
-    }
-
-    suspend fun awaitStartupRecovery() {
-        startupRecoveryJob?.join()
-    }
-
-    /** A persisted completion marker cannot outlive either its files or offline database record. */
-    private fun recoverMissingFiles(download: DesktopDownload): DesktopDownload {
-        if (download.status != DownloadStatus.COMPLETED) return download
-        val inspection = diskProvider.inspectChapter(
-            sourceId = download.sourceId,
-            mangaTitle = download.mangaTitle,
-            chapterName = download.chapterName,
-            expectedPageIndexes = download.pages.map(DownloadPage::index),
-            mangaId = download.mangaId,
-            chapterId = download.chapterId,
-        )
-        if (inspection.isComplete) {
-            val registrationError = runCatching {
-                mutationPort?.let { mutations ->
-                    if (!diskProvider.isChapterRegistrationCurrent(
-                            sourceId = download.sourceId,
-                            mangaId = download.mangaId,
-                            chapterId = download.chapterId,
-                            mangaTitle = download.mangaTitle,
-                            chapterName = download.chapterName,
-                            totalBytes = inspection.totalBytes,
-                            mutationPort = mutations,
-                        )
-                    ) {
-                        diskProvider.registerCompletedChapter(
-                            sourceId = download.sourceId,
-                            mangaId = download.mangaId,
-                            chapterId = download.chapterId,
-                            mangaTitle = download.mangaTitle,
-                            chapterName = download.chapterName,
-                            totalBytes = inspection.totalBytes,
-                            mutationPort = mutations,
-                        )
-                    }
-                }
-            }.exceptionOrNull()
-            if (registrationError == null) {
-                return download.copy(
-                    bytesDownloaded = inspection.totalBytes,
-                    pages = download.pages.map { page ->
-                        val metadata = inspection.validPages.getValue(page.index)
-                        page.copy(
-                            status = PageStatus.READY,
-                            progress = 1f,
-                            bytesWritten = metadata.sizeBytes,
-                            error = null,
-                        )
-                    },
-                )
-            }
-            val message = "Downloaded files could not be registered for offline reading: ${registrationError.message}"
-            return download.copy(
-                status = DownloadStatus.ERROR,
-                error = message,
-                failureReason = DownloadFailureReason.REGISTRATION,
-            )
-        }
-        runCatching { mutationPort?.deleteLocalChapterAsset(download.mangaId, download.chapterId) }
-        val message = "Downloaded files are missing or corrupt. Retry to download them again."
-        return download.copy(
-            status = DownloadStatus.ERROR,
-            error = message,
-            failureReason = DownloadFailureReason.MISSING_FILES,
-            progress = if (download.pages.isEmpty()) {
-                0f
-            } else {
-                inspection.validPages.size.toFloat() / download.pages.size
-            },
-            bytesDownloaded = inspection.totalBytes,
-            pages = download.pages.map { page ->
-                val metadata = inspection.validPages[page.index]
-                if (metadata != null) {
-                    page.copy(
-                        status = PageStatus.READY,
-                        progress = 1f,
-                        bytesWritten = metadata.sizeBytes,
-                        error = null,
-                    )
-                } else {
-                    page.copy(
-                        status = PageStatus.ERROR,
-                        progress = 0f,
-                        bytesWritten = 0L,
-                        error = message,
-                    )
-                }
-            },
+        control = DownloadControl(
+            scope = scope,
+            diskProvider = diskProvider,
+            queueState = _queueState,
+            isRunning = _isRunning,
+            speedBytesPerSec = _speedBytesPerSec,
+            persistence = persistence,
+            activeJobs = activeDownloadJobs,
+            pendingCleanupJobs = pendingCleanupJobs,
+            sessionBytes = sessionBytes,
+            sessionGeneration = sessionGeneration,
+            runLoop = { scheduler.runLoop() },
+            onFatal = { message -> _storageError.value = message },
+            onCleanupFailure = { message -> _storageError.value = message },
         )
     }
+
+    private val scheduler = DownloadScheduler(
+        diskProvider = diskProvider,
+        engine = engine,
+        queueState = _queueState,
+        isRunning = _isRunning,
+        persistence = persistence,
+        activeJobs = activeDownloadJobs,
+        pendingCleanupJobs = pendingCleanupJobs,
+        downloadParallelism = downloadParallelism,
+        sourceParallelism = sourceParallelism,
+        onFailed = onDownloadFailed,
+    )
+
+    private val startupRecovery = DownloadStartupRecovery(
+        scope = scope,
+        store = store,
+        diskProvider = diskProvider,
+        mutationPort = mutationPort,
+        queueState = _queueState,
+        persistQueue = { persistence.persistImmediate() },
+        startLoop = ::start,
+    )
+
+    init {
+        startupRecovery.restorePersistedQueue()
+    }
+
+    suspend fun awaitStartupRecovery() = startupRecovery.await()
+
+    fun restoreDownloads(items: List<DesktopDownload>) = startupRecovery.restore(items)
 
     suspend fun enqueue(
         sourceId: Long,
@@ -245,41 +157,49 @@ class DesktopDownloader(
         chapters: List<LibraryChapter>,
         autoStart: Boolean = true,
     ) {
-        queueMutex.withLock {
-            synchronized(this) {
-                val current = _queueState.value.toMutableList()
+        // Slow disk checks happen before the CAS so a concurrent progress update cannot make them run again.
+        val knownChapterIds = _queueState.value.mapTo(HashSet()) { it.chapterId }
+        val downloadable = chapters.filter { chapter ->
+            chapter.id !in knownChapterIds &&
+                !isChapterDownloaded(sourceId, mangaTitle, chapter.id, chapter.name, mangaId)
+        }.associateBy { it.id }
 
+        queueMutex.withLock {
+            var changed = false
+            _queueState.update { state ->
+                val current = state.toMutableList()
                 for (chapter in chapters) {
                     val existingIndex = current.indexOfFirst { it.chapterId == chapter.id }
                     if (existingIndex >= 0) {
                         val existing = current[existingIndex]
-                        val recovered = recoverMissingFiles(existing)
+                        val recovered = startupRecovery.recoverMissing(existing)
                         if (recovered != existing || existing.status == DownloadStatus.ERROR) {
                             current[existingIndex] = recovered.copy(status = DownloadStatus.QUEUED, error = null)
                         }
                         continue
                     }
-                    if (isChapterDownloaded(sourceId, mangaTitle, chapter.id, chapter.name, mangaId)) continue
-
+                    val chapterToAdd = downloadable[chapter.id] ?: continue
                     current.add(
                         DesktopDownload(
-                            chapterId = chapter.id,
+                            chapterId = chapterToAdd.id,
                             mangaId = mangaId,
                             sourceId = sourceId,
                             mangaTitle = mangaTitle,
-                            chapterName = chapter.name,
-                            chapterUrl = chapter.url,
+                            chapterName = chapterToAdd.name,
+                            chapterUrl = chapterToAdd.url,
                             status = DownloadStatus.QUEUED,
                             storageLayoutVersion = 1,
                         ),
                     )
                 }
-
-                if (current != _queueState.value) {
-                    _queueState.value = current
-                    persistQueue()
+                if (current != state) {
+                    changed = true
+                    current.toList()
+                } else {
+                    state
                 }
             }
+            if (changed) persistence.persist()
         }
 
         if (autoStart) {
@@ -340,43 +260,10 @@ class DesktopDownloader(
         chapterId: Long,
         chapterName: String,
         mangaId: Long? = null,
-    ): Boolean {
-        val queued = _queueState.value.firstOrNull { it.chapterId == chapterId }
-        if (queued != null && queued.status != DownloadStatus.COMPLETED) return false
-        return if (queued != null) {
-            diskProvider.isChapterDownloaded(
-                queued.sourceId,
-                queued.mangaTitle,
-                queued.chapterName,
-                queued.mangaId,
-                queued.chapterId,
-            )
-        } else {
-            diskProvider.isChapterDownloaded(
-                sourceId,
-                mangaTitle,
-                chapterName,
-                mangaId,
-                chapterId.takeIf {
-                    mangaId !=
-                        null
-                },
-            )
-        }
-    }
+    ): Boolean = libraryOps.isChapterDownloaded(sourceId, mangaTitle, chapterId, chapterName, mangaId)
 
-    fun deleteDownloadedChapter(sourceId: Long, mangaTitle: String, chapterName: String): Boolean {
-        val saved = _queueState.value.firstOrNull {
-            it.sourceId == sourceId && it.mangaTitle == mangaTitle && it.chapterName == chapterName
-        }
-        return deleteDownloadedChapter(
-            sourceId = sourceId,
-            mangaId = saved?.mangaId,
-            mangaTitle = mangaTitle,
-            chapterId = saved?.chapterId,
-            chapterName = chapterName,
-        )
-    }
+    fun deleteDownloadedChapter(sourceId: Long, mangaTitle: String, chapterName: String): Boolean =
+        libraryOps.deleteDownloadedChapter(sourceId, mangaTitle, chapterName)
 
     fun deleteDownloadedChapter(
         sourceId: Long,
@@ -384,697 +271,66 @@ class DesktopDownloader(
         mangaTitle: String,
         chapterId: Long?,
         chapterName: String,
-    ): Boolean {
-        val saved = _queueState.value.firstOrNull { item ->
-            if (chapterId != null) {
-                item.chapterId == chapterId
-            } else {
-                item.sourceId == sourceId && item.mangaTitle == mangaTitle && item.chapterName == chapterName
-            }
-        }
-        val effectiveSourceId = saved?.sourceId ?: sourceId
-        val effectiveMangaId = saved?.mangaId ?: mangaId
-        val effectiveMangaTitle = saved?.mangaTitle ?: mangaTitle
-        val effectiveChapterId = saved?.chapterId ?: chapterId
-        val effectiveChapterName = saved?.chapterName ?: chapterName
-        val chapterEntry = diskProvider.findChapterEntry(
-            effectiveSourceId,
-            effectiveMangaTitle,
-            effectiveChapterName,
-            effectiveMangaId,
-            effectiveChapterId,
-        )
-        val existed = chapterEntry != null && Files.exists(chapterEntry.path)
-        if (existed &&
-            !diskProvider.deleteChapter(
-                effectiveSourceId,
-                effectiveMangaTitle,
-                effectiveChapterName,
-                effectiveMangaId,
-                effectiveChapterId,
-            )
-        ) {
-            return false
-        }
-        if (effectiveMangaId != null && effectiveChapterId != null) {
-            try {
-                mutationPort?.deleteLocalChapterAsset(effectiveMangaId, effectiveChapterId)
-            } catch (error: Exception) {
-                _storageError.value = "下载记录无法清理：${error.message}"
-                return false
-            }
-        }
-        var removed = false
-        _queueState.update { queue ->
-            queue.filterNot { item ->
-                val matches = if (effectiveChapterId != null) {
-                    item.chapterId == effectiveChapterId
-                } else {
-                    item.sourceId == effectiveSourceId && item.mangaTitle == effectiveMangaTitle &&
-                        item.chapterName == effectiveChapterName
-                }
-                (matches && item.status in setOf(DownloadStatus.COMPLETED, DownloadStatus.ERROR)).also {
-                    if (it) removed = true
-                }
-            }
-        }
-        if (removed) persistQueue()
-        return existed || removed || (effectiveMangaId != null && effectiveChapterId != null)
-    }
+    ): Boolean = libraryOps.deleteDownloadedChapter(sourceId, mangaId, mangaTitle, chapterId, chapterName)
 
     fun deleteDownloadedChapter(manga: LibraryManga, chapter: LibraryChapter): Boolean =
-        deleteDownloadedChapter(manga.sourceId, manga.id, manga.title, chapter.id, chapter.name)
+        libraryOps.deleteDownloadedChapter(manga, chapter)
 
     fun deleteDownloadedChapter(manga: MangaDetails, chapter: LibraryChapter): Boolean =
-        deleteDownloadedChapter(manga.sourceId, manga.id, manga.title, chapter.id, chapter.name)
+        libraryOps.deleteDownloadedChapter(manga, chapter)
 
     @Synchronized
-    fun start(): Boolean {
-        if (_isRunning.value) return false
-        val hasPending = _queueState.value.any {
-            it.status == DownloadStatus.QUEUED || it.status == DownloadStatus.PAUSED
-        }
-        if (!hasPending) return false
-
-        _isRunning.value = true
-        sessionBytes.set(0L)
-        sessionStartedAt = System.currentTimeMillis()
-        val generation = sessionGeneration.incrementAndGet()
-        val previousJob = downloadJob
-        downloadJob = scope.launch {
-            try {
-                previousJob?.join()
-                runDownloadLoop()
-            } catch (error: CancellationException) {
-                throw error
-            } catch (error: Exception) {
-                _storageError.value = "下载调度已停止：${error.message}"
-            } finally {
-                if (sessionGeneration.get() == generation) {
-                    _isRunning.value = false
-                    _speedBytesPerSec.value = 0.0
-                }
-            }
-        }
-        return true
-    }
+    fun start(): Boolean = control.start()
 
     @Synchronized
-    fun pause() {
-        sessionGeneration.incrementAndGet()
-        downloadJob?.cancel()
-        _isRunning.value = false
-        _speedBytesPerSec.value = 0.0
-
-        _queueState.update { list ->
-            list.map { item ->
-                if (item.status == DownloadStatus.DOWNLOADING || item.status == DownloadStatus.QUEUED) {
-                    item.copy(status = DownloadStatus.PAUSED)
-                } else {
-                    item
-                }
-            }
-        }
-        persistQueue()
-    }
+    fun pause() = control.pause()
 
     @Synchronized
-    fun resume() {
-        _queueState.update { list ->
-            list.map { item ->
-                if (item.status == DownloadStatus.PAUSED) {
-                    item.copy(status = DownloadStatus.QUEUED)
-                } else {
-                    item
-                }
-            }
-        }
-        persistQueue()
-        start()
-    }
+    fun resume() = control.resume()
 
     @Synchronized
-    fun pause(chapterId: Long): Boolean {
-        val job = activeDownloadJobs.remove(chapterId)
-        job?.cancel()
-        var changed = false
-        _queueState.update { list ->
-            list.map { item ->
-                if (item.chapterId == chapterId &&
-                    (item.status == DownloadStatus.DOWNLOADING || item.status == DownloadStatus.QUEUED)
-                ) {
-                    changed = true
-                    item.copy(status = DownloadStatus.PAUSED)
-                } else {
-                    item
-                }
-            }
-        }
-        if (changed) {
-            persistQueue()
-        }
-        return changed
-    }
+    fun pause(chapterId: Long): Boolean = control.pause(chapterId)
 
     @Synchronized
-    fun resume(chapterId: Long): Boolean {
-        var changed = false
-        _queueState.update { list ->
-            list.map { item ->
-                if (item.chapterId == chapterId && item.status == DownloadStatus.PAUSED) {
-                    changed = true
-                    item.copy(status = DownloadStatus.QUEUED)
-                } else {
-                    item
-                }
-            }
-        }
-        if (changed) {
-            persistQueue()
-            start()
-        }
-        return changed
-    }
+    fun resume(chapterId: Long): Boolean = control.resume(chapterId)
 
     @Synchronized
-    fun cancel(chapterId: Long): DesktopDownload? {
-        val job = activeDownloadJobs.remove(chapterId)
-        val previousCleanup = pendingCleanupJobs[chapterId]
-        val cancelled = _queueState.value.find { it.chapterId == chapterId }
-        job?.cancel()
-        val cleanup = cancelled?.let { download ->
-            scope.launch(start = CoroutineStart.LAZY) {
-                previousCleanup?.join()
-                job?.join()
-                runCatching {
-                    diskProvider.deleteTempChapter(
-                        download.sourceId,
-                        download.mangaTitle,
-                        download.chapterName,
-                        download.mangaId,
-                        download.chapterId,
-                    )
-                }.onFailure { _storageError.value = "下载临时文件无法清理：${it.message}" }
-            }.also { cleanup ->
-                pendingCleanupJobs[chapterId] = cleanup
-                cleanup.invokeOnCompletion { pendingCleanupJobs.remove(chapterId, cleanup) }
-            }
-        }
-        _queueState.update { list -> list.filterNot { it.chapterId == chapterId } }
-        try {
-            persistQueue()
-        } finally {
-            cleanup?.start()
-        }
-        return cancelled
-    }
+    fun cancel(chapterId: Long): DesktopDownload? = control.cancel(chapterId)
 
     @Synchronized
-    fun retry(chapterId: Long) {
-        retryFailed { it.chapterId == chapterId }
-    }
+    fun retry(chapterId: Long) = editor.retry(chapterId)
 
     @Synchronized
-    fun retryAllFailed() {
-        retryFailed { true }
-    }
-
-    private fun retryFailed(select: (DesktopDownload) -> Boolean) {
-        if (_queueState.value.none { it.status == DownloadStatus.ERROR && select(it) }) return
-        _queueState.update { list ->
-            list.map { item ->
-                if (item.status == DownloadStatus.ERROR && select(item)) {
-                    item.copy(
-                        status = DownloadStatus.QUEUED,
-                        error = null,
-                        failureReason = null,
-                        pages = item.pages.map { page ->
-                            if (page.status ==
-                                PageStatus.ERROR
-                            ) {
-                                page.copy(status = PageStatus.QUEUE, error = null)
-                            } else {
-                                page
-                            }
-                        },
-                    )
-                } else {
-                    item
-                }
-            }
-        }
-        persistQueue()
-        start()
-    }
+    fun retryAllFailed() = editor.retryAllFailed()
 
     @Synchronized
-    fun clearCompleted(): List<DesktopDownload> {
-        val completed = _queueState.value.filter { it.status == DownloadStatus.COMPLETED }
-        _queueState.update { list -> list.filterNot { it.status == DownloadStatus.COMPLETED } }
-        persistQueue()
-        return completed
-    }
+    fun clearCompleted(): List<DesktopDownload> = editor.clearCompleted()
 
     @Synchronized
-    fun moveUp(chapterId: Long): Boolean {
-        val list = _queueState.value.toMutableList()
-        val index = list.indexOfFirst { it.chapterId == chapterId }
-        if (index <= 0) return false
-        val item = list.removeAt(index)
-        list.add(index - 1, item)
-        _queueState.value = list
-        persistQueue()
-        return true
-    }
+    fun moveUp(chapterId: Long): Boolean = editor.moveUp(chapterId)
 
     @Synchronized
-    fun moveDown(chapterId: Long): Boolean {
-        val list = _queueState.value.toMutableList()
-        val index = list.indexOfFirst { it.chapterId == chapterId }
-        if (index < 0 || index >= list.lastIndex) return false
-        val item = list.removeAt(index)
-        list.add(index + 1, item)
-        _queueState.value = list
-        persistQueue()
-        return true
-    }
+    fun moveDown(chapterId: Long): Boolean = editor.moveDown(chapterId)
 
     @Synchronized
-    fun reorder(fromIndex: Int, toIndex: Int): Boolean {
-        val list = _queueState.value.toMutableList()
-        if (fromIndex !in list.indices || toIndex !in list.indices || fromIndex == toIndex) return false
-        val item = list.removeAt(fromIndex)
-        list.add(toIndex, item)
-        _queueState.value = list
-        persistQueue()
-        return true
-    }
-
-    /** Pauses every queued or downloading chapter of [mangaId]. Returns how many were paused. */
-    @Synchronized
-    fun pauseManga(mangaId: Long): Int = chapterIdsOf(mangaId) {
-        it.status == DownloadStatus.QUEUED || it.status == DownloadStatus.DOWNLOADING
-    }.count { pause(it) }
-
-    /** Resumes every paused chapter of [mangaId]. Returns how many were resumed. */
-    @Synchronized
-    fun resumeManga(
-        mangaId: Long,
-    ): Int = chapterIdsOf(mangaId) { it.status == DownloadStatus.PAUSED }.count { resume(it) }
-
-    /** Re-queues the failed chapters of [mangaId]. Returns how many were retried. */
-    @Synchronized
-    fun retryManga(mangaId: Long): Int {
-        val failed = chapterIdsOf(mangaId) { it.status == DownloadStatus.ERROR }
-        if (failed.isNotEmpty()) retryFailed { it.mangaId == mangaId }
-        return failed.size
-    }
-
-    /** Removes every chapter of [mangaId] from the queue (cleaning temporary files). */
-    @Synchronized
-    fun cancelManga(mangaId: Long): List<DesktopDownload> = chapterIdsOf(mangaId) { true }.mapNotNull { cancel(it) }
-
-    /** Moves all chapters of [mangaId] ahead of the rest of the queue, keeping their relative order. */
-    @Synchronized
-    fun moveMangaToTop(mangaId: Long): Boolean {
-        val list = _queueState.value
-        val (group, rest) = list.partition { it.mangaId == mangaId }
-        val reordered = group + rest
-        if (group.isEmpty() || reordered.map { it.chapterId } == list.map { it.chapterId }) return false
-        _queueState.value = reordered
-        persistQueue()
-        return true
-    }
-
-    private fun chapterIdsOf(mangaId: Long, filter: (DesktopDownload) -> Boolean): List<Long> =
-        _queueState.value.filter { it.mangaId == mangaId && filter(it) }.map { it.chapterId }
+    fun reorder(fromIndex: Int, toIndex: Int): Boolean = editor.reorder(fromIndex, toIndex)
 
     @Synchronized
-    fun restoreDownloads(items: List<DesktopDownload>) {
-        if (items.isEmpty()) return
-        _queueState.update { list ->
-            val existingIds = list.map { it.chapterId }.toSet()
-            val toAdd = items.filterNot { it.chapterId in existingIds }.map {
-                if (it.status == DownloadStatus.DOWNLOADING) {
-                    it.copy(status = DownloadStatus.QUEUED)
-                } else {
-                    it
-                }
-            }
-            list + toAdd
-        }
-        persistQueue()
-        // The queue may have already drained (isRunning == false); without this the restored
-        // items would sit in QUEUED forever, unlike resume() which always restarts the loop.
-        start()
-    }
-
-    private suspend fun runDownloadLoop() = supervisorScope {
-        val workers = List(downloadParallelism().coerceIn(1, 16)) {
-            launch {
-                while (_isRunning.value) {
-                    val (chapterId, chapterJob) = synchronized(this@DesktopDownloader) {
-                        val next = claimNextDownload() ?: return@synchronized null
-                        val chapterJob = launch(start = CoroutineStart.LAZY) {
-                            pendingCleanupJobs[next.chapterId]?.join()
-                            if (!diskProvider.checkDiskSpace()) {
-                                val errorMessage = "Insufficient disk space"
-                                updateDownload(next.chapterId) {
-                                    it.copy(
-                                        status = DownloadStatus.ERROR,
-                                        error = errorMessage,
-                                        failureReason = DownloadFailureReason.STORAGE_FULL,
-                                    )
-                                }
-                                onDownloadFailed?.invoke(next, errorMessage)
-                                return@launch
-                            }
-
-                            try {
-                                processDownload(next)
-                            } catch (error: CancellationException) {
-                                throw error
-                            } catch (error: Exception) {
-                                val errorMessage = error.message ?: "Unknown download error"
-                                mihon.desktop.logging.DesktopLogger.error(
-                                    "Downloader",
-                                    "Download failed for chapter ${next.chapterName} (${next.chapterId}): $errorMessage",
-                                    error,
-                                )
-                                val failed = updateDownload(next.chapterId) {
-                                    it.copy(
-                                        status = DownloadStatus.ERROR,
-                                        error = errorMessage,
-                                        failureReason = classifyDownloadFailure(error),
-                                    )
-                                }
-                                onDownloadFailed?.invoke(failed ?: next, errorMessage)
-                            }
-                        }
-                        activeDownloadJobs[next.chapterId] = chapterJob
-                        next.chapterId to chapterJob
-                    } ?: break
-                    try {
-                        // Save the claimed state before starting I/O, outside the downloader monitor.
-                        persistQueue()
-                        chapterJob.start()
-                        chapterJob.join()
-                    } finally {
-                        activeDownloadJobs.remove(chapterId, chapterJob)
-                        if (!chapterJob.isCompleted) chapterJob.cancel()
-                    }
-                }
-            }
-        }
-        workers.forEach { it.join() }
-    }
+    fun retryManga(mangaId: Long): Int = editor.retryManga(mangaId)
 
     @Synchronized
-    private fun claimNextDownload(): DesktopDownload? {
-        while (true) {
-            val current = _queueState.value
-            val activeBySource = current.filter {
-                it.status == DownloadStatus.DOWNLOADING
-            }.groupingBy { it.sourceId }.eachCount()
-            val eligible = current.filter {
-                it.status == DownloadStatus.QUEUED &&
-                    (activeBySource[it.sourceId] ?: 0) < sourceParallelism().coerceIn(1, 16)
-            }
-            val sources = current.map { it.sourceId }.distinct()
-            val after = sources.indexOfFirst { it == lastClaimedSource } + 1
-            val rotation = sources.drop(after) + sources.take(after)
-            val source = rotation.firstOrNull { id -> eligible.any { it.sourceId == id } } ?: return null
-            val next = eligible.first { it.sourceId == source }
-            val claimed = next.copy(status = DownloadStatus.DOWNLOADING, error = null, failureReason = null)
-            val updated = current.map { item -> if (item.chapterId == next.chapterId) claimed else item }
-            if (_queueState.compareAndSet(current, updated)) {
-                lastClaimedSource = next.sourceId
-                return claimed
-            }
-        }
-    }
+    fun pauseManga(mangaId: Long): Int = editor.pauseManga(mangaId)
 
-    internal suspend fun processDownload(download: DesktopDownload) {
-        // Fetch page list if not already populated
-        val currentDownload = _queueState.value.firstOrNull { it.chapterId == download.chapterId } ?: run {
-            mihon.desktop.logging.DesktopLogger.warn(
-                "Downloader",
-                "Download for chapter ${download.chapterId} was cancelled before processing",
-            )
-            return
-        }
-        val pages = if (currentDownload.pages.isEmpty()) {
-            val fetchedPages = fetchPages(currentDownload.sourceId, currentDownload.chapterUrl)
-            val downloadPages = fetchedPages.distinctBy { it.index }.mapIndexed { index, page ->
-                DownloadPage(
-                    index = index,
-                    url = page.url,
-                    imageUrl = page.imageUrl,
-                    headers = page.headers,
-                    status = PageStatus.QUEUE,
-                )
-            }
-            updateDownload(currentDownload.chapterId) { it.copy(pages = downloadPages) }
-            downloadPages
-        } else {
-            currentDownload.pages
-        }
+    @Synchronized
+    fun resumeManga(mangaId: Long): Int = editor.resumeManga(mangaId)
 
-        if (pages.isEmpty()) {
-            throw IOException("Page list is empty for chapter ${download.chapterName}")
-        }
+    @Synchronized
+    fun cancelManga(mangaId: Long): List<DesktopDownload> = editor.cancelManga(mangaId)
 
-        val tempDir = diskProvider.getTempChapterDir(
-            download.sourceId,
-            download.mangaTitle,
-            download.chapterName,
-            download.mangaId,
-            download.chapterId,
-        )
-        if (!Files.exists(tempDir)) {
-            Files.createDirectories(tempDir)
-        }
+    @Synchronized
+    fun moveMangaToTop(mangaId: Long): Boolean = editor.moveMangaToTop(mangaId)
 
-        diskProvider.cleanPartialPages(tempDir)
-        diskProvider.restoreLegacyTemporaryPages(download, tempDir)
-        // A previous run may have published the images before database registration failed.
-        // Only reuse pages the saved queue marked ready, and validate their bytes again.
-        val publishedDir =
-            diskProvider.findChapterEntry(
-                download.sourceId,
-                download.mangaTitle,
-                download.chapterName,
-                download.mangaId,
-                download.chapterId,
-            )?.path
-                ?: diskProvider.getChapterDir(
-                    download.sourceId,
-                    download.mangaTitle,
-                    download.chapterName,
-                    download.mangaId,
-                    download.chapterId,
-                )
-        pages.filter { it.status == PageStatus.READY }.forEach { page ->
-            if (diskProvider.validPageMetadata(tempDir, page.index) != null) return@forEach
-            val publishedFiles = diskProvider.pageFiles(publishedDir, page.index)
-            if (publishedFiles.isEmpty() || publishedFiles.any { !diskProvider.isValidPage(it) }) return@forEach
-            publishedFiles.forEach { published ->
-                Files.copy(
-                    published,
-                    tempDir.resolve(published.fileName.toString()),
-                    java.nio.file.StandardCopyOption.REPLACE_EXISTING,
-                )
-            }
-        }
-        val pageSizes = mutableMapOf<Int, Long>()
-        for (page in pages) {
-            val stored = diskProvider.validPageMetadata(tempDir, page.index) ?: continue
-            pageSizes[page.index] = stored.sizeBytes
-        }
-        val totalBytes = AtomicLong(pageSizes.values.sum())
-        updateDownload(download.chapterId) { item ->
-            item.copy(
-                bytesDownloaded = totalBytes.get(),
-                pages = item.pages.map { page ->
-                    val size = pageSizes[page.index]
-                    if (size != null) {
-                        page.copy(
-                            status = PageStatus.READY,
-                            progress = 1f,
-                            bytesWritten = size,
-                            error = null,
-                        )
-                    } else {
-                        page.copy(status = PageStatus.QUEUE, progress = 0f, error = null)
-                    }
-                },
-            )
-        }
-        val pageFailures = ConcurrentHashMap<Int, Exception>()
-        val pageSemaphore = Semaphore(pageParallelism().coerceIn(1, 32))
-        coroutineScope {
-            pages.map { page ->
-                async {
-                    pageSemaphore.withPermit {
-                        val existingSize = pageSizes[page.index]
-                        if (existingSize != null) {
-                            updatePageStatus(
-                                download.chapterId,
-                                page.index,
-                                PageStatus.READY,
-                                1.0f,
-                                bytesWritten = existingSize,
-                            )
-                            return@withPermit
-                        }
-
-                        updatePageStatus(download.chapterId, page.index, PageStatus.DOWNLOADING, 0.1f)
-                        try {
-                            val bytes = mihon.desktop.extension.downloadSourcePage(
-                                download.sourceId,
-                                Page(page.index, page.url, page.imageUrl, page.headers),
-                                download.chapterUrl,
-                                networkHelper,
-                                sourceManager,
-                                processManager,
-                                priority = mihon.extension.ipc.RequestPriority.BACKGROUND,
-                            )
-                            currentCoroutineContext().ensureActive()
-                            val savedPage = diskProvider.savePage(tempDir, page.index, bytes)
-                            // Splitting is best effort: it never fails the download, and the byte
-                            // totals below follow what is actually on disk afterwards.
-                            val split = tallImageSplitter?.split(savedPage, page.index)
-                            val storedBytes = (split as? TallImageSplitResult.Split)?.totalBytes
-                                ?: bytes.size.toLong()
-
-                            val downloadedBytes = totalBytes.addAndGet(storedBytes)
-                            val allSessionBytes = sessionBytes.addAndGet(storedBytes)
-                            val elapsedSeconds = (System.currentTimeMillis() - sessionStartedAt) / 1000.0
-                            if (elapsedSeconds > 0.1) {
-                                _speedBytesPerSec.value = allSessionBytes / elapsedSeconds
-                            }
-
-                            updatePageStatus(
-                                download.chapterId,
-                                page.index,
-                                PageStatus.READY,
-                                1.0f,
-                                bytesWritten = storedBytes,
-                            )
-                            val progress = updateDownload(download.chapterId) {
-                                it.copy(bytesDownloaded = downloadedBytes)
-                            }
-                            progress?.let { onDownloadProgress?.invoke(it) }
-                        } catch (error: CancellationException) {
-                            throw error
-                        } catch (error: Exception) {
-                            updatePageStatus(
-                                download.chapterId,
-                                page.index,
-                                PageStatus.ERROR,
-                                0f,
-                                error.message,
-                            )
-                            pageFailures[page.index] = error
-                        }
-                    }
-                }
-            }.forEach { it.await() }
-        }
-
-        if (pageFailures.isNotEmpty()) {
-            val first = pageFailures.minBy { it.key }
-            throw IOException(
-                "${pageFailures.size} page(s) failed; page ${first.key + 1}: ${first.value.message}",
-                first.value,
-            )
-        }
-
-        currentCoroutineContext().ensureActive()
-        // Finalize chapter atomically and register in database
-        diskProvider.finalizeChapter(
-            sourceId = download.sourceId,
-            mangaId = download.mangaId,
-            chapterId = download.chapterId,
-            mangaTitle = download.mangaTitle,
-            chapterName = download.chapterName,
-            totalPages = pages.size,
-            mutationPort = mutationPort,
-        )
-
-        val completedDownload = updateDownload(download.chapterId) {
-            it.copy(status = DownloadStatus.COMPLETED, progress = 1.0f, storageLayoutVersion = 1)
-        }
-        completedDownload?.let { onDownloadCompleted?.invoke(it) }
-    }
-
-    private suspend fun fetchPages(sourceId: Long, chapterUrl: String): List<Page> {
-        if (pageListFetcher != null) {
-            return pageListFetcher.invoke(sourceId, chapterUrl)
-        }
-        val chapter = SChapter(url = chapterUrl, name = "")
-        if (sourceManager != null) {
-            return sourceManager.getPageList(sourceId, chapter)
-        }
-        if (processManager != null) {
-            return processManager.getPageList(sourceId, chapter)
-        }
-        throw IllegalStateException("No page list fetcher available")
-    }
-
-    private fun updateDownload(
-        chapterId: Long,
-        persistImmediately: Boolean = false,
-        transform: (DesktopDownload) -> DesktopDownload,
-    ): DesktopDownload? {
-        var updatedItem: DesktopDownload? = null
-        _queueState.update { list ->
-            val index = list.indexOfFirst { it.chapterId == chapterId }
-            if (index == -1) return@update list
-            val item = list[index]
-            val updated = transform(item)
-            val readyCount = updated.pages.count { it.status == PageStatus.READY }
-            val progress = if (updated.pages.isNotEmpty()) readyCount.toFloat() / updated.pages.size else 0f
-            val finalItem = updated.copy(progress = progress)
-            updatedItem = finalItem
-            val mutable = list.toMutableList()
-            mutable[index] = finalItem
-            mutable
-        }
-        val item = updatedItem
-        val persistNow =
-            persistImmediately ||
-                (item != null && (item.status == DownloadStatus.COMPLETED || item.status == DownloadStatus.ERROR))
-        if (persistNow) {
-            persistQueueImmediate()
-        } else {
-            scheduleDebouncedPersist()
-        }
-        return item
-    }
-
-    private fun updatePageStatus(
-        chapterId: Long,
-        pageIndex: Int,
-        status: PageStatus,
-        progress: Float,
-        error: String? = null,
-        bytesWritten: Long? = null,
-    ) {
-        updateDownload(chapterId) { download ->
-            val pageIdx = download.pages.indexOfFirst { it.index == pageIndex }
-            if (pageIdx == -1) return@updateDownload download
-            val mutablePages = download.pages.toMutableList()
-            val p = mutablePages[pageIdx]
-            mutablePages[pageIdx] = p.copy(
-                status = status,
-                progress = progress,
-                error = error,
-                bytesWritten = bytesWritten ?: p.bytesWritten,
-            )
-            download.copy(pages = mutablePages)
-        }
-    }
+    internal suspend fun processDownload(download: DesktopDownload) = engine.processDownload(download)
 
     suspend fun shutdown() {
         close()
@@ -1082,11 +338,7 @@ class DesktopDownloader(
     }
 
     override fun close() {
-        downloadJob?.cancel()
-        activeDownloadJobs.values.forEach(Job::cancel)
-        activeDownloadJobs.clear()
-        downloadJob = null
-        _isRunning.value = false
+        control.close()
         scope.cancel()
     }
 }

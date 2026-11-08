@@ -1,0 +1,1 @@
+# Legacy Kotlin files over 400 lines: <path> <max allowed lines>. Only remove entries, never add.

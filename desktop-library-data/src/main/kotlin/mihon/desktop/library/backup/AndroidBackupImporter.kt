@@ -1,9 +1,6 @@
 package mihon.desktop.library.backup
 
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonPrimitive
 import mihon.desktop.library.model.CategoryRecord
-import mihon.desktop.library.model.ChapterRecord
 import mihon.desktop.library.model.HistoryRecord
 import mihon.desktop.library.model.ImportCounts
 import mihon.desktop.library.model.ImportReport
@@ -12,12 +9,10 @@ import mihon.desktop.library.model.ImportReportItemRecord
 import mihon.desktop.library.model.ImportReportRecord
 import mihon.desktop.library.model.ImportStatus
 import mihon.desktop.library.model.ImportType
-import mihon.desktop.library.model.MangaRecord
 import mihon.desktop.library.model.PreferenceSkipReason
 import mihon.desktop.library.model.PreferenceSnapshotRecord
 import mihon.desktop.library.model.SourcePreferenceSnapshotRecord
 import mihon.desktop.library.model.SourceRecord
-import mihon.desktop.library.model.TrackingRecord
 import mihon.desktop.library.repository.LibraryMutationPort
 import java.nio.file.Path
 import java.util.Locale
@@ -77,7 +72,7 @@ class AndroidBackupImporter(
 
         backup.backupManga.forEachIndexed { mangaIndex, manga ->
             control.checkpoint()
-            val incomingManga = manga.toRecord(validated.mangaMemoJson[mangaIndex])
+            val incomingManga = manga.toMangaRecord(validated.mangaMemoJson[mangaIndex])
             val existingManga = findManga(manga.source, manga.url)
             val mangaId = if (existingManga == null) {
                 accumulator.mangaInserted++
@@ -97,7 +92,10 @@ class AndroidBackupImporter(
             val chapterIdByUrl = mutableMapOf<String, Long>()
             manga.chapters.forEachIndexed { chapterIndex, chapter ->
                 control.checkpoint()
-                val incomingChapter = chapter.toRecord(mangaId, validated.chapterMemoJson[mangaIndex][chapterIndex])
+                val incomingChapter = chapter.toChapterRecord(
+                    mangaId,
+                    validated.chapterMemoJson[mangaIndex][chapterIndex],
+                )
                 val existingChapter = findChapter(mangaId, chapter.url)
                 val chapterId = if (existingChapter == null) {
                     accumulator.chaptersInserted++
@@ -124,7 +122,7 @@ class AndroidBackupImporter(
 
             manga.tracking.forEach { tracking ->
                 control.checkpoint()
-                val incoming = tracking.toRecord(mangaId)
+                val incoming = tracking.toTrackingRecord(mangaId)
                 val existing = findTracking(mangaId, tracking.syncId.toLong())
                 if (existing == null) {
                     insertTracking(incoming)
@@ -289,68 +287,6 @@ private class ImportAccumulator(
         items = items.toList(),
     )
 }
-
-private fun AndroidBackupManga.toRecord(memoJson: String) = MangaRecord(
-    sourceId = source,
-    url = url,
-    title = title,
-    artist = artist,
-    author = author,
-    description = description,
-    genreJson = canonicalStringSetJson(genre),
-    status = status.toLong(),
-    thumbnailUrl = thumbnailUrl,
-    favorite = favorite,
-    dateAdded = dateAdded,
-    viewerFlags = (viewerFlags ?: viewer).toLong(),
-    chapterFlags = chapterFlags.toLong(),
-    updateStrategy = updateStrategy.name,
-    lastModifiedAt = lastModifiedAt,
-    favoriteModifiedAt = favoriteModifiedAt,
-    excludedScanlatorsJson = canonicalStringSetJson(excludedScanlators),
-    version = version,
-    notes = notes,
-    initialized = initialized,
-    memoJson = memoJson,
-)
-
-private fun AndroidBackupChapter.toRecord(mangaId: Long, memoJson: String) = ChapterRecord(
-    mangaId = mangaId,
-    url = url,
-    name = name,
-    scanlator = scanlator,
-    read = read,
-    bookmark = bookmark,
-    lastPageRead = lastPageRead,
-    dateFetch = dateFetch,
-    dateUpload = dateUpload,
-    chapterNumber = chapterNumber.toDouble(),
-    sourceOrder = sourceOrder,
-    lastModifiedAt = lastModifiedAt,
-    version = version,
-    memoJson = memoJson,
-)
-
-@Suppress("DEPRECATION")
-internal fun AndroidBackupTracking.toRecord(mangaId: Long) = TrackingRecord(
-    mangaId = mangaId,
-    trackerId = syncId.toLong(),
-    remoteId = if (mediaIdInt != 0) mediaIdInt.toLong() else mediaId,
-    libraryId = libraryId,
-    title = title,
-    lastChapterRead = lastChapterRead.toDouble(),
-    totalChapters = totalChapters.toLong(),
-    score = score.toDouble(),
-    status = status.toLong(),
-    startedReadingDate = startedReadingDate,
-    finishedReadingDate = finishedReadingDate,
-    private = private,
-    trackingUrl = trackingUrl,
-)
-
-private fun canonicalStringSetJson(values: Iterable<String>) = JsonArray(
-    values.toSet().sortedWith(UNICODE_CODE_POINT_COMPARATOR).map(::JsonPrimitive),
-).toString()
 
 private fun ImportReport.toRecord() = ImportReportRecord(
     importType = importType,

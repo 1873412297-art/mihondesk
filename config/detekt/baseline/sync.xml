@@ -1,0 +1,9 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<SmellBaseline>
+  <ManuallySuppressedIssues />
+  <CurrentIssues>
+    <ID>LongMethod:SyncEngine.kt:SyncEngine$suspend fun syncNow: SyncReport</ID>
+    <ID>LongMethod:SyncMergePolicy.kt:SyncMergePolicy$fun mergeChangeset: Changeset</ID>
+    <ID>LongMethod:SyncMergePolicy.kt:SyncMergePolicy$fun mergeManga: AndroidBackupManga</ID>
+  </CurrentIssues>
+</SmellBaseline>

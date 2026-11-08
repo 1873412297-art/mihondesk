@@ -5,7 +5,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.util.concurrent.ConcurrentHashMap
 
-object CoverFailureRegistry {
+class CoverFailureRegistry {
     private val failures = ConcurrentHashMap<Long, String>()
     private val _failuresFlow = MutableStateFlow<Map<Long, String>>(emptyMap())
     val failuresFlow: StateFlow<Map<Long, String>> = _failuresFlow.asStateFlow()

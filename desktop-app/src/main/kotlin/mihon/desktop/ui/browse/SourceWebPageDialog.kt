@@ -24,6 +24,8 @@ import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import mihon.desktop.DesktopRuntime
+import mihon.desktop.extension.getSourceStates
+import mihon.desktop.extension.sourceWebPage
 import mihon.desktop.i18n.LocalStrings
 import mihon.desktop.i18n.UiText
 import mihon.desktop.i18n.text

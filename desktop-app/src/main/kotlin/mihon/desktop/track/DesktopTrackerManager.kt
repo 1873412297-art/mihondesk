@@ -63,30 +63,40 @@ class DesktopTrackerManager(
 
     suspend fun login(trackerId: Long, credentials: Map<String, String>): Boolean {
         val tracker = get(trackerId) ?: return false
-        val success = tracker.login(credentials)
-        if (success) {
-            if (store != null) {
-                val token = tracker.persistenceToken
-                    ?: credentials["token"]
-                    ?: credentials["access_token"]
-                    ?: credentials["password"]
-                    ?: ""
-                val serverUrl = credentials["server_url"] ?: credentials["url"] ?: ""
-                store.saveLogin(
-                    trackerId = tracker.id,
-                    username = tracker.username.orEmpty(),
-                    token = token,
-                    serverUrl = serverUrl,
-                )
-            }
-            try {
-                loginRecoveryHandler?.invoke(trackerId)
-            } catch (error: CancellationException) {
-                throw error
-            } catch (_: Exception) { }
-            drainPendingSafely()
+        if (!tracker.login(credentials)) return false
+        if (!persistLogin(tracker, credentials)) {
+            store?.getLoginInfo(tracker.id)?.let(tracker::restoreLogin) ?: tracker.logout()
+            return false
         }
-        return success
+        try {
+            loginRecoveryHandler?.invoke(trackerId)
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            mihon.desktop.logging.DesktopLogger.warn(
+                "Tracker",
+                "Login recovery for tracker $trackerId failed",
+                error,
+            )
+        }
+        drainPendingSafely()
+        return true
+    }
+
+    /** Returns false when the new credential could not be stored. A missing store is not a failure. */
+    private fun persistLogin(tracker: DesktopTracker, credentials: Map<String, String>): Boolean {
+        val target = store ?: return true
+        val token = tracker.persistenceToken
+            ?: credentials["token"]
+            ?: credentials["access_token"]
+            ?: credentials["password"]
+            ?: ""
+        return target.saveLogin(
+            trackerId = tracker.id,
+            username = tracker.username.orEmpty(),
+            token = token,
+            serverUrl = credentials["server_url"] ?: credentials["url"] ?: "",
+        )
     }
 
     private suspend fun drainPendingSafely() {

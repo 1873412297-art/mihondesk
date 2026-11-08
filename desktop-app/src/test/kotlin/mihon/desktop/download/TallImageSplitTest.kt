@@ -211,7 +211,9 @@ class TallImageSplitTest {
 
     /** A page whose parts are missing must count as not downloaded. */
     @Test
-    fun `a missing part makes the split page count as not downloaded`(@TempDir dir: Path): Unit = runBlocking {
+    fun `a missing part makes the split page count as not downloaded`(
+        @TempDir dir: Path,
+    ): Unit = runBlocking {
         val disk = DownloadDiskProvider(dir.resolve("downloads"))
         val temp = disk.getTempChapterDir(sourceId, mangaTitle, chapterName, 1L, 11L)
         splitter(disk).split(disk.savePage(temp, 0, tallDownloadImage(40, 413)), pageIndex = 0)
@@ -223,6 +225,27 @@ class TallImageSplitTest {
 
         disk.isChapterDownloaded(sourceId, mangaTitle, chapterName, 1L, 11L) shouldBe false
         disk.inspectChapter(sourceId, mangaTitle, chapterName, listOf(0), 1L, 11L).isComplete shouldBe false
+    }
+
+    /** When the queue still knows the part count, finalize must not publish a truncated prefix. */
+    @Test
+    fun `finalize rejects a split page whose last part disappeared`(@TempDir dir: Path): Unit = runBlocking {
+        val disk = DownloadDiskProvider(dir.resolve("downloads"))
+        val temp = disk.getTempChapterDir(sourceId, mangaTitle, chapterName, 1L, 11L)
+        splitter(disk).split(disk.savePage(temp, 0, tallDownloadImage(40, 413)), pageIndex = 0)
+        Files.delete(disk.getSplitPartFile(temp, 0, partCount - 1))
+
+        io.kotest.assertions.throwables.shouldThrow<IOException> {
+            disk.finalizeChapter(
+                sourceId,
+                1L,
+                11L,
+                mangaTitle,
+                chapterName,
+                1,
+                pagePartCounts = mapOf(0 to partCount),
+            )
+        }
     }
 
     /** A page and its parts must sort as one run: this is what makes each part a reader page. */

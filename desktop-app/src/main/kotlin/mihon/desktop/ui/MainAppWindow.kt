@@ -37,9 +37,8 @@ import mihon.desktop.platform.toColorRef
 import mihon.desktop.preferences.DesktopPreferences
 import mihon.desktop.ui.splash.StartupHandoff
 import mihon.desktop.ui.splash.StartupSplash
-import mihon.desktop.window.ScreenBounds
+import mihon.desktop.window.DisplayLayout
 import mihon.desktop.window.WindowPlacement
-import java.awt.Toolkit
 import androidx.compose.ui.window.WindowPlacement as ComposeWindowPlacement
 
 /**
@@ -74,9 +73,7 @@ fun ApplicationScope.MainAppWindow(
     onCloseDuringStartup: () -> Unit,
 ) {
     val placement = remember {
-        val screenSize = Toolkit.getDefaultToolkit().screenSize
-        (preferences.windowPlacement ?: WindowPlacement(0, 0, 1280, 800, false))
-            .sanitize(ScreenBounds(0, 0, screenSize.width, screenSize.height))
+        DisplayLayout.current().sanitize(preferences.windowPlacement ?: WindowPlacement(0, 0, 1280, 800, false))
     }
     val windowState = rememberWindowState(
         placement = if (placement.maximized) ComposeWindowPlacement.Maximized else ComposeWindowPlacement.Floating,
@@ -88,9 +85,13 @@ fun ApplicationScope.MainAppWindow(
         runCatching {
             MainWindowHost::class.java.getResourceAsStream("/icon.png")?.use {
                 androidx.compose.ui.graphics.painter.BitmapPainter(
-                    org.jetbrains.skia.Image.makeFromEncoded(it.readAllBytes()).toComposeImageBitmap(),
+                    org.jetbrains.skia.Image.makeFromEncoded(it.readAllBytes()).use { image ->
+                        image.toComposeImageBitmap()
+                    },
                 )
             }
+        }.onFailure {
+            mihon.desktop.logging.DesktopLogger.debug("Window", "Failed to load boot icon", it)
         }.getOrNull()
     }
     val customTitleBarEnabled = remember {

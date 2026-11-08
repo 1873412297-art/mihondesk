@@ -1,0 +1,2 @@
+CREATE INDEX IF NOT EXISTS manga_last_modified ON manga(last_modified_at);
+CREATE INDEX IF NOT EXISTS chapter_last_modified ON chapter(last_modified_at);

@@ -13,6 +13,7 @@ import kotlinx.coroutines.runBlocking
 import mihon.desktop.extension.DesktopExtensionInstaller
 import mihon.desktop.extension.DesktopSourceManager
 import mihon.desktop.extension.ExtensionStoreService
+import mihon.desktop.extension.registerBuiltinSource
 import mihon.desktop.library.db.DesktopLibraryDatabaseFactory
 import mihon.desktop.library.model.CategoryRecord
 import mihon.desktop.library.model.ChapterRecord
@@ -21,6 +22,7 @@ import mihon.desktop.library.model.MangaRecord
 import mihon.desktop.library.model.TrackingRecord
 import mihon.desktop.preferences.DesktopPreferenceStore
 import mihon.desktop.ui.browse.BrowsePresenter
+import mihon.desktop.ui.browse.performMigrationInternal
 import mihon.extension.model.SourceDescriptor
 import mihon.extension.source.WindowsCatalogueSource
 import mihon.extension.source.model.FilterList

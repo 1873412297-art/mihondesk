@@ -45,7 +45,7 @@ class ActivityCenterTest {
     }
 
     @Test
-    fun `track records success and failure of a suspending block`() = runBlocking {
+    fun `track records success and failure of a suspending block`(): Unit = runBlocking {
         center.track("lib", ActivityKind.LIBRARY_UPDATE) { it.progress(1, 3) } shouldBe Unit
         center.items.value.single().state shouldBe ActivityState.SUCCEEDED
 

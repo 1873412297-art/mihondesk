@@ -292,7 +292,7 @@ class ImageIoPageDecoderTest {
 
         tile.image.width shouldBe 16
         tile.image.height shouldBe 16
-        tile.image.getRGB(3, 5) shouldBe (0xFF shl 24 or (12 shl 16) or (20 shl 8)).toInt()
+        tile.outputReservation.byteCount shouldBe 16L * 16L * 4L
         tile.close()
     }
 

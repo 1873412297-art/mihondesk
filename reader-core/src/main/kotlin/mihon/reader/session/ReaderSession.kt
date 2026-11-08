@@ -1,5 +1,6 @@
 package mihon.reader.session
 
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.StateFlow
 import mihon.reader.model.PageId
 
@@ -21,5 +22,9 @@ interface ReaderSession {
 
     suspend fun closeAndFlush()
 
-    fun cancelWithoutFlush()
+    /**
+     * Stops loading without flushing progress and returns the job that releases chapter resources.
+     * The caller must let this job finish before cancelling the session's coroutine scope.
+     */
+    fun cancelWithoutFlush(): Job
 }

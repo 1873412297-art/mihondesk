@@ -5,6 +5,8 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import mihon.extension.ipc.BrokerHttpRequest
 import mihon.extension.ipc.BrokerHttpResponse
 import mihon.extension.ipc.NetworkFailureKind
+import mihon.extension.network.TlsFallback
+import mihon.extension.network.withTlsFallback
 import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.Cookie
@@ -40,12 +42,14 @@ class DesktopNetworkHelper(
     private val cookieStore: DesktopCookieStore? = null,
     private val scheduler: NetworkRequestScheduler = NetworkRequestScheduler(),
     private val policyProvider: () -> DesktopNetworkPolicy = { DesktopNetworkPolicy() },
+    /** Directory the extension host spills large request bodies into; see [readSpilledBody]. */
+    private val brokerTempRoot: java.nio.file.Path? = null,
 ) : AutoCloseable {
     // Redirects are followed here so every destination uses its own permissions and session.
     private val baseClient = client.newBuilder()
         .followRedirects(false)
         .followSslRedirects(false)
-        .connectionSpecs(DesktopTls.defaultSpecs)
+        .connectionSpecs(TlsFallback.defaultSpecs)
         .build()
 
     internal fun connectionSpecs(): List<okhttp3.ConnectionSpec> = currentClient().connectionSpecs
@@ -75,6 +79,7 @@ class DesktopNetworkHelper(
                     ),
                 )
             }
+            builder.dns(DesktopDns.forPolicy(policy, baseClient))
             client.connectionPool.evictAll()
             client = builder.withTlsFallback()
             appliedPolicy = policy
@@ -85,6 +90,9 @@ class DesktopNetworkHelper(
     private val runtimeHosts = ConcurrentHashMap<String, MutableSet<String>>()
     private val sourceOwners = ConcurrentHashMap<Long, String>()
     private val memoryCookies = ConcurrentHashMap<String, List<Cookie>>()
+
+    /** The policy in effect now, for child processes that open their own connections (JCEF). */
+    fun currentPolicy(): DesktopNetworkPolicy = policyProvider().validate()
 
     fun userAgentFor(url: String): String = cookieStore?.getUserAgent(url.toHttpUrl().host)
         ?: policyProvider().userAgent.takeIf { it.isNotBlank() } ?: defaultUserAgent
@@ -187,13 +195,29 @@ class DesktopNetworkHelper(
         BrokerHttpResponse(502, error = "$kind: ${failure.message}", failureKind = kind)
     }
 
+    internal fun readSpilledBody(fileName: String): ByteArray {
+        val path = java.nio.file.Path.of(fileName).toAbsolutePath().normalize()
+        // Resolve links before trusting the path: the extension host can write in its temp area.
+        val real = path.toRealPath()
+        val root = brokerTempRoot?.toAbsolutePath()?.normalize()
+            ?: java.nio.file.Path.of(System.getProperty("java.io.tmpdir")).toAbsolutePath().normalize()
+        val realRoot = runCatching { root.toRealPath() }.getOrNull()
+        require(realRoot != null && real.startsWith(realRoot) && real.fileName.toString().startsWith("mihon-broker-")) {
+            "Refusing request body outside the broker temp area: $fileName"
+        }
+        require(java.nio.file.Files.size(real) <= MAX_RESPONSE_BYTES) { "Request body exceeds 64 MiB" }
+        return java.nio.file.Files.readAllBytes(real)
+    }
+
     private suspend fun execute(request: BrokerHttpRequest, browsing: Boolean = false): NetworkResponse {
         val owner = request.extensionId ?: request.sourceId?.let(sourceOwners::get)
         val identity = owner ?: LEGACY_OWNER
         var url = request.url.toHttpUrl()
         var permittedCdnRedirect: HttpUrl? = null
         var method = request.method.uppercase()
-        var bytes = request.bodyBase64?.let { Base64.getDecoder().decode(it) } ?: request.body?.toByteArray()
+        var bytes = request.bodyBase64?.let { Base64.getDecoder().decode(it) }
+            ?: request.body?.toByteArray()
+            ?: request.bodyFileName?.let { readSpilledBody(it) }
         require((bytes?.size ?: 0) <= MAX_RESPONSE_BYTES) { "Request body exceeds 64 MiB" }
         val headers = linkedMapOf<String, List<String>>()
         request.headers.forEach { (key, value) -> headers[key] = listOf(value) }

@@ -3,6 +3,7 @@ package mihon.desktop.library.backup
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonPrimitive
 import mihon.desktop.library.model.PreferenceSkipReason
+import mihon.sync.core.merge.SyncMergePolicy
 
 data class SupportedPreferencePolicy(
     val appKeys: Set<String> = DEFAULT_APP_KEYS,
@@ -72,21 +73,7 @@ internal fun AndroidPreferenceValue.toImportDecision(): PreferenceDecision.Impor
     is AndroidBooleanPreferenceValue -> PreferenceDecision.Import("BOOLEAN", value.toString())
     is AndroidStringSetPreferenceValue -> PreferenceDecision.Import(
         "STRING_SET",
-        JsonArray(value.sortedWith(UNICODE_CODE_POINT_COMPARATOR).map(::JsonPrimitive)).toString(),
+        JsonArray(value.sortedWith(SyncMergePolicy.UNICODE_CODE_POINT_COMPARATOR).map(::JsonPrimitive)).toString(),
     )
     else -> null
-}
-
-internal val UNICODE_CODE_POINT_COMPARATOR = Comparator<String> { left, right ->
-    val leftPoints = left.codePoints().iterator()
-    val rightPoints = right.codePoints().iterator()
-    while (leftPoints.hasNext() && rightPoints.hasNext()) {
-        val comparison = leftPoints.nextInt().compareTo(rightPoints.nextInt())
-        if (comparison != 0) return@Comparator comparison
-    }
-    when {
-        leftPoints.hasNext() -> 1
-        rightPoints.hasNext() -> -1
-        else -> 0
-    }
 }

@@ -21,6 +21,7 @@ import mihon.desktop.stats.DesktopStatsData
 import mihon.desktop.sync.DesktopSyncScheduler
 import mihon.desktop.track.DesktopTrackerManager
 import mihon.desktop.track.TrackOnReadSyncService
+import mihon.desktop.ui.common.ContentDensity
 import mihon.desktop.ui.library.ChapterDisplayMode
 import mihon.desktop.ui.library.ChapterFilterState
 import mihon.desktop.ui.library.ChapterSortState
@@ -35,18 +36,27 @@ import mihon.desktop.updates.LibraryUpdateResult
 import mihon.desktop.updates.UpdatedChapterItem
 import java.nio.file.Path
 
+private val NoDownloads: () -> List<DesktopDownload> = { emptyList() }
+private val NoDownloadSpeed: () -> Double = { 0.0 }
+
 @Immutable
 data class DesktopShellState(
     val selected: DesktopDestination = DesktopDestination.Library,
+    /** Section the navigation rail highlights; differs from [selected] while manga details are open. */
+    val railSection: DesktopDestination = selected,
     val libraryState: LibraryUiState = LibraryUiState(),
     val libraryBatchState: LibraryBatchState = LibraryBatchState(),
     val mangaDetailState: MangaDetailUiState = MangaDetailUiState(),
     val standaloneMangaDetails: Boolean = false,
     val isMangaLibraryActionRunning: Boolean = false,
     val isMangaSourceRefreshing: Boolean = false,
-    val downloadsQueue: List<DesktopDownload> = emptyList(),
+    val downloadsQueue: () -> List<DesktopDownload> = NoDownloads,
+    val downloadsBadge: mihon.desktop.ui.tasks.DownloadsNavBadge? = null,
+    val downloadProgressOf: (Long) -> mihon.desktop.ui.tasks.DownloadProgressInfo = {
+        mihon.desktop.ui.tasks.DownloadProgressInfo(0f, 0, 0)
+    },
     val isDownloaderRunning: Boolean = false,
-    val downloadSpeedBytesPerSec: Double = 0.0,
+    val downloadSpeed: () -> Double = NoDownloadSpeed,
     val downloadRecoveryMessage: String? = null,
     val downloadStorageError: String? = null,
     val updatedChapters: List<UpdatedChapterItem> = emptyList(),
@@ -64,6 +74,9 @@ data class DesktopShellState(
     val statsData: DesktopStatsData = DesktopStatsData(),
     val incognitoMode: Boolean = false,
     val preferenceStore: DesktopPreferenceStore? = null,
+    val contentDensity: ContentDensity = ContentDensity.Standard,
+    val railCollapsed: Boolean = false,
+    val railToggleRequests: Int = 0,
     val readerSettingsStore: DesktopReaderSettingsStore? = null,
     val diagnosticService: DiagnosticBundleService? = null,
     val trackerManager: DesktopTrackerManager? = null,
@@ -86,7 +99,8 @@ data class DesktopShellState(
 )
 
 @Immutable
-data class DesktopShellActions(
+internal data class DesktopShellActions(
+    val library: LibraryActions = LibraryActions(),
     val onDestinationSelected: (DesktopDestination) -> Unit = {},
     val appUpdateContent: (@Composable () -> Unit)? = null,
     val upcomingContent: (@Composable () -> Unit)? = null,
@@ -161,22 +175,6 @@ data class DesktopShellActions(
     val onOpenChapterInWebView: ((Long) -> Unit)? = null,
     val onOpenRandomManga: () -> Unit = {},
     val mangaDetailActions: MangaDetailActions? = null,
-    val onPauseAllDownloads: () -> Unit = {},
-    val onResumeAllDownloads: () -> Unit = {},
-    val onClearCompletedDownloads: () -> Unit = {},
-    val onCancelDownload: (Long) -> Unit = {},
-    val onPauseDownload: (Long) -> Unit = {},
-    val onResumeDownload: (Long) -> Unit = {},
-    val onMoveUpDownload: (Long) -> Unit = {},
-    val onMoveDownDownload: (Long) -> Unit = {},
-    val onRetryDownload: (Long) -> Unit = {},
-    val onRetryAllFailedDownloads: () -> Unit = {},
-    val onDownloadGroupAction: (
-        mangaId: Long,
-        action: mihon.desktop.ui.tasks.DownloadGroupAction,
-    ) -> Unit = { _, _ -> },
-    val onReorderDownload: (fromIndex: Int, toIndex: Int) -> Unit = { _, _ -> },
-    val onReadDownloadedChapter: (Long, Long) -> Unit = { _, chapterId -> onReadChapter(chapterId) },
     val onRepairBrokenCovers: (() -> Unit)? = null,
     val onCheckForUpdates: () -> Unit = {},
     val onCancelLibraryUpdate: () -> Unit = {},
@@ -193,9 +191,12 @@ data class DesktopShellActions(
     val onExportBackup: () -> Unit = {},
     val onOpenOnboarding: () -> Unit = {},
     val onPreferencesChanged: ((DesktopPreferences) -> Unit)? = null,
+    val onContentDensityChange: (ContentDensity) -> Unit = {},
+    val onRailCollapsedChange: (Boolean) -> Unit = {},
     val onLockNow: (() -> Unit)? = null,
     val onPairPhoneSync: (() -> Unit)? = null,
     val onContinueReading: ((Long) -> Unit)? = null,
     val onLibraryDetailPaneWidthChange: (Int) -> Unit = {},
     val onOpenMangaFromHome: (Long) -> Unit = {},
+    val downloadActions: DownloadActions = DownloadActions(),
 )

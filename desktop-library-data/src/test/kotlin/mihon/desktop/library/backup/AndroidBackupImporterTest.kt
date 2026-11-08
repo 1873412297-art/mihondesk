@@ -186,6 +186,19 @@ class AndroidBackupImporterTest {
             finishedReadingDate = 1_000,
             trackingUrl = "incoming-url",
         )
+        val equalProgress = regressiveTracking.copy(lastChapterRead = existingTracking.lastChapterRead)
+        BackupMergePolicy.mergeTracking(
+            existingTracking,
+            equalProgress,
+            existingDeviceId = "a",
+            incomingDeviceId = "b",
+        ).title shouldBe "incoming remote"
+        BackupMergePolicy.mergeTracking(
+            existingTracking,
+            equalProgress,
+            existingDeviceId = "b",
+            incomingDeviceId = "a",
+        ).title shouldBe "existing remote"
         BackupMergePolicy.mergeRestoredTracking(
             existingTracking,
             regressiveTracking.copy(lastChapterRead = 13.0, remoteId = 0),

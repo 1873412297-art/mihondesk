@@ -85,6 +85,7 @@ class RollingFileLogger(
             val dst = logDirectory.resolve("mihon.$i.log")
             if (Files.exists(src)) {
                 if (i == maxBackups && Files.exists(dst)) {
+                    // Best-effort cleanup; a failure here is not actionable.
                     runCatching { Files.deleteIfExists(dst) }
                 }
                 runCatching {

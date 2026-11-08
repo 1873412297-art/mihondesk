@@ -7,12 +7,12 @@ import mihon.reader.prefetch.PrefetchPolicy
 /**
  * Desktop-configurable variant of the core [PrefetchPolicy] window.
  *
- * The core policy hardcodes four pages ahead and one behind; the desktop reader exposes the
+ * The core policy uses the shared five-ahead, two-behind window; the desktop reader exposes the
  * ahead window as a user setting (1-10 pages) and applies it here. When the requested window
  * equals the core default the pipeline delegates to the coordinator's native prefetch untouched;
- * otherwise the pipeline runs this policy itself. The behind window always stays at the core
- * single page so quick direction reversal stays cheap. Pages are emitted nearest-first and RTL
- * affects placement rather than logical page order, exactly like the core policy.
+ * otherwise the pipeline runs this policy itself. The behind window always stays at the core two
+ * pages so direction reversal stays cheap. Pages are emitted nearest-first and RTL affects
+ * placement rather than logical page order, exactly like the core policy.
  */
 object DesktopPreloadPolicy {
     const val MIN_PRELOAD_PAGES = 1

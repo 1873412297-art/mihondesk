@@ -6,6 +6,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -16,8 +17,6 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.add
-import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
@@ -25,6 +24,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import mihon.desktop.extension.DesktopCookieStore
 import mihon.desktop.extension.DesktopNetworkHelper
+import mihon.desktop.logging.DesktopLogger
 import mihon.extension.ipc.BrokerHttpRequest
 import okhttp3.Cookie
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -47,82 +47,17 @@ internal fun browserErrorClosesSession(sessionReady: Boolean): Boolean = !sessio
 
 /** A browser process is created only by open(), one capability and process per source session. */
 class DesktopWebViewManager(
-    private val browserRuntime: Path,
-    private val hostDistribution: Path,
-    private val cacheDirectory: Path,
-    private val network: DesktopNetworkHelper,
-    private val cookies: DesktopCookieStore,
+    internal val browserRuntime: Path,
+    internal val hostDistribution: Path,
+    internal val cacheDirectory: Path,
+    internal val network: DesktopNetworkHelper,
+    internal val cookies: DesktopCookieStore,
+    internal val idleTimeoutMillis: Long = 120_000,
 ) : AutoCloseable {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val sessions = ConcurrentHashMap<String, BrowserSession>()
+    internal val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    internal val sessions = ConcurrentHashMap<String, BrowserSession>()
     val activeSessionCount: Int get() = sessions.size
-    private val extensionSessions = ConcurrentHashMap<String, BrowserSession>()
-    suspend fun handleExtensionRequest(
-        request: mihon.extension.ipc.WebViewRequest,
-    ): mihon.extension.ipc.WebViewResponse {
-        val key = "${request.extensionId}:${request.sourceId}:${request.sessionId}"
-        return try {
-            val value = when (request.action) {
-                "open" -> {
-                    extensionSessions.remove(key)?.close()
-                    val session = open(request.sourceId, request.extensionId, request.url, request.headers)
-                    extensionSessions[key] = session
-                    try {
-                        session.awaitLoaded()
-                    } catch (
-                        failure: Throwable,
-                    ) {
-                        extensionSessions.remove(key)?.close()
-                        throw failure
-                    }
-                }
-                "evaluate" -> (extensionSessions[key] ?: error("Browser session is not open")).evaluate(request.script)
-                "destroy" -> {
-                    extensionSessions.remove(key)?.close()
-                    ""
-                }
-                "cookies", "getCookie" -> {
-                    extensionSessions.entries.filter {
-                        it.key.startsWith("${request.extensionId}:${request.sourceId}:")
-                    }.forEach { it.value.exportCookies() }
-                    if (request.url.isBlank()) {
-                        ""
-                    } else {
-                        cookies.loadForRequest(
-                            request.extensionId,
-                            request.url.toHttpUrl(),
-                        ).joinToString("; ") {
-                            "${it.name}=${it.value}"
-                        }
-                    }
-                }
-                "setCookie" -> {
-                    val url = request.url.toHttpUrl()
-                    check(network.isDomainAllowed(url.host, request.extensionId)) { "Cookie origin is not allowed" }
-                    val cookie = Cookie.parse(url, request.value) ?: error("Invalid browser cookie")
-                    cookies.saveFromResponse(request.extensionId, url, listOf(cookie))
-                    extensionSessions.entries.filter {
-                        it.key.startsWith("${request.extensionId}:${request.sourceId}:")
-                    }.forEach { it.value.setCookie(request.url, cookie) }
-                    ""
-                }
-                "userAgent" -> network.userAgentFor(request.url.ifBlank { "https://localhost/" })
-                else -> error("Unsupported WebView action: ${request.action}")
-            }
-            mihon.extension.ipc.WebViewResponse(true, value)
-        } catch (
-            cancelled: CancellationException,
-        ) {
-            throw cancelled
-        } catch (failure: Exception) {
-            mihon.extension.ipc.WebViewResponse(
-                false,
-                error =
-                failure.message ?: "Browser operation failed",
-            )
-        }
-    }
-
+    internal val extensionSessions = ConcurrentHashMap<String, BrowserSession>()
     suspend fun open(
         sourceId: Long,
         extensionId: String,
@@ -146,7 +81,6 @@ class DesktopWebViewManager(
         }
         val cache = cacheDirectory.resolve(id)
         Files.createDirectories(cache)
-        network.registerRuntimePageUrl(url, extensionId, sourceId)
         val session = BrowserSession(id, sourceId, extensionId, token, url, cache)
         sessions[id] = session
         return try {
@@ -184,6 +118,7 @@ class DesktopWebViewManager(
         }
         private val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
         private var process: Process? = null
+        private val idleWatch = BrowserIdleWatch(scope, idleTimeoutMillis, sessionId, ::close)
         private var processJob: mihon.desktop.extension.WindowsJobObject? = null
         private var writer: java.io.BufferedWriter? = null
         val processId: Long? get() = process?.pid()
@@ -218,70 +153,28 @@ class DesktopWebViewManager(
                     val output = Json.encodeToString(response).toByteArray()
                     exchange.sendResponseHeaders(200, output.size.toLong())
                     exchange.responseBody.use { it.write(output) }
-                } catch (
-                    _: Exception,
-                ) {
-                    runCatching { exchange.sendResponseHeaders(403, -1) }
+                } catch (failure: Exception) {
+                    rejectBrokerRequest(exchange, failure)
                 } finally {
                     exchange.close()
                 }
             }
             server.start()
-            val command =
-                listOf(
-                    browserRuntime.resolve("bin/java.exe").toString(),
-                    "--add-modules=jcef",
-                    "--add-exports=java.desktop/sun.awt=ALL-UNNAMED",
-                    "-cp",
-                    (
-                        hostDistribution.resolve("lib").toString() +
-                            "/*"
-                        ),
-                    "mihon.webview.MainKt",
-                )
-            val child = ProcessBuilder(command).redirectError(cache.resolve("host-error.log").toFile()).start()
+            val command = browserHostCommand(browserRuntime, hostDistribution)
+            val child = mihon.desktop.platform.ChildProcessReaper.track(
+                ProcessBuilder(command).redirectError(cache.resolve("host-error.log").toFile()).start(),
+            )
             process = child
+            idleWatch.start()
             // The helper waits for stdin configuration, so no Chromium children can escape
             // before it is assigned to this kill-on-close process tree.
             val job = mihon.desktop.extension.WindowsJobObject(2L * 1024 * 1024 * 1024, activeProcessLimit = 32)
             processJob = job
             check(job.assignProcess(child)) { "Unable to contain browser process tree" }
             writer = child.outputStream.bufferedWriter(Charsets.UTF_8)
-            val initialCookies = cookies.loadAll(extensionId)
-            send(
-                buildJsonObject {
-                    put("url", initialUrl)
-                    put("cache", cache.toAbsolutePath().toString())
-                    put("broker", "http://127.0.0.1:${server.address.port}/request")
-                    put("headers", buildJsonObject { headers.forEach { (key, value) -> put(key, value) } })
-                    put(
-                        "cookies",
-                        buildJsonArray {
-                            initialCookies.forEach { cookie ->
-                                add(
-                                    buildJsonObject {
-                                        put("name", cookie.name)
-                                        put("value", cookie.value)
-                                        put(
-                                            "domain",
-                                            if (cookie.hostOnly) cookie.domain else ".${cookie.domain}",
-                                        )
-                                        put("path", cookie.path)
-                                        put("secure", cookie.secure)
-                                        put("httpOnly", cookie.httpOnly)
-                                        put("expiresAt", if (cookie.persistent) cookie.expiresAt else 0)
-                                        put(
-                                            "url",
-                                            "${if (cookie.secure) "https" else "http"}://" +
-                                                "${cookie.domain.removePrefix(".")}/",
-                                        )
-                                    },
-                                )
-                            }
-                        },
-                    )
-                },
-            )
+            val args = BrowserNetworkArguments.forPolicy(network.currentPolicy())
+            val profile = cookies.loadAll(extensionId)
+            send(browserConfiguration(initialUrl, cache, server.address.port, headers, profile, args))
             scope.launch {
                 child.waitFor()
                 close()
@@ -309,7 +202,11 @@ class DesktopWebViewManager(
                 }
             }
         }
+        internal fun touch() = idleWatch.touch()
+
         private fun onEvent(message: JsonObject) {
+            touch()
+
             if (message.text("sessionId") != sessionId || message.text("sourceId") != sourceId.toString()) return
             val type = message.text("type")
             val value = message.text("value")
@@ -348,10 +245,7 @@ class DesktopWebViewManager(
             val domain = value.text("domain").removePrefix(".")
             val name = value.text("name")
             if (domain.isBlank() || name.isBlank()) return
-            mihon.desktop.logging.DesktopLogger.debug(
-                "DesktopWebViewManager",
-                "Keeping browser cookie $name for $domain ($extensionId)",
-            )
+            DesktopLogger.debug("DesktopWebViewManager", "Keeping browser cookie $name for $domain ($extensionId)")
             if (name == "cf_clearance") {
                 browserUserAgent?.let { cookies.noteBrowserUserAgent(domain, it) }
             }
@@ -371,15 +265,14 @@ class DesktopWebViewManager(
                 )
             }
             saved.exceptionOrNull()?.let {
-                mihon.desktop.logging.DesktopLogger.warn(
-                    "DesktopWebViewManager",
-                    "Dropped browser cookie $name for $domain ($extensionId)",
-                    it,
-                )
+                DesktopLogger.warn("DesktopWebViewManager", "Dropped browser cookie $name for $domain", it)
             }
         }
         suspend fun awaitLoaded(timeoutMillis: Long = 30_000): String = try {
             withTimeout(timeoutMillis) { loaded.await() }
+        } catch (timeout: TimeoutCancellationException) {
+            close()
+            throw IllegalStateException("Browser page did not load within $timeoutMillis ms", timeout)
         } catch (cancelled: CancellationException) {
             close()
             throw cancelled
@@ -387,40 +280,24 @@ class DesktopWebViewManager(
         suspend fun evaluate(
             script: String,
             timeoutMillis: Long = 10_000,
-        ): String = query("evaluate", "script", script, timeoutMillis)
+        ): String {
+            touch()
+            return query("evaluate", "script", script, timeoutMillis)
+        }
         internal suspend fun setCookie(url: String, cookie: Cookie) {
-            val id = UUID.randomUUID().toString()
-            val result = CompletableDeferred<String>()
-            pending[id] = result
-            try {
-                send(
-                    buildJsonObject {
-                        put("type", "setCookie")
-                        put("id", id)
-                        put("url", url)
-                        put(
-                            "cookie",
-                            buildJsonObject {
-                                put("name", cookie.name)
-                                put("value", cookie.value)
-                                put("domain", if (cookie.hostOnly) cookie.domain else ".${cookie.domain}")
-                                put("path", cookie.path)
-                                put("secure", cookie.secure)
-                                put("httpOnly", cookie.httpOnly)
-                                put("expiresAt", if (cookie.persistent) cookie.expiresAt else 0)
-                            },
-                        )
-                    },
-                )
-                withTimeout(5_000) { result.await() }
-            } finally {
-                pending.remove(id)
-            }
+            query("setCookie", "", "", 5_000, cookieMessage(url, cookie))
         }
         suspend fun exportCookies(timeoutMillis: Long = 5_000) {
             query("cookies", "", "", timeoutMillis)
         }
-        private suspend fun query(type: String, key: String, value: String, timeout: Long): String {
+        private suspend fun query(
+            type: String,
+            key: String,
+            value: String,
+            timeout: Long,
+            extra: JsonObject = JsonObject(emptyMap()),
+        ): String {
+            touch()
             val id = UUID.randomUUID().toString()
             val result = CompletableDeferred<String>()
             pending[id] = result
@@ -430,6 +307,7 @@ class DesktopWebViewManager(
                         put("type", type)
                         put("id", id)
                         if (key.isNotEmpty()) put(key, value)
+                        extra.forEach { (field, content) -> put(field, content) }
                     },
                 )
                 withTimeout(timeout) { result.await() }
@@ -459,18 +337,29 @@ class DesktopWebViewManager(
         }
         override fun close() {
             if (!closed.compareAndSet(false, true)) return
+            idleWatch.close()
             currentState.value = BrowserEvent("closed", "")
-            runCatching { writer?.close() }
-            process?.let { child ->
-                val descendants = child.descendants().toList()
-                descendants.forEach { it.destroy() }
-                child.destroy()
-                if (!child.waitFor(2, TimeUnit.SECONDS)) child.destroyForcibly()
-                descendants.filter { it.isAlive }.forEach { it.destroyForcibly() }
+            runCatching { writer?.close() }.onFailure {
+                DesktopLogger.warn("DesktopWebViewManager", "Failed to close browser input", it)
             }
-            processJob?.close()
+            runCatching {
+                process?.let { child ->
+                    val descendants = child.descendants().toList()
+                    descendants.forEach { it.destroy() }
+                    child.destroy()
+                    if (!child.waitFor(2, TimeUnit.SECONDS)) child.destroyForcibly()
+                    descendants.filter { it.isAlive }.forEach { it.destroyForcibly() }
+                }
+            }.onFailure {
+                DesktopLogger.warn("DesktopWebViewManager", "Failed to stop browser process", it)
+            }
+            runCatching { processJob?.close() }.onFailure {
+                DesktopLogger.warn("DesktopWebViewManager", "Failed to close browser process job", it)
+            }
             processJob = null
-            server.stop(0)
+            runCatching { server.stop(0) }.onFailure {
+                DesktopLogger.warn("DesktopWebViewManager", "Failed to stop browser server", it)
+            }
             executor.shutdownNow()
             sessions.remove(sessionId)
             extensionSessions.entries.removeIf { it.value === this }
@@ -482,7 +371,7 @@ class DesktopWebViewManager(
                     Files.walk(owned).use { paths ->
                         paths.sorted(Comparator.reverseOrder()).forEach { Files.deleteIfExists(it) }
                     }
-                }
+                }.onFailure { DesktopLogger.warn("DesktopWebViewManager", "Failed to clear browser cache", it) }
             }
         }
     }

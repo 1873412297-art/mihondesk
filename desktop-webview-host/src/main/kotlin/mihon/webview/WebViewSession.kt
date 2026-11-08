@@ -66,6 +66,8 @@ internal class WebViewSession(
                 "--disable-sync",
             ),
         )
+        // Proxy and DoH switches chosen by the main process, so this window shares the source route.
+        cef.appArgsAsList.addAll(BrowserSwitches.accepted(config))
         check(CefApp.startup(cef.appArgs)) { "JCEF startup failed" }
         app = CefApp.getInstance(cef.appArgs, cef.cefSettings)
         // Native startup finishes on another thread. The cookie manager throws if used before that.

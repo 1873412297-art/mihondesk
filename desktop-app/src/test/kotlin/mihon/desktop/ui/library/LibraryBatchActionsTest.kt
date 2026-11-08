@@ -322,6 +322,9 @@ private class BatchTestFakeRepository(
     }
     override fun findChapter(mangaId: Long, url: String): ChapterRecord? =
         chapterRecords.values.find { it.mangaId == mangaId && it.url == url }
+
+    override fun chaptersForManga(mangaId: Long): List<ChapterRecord> =
+        chapterRecords.values.filter { it.mangaId == mangaId }
     override fun insertChapter(value: ChapterRecord): Long = 0L
     override fun updateChapter(value: ChapterRecord) {
         chapterRecords[value.id] = value

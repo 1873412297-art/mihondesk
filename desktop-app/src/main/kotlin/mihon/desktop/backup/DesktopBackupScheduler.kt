@@ -11,6 +11,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import mihon.desktop.library.backup.AndroidBackupExporter
+import mihon.desktop.logging.DesktopLogger
 import mihon.desktop.preferences.DesktopPreferenceStore
 import java.io.IOException
 import java.nio.file.Files
@@ -45,8 +46,10 @@ class DesktopBackupScheduler(
                     checkAndRunAutoBackup()
                 } catch (cancelled: CancellationException) {
                     throw cancelled
-                } catch (_: Exception) {
-                    // Ignore background scheduler errors and continue
+                } catch (error: Exception) {
+                    // An automatic backup that keeps failing must leave a trace and a visible result.
+                    lastResult = BackupRunResult(null, clock(), error.message ?: error.javaClass.simpleName)
+                    DesktopLogger.warn("Backup", "Automatic backup check failed", error)
                 }
                 delay(60_000L) // check every minute
             }

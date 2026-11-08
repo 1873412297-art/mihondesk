@@ -9,6 +9,7 @@ kotlin { jvmToolchain(mihonx.versions.java.get().toInt()) }
 dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.coroutines.core)
+    implementation(libs.okhttp.core)
 
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.bundles.test)

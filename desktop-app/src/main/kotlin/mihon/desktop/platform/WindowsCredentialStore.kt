@@ -72,7 +72,10 @@ class WindowsCredentialStore internal constructor(
         }
     }
 
-    private val api by lazy { Native.load("Advapi32", Credentials::class.java) }
+    // Resolved through the injected loader so tests can substitute a fake; production passes the
+    // Advapi32 loader. Previously this ignored apiLoader and always loaded the real library, so the
+    // fake was dead and the unit tests silently hit the live Windows Credential Manager.
+    private val api by lazy { apiLoader() }
 
     override fun read(target: String): String? {
         val result = PointerByReference()

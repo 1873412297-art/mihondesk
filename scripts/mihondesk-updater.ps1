@@ -93,6 +93,13 @@ function Write-Journal($Journal) {
         else { [IO.File]::Move($temporary, $journalPath) }
     } finally { if (Test-Path -LiteralPath $temporary) { Remove-Item -LiteralPath $temporary -Force } }
 }
+# Mirrors PortableLayout: `.portable` (shipped layout) or `portable` (visible in Explorer).
+function Test-PortableMarker([string]$Directory) {
+    foreach ($name in @('.portable', 'portable')) {
+        if (Test-Path -LiteralPath (Join-Path $Directory $name) -PathType Leaf) { return $true }
+    }
+    return $false
+}
 function Acquire-ProfileLock([string]$ApplicationDirectory) {
     $data = Join-Path $ApplicationDirectory 'data'
     Assert-NoReparse $data
@@ -137,7 +144,7 @@ function Recover-PendingUpdate {
     try {
         foreach ($path in @($targetResolved, $paths.Backup)) {
             if (Test-Path -LiteralPath $path) {
-                if (-not (Test-Path -LiteralPath (Join-Path $path '.portable') -PathType Leaf)) { throw 'Recovery directory is not a portable installation' }
+                if (-not (Test-PortableMarker $path)) { throw 'Recovery directory is not a portable installation' }
                 $heldLocks.Add((Acquire-ProfileLock $path))
             }
         }
@@ -234,7 +241,7 @@ try {
     catch { throw 'Another portable update is in progress' }
     if (Test-Path -LiteralPath $journalPath) { Recover-PendingUpdate }
     if ($Recover) { return }
-    if (-not (Test-Path -LiteralPath (Join-Path $targetResolved '.portable') -PathType Leaf)) { throw 'Update target must be an existing portable application directory' }
+    if (-not (Test-PortableMarker $targetResolved)) { throw 'Update target must be an existing portable application directory' }
     if (Test-Path -LiteralPath (Join-Path $targetResolved $guardName)) { throw 'Update guard has no recovery journal; preserve this directory and investigate' }
     if ($CallerPid -gt 0) {
         $caller = Get-Process -Id $CallerPid -ErrorAction SilentlyContinue

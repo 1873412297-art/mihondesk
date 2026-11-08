@@ -82,7 +82,10 @@ class SqlDelightSyncLocalRepositoryTest {
                     insertManga(
                         MangaRecord(sourceId = 10, url = "/manga/a", title = "Local Manga", lastModifiedAt = 50L),
                     )
-                insertChapter(ChapterRecord(mangaId = mId, url = "/ch/1", name = "Chapter 1", lastModifiedAt = 60L))
+                val chapterId = insertChapter(
+                    ChapterRecord(mangaId = mId, url = "/ch/1", name = "Chapter 1", lastModifiedAt = 60L),
+                )
+                upsertHistory(HistoryRecord(chapterId, lastRead = 42L, readDuration = 7L))
             }
 
             // Export delta since 0
@@ -90,6 +93,8 @@ class SqlDelightSyncLocalRepositoryTest {
             delta0.mangas.size shouldBe 1
             delta0.mangas.first().url shouldBe "/manga/a"
             delta0.mangas.first().chapters.size shouldBe 1
+            delta0.mangas.first().history.single().lastRead shouldBe 42L
+            delta0.mangas.first().history.single().readDuration shouldBe 7L
 
             // Export delta since 100 -> nothing
             val delta100 = syncRepo.exportDelta(sinceCursor = 100L)

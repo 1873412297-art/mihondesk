@@ -194,6 +194,7 @@ class DesktopAppUpdateService(
         } catch (_: Exception) {
             false
         } finally {
+            // Best-effort cleanup; a failure here is not actionable.
             if (!keepPartial) runCatching { Files.deleteIfExists(tempFile) }
         }
     }

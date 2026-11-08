@@ -10,9 +10,7 @@ kotlin { jvmToolchain(mihonx.versions.java.get().toInt()) }
 
 dependencies {
     api(project(":reader-core"))
-    api(project(":sync-core"))
-    api(project(":sync-engine"))
-    api(project(":sync-transport-api"))
+    api(project(":sync"))
     implementation(libs.sqldelight.jdbcDriver)
     implementation(libs.sqldelight.coroutines)
     implementation(libs.kotlinx.coroutines.core)

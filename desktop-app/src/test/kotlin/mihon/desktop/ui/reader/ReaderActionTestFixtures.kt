@@ -1,5 +1,6 @@
 package mihon.desktop.ui.reader
 
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import mihon.reader.model.PageDescriptor
@@ -37,8 +38,9 @@ internal class TestReaderSession(initial: ReaderState) : ReaderSession {
         closeFailure?.let { throw it }
     }
 
-    override fun cancelWithoutFlush() {
+    override fun cancelWithoutFlush(): Job {
         cancelRequests++
+        return Job()
     }
 }
 

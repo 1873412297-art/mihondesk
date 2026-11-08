@@ -23,9 +23,7 @@ object MigrationMatcher {
     /**
      * Normalizes a title: lowercase, keeps letters (including CJK) and digits.
      */
-    fun normalizeTitle(title: String): String = title
-        .lowercase(Locale.ROOT)
-        .filter { it.isLetterOrDigit() }
+    fun normalizeTitle(title: String): String = mihon.desktop.ui.common.normalizeMangaTitle(title)
 
     /**
      * Strips text in brackets (parentheses, square brackets, braces, angle brackets),

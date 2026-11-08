@@ -69,6 +69,7 @@ class EditMangaInfoTest {
                 savedManga = value
             }
             override fun findChapter(mangaId: Long, url: String): ChapterRecord? = null
+            override fun chaptersForManga(mangaId: Long): List<ChapterRecord> = emptyList()
             override fun insertChapter(value: ChapterRecord): Long = 0L
             override fun updateChapter(value: ChapterRecord) {}
             override fun upsertCategory(value: CategoryRecord): Long = 0L

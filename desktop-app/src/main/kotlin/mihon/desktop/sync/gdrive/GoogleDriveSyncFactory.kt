@@ -1,7 +1,7 @@
 package mihon.desktop.sync.gdrive
 
 import kotlinx.coroutines.CoroutineScope
-import mihon.desktop.extension.withTlsFallback
+import mihon.extension.network.withTlsFallback
 import mihon.sync.engine.SyncLocalRepository
 import mihon.sync.transport.gdrive.DriveRestSnapshotStore
 import mihon.sync.transport.gdrive.GoogleDriveTransport
