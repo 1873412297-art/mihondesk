@@ -23,16 +23,16 @@ AI 辅助开发的开源项目 · 基于 Mihon · Kotlin / Compose Desktop
 
 ## 下载与安装
 
-当前版本：**0.3.26**。面向 **Windows 10 22H2 / Windows 11，x64**，发行包已内置 JetBrains Runtime 21（JBR），无需另装 Java。
+当前版本：**0.4.0**。面向 **Windows 10 22H2 / Windows 11，x64**，发行包已内置 JetBrains Runtime 21（JBR），无需另装 Java。
 
 程序、安装包和快捷方式现已统一命名为 **mihondesk**。安装版继续使用原有数据目录，支持从 MihonW 升级。
 
 | 下载 | 适用方式 |
 | --- | --- |
-| **[EXE 安装包](https://github.com/1873412297-art/mihondesk/releases/download/v0.3.26/mihondesk-0.3.26.exe)** | 推荐使用，下载后按向导安装 |
-| [MSI 安装包](https://github.com/1873412297-art/mihondesk/releases/download/v0.3.26/mihondesk-0.3.26.msi) | 需要 MSI 安装方式时使用 |
-| [便携 ZIP](https://github.com/1873412297-art/mihondesk/releases/download/v0.3.26/mihondesk-0.3.26-windows-x64-portable.zip) | 完整解压到可写目录，运行其中的 `mihondesk.exe` |
-| [SHA-256 校验文件](https://github.com/1873412297-art/mihondesk/releases/download/v0.3.26/SHA256SUMS.txt) | 校验下载文件的完整性 |
+| **[EXE 安装包](https://github.com/1873412297-art/mihondesk/releases/download/v0.4.0/mihondesk-0.4.0.exe)** | 推荐使用，下载后按向导安装 |
+| [MSI 安装包](https://github.com/1873412297-art/mihondesk/releases/download/v0.4.0/mihondesk-0.4.0.msi) | 需要 MSI 安装方式时使用 |
+| [便携 ZIP](https://github.com/1873412297-art/mihondesk/releases/download/v0.4.0/mihondesk-0.4.0-windows-x64-portable.zip) | 完整解压到可写目录，运行其中的 `mihondesk.exe` |
+| [SHA-256 校验文件](https://github.com/1873412297-art/mihondesk/releases/download/v0.4.0/SHA256SUMS.txt) | 校验下载文件的完整性 |
 
 **首次使用**：发行包不预装在线图源或扩展仓库，请自行添加仓库或安装扩展。本地文件阅读无需安装图源。升级会保留已有书架、设置和阅读数据。
 
@@ -63,6 +63,15 @@ AI 辅助开发的开源项目 · 基于 Mihon · Kotlin / Compose Desktop
 2. **阅读本地文件**：使用本地导入入口选择漫画文件或图片目录。
 3. **阅读在线内容**：在浏览页安装扩展包，再选择图源。安装入口支持 `.mext`，也可尝试转换受支持的扩展 `.apk`。
 4. **保留阅读数据**：使用备份功能定期导出。备份不包含已下载的漫画图片。
+
+## 0.4.0 更新
+
+- **架构与质量**：桌面端所有 Kotlin 文件重新拆分到 400 行以内，设置、书库、阅读器、下载与扩展逻辑按职责拆到独立文件；新增 detekt、文件长度门禁和编码约束；
+- **安全**：拒绝扩展包 ZIP 路径穿越；签名包内所有条目必须由同一签名者签名；扩展宿主与父进程共享受限的 broker 临时目录；扩展包解压上限改为流式检查，避免压缩炸弹；
+- **稳定性**：修复下载队列保存死锁、取消/暂停仍发布章节、孤儿清理误删已登记下载、分片缺尾、阅读器打开失败后重试上一章、单飞取消悬挂、输入流与内存租约泄漏、后台任务开关竞态、Drive 同步 busy 卡死、自动备份与延迟启动静默失败；
+- **体验**：切换章节清理旧解码缓存、双页设置即时生效、命令面板 NSFW 过滤失败时保守隐藏、分类 ID 输入框不再吞分隔符、标题栏无障碍文案跟随语言、清理图片缓存不再删除浏览器数据与运行时文件。
+
+详见[本版发布说明](https://github.com/1873412297-art/mihondesk/releases/tag/v0.4.0)和[更新日志](CHANGELOG.md)。
 
 ## 0.3.26 更新
 
@@ -109,7 +118,7 @@ AI 辅助开发的开源项目 · 基于 Mihon · Kotlin / Compose Desktop
 
 ## 当前限制
 
-mihondesk 仍在持续开发，桌面端尚未覆盖 Mihon 的全部功能。当前版本号为独立序列（`0.x`，现为 0.3.26），与上游 mihon `0.20.x` 无对应关系。以下限制基于[功能覆盖快照](docs/superpowers/evidence/suwayomi-feature-coverage.md)与原设计完成标准，会随验证进展持续收敛：
+mihondesk 仍在持续开发，桌面端尚未覆盖 Mihon 的全部功能。当前版本号为独立序列（`0.x`，现为 0.4.0），与上游 mihon `0.20.x` 无对应关系。以下限制基于[功能覆盖快照](docs/superpowers/evidence/suwayomi-feature-coverage.md)与原设计完成标准，会随验证进展持续收敛：
 
 - **扩展与图源兼容性**：扩展可安装并加载，不代表该图源的浏览→详情→章节→图片全链可用。部分站点需要验证码或登录。详见[扩展兼容矩阵](docs/suwayomi-extension-compatibility.md)。
 - **Tracker 账户**：11 个服务均有实现与本地契约测试。2026-09-22 生产实测：**Bangumi** 与 **AniList** 已完成登录→搜索绑定→进度写入→重进保持→解绑全链验证；其余服务（MyAnimeList、Kitsu、Shikimori、MangaUpdates、Hikka、MangaBaka 及自托管 Komga / Kavita / Suwayomi）尚待账户或实例就绪后继续联调，新增服务的 OAuth 自动登录配置也未完成。
