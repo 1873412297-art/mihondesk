@@ -3,6 +3,7 @@ package mihon.desktop.track
 import mihon.desktop.platform.CredentialStore
 import mihon.desktop.preferences.DesktopPreferenceStore
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Assertions.fail
@@ -36,12 +37,13 @@ class TrackingRecoveryTest {
         assertEquals("legacy", credentials.values["test/tracker/1"])
     }
 
-    @Test fun `new login never falls back to plaintext on credential failure`() {
+    @Test fun `a new login is rejected when the credential cannot be stored`() {
         val preferences = DesktopPreferenceStore(directory.resolve("prefs"))
         val store = DesktopTrackerStore(preferences, FakeCredentials(true), "test")
-        store.saveLogin(1, "user", "secret")
+        assertFalse(store.saveLogin(1, "user", "secret"))
         assertNull(preferences.property("tracker.1.token"))
-        assertEquals("secret", store.getAuthToken(1))
+        assertNull(store.getAuthToken(1))
+        assertFalse(store.isLoggedIn(1))
     }
 
     @Test fun `Windows credential native round trip and delete`() {
