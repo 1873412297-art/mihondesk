@@ -2,6 +2,7 @@ package mihon.desktop.track
 
 import com.sun.net.httpserver.HttpServer
 import kotlinx.coroutines.runBlocking
+import mihon.desktop.platform.CredentialStore
 import mihon.desktop.preferences.DesktopPreferenceStore
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -95,10 +96,21 @@ class DesktopKitsuTrackerApiTest {
 
     @Test
     fun `manager persists Kitsu OAuth access token instead of the password`() = runBlocking {
-        val store = DesktopTrackerStore(DesktopPreferenceStore(tempDir.resolve("preferences.properties")))
+        val store = DesktopTrackerStore(
+            DesktopPreferenceStore(tempDir.resolve("preferences.properties")),
+            InMemoryCredentials(),
+            "test",
+        )
         val manager = DesktopTrackerManager(listOf(tracker), store)
 
         assertTrue(manager.login(tracker.id, mapOf("username" to "reader", "password" to "secret-password")))
         assertEquals("kitsu-token", store.getAuthToken(tracker.id))
     }
+}
+
+private class InMemoryCredentials : CredentialStore {
+    private val values = mutableMapOf<String, String>()
+    override fun read(target: String): String? = values[target]
+    override fun write(target: String, secret: String): Boolean = true.also { values[target] = secret }
+    override fun delete(target: String): Boolean = values.remove(target) != null
 }

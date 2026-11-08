@@ -173,6 +173,8 @@ CREATE TABLE library_metadata (
 CREATE INDEX chapter_manga_order ON chapter(manga_id, source_order DESC, chapter_number DESC, id DESC);
 CREATE INDEX history_last_read ON history(last_read DESC);
 CREATE INDEX manga_title ON manga(title COLLATE NOCASE);
+CREATE INDEX manga_last_modified ON manga(last_modified_at);
+CREATE INDEX chapter_last_modified ON chapter(last_modified_at);
 
 selectLibrary:
 SELECT manga.*, COUNT(chapter.id) AS chapter_count,
