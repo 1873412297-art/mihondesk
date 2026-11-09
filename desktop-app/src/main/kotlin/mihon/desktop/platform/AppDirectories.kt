@@ -37,10 +37,9 @@ class AppDirectoryResolver(
     }
 
     private fun resolveInstalledRoot(): Path =
-        (appDataDirectory ?: macOSApplicationSupport())?.resolve("MihonW")
-            ?: throw IllegalStateException(
-                "APPDATA is unavailable; pass --data-dir=<path> to select a writable data directory",
-            )
+        requireNotNull(appDataDirectory ?: macOSApplicationSupport()) {
+            "APPDATA is unavailable; pass --data-dir=<path> to select a writable data directory"
+        }.resolve("MihonW")
 
     /** Windows uses APPDATA; macOS keeps the same profile name under Application Support. */
     private fun macOSApplicationSupport(): Path? =
