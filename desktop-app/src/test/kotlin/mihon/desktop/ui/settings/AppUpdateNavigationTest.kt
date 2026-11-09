@@ -28,49 +28,55 @@ class AppUpdateNavigationTest {
     @TempDir lateinit var root: Path
 
     @Test
-    fun `leaving about keeps the download and returning shows its verified result`() = runComposeUiTest(
-        testTimeout = UI_TEST_TIMEOUT,
-    ) {
-        val content = "app bytes".toByteArray()
-        val hash = MessageDigest.getInstance("SHA-256").digest(content).joinToString("") { "%02x".format(it) }
-        val name = "mihondesk-9.9.0.exe"
-        val base = "https://github.com/${DesktopAppUpdateService.DEFAULT_REPO}/releases/download/v9.9.0/"
-        val json = """{"tag_name":"v9.9.0","assets":[
+    fun `leaving about keeps the download and returning shows its verified result`() {
+        org.junit.jupiter.api.Assumptions.assumeTrue(
+            System.getProperty("os.name").orEmpty().startsWith("Windows"),
+            "The app update panel is Windows-only",
+        )
+        runComposeUiTest(
+            testTimeout = UI_TEST_TIMEOUT,
+        ) {
+            val content = "app bytes".toByteArray()
+            val hash = MessageDigest.getInstance("SHA-256").digest(content).joinToString("") { "%02x".format(it) }
+            val name = "mihondesk-9.9.0.exe"
+            val base = "https://github.com/${DesktopAppUpdateService.DEFAULT_REPO}/releases/download/v9.9.0/"
+            val json = """{"tag_name":"v9.9.0","assets":[
             {"name":"$name","browser_download_url":"$base$name","size":${content.size}},
             {"name":"SHA256SUMS.txt","browser_download_url":"${base}SHA256SUMS.txt"}]}"""
-        val calls = AtomicInteger()
-        val streamGate = CompletableDeferred<Unit>()
-        val service = DesktopAppUpdateService(fetchText = {
-            calls.incrementAndGet()
-            if (it.endsWith("latest")) json else "$hash  $name"
-        }, downloadStream = {
-            streamGate.await()
-            ByteArrayInputStream(content)
-        })
-        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
-        val presenter = AppUpdatePresenter(service, scope)
-        val showAbout = mutableStateOf(true)
-        try {
-            setContent { if (showAbout.value) AppUpdatePanel(presenter, service) }
-            waitForIdle()
-            calls.get() shouldBe 0
-            onNodeWithTag("app-update-check").performClick()
-            // The update service checks and writes the download through Dispatchers.IO.
-            waitUntil(timeoutMillis = 30_000) { presenter.state.value.phase == AppUpdatePhase.Available }
-            runOnIdle {
-                presenter.download(root.resolve(name))
-                showAbout.value = false
+            val calls = AtomicInteger()
+            val streamGate = CompletableDeferred<Unit>()
+            val service = DesktopAppUpdateService(fetchText = {
+                calls.incrementAndGet()
+                if (it.endsWith("latest")) json else "$hash  $name"
+            }, downloadStream = {
+                streamGate.await()
+                ByteArrayInputStream(content)
+            })
+            val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+            val presenter = AppUpdatePresenter(service, scope)
+            val showAbout = mutableStateOf(true)
+            try {
+                setContent { if (showAbout.value) AppUpdatePanel(presenter, service) }
+                waitForIdle()
+                calls.get() shouldBe 0
+                onNodeWithTag("app-update-check").performClick()
+                // The update service checks and writes the download through Dispatchers.IO.
+                waitUntil(timeoutMillis = 30_000) { presenter.state.value.phase == AppUpdatePhase.Available }
+                runOnIdle {
+                    presenter.download(root.resolve(name))
+                    showAbout.value = false
+                }
+                waitForIdle()
+                streamGate.complete(Unit)
+                waitUntil(timeoutMillis = 30_000) { presenter.state.value.phase == AppUpdatePhase.Ready }
+                runOnIdle { showAbout.value = true }
+                onNodeWithTag("app-update-saved").assertExists()
+                Files.readAllBytes(root.resolve(name)) shouldBe content
+                calls.get() shouldBe 2
+            } finally {
+                streamGate.complete(Unit)
+                scope.cancel()
             }
-            waitForIdle()
-            streamGate.complete(Unit)
-            waitUntil(timeoutMillis = 30_000) { presenter.state.value.phase == AppUpdatePhase.Ready }
-            runOnIdle { showAbout.value = true }
-            onNodeWithTag("app-update-saved").assertExists()
-            Files.readAllBytes(root.resolve(name)) shouldBe content
-            calls.get() shouldBe 2
-        } finally {
-            streamGate.complete(Unit)
-            scope.cancel()
         }
     }
 }

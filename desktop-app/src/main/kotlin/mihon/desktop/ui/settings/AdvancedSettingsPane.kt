@@ -94,8 +94,11 @@ internal fun AdvancedSettingsPane(
             fontWeight = FontWeight.Bold,
         )
 
-        BackgroundSettingsCard(presenter, backgroundScheduler, scheduleCoordinator, onPreferencesChanged)
-        SystemTitleBarCard(presenter, onPreferencesChanged)
+        // Windows-only integrations: the task scheduler and the JBR title bar have no macOS equivalent.
+        if (mihon.desktop.platform.DesktopPlatform.isWindows) {
+            BackgroundSettingsCard(presenter, backgroundScheduler, scheduleCoordinator, onPreferencesChanged)
+            SystemTitleBarCard(presenter, onPreferencesChanged)
+        }
         RenderBackendCard(preferenceStore)
         NetworkSettingsCard(preferenceStore)
 

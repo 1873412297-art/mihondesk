@@ -304,7 +304,7 @@ internal fun GeneralSettingsPane(
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 Text(
-                    strings.settingsPlatformLabel("Windows x64"),
+                    strings.settingsPlatformLabel(mihon.desktop.platform.DesktopPlatform.displayName),
                     style = MaterialTheme.typography.bodyMedium,
                 )
             }

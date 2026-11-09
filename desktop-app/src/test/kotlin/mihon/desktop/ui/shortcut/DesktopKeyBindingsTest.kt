@@ -57,7 +57,8 @@ class DesktopKeyBindingsTest {
         ).forEach { chord -> KeyChord.parse(chord.serialize()) shouldBe chord }
         KeyChord.parse("Hyper+A").shouldBeNull()
         KeyChord.parse("Ctrl+").shouldBeNull()
-        KeyChord(Key.Slash, ctrl = true).displayLabel() shouldBe "Ctrl + /"
+        KeyChord(Key.Slash, ctrl = true).displayLabel() shouldBe
+            "${mihon.desktop.platform.DesktopPlatform.primaryModifierLabel} + /"
     }
 
     @Test

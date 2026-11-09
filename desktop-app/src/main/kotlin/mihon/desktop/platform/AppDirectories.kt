@@ -30,13 +30,25 @@ class AppDirectoryResolver(
         explicitRoot: Path? = null,
     ): AppDirectories {
         val root = explicitRoot ?: when (mode) {
-            DistributionMode.Installed -> requireNotNull(appDataDirectory) {
-                "APPDATA is unavailable; pass --data-dir=<path> to select a writable data directory"
-            }.resolve("MihonW")
+            DistributionMode.Installed -> resolveInstalledRoot()
             DistributionMode.Portable -> executableDirectory.resolve("data")
         }
         return AppDirectories(root.toAbsolutePath().normalize())
     }
+
+    private fun resolveInstalledRoot(): Path =
+        (appDataDirectory ?: macOSApplicationSupport())?.resolve("MihonW")
+            ?: throw IllegalStateException(
+                "APPDATA is unavailable; pass --data-dir=<path> to select a writable data directory",
+            )
+
+    /** Windows uses APPDATA; macOS keeps the same profile name under Application Support. */
+    private fun macOSApplicationSupport(): Path? =
+        if (System.getProperty("os.name").orEmpty().startsWith("Mac", ignoreCase = true)) {
+            Path.of(System.getProperty("user.home"), "Library", "Application Support")
+        } else {
+            null
+        }
 
     /** Resolves from a detected [PortableLayout], so `portable-data/` is honoured as the root. */
     fun resolve(layout: PortableLayout, explicitRoot: Path? = null): AppDirectories =

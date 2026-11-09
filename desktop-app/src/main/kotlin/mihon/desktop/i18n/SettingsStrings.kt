@@ -121,7 +121,6 @@ interface SettingsStrings {
     val aboutTitle: String
     val aboutSubtitle: String
     fun aboutVersion(version: String): String
-    val aboutArchitecture: String
     val aboutRuntime: String
     val aboutDatabase: String
     val aboutProtocol: String

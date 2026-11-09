@@ -7,6 +7,7 @@ import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.isMetaPressed
 import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
+import mihon.desktop.platform.DesktopPlatform
 import mihon.desktop.preferences.DesktopPreferenceStore
 import mihon.desktop.reader.input.ReaderShortcutAction
 
@@ -30,9 +31,9 @@ data class KeyChord(
         append(BindableKeys.nameOf(key))
     }
 
-    /** Human-readable label for dialogs and settings, e.g. `Ctrl + Shift + /`. */
+    /** Human-readable label for dialogs and settings, e.g. `Ctrl + Shift + /` or `⌘ + Shift + /`. */
     fun displayLabel(): String = listOfNotNull(
-        "Ctrl".takeIf { ctrl },
+        DesktopPlatform.primaryModifierLabel.takeIf { ctrl },
         "Alt".takeIf { alt },
         "Shift".takeIf { shift },
         BindableKeys.displayOf(key),

@@ -11,6 +11,7 @@ import mihon.desktop.extension.builtin.BundledLocalSource
 import mihon.desktop.extension.getSources
 import mihon.desktop.preferences.DesktopPreferenceStore
 import mihon.desktop.reader.DesktopReaderFactory
+import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.io.TempDir
@@ -131,6 +132,10 @@ class DesktopRuntimeFactoryTest {
 
     @Test
     fun `blank APPDATA requires an explicit installed data directory`() {
+        assumeTrue(
+            System.getProperty("os.name").orEmpty().startsWith("Windows"),
+            "macOS falls back to ~/Library/Application Support",
+        )
         val exception = assertThrows<IllegalArgumentException> {
             DesktopRuntimeFactory.create(
                 args = emptyArray(),

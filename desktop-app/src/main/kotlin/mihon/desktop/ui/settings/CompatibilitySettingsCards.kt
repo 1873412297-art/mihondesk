@@ -71,17 +71,19 @@ internal fun RenderBackendCard(preferenceStore: DesktopPreferenceStore) {
                 CompatibilityText.RenderSummary.resolve(strings),
             )
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                RenderBackend.entries.forEach { backend ->
-                    FilterChip(
-                        selected = selected == backend,
-                        onClick = {
-                            RenderBackend.save(preferenceStore, backend)
-                            selected = backend
-                        },
-                        label = { Text(backend.label().resolve(strings)) },
-                        modifier = Modifier.testTag("render-backend-${backend.name.lowercase()}"),
-                    )
-                }
+                RenderBackend.entries
+                    .filter { mihon.desktop.platform.DesktopPlatform.isWindows || it != RenderBackend.DIRECT3D }
+                    .forEach { backend ->
+                        FilterChip(
+                            selected = selected == backend,
+                            onClick = {
+                                RenderBackend.save(preferenceStore, backend)
+                                selected = backend
+                            },
+                            label = { Text(backend.label().resolve(strings)) },
+                            modifier = Modifier.testTag("render-backend-${backend.name.lowercase()}"),
+                        )
+                    }
             }
             if (selected != applied) {
                 Text(CompatibilityText.RenderRestart.resolve(strings), color = MaterialTheme.colorScheme.primary)
