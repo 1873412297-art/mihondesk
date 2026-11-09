@@ -23,7 +23,7 @@ AI 辅助开发的开源项目 · 基于 Mihon · Kotlin / Compose Desktop
 
 ## 下载与安装
 
-当前版本：**0.4.0**。面向 **Windows 10 22H2 / Windows 11，x64**，发行包已内置 JetBrains Runtime 21（JBR），无需另装 Java。
+当前版本：**0.4.0**。Windows 面向 **Windows 10 22H2 / Windows 11，x64**，发行包已内置 JetBrains Runtime 21（JBR），无需另装 Java；另提供 macOS（Apple Silicon）DMG。
 
 程序、安装包和快捷方式现已统一命名为 **mihondesk**。安装版继续使用原有数据目录，支持从 MihonW 升级。
 
@@ -32,6 +32,7 @@ AI 辅助开发的开源项目 · 基于 Mihon · Kotlin / Compose Desktop
 | **[EXE 安装包](https://github.com/1873412297-art/mihondesk/releases/download/v0.4.0/mihondesk-0.4.0.exe)** | 推荐使用，下载后按向导安装 |
 | [MSI 安装包](https://github.com/1873412297-art/mihondesk/releases/download/v0.4.0/mihondesk-0.4.0.msi) | 需要 MSI 安装方式时使用 |
 | [便携 ZIP](https://github.com/1873412297-art/mihondesk/releases/download/v0.4.0/mihondesk-0.4.0-windows-x64-portable.zip) | 完整解压到可写目录，运行其中的 `mihondesk.exe` |
+| [macOS DMG（Apple Silicon）](https://github.com/1873412297-art/mihondesk/releases/download/v0.4.0/mihondesk-0.4.0-macos-arm64.dmg) | 未签名的 arm64 构建；首次打开请在 Finder 中右键“打开” |
 | [SHA-256 校验文件](https://github.com/1873412297-art/mihondesk/releases/download/v0.4.0/SHA256SUMS.txt) | 校验下载文件的完整性 |
 
 **首次使用**：发行包不预装在线图源或扩展仓库，请自行添加仓库或安装扩展。本地文件阅读无需安装图源。升级会保留已有书架、设置和阅读数据。
