@@ -32,8 +32,13 @@ class RenderBackendTest {
         opengl.getProperty("skiko.renderApi") shouldBe "OPENGL"
         opengl.getProperty("skiko.rendering.angle.enabled") shouldBe "false"
         val direct3d = Properties().also { applyRenderBackend(RenderBackend.DIRECT3D, it, emptyMap()) }
-        direct3d.getProperty("skiko.renderApi") shouldBe "DIRECT3D"
-        direct3d.getProperty("skiko.rendering.angle.enabled") shouldBe null
+        if (System.getProperty("os.name").orEmpty().startsWith("Windows")) {
+            direct3d.getProperty("skiko.renderApi") shouldBe "DIRECT3D"
+            direct3d.getProperty("skiko.rendering.angle.enabled") shouldBe null
+        } else {
+            // A profile copied from Windows must not pin Direct3D on another host.
+            direct3d.isEmpty shouldBe true
+        }
     }
 
     @Test

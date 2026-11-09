@@ -47,7 +47,7 @@ fun AboutScreen(modifier: Modifier = Modifier, updateContent: (@Composable () ->
                         fontWeight = FontWeight.SemiBold,
                     )
                     Text(strings.aboutVersion(mihon.desktop.updates.DesktopAppUpdateService.CURRENT_VERSION))
-                    Text(strings.aboutArchitecture)
+                    Text(strings.settingsPlatformLabel(mihon.desktop.platform.DesktopPlatform.displayName))
                     Text(strings.aboutRuntime)
                     Text(strings.aboutDatabase)
                     Text(strings.aboutProtocol)

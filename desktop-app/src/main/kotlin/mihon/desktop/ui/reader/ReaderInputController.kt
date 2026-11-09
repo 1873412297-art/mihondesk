@@ -5,6 +5,7 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isMetaPressed
 import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.type
@@ -266,7 +267,7 @@ internal fun ReaderScreenState.handleReaderKey(state: ReaderState, event: KeyEve
             wheelBehavior = settings.wheelBehavior,
             pageCount = state.pages.size.coerceAtLeast(1),
             anchor = state.viewportAnchor,
-            ctrl = event.isCtrlPressed,
+            ctrl = event.isCtrlPressed || event.isMetaPressed,
             shift = event.isShiftPressed,
         ),
     )

@@ -40,6 +40,8 @@ internal fun applyRenderBackend(
     properties: Properties = System.getProperties(),
     environment: Map<String, String> = System.getenv(),
 ) {
+    // A profile copied from Windows may still carry DIRECT3D; it would break the macOS Skiko start.
+    if (backend == RenderBackend.DIRECT3D && !mihon.desktop.platform.DesktopPlatform.isWindows) return
     val api = backend.skikoApi ?: return
     if (!environment["SKIKO_RENDER_API"].isNullOrBlank() || properties.containsKey("skiko.renderApi")) return
     properties.setProperty("skiko.renderApi", api)

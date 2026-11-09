@@ -267,10 +267,16 @@ compose.desktop {
 
         nativeDistributions {
             appResourcesRootDir.set(distributionResourcesRoot)
-            targetFormats(TargetFormat.Exe, TargetFormat.Msi)
+            targetFormats(TargetFormat.Exe, TargetFormat.Msi, TargetFormat.Dmg)
             packageName = "mihondesk"
-            packageVersion = desktopVersion
-            description = "mihondesk manga reader for Windows"
+            // jpackage's macOS bundler rejects a leading zero in app-version; the app's own
+            // version resource remains desktopVersion (0.4.0).
+            packageVersion = if (System.getProperty("os.name").orEmpty().startsWith("Mac", ignoreCase = true)) {
+                "1.0.0"
+            } else {
+                desktopVersion
+            }
+            description = "mihondesk manga reader"
             vendor = "mihondesk"
             licenseFile.set(rootProject.file("LICENSE"))
             // Every module here must be reachable at runtime: jdeps on the packaged app jar reports
@@ -303,22 +309,30 @@ compose.desktop {
                 menuGroup = "mihondesk"
                 upgradeUuid = "07E02BEA-9179-4E54-A1AF-CFC185C91398"
             }
+
+            macOS {
+                iconFile.set(project.file("src/main/resources/icon.icns"))
+                bundleID = "app.mihondesk"
+            }
         }
     }
 }
 
 // Skiko loads ANGLE beside its own native DLL. Reuse the version-pinned, licensed browser
 // payload, without changing the main Java runtime or downloading a second native dependency.
-tasks.matching { it.name == "createDistributable" }.configureEach {
-    val browserBin = project(":desktop-webview-host").layout.buildDirectory.dir("browser-runtime/bin")
-    val angleLibraries = listOf("libEGL.dll", "libGLESv2.dll", "d3dcompiler_47.dll")
-    inputs.files(angleLibraries.map { browserBin.get().file(it) })
-    doLast {
-        val appDirectory = layout.buildDirectory.dir("compose/binaries/main/app/mihondesk/app").get().asFile
-        angleLibraries.forEach { name ->
-            val source = browserBin.get().file(name).asFile
-            check(source.isFile && source.length() > 0) { "Packaged ANGLE dependency missing: $source" }
-            source.copyTo(File(appDirectory, name), overwrite = true)
+// Windows only: the macOS distribution uses the JBR's native graphics stack.
+if (System.getProperty("os.name").orEmpty().startsWith("Windows", ignoreCase = true)) {
+    tasks.matching { it.name == "createDistributable" }.configureEach {
+        val browserBin = project(":desktop-webview-host").layout.buildDirectory.dir("browser-runtime/bin")
+        val angleLibraries = listOf("libEGL.dll", "libGLESv2.dll", "d3dcompiler_47.dll")
+        inputs.files(angleLibraries.map { browserBin.get().file(it) })
+        doLast {
+            val appDirectory = layout.buildDirectory.dir("compose/binaries/main/app/mihondesk/app").get().asFile
+            angleLibraries.forEach { name ->
+                val source = browserBin.get().file(name).asFile
+                check(source.isFile && source.length() > 0) { "Packaged ANGLE dependency missing: $source" }
+                source.copyTo(File(appDirectory, name), overwrite = true)
+            }
         }
     }
 }

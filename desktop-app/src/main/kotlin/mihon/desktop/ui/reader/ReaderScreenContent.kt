@@ -27,6 +27,7 @@ import mihon.reader.model.ReadingMode
 import mihon.reader.session.ReaderLoadState
 import mihon.reader.session.ReaderState
 import androidx.compose.ui.input.pointer.isCtrlPressed as isPointerCtrlPressed
+import androidx.compose.ui.input.pointer.isMetaPressed as isPointerMetaPressed
 
 /** Reader viewport composition: input surface, page layer, chrome, HUD and edge reveals. */
 @OptIn(ExperimentalComposeUiApi::class)
@@ -96,7 +97,7 @@ private fun Modifier.readerScreenInputs(
             x = (change.position.x / viewport.width.coerceAtLeast(1)).coerceIn(0f, 1f),
             y = (change.position.y / viewport.height.coerceAtLeast(1)).coerceIn(0f, 1f),
         )
-        val ctrl = event.keyboardModifiers.isPointerCtrlPressed
+        val ctrl = event.keyboardModifiers.isPointerCtrlPressed || event.keyboardModifiers.isPointerMetaPressed
         holder.handleWheel(deltaPixels, ctrl, centroid, viewport)
         val continuous = state.mode == ReadingMode.VERTICAL || state.mode == ReadingMode.WEBTOON
         if (ctrl || !continuous) {

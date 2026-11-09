@@ -3,12 +3,17 @@ package mihon.desktop.ui
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyShortcut
 import androidx.compose.ui.window.ApplicationScope
+import androidx.compose.ui.window.MenuBar
 import androidx.compose.ui.window.Window
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 import mihon.desktop.DesktopRuntime
 import mihon.desktop.i18n.DesktopStrings
+import mihon.desktop.navigation.DesktopDestination
+import mihon.desktop.platform.DesktopPlatform
 import mihon.desktop.platform.SingleInstanceRequest
 import mihon.desktop.ui.splash.StartupHandoff
 
@@ -56,7 +61,24 @@ fun ApplicationScope.MihonDesktopApp(
             icon = icon,
             onPreviewKeyEvent = { onKey(it, false) },
             onKeyEvent = { onKey(it, true) },
-            content = content,
+            content = {
+                // macOS expects a system menu bar even when the window uses the native title bar.
+                if (DesktopPlatform.isMac) {
+                    MenuBar {
+                        Menu("mihondesk") {
+                            Item("About mihondesk") { app.navigator.navigate(DesktopDestination.About) }
+                            Item("Settings…", shortcut = KeyShortcut(Key.Comma, meta = true)) {
+                                app.navigator.navigate(DesktopDestination.Settings)
+                            }
+                            Separator()
+                            Item("Quit mihondesk", shortcut = KeyShortcut(Key.Q, meta = true)) {
+                                window.close(true)
+                            }
+                        }
+                    }
+                }
+                content()
+            },
         )
     }
 }

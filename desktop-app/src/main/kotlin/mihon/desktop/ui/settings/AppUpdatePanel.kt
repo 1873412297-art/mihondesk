@@ -18,6 +18,9 @@ import java.net.URI
 
 @Composable
 fun AppUpdatePanel(presenter: AppUpdatePresenter, service: DesktopAppUpdateService) {
+    // Releases currently publish Windows packages only; an update check on another host would
+    // only ever report "no matching package".
+    if (!mihon.desktop.platform.DesktopPlatform.isWindows) return
     val state by presenter.state.collectAsState()
     val strings = LocalStrings.current
     val scope = rememberCoroutineScope()

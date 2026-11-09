@@ -115,7 +115,7 @@ internal fun DesktopRail(
             modifier = Modifier.fillMaxHeight().padding(vertical = 8.dp),
             horizontalAlignment = if (expanded) Alignment.Start else Alignment.CenterHorizontally,
         ) {
-            DesktopTooltipBox(text = "$toggleLabel (Ctrl+B)") {
+            DesktopTooltipBox(text = "$toggleLabel (${mihon.desktop.platform.DesktopPlatform.primaryModifierLabel}B)") {
                 IconButton(
                     onClick = onToggle,
                     modifier = Modifier.padding(horizontal = 12.dp).testTag(DESKTOP_RAIL_TOGGLE_TEST_TAG),
