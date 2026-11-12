@@ -33,9 +33,9 @@ detekt 已把其中可机器检查的部分设为构建失败项（见 `config/d
 
 ## 仓库结构须知（改之前先读）
 
-- `app/`、`baseline-profile/`、`data/`、`domain/`、`source-*`、`presentation-*`、`core*`、`i18n`、`icons`、
-  `telemetry` 属于 **Android 端**，仍由 CI 构建 APK，并用于备份格式双向兼容验证（见 README“Android 回归”）。
-  桌面端模块不依赖它们；不要在桌面代码里引用它们，也不要未经维护者确认删除它们。
+- 本仓库只保留桌面端。不要把上游 Mihon 的 Android 模块（`app`、`data`、`domain`、`source-*`、
+  `presentation-*`、`core*`、`i18n`、`icons`、`telemetry`、`fastlane` 等）再加回来。备份格式兼容由
+  `desktop-library-data` 的契约测试覆盖，而不是在这里编译 Android 工程。
 - 桌面端入口：`desktop-app/src/main/kotlin/mihon/desktop/Main.kt`；运行时组装：`DesktopRuntime.kt`。
 - 扩展宿主是独立进程：`extension-host/`（`--extension-host` 子命令启动），通过 `extension-sdk` 的 IPC 通信。
 - JCEF 浏览器是按需启动的独立进程：`desktop-webview-host/`，由 `DesktopWebViewManager` 管理。

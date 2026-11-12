@@ -35,27 +35,11 @@ plugins {
     id("org.gradle.toolchains.foojay-resolver-convention") version "1.0.0"
 }
 
-rootProject.name = "Mihon"
-include(":app")
+rootProject.name = "mihondesk"
 include(":desktop-app")
 include(":desktop-library-data")
 include(":reader-core")
 include(":extension-sdk")
 include(":extension-host")
-include(":baseline-profile")
-include(":core-metadata")
-include(":core:archive")
-include(":core:common")
-include(":core:metro")
-include(":data")
-include(":domain")
-include(":i18n")
-include(":icons:material-symbols")
-include(":icons:simple-icons")
-include(":presentation-core")
-include(":presentation-widget")
-include(":source-api")
-include(":source-local")
-include(":telemetry")
 include(":desktop-webview-host")
 include(":sync")
