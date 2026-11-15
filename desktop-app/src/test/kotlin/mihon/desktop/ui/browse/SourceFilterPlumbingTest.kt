@@ -18,7 +18,7 @@ import mihon.desktop.extension.DesktopSourceManager
 import mihon.desktop.extension.WindowsExtensionProcessManager
 import mihon.desktop.extension.builtin.BundledMangaDexSource
 import mihon.desktop.extension.ensureSourceLoaded
-import mihon.desktop.extension.getFilterList
+import mihon.desktop.extension.loadFilterList
 import mihon.desktop.extension.registerBuiltinSource
 import mihon.desktop.extension.searchManga
 import mihon.extension.model.SourceDescriptor
@@ -102,7 +102,7 @@ class SourceFilterPlumbingTest {
 
         try {
             runBlocking { manager.ensureSourceLoaded(4242L) }
-            val loaded = manager.getFilterList(4242L)
+            val loaded = runBlocking { manager.loadFilterList(4242L) }
 
             loaded.filters shouldHaveSize 8
             loaded.filters[2].shouldBeInstanceOf<Filter.Text>().state shouldBe "Oda"
@@ -132,7 +132,7 @@ class SourceFilterPlumbingTest {
         manager.registerBuiltinSource(BundledMangaDexSource())
 
         try {
-            val filters = manager.getFilterList(BundledMangaDexSource.MANGADEX_SOURCE_ID)
+            val filters = runBlocking { manager.loadFilterList(BundledMangaDexSource.MANGADEX_SOURCE_ID) }
 
             filters.filters shouldHaveSize 4
             filters.filters[0].shouldBeInstanceOf<BundledMangaDexSource.SortFilter>().state shouldBe

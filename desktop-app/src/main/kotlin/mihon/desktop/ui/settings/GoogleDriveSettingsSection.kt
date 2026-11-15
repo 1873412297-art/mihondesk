@@ -100,7 +100,7 @@ internal fun GoogleDriveSyncCard(service: GoogleDriveSyncService) {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (state.signedIn) {
                     Button(
-                        onClick = { scope.launch { runCatching { service.syncNow() } } },
+                        onClick = { scope.launch { runGoogleDriveAction("syncNow") { service.syncNow() } } },
                         enabled = !busy,
                         modifier = Modifier.testTag("gdrive-sync-now"),
                     ) {
@@ -115,13 +115,13 @@ internal fun GoogleDriveSyncCard(service: GoogleDriveSyncService) {
                         )
                     }
                     OutlinedButton(
-                        onClick = { scope.launch { runCatching { service.signOut() } } },
+                        onClick = { scope.launch { runGoogleDriveAction("signOut") { service.signOut() } } },
                         enabled = !busy,
                         modifier = Modifier.testTag("gdrive-sign-out"),
                     ) { Text(strings.gdriveSignOut) }
                 } else {
                     Button(
-                        onClick = { scope.launch { runCatching { service.signIn() } } },
+                        onClick = { scope.launch { runGoogleDriveAction("signIn") { service.signIn() } } },
                         enabled = !busy && state.configured,
                         modifier = Modifier.testTag("gdrive-sign-in"),
                     ) {
@@ -148,4 +148,10 @@ internal fun GoogleDriveSyncCard(service: GoogleDriveSyncService) {
             }
         }
     }
+}
+
+// The service reports expected failures through its state; anything that still escapes is logged.
+private suspend fun runGoogleDriveAction(name: String, action: suspend () -> Unit) {
+    mihon.desktop.logging.runSuspendCatching { action() }
+        .onFailure { mihon.desktop.logging.DesktopLogger.warn("GoogleDrive", "Google Drive $name failed", it) }
 }

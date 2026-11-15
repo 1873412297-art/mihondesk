@@ -94,7 +94,7 @@ class DesktopSourceManagerTest {
         local?.supportsLatest shouldBe true
 
         manager.getSourceStates().first { it.source.id == BundledLocalSource.ID }.isLocal shouldBe true
-        manager.getFilterList(BundledLocalSource.ID).isEmpty() shouldBe false
+        runBlocking { manager.loadFilterList(BundledLocalSource.ID) }.isEmpty() shouldBe false
     }
 
     @Test

@@ -2,7 +2,6 @@ package mihon.desktop.extension
 
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import mihon.desktop.logging.DesktopLogger
@@ -128,20 +127,6 @@ internal suspend fun DesktopSourceManager.getLatest(sourceId: Long, page: Int): 
         return@withContext builtin.getLatestUpdates(page)
     }
     withLoadedExtensionSource(sourceId) { proc -> proc.getLatest(sourceId, page) }
-}
-
-internal fun DesktopSourceManager.getFilterList(sourceId: Long): FilterList {
-    val builtin = builtinSources[sourceId]
-    if (builtin != null) {
-        return builtin.getFilterList()
-    }
-    return try {
-        // Callers such as the desktop Compose source screen expect a synchronous filter list.
-        // The process manager keeps the host/extension loaded, so subsequent calls are cheap.
-        runBlocking { loadFilterList(sourceId) }
-    } catch (_: Exception) {
-        FilterList()
-    }
 }
 
 /**

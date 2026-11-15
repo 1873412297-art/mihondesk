@@ -76,13 +76,17 @@ class LibraryImportController(
             ImportActionState.Completed(import().sanitized())
         } catch (cancelled: CancellationException) {
             throw cancelled
-        } catch (_: BackupDecodeException) {
+        } catch (rejected: BackupDecodeException) {
+            mihon.desktop.logging.DesktopLogger.info("LibraryImport", "Backup rejected: ${rejected.message}")
             ImportActionState.Rejected("INVALID_ANDROID_BACKUP")
-        } catch (_: BackupValidationException) {
+        } catch (rejected: BackupValidationException) {
+            mihon.desktop.logging.DesktopLogger.info("LibraryImport", "Backup rejected: ${rejected.message}")
             ImportActionState.Rejected("INVALID_ANDROID_BACKUP")
-        } catch (_: LocalImportRejected) {
+        } catch (rejected: LocalImportRejected) {
+            mihon.desktop.logging.DesktopLogger.info("LibraryImport", "Local import rejected: ${rejected.message}")
             ImportActionState.Rejected("UNSAFE_LOCAL_DIRECTORY")
-        } catch (_: Exception) {
+        } catch (error: Exception) {
+            mihon.desktop.logging.DesktopLogger.warn("LibraryImport", "Import failed", error)
             ImportActionState.Failed("Import failed. Check the selected file and try again.")
         }
     }
@@ -112,7 +116,8 @@ class LibraryImportActions(
             withContext(chooserDispatcher) { chooser() }
         } catch (e: CancellationException) {
             throw e
-        } catch (_: Throwable) {
+        } catch (error: Throwable) {
+            mihon.desktop.logging.DesktopLogger.warn("LibraryImport", "File chooser failed", error)
             return ImportActionState.Failed("Could not open the file chooser. Please try again.")
         }
         return path?.let { import(it) } ?: ImportActionState.Idle
