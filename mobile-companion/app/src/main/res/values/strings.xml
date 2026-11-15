@@ -8,7 +8,7 @@
     <string name="library_search">Search library</string>
     <string name="library_search_clear">Clear search</string>
     <string name="library_empty_title">Your library is empty</string>
-    <string name="library_empty_body">Sign in with Google to bring in your mihondesk library, or import a Mihon backup.</string>
+    <string name="library_empty_body">Open Sync to choose Mihon’s folder, or sign in with Google to bring in your mihondesk library.</string>
     <string name="library_no_match">Nothing matches</string>
     <string name="category_all">All</string>
     <string name="library_pending">%1$d local changes not uploaded</string>
@@ -65,4 +65,16 @@
     <string name="device_id">This device: %1$s</string>
     <string name="sign_in_failed">Sign-in failed: %1$s</string>
     <string name="sign_in_cancelled">Sign-in cancelled</string>
+    <string name="mihon_folder_section">Mihon folder</string>
+    <string name="mihon_folder_pick">Choose Mihon’s folder</string>
+    <string name="mihon_folder_change">Change folder</string>
+    <string name="mihon_folder_clear">Stop reading this folder</string>
+    <string name="mihon_folder_desc">Read Mihon’s newest automatic backup every time this app opens, and sync it to Google Drive</string>
+    <string name="mihon_folder_current">Folder: %1$s</string>
+    <string name="mihon_folder_hint">Pick Mihon’s storage folder (the one that contains autobackup). In Mihon, turn on Settings → Data and storage → Automatic backups; this app sees changes after Mihon’s next backup.</string>
+    <string name="mihon_folder_last">Read %1$s · %2$s</string>
+    <string name="mihon_folder_none_yet">No backup read yet</string>
+    <string name="mihon_folder_no_backups">No Mihon backups in this folder yet</string>
+    <string name="mihon_folder_lost">Access to the folder was lost; choose it again</string>
+    <string name="mihon_folder_error">Could not read the Mihon backup: %1$s</string>
 </resources>

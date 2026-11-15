@@ -35,6 +35,9 @@ fun SyncScreen(state: SyncUiState, onAction: (SyncAction) -> Unit) {
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument(BACKUP_MIME)) { uri ->
         if (uri != null) onAction(SyncAction.Export(uri))
     }
+    val folderLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        if (uri != null) onAction(SyncAction.PickMihonFolder(uri))
+    }
     LaunchedEffect(state.consent) {
         val intent = state.consent ?: return@LaunchedEffect
         onAction(SyncAction.ConsentLaunched)
@@ -44,6 +47,14 @@ fun SyncScreen(state: SyncUiState, onAction: (SyncAction) -> Unit) {
         LazyColumn(Modifier.fillMaxSize()) {
             item { PageHeader(stringResource(R.string.sync_title)) }
             item { AccountSection(state, onAction) }
+            item {
+                MihonFolderSection(
+                    status = state.mihon,
+                    enabled = !state.busy,
+                    onPick = { folderLauncher.launch(null) },
+                    onClear = { onAction(SyncAction.ClearMihonFolder) },
+                )
+            }
             item {
                 MihonSection(
                     enabled = !state.busy,

@@ -8,7 +8,7 @@
     <string name="library_search">搜索书架</string>
     <string name="library_search_clear">清除搜索</string>
     <string name="library_empty_title">书架还是空的</string>
-    <string name="library_empty_body">登录 Google 账号同步 mihondesk 桌面端的书架，或导入 Mihon 备份。</string>
+    <string name="library_empty_body">到「同步」页选择 Mihon 数据目录，或登录 Google 账号同步 mihondesk 桌面端的书架。</string>
     <string name="library_no_match">没有匹配的漫画</string>
     <string name="category_all">全部</string>
     <string name="library_pending">%1$d 项本机修改待上传</string>
@@ -65,4 +65,16 @@
     <string name="device_id">本机设备 ID：%1$s</string>
     <string name="sign_in_failed">登录失败：%1$s</string>
     <string name="sign_in_cancelled">已取消登录</string>
+    <string name="mihon_folder_section">Mihon 目录</string>
+    <string name="mihon_folder_pick">选择 Mihon 数据目录</string>
+    <string name="mihon_folder_change">更换目录</string>
+    <string name="mihon_folder_clear">停止读取此目录</string>
+    <string name="mihon_folder_desc">每次打开应用时读取 Mihon 最新的自动备份，并同步到 Google Drive</string>
+    <string name="mihon_folder_current">目录：%1$s</string>
+    <string name="mihon_folder_hint">请选择 Mihon 的存储目录（包含 autobackup 文件夹的那个）。在 Mihon 中开启「设置 → 数据与存储 → 自动备份」，Mihon 下一次备份后这里就能读到新的变化。</string>
+    <string name="mihon_folder_last">%1$s读取 · %2$s</string>
+    <string name="mihon_folder_none_yet">还没有读取到备份</string>
+    <string name="mihon_folder_no_backups">此目录中还没有 Mihon 备份</string>
+    <string name="mihon_folder_lost">目录访问权限已失效，请重新选择</string>
+    <string name="mihon_folder_error">读取 Mihon 备份失败：%1$s</string>
 </resources>

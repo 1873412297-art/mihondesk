@@ -18,6 +18,7 @@ import kotlinx.coroutines.launch
 import mihon.companion.CompanionLog
 import mihon.companion.CompanionRuntime
 import mihon.companion.R
+import mihon.companion.mihonfolder.MihonFolderStatus
 import mihon.companion.sync.DriveAuthorizer
 import mihon.companion.sync.SyncStatus
 
@@ -25,6 +26,7 @@ data class UiMessage(@StringRes val text: Int, val args: List<Any> = emptyList()
 
 data class SyncUiState(
     val status: SyncStatus = SyncStatus(),
+    val mihon: MihonFolderStatus = MihonFolderStatus(),
     val pendingChanges: Int = 0,
     val deviceId: String = "",
     /** Google consent screen waiting to be launched by the UI. */
@@ -43,6 +45,8 @@ sealed interface SyncAction {
     data class Import(val uri: Uri) : SyncAction
     data class Export(val uri: Uri) : SyncAction
     data object Repull : SyncAction
+    data class PickMihonFolder(val uri: Uri) : SyncAction
+    data object ClearMihonFolder : SyncAction
     data object MessageShown : SyncAction
 }
 
@@ -59,13 +63,15 @@ class SyncPresenter(
     private val transient = MutableStateFlow(Transient())
     private val backups = BackupTransfer(runtime, resolver)
     private val deviceId = runtime.sync.deviceId()
+    private val folders = MihonFolderPicker(runtime, resolver)
 
-    val state: StateFlow<SyncUiState> = combine(runtime.sync.status, runtime.library.library, transient) {
-            status,
-            library,
-            t,
-        ->
-        SyncUiState(status, library.pendingChanges, deviceId, t.consent, t.message, t.busy)
+    val state: StateFlow<SyncUiState> = combine(
+        runtime.sync.status,
+        runtime.mihonFolder.status,
+        runtime.library.library,
+        transient,
+    ) { status, mihon, library, t ->
+        SyncUiState(status, mihon, library.pendingChanges, deviceId, t.consent, t.message, t.busy)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SyncUiState())
 
     fun onAction(action: SyncAction) {
@@ -80,7 +86,7 @@ class SyncPresenter(
                 }
             }
             SyncAction.SignOut -> launch { signOut() }
-            SyncAction.SyncNow -> launch { runtime.sync.syncNow() }
+            SyncAction.SyncNow -> launch { runtime.refresher.refresh() }
             is SyncAction.SetAutoSync -> {
                 runtime.sync.setAutoSync(action.enabled)
                 runtime.scheduler.apply(action.enabled && runtime.sync.status.value.signedIn)
@@ -94,6 +100,8 @@ class SyncPresenter(
                 runtime.sync.resetPeers()
                 show(UiMessage(R.string.sync_repull_done))
             }
+            is SyncAction.PickMihonFolder -> busy { folders.pick(action.uri)?.let(::show) }
+            SyncAction.ClearMihonFolder -> launch { folders.clear() }
             SyncAction.MessageShown -> transient.value = transient.value.copy(message = null)
         }
     }
@@ -104,7 +112,7 @@ class SyncPresenter(
             is DriveAuthorizer.Outcome.Granted -> {
                 runtime.sync.onSignedIn(outcome.email)
                 runtime.scheduler.apply(runtime.sync.status.value.autoSync)
-                runtime.sync.syncNow()
+                runtime.refresher.refresh()
             }
         }
     }

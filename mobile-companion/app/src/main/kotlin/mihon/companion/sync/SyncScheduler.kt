@@ -49,7 +49,7 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
     override suspend fun doWork(): Result {
         val runtime = (applicationContext as CompanionApp).runtime
         runtime.library.load()
-        val report = runtime.sync.syncNow() ?: return Result.success()
+        val report = runtime.refresher.refresh().sync ?: return Result.success()
         return when {
             report.success -> Result.success()
             // Needs the user to sign in again: retrying in the background cannot fix that.
