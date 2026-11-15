@@ -64,7 +64,6 @@
     <string name="sync_repull_done">Will download everything on the next sync</string>
     <string name="device_id">This device: %1$s</string>
     <string name="sign_in_failed">Sign-in failed: %1$s</string>
-    <string name="sign_in_cancelled">Sign-in cancelled</string>
     <string name="mihon_folder_section">Mihon folder</string>
     <string name="mihon_folder_pick">Choose Mihon’s folder</string>
     <string name="mihon_folder_change">Change folder</string>
@@ -77,4 +76,10 @@
     <string name="mihon_folder_no_backups">No Mihon backups in this folder yet</string>
     <string name="mihon_folder_lost">Access to the folder was lost; choose it again</string>
     <string name="mihon_folder_error">Could not read the Mihon backup: %1$s</string>
+    <string name="sign_in_error_developer">Google rejected this app (error 10): the Android OAuth client for the package name and SHA-1 below is missing from Google Cloud, or it is in a different project than the desktop client.</string>
+    <string name="sign_in_error_cancelled">Sign-in did not finish. If you did not cancel it, the usual cause is that Google Cloud does not know this app yet (package name + SHA-1 below), or your account is not a test user of the consent screen.</string>
+    <string name="sign_in_error_network">Could not reach Google (error %1$d). Check the network or proxy.</string>
+    <string name="sign_in_error_code">Google sign-in failed (error %1$d): %2$s</string>
+    <string name="action_failed">Failed: %1$s</string>
+    <string name="signing_info">Google Cloud registration — package: %1$s · SHA-1: %2$s</string>
 </resources>

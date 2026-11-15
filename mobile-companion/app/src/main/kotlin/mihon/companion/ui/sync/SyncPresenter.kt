@@ -33,6 +33,10 @@ data class SyncUiState(
     val consent: PendingIntent? = null,
     val message: UiMessage? = null,
     val busy: Boolean = false,
+    /** Why the last sign-in attempt failed; stays visible until the next attempt. */
+    val signInError: UiMessage? = null,
+    val packageName: String = "",
+    val signingSha1: String = "",
 )
 
 sealed interface SyncAction {
@@ -54,6 +58,7 @@ private data class Transient(
     val consent: PendingIntent? = null,
     val message: UiMessage? = null,
     val busy: Boolean = false,
+    val signInError: UiMessage? = null,
 )
 
 class SyncPresenter(
@@ -71,18 +76,32 @@ class SyncPresenter(
         runtime.library.library,
         transient,
     ) { status, mihon, library, t ->
-        SyncUiState(status, mihon, library.pendingChanges, deviceId, t.consent, t.message, t.busy)
+        SyncUiState(
+            status = status,
+            mihon = mihon,
+            pendingChanges = library.pendingChanges,
+            deviceId = deviceId,
+            consent = t.consent,
+            message = t.message,
+            busy = t.busy,
+            signInError = t.signInError,
+            packageName = runtime.signature.packageName,
+            signingSha1 = runtime.signature.sha1,
+        )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SyncUiState())
 
     fun onAction(action: SyncAction) {
         when (action) {
-            SyncAction.SignIn -> launch { authorized(runtime.authorizer.authorize()) }
+            SyncAction.SignIn -> signIn { authorized(runtime.authorizer.authorize()) }
             SyncAction.ConsentLaunched -> transient.value = transient.value.copy(consent = null)
-            is SyncAction.ConsentResult -> launch {
-                if (action.resultCode != Activity.RESULT_OK) {
-                    show(UiMessage(R.string.sign_in_cancelled))
+            is SyncAction.ConsentResult -> signIn {
+                // Even a cancelled result usually carries Google's real status (e.g. DEVELOPER_ERROR),
+                // which fromIntent() throws as an ApiException.
+                val data = action.data
+                if (data == null && action.resultCode != Activity.RESULT_OK) {
+                    transient.value = transient.value.copy(signInError = SignInErrors.cancelled)
                 } else {
-                    authorized(runtime.authorizer.fromIntent(action.data))
+                    authorized(runtime.authorizer.fromIntent(data))
                 }
             }
             SyncAction.SignOut -> launch { signOut() }
@@ -136,7 +155,22 @@ class SyncPresenter(
         }
     }
 
-    /** Runs [block]; sign-in failures become a visible message instead of disappearing. */
+    /** A sign-in step whose failure is kept on the account card instead of a passing snackbar. */
+    private fun signIn(block: suspend () -> Unit) {
+        transient.value = transient.value.copy(signInError = null)
+        viewModelScope.launch {
+            try {
+                block()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                CompanionLog.warn(TAG, "Google sign-in failed", error)
+                transient.value = transient.value.copy(signInError = SignInErrors.describe(error))
+            }
+        }
+    }
+
+    /** Runs [block]; a failure becomes a visible message instead of disappearing. */
     private fun launch(block: suspend () -> Unit) {
         viewModelScope.launch {
             try {
@@ -145,7 +179,7 @@ class SyncPresenter(
                 throw cancelled
             } catch (error: Exception) {
                 CompanionLog.warn(TAG, "Sync screen action failed", error)
-                show(UiMessage(R.string.sign_in_failed, listOf(error.message ?: error.javaClass.simpleName)))
+                show(UiMessage(R.string.action_failed, listOf(error.message ?: error.javaClass.simpleName)))
             }
         }
     }

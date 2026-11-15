@@ -64,7 +64,6 @@
     <string name="sync_repull_done">下次同步将重新下载全部数据</string>
     <string name="device_id">本机设备 ID：%1$s</string>
     <string name="sign_in_failed">登录失败：%1$s</string>
-    <string name="sign_in_cancelled">已取消登录</string>
     <string name="mihon_folder_section">Mihon 目录</string>
     <string name="mihon_folder_pick">选择 Mihon 数据目录</string>
     <string name="mihon_folder_change">更换目录</string>
@@ -77,4 +76,10 @@
     <string name="mihon_folder_no_backups">此目录中还没有 Mihon 备份</string>
     <string name="mihon_folder_lost">目录访问权限已失效，请重新选择</string>
     <string name="mihon_folder_error">读取 Mihon 备份失败：%1$s</string>
+    <string name="sign_in_error_developer">Google 拒绝了本应用（错误 10）：Google Cloud 中还没有登记下面的包名和 SHA-1 对应的 Android OAuth 客户端，或登记在了与桌面端不同的项目里。</string>
+    <string name="sign_in_error_cancelled">登录没有完成。如果你没有主动取消，通常是 Google Cloud 里还没有登记本应用（下面的包名和 SHA-1），或你的账号不在同意屏幕的测试用户里。</string>
+    <string name="sign_in_error_network">无法连接 Google（错误 %1$d），请检查网络或代理。</string>
+    <string name="sign_in_error_code">Google 登录失败（错误 %1$d）：%2$s</string>
+    <string name="action_failed">操作失败：%1$s</string>
+    <string name="signing_info">Google Cloud 登记信息 — 包名：%1$s · SHA-1：%2$s</string>
 </resources>

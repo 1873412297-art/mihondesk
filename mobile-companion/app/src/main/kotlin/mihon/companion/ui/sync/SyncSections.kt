@@ -52,6 +52,7 @@ internal fun AccountSection(state: SyncUiState, onAction: (SyncAction) -> Unit) 
                 style = MaterialTheme.typography.titleSmall,
             )
             if (status.signedIn) StatusLine(state)
+            if (!status.signedIn) SignInHelp(state.signInError, state.packageName, state.signingSha1)
             Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (status.signedIn) {
                     Button(onClick = {

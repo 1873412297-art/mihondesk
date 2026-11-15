@@ -78,8 +78,10 @@ private fun MessageSnackbar(
     val context = LocalContext.current
     LaunchedEffect(message) {
         if (message == null) return@LaunchedEffect
-        onShown()
+        // Clear the message only after it was shown: clearing first restarts this effect and
+        // cancels the snackbar before it appears.
         host.showSnackbar(context.getString(message.text, *message.args.toTypedArray()))
+        onShown()
     }
     Box(Modifier.fillMaxSize()) { content(host) }
 }

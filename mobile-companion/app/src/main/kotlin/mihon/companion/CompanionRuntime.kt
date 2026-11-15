@@ -27,6 +27,7 @@ class CompanionRuntime(
     val mihonFolder: MihonAutoImporter,
     val mihonSource: SafMihonBackupSource,
     val refresher: LibraryRefresher,
+    val signature: AppSignature,
 ) {
     companion object {
         fun create(context: Context): CompanionRuntime {
@@ -63,6 +64,7 @@ class CompanionRuntime(
                 mihonFolder = mihonFolder,
                 mihonSource = mihonSource,
                 refresher = LibraryRefresher(mihonFolder, sync),
+                signature = AppSignature.of(context),
             )
         }
     }
