@@ -1,5 +1,6 @@
 package mihon.sync.transport.gdrive
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -75,6 +76,7 @@ class DriveRestSnapshotStore(
                     .addQueryParameter("alt", "media").build()
                 call(Request.Builder().url(media).get()) { it.body.bytes() }
             }.onFailure { error ->
+                if (error is CancellationException) throw error
                 // A document that disappears between listing and download must not fail the pull.
                 System.err.println("Skipping unreadable Drive sync document $id: ${error.message}")
             }.getOrNull()

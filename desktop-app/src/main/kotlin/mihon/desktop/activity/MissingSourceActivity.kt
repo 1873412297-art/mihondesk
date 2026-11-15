@@ -5,6 +5,7 @@ import mihon.desktop.i18n.DesktopStrings
 import mihon.desktop.i18n.UiText
 import mihon.desktop.i18n.text
 import mihon.desktop.library.update.LibraryUpdateReport
+import mihon.desktop.logging.runSuspendCatching
 
 fun missingSourceActivityId(sourceId: Long) = "missing-source-$sourceId"
 
@@ -68,7 +69,7 @@ class MissingSourceAlerts {
             }
         groups.forEach { (sourceId, titles) ->
             scope.launch {
-                val match = runCatching { findInRepos(sourceId) }.getOrNull()
+                val match = runSuspendCatching { findInRepos(sourceId) }.getOrNull()
                 val name = match?.sources?.firstOrNull { it.id == sourceId }?.name ?: match?.name
                 val item = missingSourceActivity(
                     sourceId = sourceId,

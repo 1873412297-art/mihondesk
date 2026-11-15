@@ -1,4 +1,5 @@
 package mihon.desktop.extension
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.ExperimentalSerializationApi
@@ -279,6 +280,8 @@ internal suspend fun ExtensionStoreService.fetchAvailableExtensions(): List<Exte
         try {
             val items = fetchRepository(repo)
             allItems.addAll(items)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (error: Exception) {
             mihon.desktop.logging.DesktopLogger.warn("ExtensionStore", "Repository unavailable", error)
         }

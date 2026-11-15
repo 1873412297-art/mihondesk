@@ -19,6 +19,7 @@ import mihon.desktop.library.model.ImportReportItemRecord
 import mihon.desktop.library.model.ImportReportRecord
 import mihon.desktop.library.model.ImportStatus
 import mihon.desktop.library.model.ImportType
+import mihon.desktop.logging.runSuspendCatching
 import mihon.desktop.preferences.DesktopPreferenceStore
 import mihon.desktop.sync.gdrive.GoogleDriveSyncService
 import mihon.sync.engine.SyncReport
@@ -104,7 +105,7 @@ class DesktopSyncScheduler(
     suspend fun checkAndRunAutoSync(): SyncReport? = syncMutex.withLock {
         val drive = activeBackend()?.takeIf { it.isReady() } ?: return@withLock null
         val prefs = preferenceStore.load()
-        val dirty = runCatching { drive.hasLocalChanges() }
+        val dirty = runSuspendCatching { drive.hasLocalChanges() }
             .onFailure {
                 // A failed dirty check must not look like "no local changes": sync anyway.
                 mihon.desktop.logging.DesktopLogger.warn(

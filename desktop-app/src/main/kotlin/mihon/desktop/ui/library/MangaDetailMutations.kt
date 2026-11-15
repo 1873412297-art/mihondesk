@@ -10,6 +10,7 @@ import mihon.desktop.library.model.LibraryChapter
 import mihon.desktop.library.model.MangaDetails
 import mihon.desktop.library.repository.LibraryMutationPort
 import mihon.desktop.library.repository.LibraryRepository
+import mihon.desktop.logging.runSuspendCatching
 
 /** Chapter and metadata mutations for the manga detail page, all off the UI thread. */
 internal class MangaDetailMutations(
@@ -250,10 +251,10 @@ internal class MangaDetailMutations(
             return
         }
         scope.launch(Dispatchers.IO) {
-            val success = runCatching {
+            val success = runSuspendCatching {
                 val record = repository.allMangaSnapshot().firstOrNull { it.id == mangaId }
-                    ?: return@runCatching false
-                if (record.favorite == favorite) return@runCatching true
+                    ?: return@runSuspendCatching false
+                if (record.favorite == favorite) return@runSuspendCatching true
                 val now = System.currentTimeMillis()
                 mutationPort?.updateManga(
                     record.copy(
@@ -262,7 +263,7 @@ internal class MangaDetailMutations(
                         lastModifiedAt = now,
                         favoriteModifiedAt = now,
                     ),
-                ) ?: return@runCatching false
+                ) ?: return@runSuspendCatching false
                 onChanged()
                 onLibraryChanged()
                 true

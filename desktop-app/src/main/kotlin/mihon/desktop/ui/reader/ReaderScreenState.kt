@@ -17,6 +17,7 @@ import mihon.desktop.i18n.UiText
 import mihon.desktop.i18n.text
 import mihon.desktop.image.CustomCoverManager
 import mihon.desktop.library.model.MangaReaderSettingsOverride
+import mihon.desktop.logging.runSuspendCatching
 import mihon.desktop.platform.ScreenAwakeController
 import mihon.desktop.reader.DesktopReaderSettings
 import mihon.desktop.reader.DesktopReaderSettingsStore
@@ -228,7 +229,7 @@ internal class ReaderScreenState(
     ) {
         pageActionsTarget = null
         scope.launch {
-            val success = runCatching { block(effectivePageActionHandler, target) }.getOrDefault(false)
+            val success = runSuspendCatching { block(effectivePageActionHandler, target) }.getOrDefault(false)
             if (!success) pageActionMessage = strings.text(UiText.PageActionFailed)
         }
     }

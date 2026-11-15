@@ -17,6 +17,7 @@ import mihon.desktop.download.DesktopDownloader
 import mihon.desktop.extension.OnlineMangaSyncService
 import mihon.desktop.library.model.MangaRecord
 import mihon.desktop.library.repository.LibraryRepository
+import mihon.desktop.logging.runSuspendCatching
 import mihon.desktop.platform.DesktopNotificationService
 import mihon.desktop.platform.NotificationType
 import mihon.extension.source.model.SManga
@@ -140,7 +141,7 @@ class LibraryUpdateService(
 
         // Notify user via Desktop Notification Service
         if (onReport != null) {
-            runCatching { onReport.invoke(report) }
+            runSuspendCatching { onReport.invoke(report) }
                 .onFailure {
                     mihon.desktop.logging.DesktopLogger.warn("LibraryUpdate", "Update report listener failed", it)
                 }

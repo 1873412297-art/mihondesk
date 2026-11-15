@@ -12,6 +12,7 @@ import mihon.desktop.extension.getSourcePreferenceValue
 import mihon.desktop.extension.getSourceStates
 import mihon.desktop.extension.getSourceStatesForExtension
 import mihon.desktop.extension.isExtensionIncognito
+import mihon.desktop.logging.runSuspendCatching
 import mihon.extension.model.SourceDescriptor
 
 internal fun BrowsePresenter.refresh() {
@@ -93,11 +94,13 @@ internal fun BrowsePresenter.maybeBackfillIcons(storeItems: List<ExtensionStoreI
     iconBackfillStarted = true
     val iconUrls = storeItems.filter { it.iconUrl.isNotBlank() }.associate { it.pkg to it.iconUrl }
     scope.launch {
-        val fixed = runCatching {
+        val fixed = runSuspendCatching {
             installer.backfillMissingIcons { ext ->
                 val url = iconUrls[ext.pkg] ?: return@backfillMissingIcons null
                 iconFetcher?.invoke(url)
             }
+        }.onFailure {
+            mihon.desktop.logging.DesktopLogger.warn("BrowsePresenter", "Extension icon backfill failed", it)
         }.getOrDefault(0)
         if (fixed > 0) {
             mihon.desktop.logging.DesktopLogger.info("BrowsePresenter", "Backfilled $fixed extension icons")

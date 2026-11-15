@@ -56,6 +56,7 @@ import androidx.compose.ui.window.ApplicationScope
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.rememberWindowState
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -185,6 +186,8 @@ private fun exportBackup(
                 mihon.desktop.library.backup.AndroidBackupCodec().encode(backup, path)
             }
             ctx.snackbarHostState.showSnackbar(ctx.strings.backupExportSuccess(path.toString()))
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (error: Exception) {
             ctx.snackbarHostState.showSnackbar(ctx.strings.backupExportFailed(error.message ?: ""))
         }
@@ -207,6 +210,8 @@ private fun restoreBackup(
                 temp
             }
             ctx.backupRestore.start(filtered)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (error: Exception) {
             ctx.snackbarHostState.showSnackbar(error.message ?: "Failed to process backup")
         }

@@ -6,6 +6,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import mihon.desktop.logging.DesktopLogger
+import mihon.desktop.logging.runSuspendCatching
 import mihon.extension.ipc.IpcException
 import mihon.extension.source.WindowsHttpSource
 import mihon.extension.source.model.FilterList
@@ -58,7 +59,7 @@ internal suspend fun DesktopSourceManager.loadSource(sourceId: Long) {
     // Validate the host registry as well as this process-local package hint so a live host with
     // a cleared/partially replaced registry can repair itself without an application restart.
     val hostHasSource = if (loadedPackages.contains(targetExt.pkg)) {
-        runCatching { proc.getSources().any { it.id == sourceId } }.getOrDefault(false)
+        runSuspendCatching { proc.getSources().any { it.id == sourceId } }.getOrDefault(false)
     } else {
         false
     }

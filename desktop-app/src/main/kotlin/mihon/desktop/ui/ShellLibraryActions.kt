@@ -2,6 +2,7 @@ package mihon.desktop.ui
 
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarResult
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import mihon.desktop.extension.builtin.isLocalSource
 import mihon.desktop.extension.findSourceDescriptor
@@ -48,6 +49,8 @@ internal fun refreshMangaSource(ctx: AppShellContext, live: ShellLiveState): () 
                     )
                     ctx.libraryPresenter.retryDetail()
                 }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
             } catch (error: Exception) {
                 ctx.snackbarHostState.showSnackbar(
                     formatNetworkErrorMessage(error.message ?: "Unable to refresh manga", ctx.strings),

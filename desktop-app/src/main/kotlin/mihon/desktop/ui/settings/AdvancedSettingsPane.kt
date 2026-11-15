@@ -190,6 +190,8 @@ internal fun AdvancedSettingsPane(
                                         }
                                         selectedSources = emptySet()
                                         databaseClearMessage = strings.clearDatabaseResult(removed)
+                                    } catch (cancelled: CancellationException) {
+                                        throw cancelled
                                     } catch (error: Exception) {
                                         databaseClearMessage =
                                             "${strings.clearDatabaseFailed}: ${error.message.orEmpty()}"

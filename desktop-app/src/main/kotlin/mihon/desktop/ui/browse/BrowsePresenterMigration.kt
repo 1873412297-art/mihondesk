@@ -71,7 +71,10 @@ internal suspend fun BrowsePresenter.searchTargetMigrationSource(targetSourceId:
     return try {
         val page = sourceManager.searchManga(targetSourceId, 1, query)
         page.mangas
-    } catch (_: Exception) {
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (error: Exception) {
+        mihon.desktop.logging.DesktopLogger.warn("BrowseMigration", "Target source search failed for \"$query\"", error)
         emptyList()
     }
 }
@@ -89,7 +92,10 @@ internal suspend fun BrowsePresenter.autoMatchTargetSource(
             }
         }
         MigrationMatcher.evaluateCandidates(manga.title, mangas)
-    } catch (_: Exception) {
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (error: Exception) {
+        mihon.desktop.logging.DesktopLogger.warn("BrowseMigration", "Auto-match failed for manga ${manga.id}", error)
         MigrationMatcher.MatchEvaluation(emptyList(), null, false)
     }
 }
@@ -134,13 +140,27 @@ internal suspend fun BrowsePresenter.performMigrationInternal(
 ): Long = withContext(Dispatchers.IO) {
     val detailedTarget = try {
         sourceManager.getMangaDetails(targetSource.id, targetManga)
-    } catch (_: Exception) {
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (error: Exception) {
+        mihon.desktop.logging.DesktopLogger.warn(
+            "BrowseMigration",
+            "Target details unavailable; migrating with search data",
+            error,
+        )
         targetManga
     }
 
     val targetChapters = try {
         sourceManager.getChapterList(targetSource.id, detailedTarget)
-    } catch (_: Exception) {
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (error: Exception) {
+        mihon.desktop.logging.DesktopLogger.warn(
+            "BrowseMigration",
+            "Target chapter list unavailable; migrating without chapters",
+            error,
+        )
         emptyList()
     }
 

@@ -76,6 +76,7 @@ import mihon.desktop.i18n.LocalStrings
 import mihon.desktop.i18n.UiText
 import mihon.desktop.i18n.text
 import mihon.desktop.library.model.readerSettingsOverride
+import mihon.desktop.logging.runSuspendCatching
 import mihon.desktop.navigation.DesktopBackHandler
 import mihon.desktop.navigation.DesktopDestination
 import mihon.desktop.navigation.DesktopNavigator
@@ -144,7 +145,7 @@ internal fun paletteSourceSearch(runtime: DesktopRuntime) =
         sources = {
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                 val prefs = runtime.preferences.load()
-                val installed = runCatching {
+                val installed = runSuspendCatching {
                     runtime.extensionInstaller.getInstalledExtensions()
                 }.onFailure {
                     mihon.desktop.logging.DesktopLogger.warn(

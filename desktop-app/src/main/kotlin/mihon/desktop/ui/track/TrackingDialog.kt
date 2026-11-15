@@ -32,6 +32,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import mihon.desktop.i18n.LocalStrings
 import mihon.desktop.track.DesktopTrackRecord
@@ -223,6 +224,8 @@ private fun SearchTrackDialog(
                                 searchFailed = false
                                 try {
                                     results = onSearch(query)
+                                } catch (cancelled: CancellationException) {
+                                    throw cancelled
                                 } catch (_: Exception) {
                                     results = emptyList()
                                     searchFailed = true

@@ -1,5 +1,6 @@
 package mihon.desktop.extension
 
+import kotlinx.coroutines.CancellationException
 import mihon.desktop.extension.compat.TachiyomiExtensionConverter
 import mihon.desktop.extension.compat.generateSourceId
 import mihon.desktop.library.model.MangaRecord
@@ -56,6 +57,8 @@ object MissingSourceResolver {
         if (storeService == null) return emptyList()
         return try {
             storeService.fetchAvailableExtensions()
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (_: Exception) {
             emptyList()
         }

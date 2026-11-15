@@ -44,6 +44,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -188,6 +189,8 @@ fun MangaCoverDialog(
                                             withContext(Dispatchers.Main) {
                                                 saveStatusMessage = "${strings.mangaDetailCoverSaved}: ${destFile.name}"
                                             }
+                                        } catch (cancelled: CancellationException) {
+                                            throw cancelled
                                         } catch (e: Exception) {
                                             withContext(Dispatchers.Main) {
                                                 saveStatusMessage = strings.text(UiText.SaveFailed, e.message.orEmpty())

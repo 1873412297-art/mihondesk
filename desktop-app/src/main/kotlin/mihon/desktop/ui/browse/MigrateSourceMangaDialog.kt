@@ -37,6 +37,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import mihon.desktop.i18n.LocalStrings
@@ -97,6 +98,8 @@ internal fun MigrateMangaDialog(
                         selectedCandidate = eval.bestMatch?.manga
                     }
                 }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
             } catch (_: Exception) {
                 searchResults = emptyList()
                 evaluation = null

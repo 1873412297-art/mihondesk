@@ -160,6 +160,8 @@ internal fun BrowsePresenter.uninstallExtension(pkg: String) {
             sourceManager.unloadExtension(pkg)
             installer.uninstall(pkg)
             refreshInstalledAndSources()
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (e: Exception) {
             stateUpdates.update {
                 it.copy(installFailure = null, errorMessage = "Failed to uninstall $pkg: ${e.message}")
@@ -176,6 +178,8 @@ internal fun BrowsePresenter.toggleExtensionEnabled(pkg: String, enabled: Boolea
                 sourceManager.unloadExtension(pkg)
             }
             refreshInstalledAndSources()
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (e: Exception) {
             stateUpdates.update { it.copy(installFailure = null, errorMessage = "Failed to toggle $pkg: ${e.message}") }
         }

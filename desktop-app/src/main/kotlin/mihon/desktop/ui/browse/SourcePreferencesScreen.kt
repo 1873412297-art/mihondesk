@@ -43,6 +43,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import mihon.desktop.extension.DesktopSourceManager
 import mihon.desktop.extension.SourcePreferenceDefinition
@@ -113,6 +114,8 @@ fun SourcePreferencesScreen(
             } else {
                 loadError = strings.sourcePreferencesEmpty
             }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (e: Exception) {
             loadError = e.message ?: strings.sourcePreferencesEmpty
         } finally {
@@ -156,6 +159,8 @@ fun SourcePreferencesScreen(
                         )
                     }
                     saveError = null
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
                 } catch (e: Exception) {
                     saveError = e.message ?: strings.sourcePreferencesSaveError
                 }

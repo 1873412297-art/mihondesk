@@ -14,6 +14,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import mihon.desktop.logging.runSuspendCatching
 import mihon.sync.core.model.Changeset
 import mihon.sync.engine.SyncEngine
 import mihon.sync.engine.SyncLocalRepository
@@ -123,7 +124,7 @@ class GoogleDriveSyncService(
     suspend fun signOut() = mutex.withLock {
         requestJob?.cancel()
         vault.load()?.let { t ->
-            runCatching { revoker(t.refreshToken ?: t.accessToken) }
+            runSuspendCatching { revoker(t.refreshToken ?: t.accessToken) }
                 .onFailure { mihon.desktop.logging.DesktopLogger.debug("GoogleDrive", "Token revoke failed", it) }
         }
         vault.clear()
