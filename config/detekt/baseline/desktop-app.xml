@@ -40,9 +40,6 @@
     <ID>LongMethod:DesktopImageLoaderLocal.kt:internal suspend fun DesktopImageLoader.loadFull: ImageBitmap?</ID>
     <ID>LongMethod:DesktopLockScreen.kt:@Composable fun DesktopLockScreen</ID>
     <ID>LongMethod:DesktopNetworkHelper.kt:DesktopNetworkHelper$private suspend fun execute: NetworkResponse</ID>
-    <ID>LongMethod:DesktopPreferenceStore.kt:DesktopPreferenceStore$@Synchronized fun load: DesktopPreferences</ID>
-    <ID>LongMethod:DesktopPreferenceStore.kt:DesktopPreferenceStore$@Synchronized fun save</ID>
-    <ID>LongMethod:DesktopReaderSettingsStore.kt:DesktopReaderSettingsStore$fun load: DesktopReaderSettings</ID>
     <ID>LongMethod:DesktopRuntimeFactory.kt:DesktopRuntimeFactory$internal fun create: DesktopRuntime</ID>
     <ID>LongMethod:DesktopShell.kt:@Composable internal fun DesktopShell</ID>
     <ID>LongMethod:DesktopShellRail.kt:@Composable internal fun DesktopRail</ID>

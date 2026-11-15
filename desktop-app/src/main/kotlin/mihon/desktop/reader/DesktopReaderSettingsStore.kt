@@ -120,66 +120,76 @@ class DesktopReaderSettingsStore(private val preferences: DesktopPreferenceStore
 
     fun load(): DesktopReaderSettings {
         val defaults = DesktopReaderSettings()
-        val leftEnd = preferences.property(LEFT_END)?.toIntOrNull()
-        val centerEnd = preferences.property(CENTER_END)?.toIntOrNull()
-        val clickRegions = runCatching {
-            ClickRegions(
-                leftAction = enumOrDefault(preferences.property(LEFT_ACTION), defaults.clickRegions.leftAction),
-                centerAction = enumOrDefault(preferences.property(CENTER_ACTION), defaults.clickRegions.centerAction),
-                rightAction = enumOrDefault(preferences.property(RIGHT_ACTION), defaults.clickRegions.rightAction),
-                leftEndPercent = leftEnd ?: defaults.clickRegions.leftEndPercent,
-                centerEndPercent = centerEnd ?: defaults.clickRegions.centerEndPercent,
-            )
-        }.getOrDefault(defaults.clickRegions)
-        return DesktopReaderSettings(
-            mode = enumOrDefault(preferences.property(MODE), defaults.mode),
-            coverOffset = preferences.property(COVER_OFFSET)?.toBooleanStrictOrNull() ?: defaults.coverOffset,
-            scaleMode = enumOrDefault(preferences.property(SCALE), defaults.scaleMode),
-            clickRegions = clickRegions,
-            wheelBehavior = enumOrDefault(preferences.property(WHEEL), defaults.wheelBehavior),
-            lastWindowMode = enumOrDefault(preferences.property(WINDOW), defaults.lastWindowMode),
-            colorFilter = enumOrDefault(preferences.property(COLOR_FILTER), defaults.colorFilter),
-            backgroundColor = enumOrDefault(preferences.property(BG_COLOR), defaults.backgroundColor),
-            cropBorders = preferences.property(CROP_BORDERS)?.toBooleanStrictOrNull() ?: defaults.cropBorders,
-            immersiveBorderless = preferences.property(IMMERSIVE_BORDERLESS)?.toBooleanStrictOrNull()
-                ?: defaults.immersiveBorderless,
-            cropBordersWebtoon = preferences.property(CROP_BORDERS_WEBTOON)?.toBooleanStrictOrNull()
-                ?: defaults.cropBordersWebtoon,
-            webtoonMaxWidth = preferences.property(WEBTOON_MAX_WIDTH)?.toIntOrNull() ?: defaults.webtoonMaxWidth,
-            autoScrollSpeed = (preferences.property(AUTO_SCROLL_SPEED)?.toIntOrNull() ?: defaults.autoScrollSpeed)
-                .coerceIn(AutoScrollController.MIN_DP_PER_SECOND, AutoScrollController.MAX_DP_PER_SECOND),
-            webtoonSidePadding = preferences.property(WEBTOON_SIDE_PADDING)?.toIntOrNull()
-                ?: defaults.webtoonSidePadding,
-            alwaysShowChapterTransition = preferences.property(ALWAYS_SHOW_CHAPTER_TRANSITION)
-                ?.toBooleanStrictOrNull() ?: defaults.alwaysShowChapterTransition,
-            skipReadChapters = preferences.property(SKIP_READ)?.toBooleanStrictOrNull() ?: defaults.skipReadChapters,
-            skipFilteredChapters = preferences.property(SKIP_FILTERED)?.toBooleanStrictOrNull()
-                ?: defaults.skipFilteredChapters,
-            skipDuplicateChapters = preferences.property(SKIP_DUPLICATE)?.toBooleanStrictOrNull()
-                ?: defaults.skipDuplicateChapters,
-            preloadPages = preferences.property(PRELOAD_PAGES)?.toIntOrNull()
-                ?.coerceIn(DesktopPreloadPolicy.MIN_PRELOAD_PAGES, DesktopPreloadPolicy.MAX_PRELOAD_PAGES)
-                ?: defaults.preloadPages,
-            keepScreenOn = preferences.property(KEEP_SCREEN_ON)?.toBooleanStrictOrNull() ?: defaults.keepScreenOn,
-            pageFlash = preferences.property(PAGE_FLASH)?.toBooleanStrictOrNull() ?: defaults.pageFlash,
-            webtoonPreventDownsizing = preferences.property(WEBTOON_PREVENT_DOWNSIZING)?.toBooleanStrictOrNull()
-                ?: defaults.webtoonPreventDownsizing,
-            webtoonDoubleTapZoom = preferences.property(WEBTOON_DOUBLE_TAP_ZOOM)?.toBooleanStrictOrNull()
-                ?: defaults.webtoonDoubleTapZoom,
-            customHue = preferences.property(CUSTOM_HUE)?.toIntOrNull()
-                ?.coerceIn(0, 360) ?: defaults.customHue,
-            customBrightness = preferences.property(CUSTOM_BRIGHTNESS)?.toIntOrNull()
-                ?.coerceIn(-100, 100) ?: defaults.customBrightness,
-            customContrast = preferences.property(CUSTOM_CONTRAST)?.toIntOrNull()
-                ?.coerceIn(-100, 100) ?: defaults.customContrast,
-            dimmingPercent = preferences.property(DIMMING_PERCENT)?.toIntOrNull()
-                ?.coerceIn(20, 100) ?: defaults.dimmingPercent,
-            pageTransition = enumOrDefault(preferences.property(PAGE_TRANSITION), defaults.pageTransition),
-            dualPageSplit = enumOrDefault(preferences.property(DUAL_PAGE_SPLIT), defaults.dualPageSplit),
-            dualPageRotateToFit = preferences.property(DUAL_PAGE_ROTATE_TO_FIT)?.toBooleanStrictOrNull()
-                ?: defaults.dualPageRotateToFit,
+        return readDisplay(defaults).let(::readWebtoon).let(::readColors)
+    }
+
+    private fun readClickRegions(defaults: ClickRegions): ClickRegions = runCatching {
+        ClickRegions(
+            leftAction = enumOrDefault(preferences.property(LEFT_ACTION), defaults.leftAction),
+            centerAction = enumOrDefault(preferences.property(CENTER_ACTION), defaults.centerAction),
+            rightAction = enumOrDefault(preferences.property(RIGHT_ACTION), defaults.rightAction),
+            leftEndPercent = preferences.property(LEFT_END)?.toIntOrNull() ?: defaults.leftEndPercent,
+            centerEndPercent = preferences.property(CENTER_END)?.toIntOrNull() ?: defaults.centerEndPercent,
         )
     }
+        // ClickRegions validates its bounds; a hand-edited file with overlapping regions falls back
+        // to the default layout rather than leaving the reader without tap zones.
+        .getOrDefault(defaults)
+
+    private fun readDisplay(defaults: DesktopReaderSettings): DesktopReaderSettings = defaults.copy(
+        mode = enumOrDefault(preferences.property(MODE), defaults.mode),
+        coverOffset = preferences.property(COVER_OFFSET)?.toBooleanStrictOrNull() ?: defaults.coverOffset,
+        scaleMode = enumOrDefault(preferences.property(SCALE), defaults.scaleMode),
+        clickRegions = readClickRegions(defaults.clickRegions),
+        wheelBehavior = enumOrDefault(preferences.property(WHEEL), defaults.wheelBehavior),
+        lastWindowMode = enumOrDefault(preferences.property(WINDOW), defaults.lastWindowMode),
+        pageTransition = enumOrDefault(preferences.property(PAGE_TRANSITION), defaults.pageTransition),
+        dualPageSplit = enumOrDefault(preferences.property(DUAL_PAGE_SPLIT), defaults.dualPageSplit),
+        dualPageRotateToFit = preferences.property(DUAL_PAGE_ROTATE_TO_FIT)?.toBooleanStrictOrNull()
+            ?: defaults.dualPageRotateToFit,
+        keepScreenOn = preferences.property(KEEP_SCREEN_ON)?.toBooleanStrictOrNull() ?: defaults.keepScreenOn,
+        pageFlash = preferences.property(PAGE_FLASH)?.toBooleanStrictOrNull() ?: defaults.pageFlash,
+        preloadPages = preferences.property(PRELOAD_PAGES)?.toIntOrNull()
+            ?.coerceIn(DesktopPreloadPolicy.MIN_PRELOAD_PAGES, DesktopPreloadPolicy.MAX_PRELOAD_PAGES)
+            ?: defaults.preloadPages,
+    )
+
+    private fun readWebtoon(defaults: DesktopReaderSettings): DesktopReaderSettings = defaults.copy(
+        cropBorders = preferences.property(CROP_BORDERS)?.toBooleanStrictOrNull() ?: defaults.cropBorders,
+        immersiveBorderless = preferences.property(IMMERSIVE_BORDERLESS)?.toBooleanStrictOrNull()
+            ?: defaults.immersiveBorderless,
+        cropBordersWebtoon = preferences.property(CROP_BORDERS_WEBTOON)?.toBooleanStrictOrNull()
+            ?: defaults.cropBordersWebtoon,
+        webtoonMaxWidth = preferences.property(WEBTOON_MAX_WIDTH)?.toIntOrNull() ?: defaults.webtoonMaxWidth,
+        autoScrollSpeed = (preferences.property(AUTO_SCROLL_SPEED)?.toIntOrNull() ?: defaults.autoScrollSpeed)
+            .coerceIn(AutoScrollController.MIN_DP_PER_SECOND, AutoScrollController.MAX_DP_PER_SECOND),
+        webtoonSidePadding = preferences.property(WEBTOON_SIDE_PADDING)?.toIntOrNull()
+            ?: defaults.webtoonSidePadding,
+        webtoonPreventDownsizing = preferences.property(WEBTOON_PREVENT_DOWNSIZING)?.toBooleanStrictOrNull()
+            ?: defaults.webtoonPreventDownsizing,
+        webtoonDoubleTapZoom = preferences.property(WEBTOON_DOUBLE_TAP_ZOOM)?.toBooleanStrictOrNull()
+            ?: defaults.webtoonDoubleTapZoom,
+        alwaysShowChapterTransition = preferences.property(ALWAYS_SHOW_CHAPTER_TRANSITION)
+            ?.toBooleanStrictOrNull() ?: defaults.alwaysShowChapterTransition,
+        skipReadChapters = preferences.property(SKIP_READ)?.toBooleanStrictOrNull() ?: defaults.skipReadChapters,
+        skipFilteredChapters = preferences.property(SKIP_FILTERED)?.toBooleanStrictOrNull()
+            ?: defaults.skipFilteredChapters,
+        skipDuplicateChapters = preferences.property(SKIP_DUPLICATE)?.toBooleanStrictOrNull()
+            ?: defaults.skipDuplicateChapters,
+    )
+
+    private fun readColors(defaults: DesktopReaderSettings): DesktopReaderSettings = defaults.copy(
+        colorFilter = enumOrDefault(preferences.property(COLOR_FILTER), defaults.colorFilter),
+        backgroundColor = enumOrDefault(preferences.property(BG_COLOR), defaults.backgroundColor),
+        customHue = preferences.property(CUSTOM_HUE)?.toIntOrNull()
+            ?.coerceIn(0, 360) ?: defaults.customHue,
+        customBrightness = preferences.property(CUSTOM_BRIGHTNESS)?.toIntOrNull()
+            ?.coerceIn(-100, 100) ?: defaults.customBrightness,
+        customContrast = preferences.property(CUSTOM_CONTRAST)?.toIntOrNull()
+            ?.coerceIn(-100, 100) ?: defaults.customContrast,
+        dimmingPercent = preferences.property(DIMMING_PERCENT)?.toIntOrNull()
+            ?.coerceIn(20, 100) ?: defaults.dimmingPercent,
+    )
 
     fun save(settings: DesktopReaderSettings) {
         preferences.update {
