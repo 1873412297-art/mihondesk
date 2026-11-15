@@ -160,7 +160,7 @@ internal fun BatchMigrationReportDialog(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 LazyColumn(modifier = Modifier.fillMaxSize()) {
-                    items(report.failures) { failure ->
+                    items(report.failures, key = { it.manga.id }) { failure ->
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()

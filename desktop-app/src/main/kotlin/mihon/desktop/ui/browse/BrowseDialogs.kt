@@ -181,7 +181,7 @@ internal fun RepositoryManagementDialog(
                 Text(strings.browseConfiguredRepositories, fontWeight = FontWeight.SemiBold)
                 Spacer(modifier = Modifier.height(8.dp))
                 LazyColumn(modifier = Modifier.fillMaxSize()) {
-                    items(repositories) { repo -> RepositoryRow(repo, strings, onRemove) }
+                    items(repositories, key = { it }) { repo -> RepositoryRow(repo, strings, onRemove) }
                 }
             }
         },

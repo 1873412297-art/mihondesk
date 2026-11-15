@@ -8,7 +8,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import mihon.extension.host.ExtensionExecutionContext
 import mihon.extension.host.WebViewBridge
 import mihon.extension.ipc.WebViewRequest
@@ -37,9 +36,8 @@ open class WebSettings {
         const val MIXED_CONTENT_NEVER_ALLOW = 1
         const val MIXED_CONTENT_ALWAYS_ALLOW = 0
 
-        @JvmStatic fun getDefaultUserAgent(context: Context): String = kotlinx.coroutines.runBlocking {
-            WebViewBridge.execute(WebViewBridge.request("userAgent")).value
-        }
+        @JvmStatic fun getDefaultUserAgent(context: Context): String =
+            WebViewBridge.executeBlocking(WebViewBridge.request("userAgent")).value
     }
 }
 interface WebResourceRequest {
@@ -143,13 +141,13 @@ open class WebView(context: Context) : android.view.ViewGroup(context) {
     }
     fun stopLoading() {
         load?.cancel()
-        runBlocking { WebViewBridge.execute(request("destroy")) }
+        WebViewBridge.executeBlocking(request("destroy"))
     }
     fun destroy() {
         if (destroyed) return
         destroyed = true
         scope.cancel()
-        runBlocking { WebViewBridge.execute(request("destroy")) }
+        WebViewBridge.executeBlocking(request("destroy"))
     }
     fun clearCache(includeDiskFiles: Boolean) { }
     fun clearHistory() { }
@@ -161,14 +159,13 @@ open class WebView(context: Context) : android.view.ViewGroup(context) {
 }
 
 class CookieManager private constructor() {
-    fun getCookie(url: String): String? = runBlocking {
-        WebViewBridge.execute(WebViewBridge.request("getCookie", url = url)).value.takeIf(String::isNotBlank)
-    }
+    fun getCookie(url: String): String? =
+        WebViewBridge.executeBlocking(WebViewBridge.request("getCookie", url = url)).value.takeIf(String::isNotBlank)
     fun setCookie(
         url: String,
         value: String,
     ) {
-        runBlocking { WebViewBridge.execute(WebViewBridge.request("setCookie", url = url, value = value)) }
+        WebViewBridge.executeBlocking(WebViewBridge.request("setCookie", url = url, value = value))
     }
     fun setCookie(
         url: String,
@@ -179,7 +176,7 @@ class CookieManager private constructor() {
         callback?.onReceiveValue(true)
     }
     fun flush() {
-        runBlocking { WebViewBridge.execute(WebViewBridge.request("cookies")) }
+        WebViewBridge.executeBlocking(WebViewBridge.request("cookies"))
     }
     fun setAcceptCookie(accept: Boolean) { }
     fun setAcceptThirdPartyCookies(view: WebView, accept: Boolean) { }

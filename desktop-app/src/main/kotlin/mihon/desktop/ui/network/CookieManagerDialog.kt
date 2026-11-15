@@ -163,7 +163,7 @@ fun CookieManagerDialog(
                                     .fillMaxWidth(),
                                 verticalArrangement = Arrangement.spacedBy(8.dp),
                             ) {
-                                items(configs) { config ->
+                                items(configs, key = { it.domain }) { config ->
                                     val isSelected = config.domain == selectedDomain
                                     Card(
                                         modifier = Modifier

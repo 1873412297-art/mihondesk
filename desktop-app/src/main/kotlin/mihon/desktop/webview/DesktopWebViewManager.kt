@@ -38,6 +38,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.time.Duration.Companion.minutes
 
 /**
  * A browser that has already opened stays up. A later page error, including one from a login
@@ -135,20 +136,23 @@ class DesktopWebViewManager(
                         request.text("token") == token && request.text("sessionId") == sessionId &&
                             request.text("sourceId") == sourceId.toString(),
                     )
+                    // Bounded: each broker request holds one server thread for the browser's subresources.
                     val response = runBlocking {
-                        network.executeBrokeredRequest(
-                            BrokerHttpRequest(
-                                method = request.text("method"),
-                                url = request.text("url"),
-                                headers = (request["headers"] as? JsonObject).orEmpty().mapValues {
-                                    it.value.jsonPrimitive.content
-                                },
-                                extensionId = extensionId,
-                                sourceId = sourceId,
-                                bodyBase64 = request.text("bodyBase64").takeIf(String::isNotBlank),
-                            ),
-                            browsing = true,
-                        )
+                        withTimeout(BROKER_REQUEST_TIMEOUT) {
+                            network.executeBrokeredRequest(
+                                BrokerHttpRequest(
+                                    method = request.text("method"),
+                                    url = request.text("url"),
+                                    headers = (request["headers"] as? JsonObject).orEmpty().mapValues {
+                                        it.value.jsonPrimitive.content
+                                    },
+                                    extensionId = extensionId,
+                                    sourceId = sourceId,
+                                    bodyBase64 = request.text("bodyBase64").takeIf(String::isNotBlank),
+                                ),
+                                browsing = true,
+                            )
+                        }
                     }
                     val output = Json.encodeToString(response).toByteArray()
                     exchange.sendResponseHeaders(200, output.size.toLong())
@@ -382,3 +386,6 @@ class DesktopWebViewManager(
 }
 data class BrowserEvent(val type: String, val value: String)
 private fun JsonObject.text(key: String): String = get(key)?.jsonPrimitive?.contentOrNull.orEmpty()
+
+/** Upper bound for one brokered browser subresource request, on top of the connect/read timeouts. */
+private val BROKER_REQUEST_TIMEOUT = 2.minutes

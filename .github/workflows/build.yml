@@ -43,6 +43,21 @@ jobs:
       - name: Check desktop sources
         run: ./gradlew detekt checkFileLength
 
+      # desktop-app's suite needs the packaged Windows codec and Win32 APIs, so it runs in the
+      # Windows job; these modules are platform-independent and give faster feedback here.
+      - name: Test platform-independent modules
+        env:
+          # Fixtures use non-ASCII file names; the JVM needs a UTF-8 locale to map them on Linux.
+          LC_ALL: C.UTF-8
+        run: ./gradlew :reader-core:test :sync:test :extension-sdk:test :extension-host:test :desktop-library-data:test
+
+      - name: Upload test reports
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: mihondesk-linux-test-reports-${{ github.sha }}
+          path: '*/build/reports/tests/test'
+
   desktop-windows:
     name: Build & Test Windows Reader
     runs-on: windows-2025
