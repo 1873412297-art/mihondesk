@@ -39,6 +39,9 @@ detekt 已把其中可机器检查的部分设为构建失败项（见 `config/d
 - 桌面端入口：`desktop-app/src/main/kotlin/mihon/desktop/Main.kt`；运行时组装：`DesktopRuntime.kt`。
 - 扩展宿主是独立进程：`extension-host/`（`--extension-host` 子命令启动），通过 `extension-sdk` 的 IPC 通信。
 - JCEF 浏览器是按需启动的独立进程：`desktop-webview-host/`，由 `DesktopWebViewManager` 管理。
+- `mobile-companion/` 是独立的 Android 伴侣应用（自有 Gradle 工程，不在根 `settings.gradle.kts` 中），
+  通过 `./gradlew -p mobile-companion ...` 构建；它复用 `:sync` 模块做 Google Drive 书架同步。它不是上游 Mihon 模块，
+  不要把它并入根构建，也不要让桌面端模块依赖它。修改 `sync` 时要同时跑 `./gradlew -p mobile-companion :app:testDebugUnitTest`。
 
 ## 提交前
 

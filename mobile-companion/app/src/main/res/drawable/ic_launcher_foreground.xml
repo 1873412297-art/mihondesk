@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- mihondesk mark (desktop-app/src/main/resources/icon.svg): open ink book with a terracotta drop. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:scaleX="0.6"
+        android:scaleY="0.6"
+        android:translateX="14.4"
+        android:translateY="18.6">
+        <path
+            android:fillColor="#FFFAF1"
+            android:pathData="M66,50 C52,42 36,42 22,46 V100 C36,96 52,96 66,104 Z"
+            android:strokeColor="#2B2622"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round"
+            android:strokeWidth="3.2" />
+        <path
+            android:fillColor="#FFFAF1"
+            android:pathData="M66,50 C80,42 96,42 110,46 V100 C96,96 80,96 66,104 Z"
+            android:strokeColor="#2B2622"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round"
+            android:strokeWidth="3.2" />
+        <path
+            android:pathData="M66,50 L66,104"
+            android:strokeColor="#2B2622"
+            android:strokeLineCap="round"
+            android:strokeWidth="3.2" />
+        <path
+            android:fillColor="#B0623B"
+            android:pathData="M66,14 C66,14 57,25.5 57,31 a9,9 0,0 0,18 0 C75,25.5 66,14 66,14 Z" />
+    </group>
+</vector>
