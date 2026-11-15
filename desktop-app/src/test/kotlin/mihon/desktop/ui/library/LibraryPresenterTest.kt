@@ -46,15 +46,22 @@ class LibraryPresenterTest {
     }
 
     @Test
-    fun `starts loading then exposes database rows without changing their order`() = runBlocking {
+    fun `starts loading then exposes database rows without changing their order`() = kotlinx.coroutines.test.runTest {
         val rows = MutableStateFlow<List<LibraryManga>>(emptyList())
-        val presenter = LibraryPresenter(FakeLibraryRepository { rows }, scope)
+        // Virtual time: on a real dispatcher the first (empty) emission could land before the
+        // "still loading" assertion and make this test flaky.
+        val presenter = LibraryPresenter(
+            repository = FakeLibraryRepository { rows },
+            scope = backgroundScope,
+            ioDispatcher = kotlinx.coroutines.test.StandardTestDispatcher(testScheduler),
+        )
 
         presenter.state.value.loading shouldBe true
         rows.value = listOf(manga(2, "漫画 二"), manga(1, "Alpha"))
+        runCurrent()
 
-        presenter.awaitState { !it.loading && it.items.size == 2 }.items.map(LibraryManga::id)
-            .shouldContainExactly(2L, 1L)
+        presenter.state.value.loading shouldBe false
+        presenter.state.value.items.map(LibraryManga::id).shouldContainExactly(2L, 1L)
         presenter.close()
     }
 
