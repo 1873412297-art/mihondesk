@@ -11,16 +11,13 @@ import androidx.compose.ui.test.v2.runComposeUiTest
 import androidx.compose.ui.unit.dp
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
 import mihon.desktop.library.model.CategoryRecord
 import mihon.desktop.library.model.ChapterRecord
 import mihon.desktop.library.model.HistoryRecord
@@ -40,20 +37,11 @@ import mihon.desktop.library.model.SourceRecord
 import mihon.desktop.library.model.TrackingRecord
 import mihon.desktop.library.repository.LibraryMutationPort
 import mihon.desktop.library.repository.LibraryRepository
-import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 
 class LibraryBatchActionsTest {
-    private val parentJob = SupervisorJob()
-    private val scope = CoroutineScope(parentJob + Dispatchers.Default)
-
-    @AfterEach
-    fun tearDown() {
-        scope.cancel()
-    }
-
     @Test
-    fun `selection operations toggle ids select all and clear properly`() = runBlocking {
+    fun `selection operations toggle ids select all and clear properly`() = runTest {
         val rows = MutableStateFlow(
             listOf(
                 manga(1, "Manga 1"),
@@ -61,55 +49,60 @@ class LibraryBatchActionsTest {
                 manga(3, "Manga 3"),
             ),
         )
-        val presenter = LibraryPresenter(BatchTestFakeRepository(libraryRows = rows), scope)
-        presenter.awaitState { !it.loading && it.items.size == 3 }
+        val presenter =
+            LibraryPresenter(
+                BatchTestFakeRepository(libraryRows = rows),
+                backgroundScope,
+                ioDispatcher = StandardTestDispatcher(testScheduler),
+            )
+        settled(presenter) { !it.loading && it.items.size == 3 }
 
         // Start selection mode
         presenter.toggleSelectionMode(true)
-        presenter.awaitState { it.selectionState.isSelectionMode }
+        settled(presenter) { it.selectionState.isSelectionMode }
             .selectionState.selectedMangaIds shouldBe emptySet()
 
         // Toggle manga 1
         presenter.toggleMangaSelection(1L)
-        presenter.awaitState { it.selectionState.selectedMangaIds.contains(1L) }
+        settled(presenter) { it.selectionState.selectedMangaIds.contains(1L) }
             .selectionState.selectedMangaIds shouldContainExactly setOf(1L)
 
         // Toggle manga 2
         presenter.toggleMangaSelection(2L)
-        presenter.awaitState { it.selectionState.selectedMangaIds.size == 2 }
+        settled(presenter) { it.selectionState.selectedMangaIds.size == 2 }
             .selectionState.selectedMangaIds shouldContainExactly setOf(1L, 2L)
 
         // Toggle manga 1 off
         presenter.toggleMangaSelection(1L)
-        presenter.awaitState { it.selectionState.selectedMangaIds.size == 1 }
+        settled(presenter) { it.selectionState.selectedMangaIds.size == 1 }
             .selectionState.selectedMangaIds shouldContainExactly setOf(2L)
 
         // Select All
         presenter.selectAll()
-        presenter.awaitState { it.selectionState.selectedMangaIds.size == 3 }
+        settled(presenter) { it.selectionState.selectedMangaIds.size == 3 }
             .selectionState.selectedMangaIds shouldContainExactly setOf(1L, 2L, 3L)
 
         // Clear Selection
         presenter.clearSelection()
-        presenter.awaitState { !it.selectionState.isSelectionMode && it.selectionState.selectedMangaIds.isEmpty() }
+        settled(presenter) { !it.selectionState.isSelectionMode && it.selectionState.selectedMangaIds.isEmpty() }
 
         presenter.close()
     }
 
     @Test
-    fun `batchSetCategories updates categories for selected manga and clears selection`() = runBlocking {
+    fun `batchSetCategories updates categories for selected manga and clears selection`() = runTest {
         val repo = BatchTestFakeRepository(
             libraryRows = MutableStateFlow(listOf(manga(1, "Manga 1"), manga(2, "Manga 2"))),
         )
-        val presenter = LibraryPresenter(repo, scope)
-        presenter.awaitState { !it.loading && it.items.size == 2 }
+        val presenter = LibraryPresenter(repo, backgroundScope, ioDispatcher = StandardTestDispatcher(testScheduler))
+        settled(presenter) { !it.loading && it.items.size == 2 }
 
         presenter.toggleMangaSelection(1L)
         presenter.toggleMangaSelection(2L)
-        presenter.awaitState { it.selectionState.selectedMangaIds.size == 2 }
+        settled(presenter) { it.selectionState.selectedMangaIds.size == 2 }
 
         presenter.batchSetCategories(listOf(10L, 20L))
-        presenter.awaitState { !it.selectionState.isSelectionMode && it.selectionState.selectedMangaIds.isEmpty() }
+        settled(presenter) { !it.selectionState.isSelectionMode && it.selectionState.selectedMangaIds.isEmpty() }
 
         repo.mangaCategoryMap[1L] shouldContainExactly listOf(10L, 20L)
         repo.mangaCategoryMap[2L] shouldContainExactly listOf(10L, 20L)
@@ -118,7 +111,7 @@ class LibraryBatchActionsTest {
     }
 
     @Test
-    fun `batchMarkRead updates all chapters of selected manga`() = runBlocking {
+    fun `batchMarkRead updates all chapters of selected manga`() = runTest {
         val repo = BatchTestFakeRepository(
             libraryRows = MutableStateFlow(listOf(manga(1, "Manga 1"))),
             chaptersMap = mapOf(
@@ -128,24 +121,24 @@ class LibraryBatchActionsTest {
                 ),
             ),
         )
-        val presenter = LibraryPresenter(repo, scope)
-        presenter.awaitState { !it.loading }
+        val presenter = LibraryPresenter(repo, backgroundScope, ioDispatcher = StandardTestDispatcher(testScheduler))
+        settled(presenter) { !it.loading }
 
         presenter.toggleMangaSelection(1L)
-        presenter.awaitState { it.selectionState.selectedMangaIds.size == 1 }
+        settled(presenter) { it.selectionState.selectedMangaIds.size == 1 }
 
         // Mark read
         presenter.batchMarkRead(true)
-        presenter.awaitState { it.selectionState.selectedMangaIds.isEmpty() }
+        settled(presenter) { it.selectionState.selectedMangaIds.isEmpty() }
 
         repo.chapterRecords[101L]?.read shouldBe true
         repo.chapterRecords[102L]?.read shouldBe true
 
         // Mark unread
         presenter.toggleMangaSelection(1L)
-        presenter.awaitState { it.selectionState.selectedMangaIds.size == 1 }
+        settled(presenter) { it.selectionState.selectedMangaIds.size == 1 }
         presenter.batchMarkRead(false)
-        presenter.awaitState { it.selectionState.selectedMangaIds.isEmpty() }
+        settled(presenter) { it.selectionState.selectedMangaIds.isEmpty() }
 
         repo.chapterRecords[101L]?.read shouldBe false
         repo.chapterRecords[102L]?.read shouldBe false
@@ -154,7 +147,7 @@ class LibraryBatchActionsTest {
     }
 
     @Test
-    fun `batchRemoveFromLibrary marks selected manga as favorite false`() = runBlocking {
+    fun `batchRemoveFromLibrary marks selected manga as favorite false`() = runTest {
         val repo = BatchTestFakeRepository(
             libraryRows = MutableStateFlow(listOf(manga(1, "Manga 1"))),
             mangaRecordsMap = mutableMapOf(
@@ -167,14 +160,14 @@ class LibraryBatchActionsTest {
                 ),
             ),
         )
-        val presenter = LibraryPresenter(repo, scope)
-        presenter.awaitState { !it.loading }
+        val presenter = LibraryPresenter(repo, backgroundScope, ioDispatcher = StandardTestDispatcher(testScheduler))
+        settled(presenter) { !it.loading }
 
         presenter.toggleMangaSelection(1L)
-        presenter.awaitState { it.selectionState.selectedMangaIds.size == 1 }
+        settled(presenter) { it.selectionState.selectedMangaIds.size == 1 }
 
         presenter.batchRemoveFromLibrary()
-        presenter.awaitState { it.selectionState.selectedMangaIds.isEmpty() }
+        settled(presenter) { it.selectionState.selectedMangaIds.isEmpty() }
 
         repo.mangaRecordsMap["/1"]?.favorite shouldBe false
 
@@ -220,12 +213,25 @@ class LibraryBatchActionsTest {
         onNodeWithTag("batch-mark-unread").performClick()
         markReadValue shouldBe false
 
+        // Done sits outside the scrolling actions, so it is clickable without scrolling even when
+        // wide fallback fonts (Linux) push the last actions past the 1000 dp viewport.
         onNodeWithTag("batch-exit-button").performClick()
         exitCalled shouldBe true
     }
 
-    private suspend fun LibraryPresenter.awaitState(predicate: (LibraryUiState) -> Boolean): LibraryUiState =
-        withTimeout(5_000) { state.first(predicate) }
+    /**
+     * The presenter runs on virtual time (backgroundScope + a test dispatcher), so instead of polling
+     * with a wall-clock timeout, run everything that is due and check the state it settled on.
+     */
+    private fun TestScope.settled(
+        presenter: LibraryPresenter,
+        predicate: (LibraryUiState) -> Boolean,
+    ): LibraryUiState {
+        runCurrent()
+        val state = presenter.state.value
+        check(predicate(state)) { "Presenter settled on an unexpected state: $state" }
+        return state
+    }
 
     private fun manga(id: Long, title: String) = LibraryManga(
         id = id,

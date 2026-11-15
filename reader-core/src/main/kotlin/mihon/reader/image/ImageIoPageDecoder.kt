@@ -1,6 +1,7 @@
 package mihon.reader.image
 
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -22,9 +23,11 @@ import javax.imageio.metadata.IIOMetadataNode
 
 class ImageIoPageDecoder(
     internal val budget: BoundedReaderMemoryBudget,
+    /** Where blocking ImageIO work runs; tests pass a test dispatcher to keep decoding on virtual time. */
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : PageDecoder {
 
-    override suspend fun probe(input: BoundedPageInput): ImageMetadata = withContext(Dispatchers.IO) {
+    override suspend fun probe(input: BoundedPageInput): ImageMetadata = withContext(ioDispatcher) {
         input.use { pageInput ->
             withReader(pageInput) { reader ->
                 val format = reader.readerImageFormat()
@@ -59,7 +62,7 @@ class ImageIoPageDecoder(
         input: BoundedPageInput,
         metadata: ImageMetadata,
         frameId: FrameId,
-    ): DecodedTile = withContext(Dispatchers.IO) {
+    ): DecodedTile = withContext(ioDispatcher) {
         currentCoroutineContext().ensureActive()
         input.use { pageInput ->
             withReader(pageInput) { reader ->
@@ -241,7 +244,7 @@ class ImageIoPageDecoder(
         input: BoundedPageInput,
         metadata: ImageMetadata,
         request: TileRequest,
-    ): DecodedTile = withContext(Dispatchers.IO) {
+    ): DecodedTile = withContext(ioDispatcher) {
         currentCoroutineContext().ensureActive()
         input.use { pageInput ->
             withReader(pageInput) { reader ->

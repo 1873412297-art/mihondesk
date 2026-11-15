@@ -116,8 +116,9 @@ internal class TestLibraryRepository : LibraryRepository, LibraryMutationPort {
 
     override fun updateManga(value: MangaRecord) {
         manga[value.id] = value
-        mangaFlows[value.id]?.value = value.toDetails()
+        // Like a committed database write: every snapshot reflects it before any observer is told.
         refreshLibrary()
+        mangaFlows[value.id]?.value = value.toDetails()
     }
 
     override fun findChapter(mangaId: Long, url: String): ChapterRecord? =
@@ -129,17 +130,17 @@ internal class TestLibraryRepository : LibraryRepository, LibraryMutationPort {
     override fun insertChapter(value: ChapterRecord): Long {
         val chapterId = if (value.id == 0L) nextId++ else value.id
         chapters[chapterId] = value.copy(id = chapterId)
-        chapterFlows[value.mangaId]?.value = chaptersFor(value.mangaId)
         refreshLibrary()
+        chapterFlows[value.mangaId]?.value = chaptersFor(value.mangaId)
         return chapterId
     }
 
     override fun updateChapter(value: ChapterRecord) {
         val previous = chapters[value.id]
         chapters[value.id] = value
+        refreshLibrary()
         previous?.mangaId?.let { chapterFlows[it]?.value = chaptersFor(it) }
         chapterFlows[value.mangaId]?.value = chaptersFor(value.mangaId)
-        refreshLibrary()
     }
 
     override fun upsertCategory(value: CategoryRecord): Long {
