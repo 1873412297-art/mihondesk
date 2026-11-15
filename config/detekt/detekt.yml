@@ -7,11 +7,17 @@ complexity:
   LongMethod:
     active: true
     allowedLines: 60
+    # Compose UI is a declarative tree with one argument per line; its length says little about
+    # how hard it is to follow. UI code is held to CognitiveComplexMethod below instead.
+    ignoreAnnotated: ['Composable']
   LargeClass:
     active: true
     allowedLines: 400
   CognitiveComplexMethod:
-    active: false
+    # The length rule's replacement for UI code (see LongMethod), so it covers the ui/ tree only.
+    active: true
+    allowedComplexity: 15
+    includes: ['**/mihon/desktop/ui/**']
   ComplexCondition:
     active: false
   ComplexInterface:
