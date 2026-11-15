@@ -182,11 +182,14 @@ class MangaDetailScreenActionsTest {
 
         setContent {
             MaterialTheme {
-                MangaDetailScreen(
-                    state = state,
-                    onBack = {},
-                    onReadChapter = {},
-                )
+                WithChapterBrowse(state) { browseState, onBrowse ->
+                    MangaDetailScreen(
+                        state = browseState,
+                        onBack = {},
+                        onReadChapter = {},
+                        onChapterBrowseAction = onBrowse,
+                    )
+                }
             }
         }
 
@@ -226,13 +229,16 @@ class MangaDetailScreenActionsTest {
 
         setContent {
             MaterialTheme {
-                MangaDetailScreen(
-                    state = state,
-                    onBack = {},
-                    onReadChapter = {},
-                    onBatchMarkChaptersRead = { ids, _ -> batchReadIds = ids },
-                    onBatchBookmarkChapters = { ids, _ -> batchBookmarkIds = ids },
-                )
+                WithChapterBrowse(state) { browseState, onBrowse ->
+                    MangaDetailScreen(
+                        state = browseState,
+                        onBack = {},
+                        onReadChapter = {},
+                        onBatchMarkChaptersRead = { ids, _ -> batchReadIds = ids },
+                        onBatchBookmarkChapters = { ids, _ -> batchBookmarkIds = ids },
+                        onChapterBrowseAction = onBrowse,
+                    )
+                }
             }
         }
 

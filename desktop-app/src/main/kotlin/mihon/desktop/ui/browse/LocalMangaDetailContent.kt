@@ -2,6 +2,7 @@ package mihon.desktop.ui.browse
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -15,6 +16,7 @@ import mihon.desktop.DesktopRuntime
 import mihon.desktop.library.model.LibraryChapter
 import mihon.desktop.library.model.MangaDetails
 import mihon.desktop.library.reader.ReaderLibraryPort
+import mihon.desktop.ui.library.ChapterBrowseModel
 import mihon.desktop.ui.library.ChapterFilterState
 import mihon.desktop.ui.library.ChapterReaderAvailability
 import mihon.desktop.ui.library.ChapterSortMode
@@ -48,6 +50,8 @@ fun LocalMangaDetailContent(
     var detailState by remember(manga.url) { mutableStateOf(LocalMangaDetailState()) }
     var filterState by remember(manga.url) { mutableStateOf(ChapterFilterState()) }
     var sortState by remember(manga.url) { mutableStateOf(ChapterSortState()) }
+    val chapterBrowseModel = remember(manga.url) { ChapterBrowseModel() }
+    val chapterBrowse by chapterBrowseModel.state.collectAsState()
 
     LaunchedEffect(manga.url, refreshKey) {
         detailState = detailState.copy(loading = true, errorMessage = null)
@@ -140,8 +144,10 @@ fun LocalMangaDetailContent(
             readerAvailability = detailState.readerAvailability,
             chapterFilterState = filterState,
             chapterSortState = sortState,
+            chapterBrowse = chapterBrowse,
         ),
         onBack = onBack,
+        onChapterBrowseAction = { chapterBrowseModel.onAction(detailState.manga?.id, it) },
         onReadChapter = onReadChapter,
         onRetry = { refreshKey++ },
         onChapterFilterChange = { filterState = it },

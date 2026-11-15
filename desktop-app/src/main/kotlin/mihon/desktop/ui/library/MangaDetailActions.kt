@@ -48,4 +48,5 @@ data class MangaDetailActions(
     val onSaveReadingSettings: (mihon.desktop.library.model.MangaReaderSettingsOverride) -> Unit = {},
     val onClearReadingSettings: () -> Unit = {},
     val onCoverLoadFailed: ((Int) -> Unit)? = null,
+    val onChapterBrowseAction: (ChapterBrowseAction) -> Unit = {},
 )

@@ -86,6 +86,7 @@ fun MangaDetailScreen(
     onClearReadingSettings: () -> Unit = actions.onClearReadingSettings,
     onCoverLoadFailed: ((Int) -> Unit)? = actions.onCoverLoadFailed,
     onOpenChapterInWebView: ((Long) -> Unit)? = null,
+    onChapterBrowseAction: (ChapterBrowseAction) -> Unit = actions.onChapterBrowseAction,
 ) {
     val strings = LocalStrings.current
     Surface(
@@ -108,224 +109,57 @@ fun MangaDetailScreen(
                 showBack = showBack,
                 onRetry = null,
             )
-            else -> {
-                val manga = state.manga
-                val strings = mihon.desktop.i18n.LocalStrings.current
-                val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
-                val customCoverManager = mihon.desktop.image.LocalCustomCoverManager.current
-                val imageLoader = mihon.desktop.image.LocalImageLoader.current
-                var coverRefreshKey by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(0) }
-                val hasCustomCover = androidx.compose.runtime.remember(manga.id, coverRefreshKey) {
-                    customCoverManager?.hasCustomCover(manga.id) == true
-                }
-                val chapterItems = state.chapterListItems.ifEmpty {
-                    buildChapterListItems(
-                        chapters = state.chapters,
-                        settings = state.chapterSettings,
-                    )
-                }
-
-                var chapterSearchQuery by androidx.compose.runtime.remember {
-                    androidx.compose.runtime.mutableStateOf("")
-                }
-                var isSearchingChapters by androidx.compose.runtime.remember {
-                    androidx.compose.runtime.mutableStateOf(false)
-                }
-                var isCoverDialogOpen by androidx.compose.runtime.remember {
-                    androidx.compose.runtime.mutableStateOf(false)
-                }
-                var isNotesDialogOpen by androidx.compose.runtime.remember {
-                    androidx.compose.runtime.mutableStateOf(false)
-                }
-                var isSelectionMode by androidx.compose.runtime.remember {
-                    androidx.compose.runtime.mutableStateOf(false)
-                }
-                var selectedChapterIds by androidx.compose.runtime.remember {
-                    androidx.compose.runtime.mutableStateOf(emptySet<Long>())
-                }
-                // Last chapter toggled by a plain click; Shift+click selects everything between it and the target.
-                var selectionAnchorId by androidx.compose.runtime.remember {
-                    androidx.compose.runtime.mutableStateOf<Long?>(null)
-                }
-
-                val displayedChapterItems = androidx.compose.runtime.remember(chapterItems, chapterSearchQuery) {
-                    filterChapterItems(chapterItems, chapterSearchQuery)
-                }
-                val nextChapterToRead = androidx.compose.runtime.remember(state.chapters) {
-                    nextChapterToRead(state.chapters)
-                }
-
-                val fabText = androidx.compose.runtime.remember(nextChapterToRead, state.chapters) {
-                    when {
-                        nextChapterToRead == null -> ""
-                        state.chapters.none { it.read } -> strings.mangaDetailStart(nextChapterToRead.name)
-                        state.chapters.all { it.read } -> strings.mangaDetailStart(nextChapterToRead.name)
-                        else -> strings.mangaDetailResume(nextChapterToRead.name)
-                    }
-                }
-
-                Box(modifier = Modifier.fillMaxSize()) {
-                    MangaBackdropBanner(
-                        thumbnailUrl = manga.thumbnailUrl,
-                        mangaId = manga.id,
-                        modifier = Modifier.align(Alignment.TopCenter),
-                        bannerHeight = 320.dp,
-                    )
-
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        item(key = "detail-header") {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(start = 24.dp, end = 12.dp, top = 14.dp, bottom = 24.dp),
-                                verticalArrangement = Arrangement.spacedBy(16.dp),
-                            ) {
-                                MangaDetailActionRow(
-                                    manga = manga,
-                                    strings = strings,
-                                    sourceBaseUrl = sourceBaseUrl,
-                                    showBack = showBack,
-                                    onBack = onBack,
-                                    onClose = onClose,
-                                    isLibraryActionRunning = isLibraryActionRunning,
-                                    isRefreshingSource = isRefreshingSource,
-                                    onToggleLibrary = onToggleLibrary,
-                                    onRefreshSource = onRefreshSource,
-                                    onEditInfo = onEditInfo,
-                                    onEditCategories = onEditCategories,
-                                    onOpenTracking = onOpenTracking,
-                                )
-
-                                MissingSourceBanner(
-                                    state.missingSource,
-                                    strings,
-                                    onInstallMissingSource,
-                                    onIgnoreMissingSource,
-                                )
-
-                                MangaDetailInfoRow(
-                                    manga = manga,
-                                    strings = strings,
-                                    sourceBaseUrl = sourceBaseUrl,
-                                    coverRefreshKey = coverRefreshKey,
-                                    hasCustomCover = hasCustomCover,
-                                    onCoverClick = { isCoverDialogOpen = true },
-                                    onCoverChanged = { coverRefreshKey++ },
-                                    onEditNotes = { isNotesDialogOpen = true },
-                                    onCoverLoadFailed = onCoverLoadFailed,
-                                )
-
-                                HorizontalDivider(modifier = Modifier.padding(top = 4.dp))
-                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    MangaChapterToolbar(
-                                        state = state,
-                                        strings = strings,
-                                        isSearchingChapters = isSearchingChapters,
-                                        chapterSearchQuery = chapterSearchQuery,
-                                        isSelectionMode = isSelectionMode,
-                                        selectedCount = selectedChapterIds.size,
-                                        onDownloadBatch = onDownloadBatch,
-                                        onChapterSortChange = onChapterSortChange,
-                                        onOpenChapterSettings = onOpenChapterSettings,
-                                        onOpenReadingSettings = onOpenReadingSettings,
-                                        onToggleSearch = {
-                                            isSearchingChapters = !isSearchingChapters
-                                            if (!isSearchingChapters) chapterSearchQuery = ""
-                                        },
-                                        onToggleSelection = {
-                                            isSelectionMode = !isSelectionMode
-                                            if (!isSelectionMode) selectedChapterIds = emptySet()
-                                        },
-                                    )
-
-                                    ChapterFiltersBar(
-                                        state = state,
-                                        strings = strings,
-                                        isSearchingChapters = isSearchingChapters,
-                                        chapterSearchQuery = chapterSearchQuery,
-                                        onQueryChange = { chapterSearchQuery = it },
-                                        onChapterFilterChange = onChapterFilterChange,
-                                    )
-                                }
-                            }
-                        }
-                        chapterListItems(
-                            displayedChapterItems = displayedChapterItems,
-                            chapterSearchQuery = chapterSearchQuery,
-                            state = state,
-                            strings = strings,
-                            isSelectionMode = isSelectionMode,
-                            selectedChapterIds = selectedChapterIds,
-                            selectionAnchorId = selectionAnchorId,
-                            onSelectedChapterIdsChange = { selectedChapterIds = it },
-                            onSelectionModeChange = { isSelectionMode = it },
-                            onSelectionAnchorChange = { selectionAnchorId = it },
-                            onReadChapter = onReadChapter,
-                            onToggleBookmark = onToggleBookmark,
-                            onToggleRead = onToggleRead,
-                            onMarkPreviousRead = onMarkPreviousRead,
-                            onDownloadChapter = onDownloadChapter,
-                            onDeleteDownload = onDeleteDownload,
-                            onOpenChapterInWebView = onOpenChapterInWebView,
-                        )
-                    }
-
-                    if (nextChapterToRead != null && !isSelectionMode && selectedChapterIds.isEmpty()) {
-                        NextChapterFab(
-                            text = fabText,
-                            onRead = { onReadChapter(nextChapterToRead.id) },
-                            modifier = Modifier.align(Alignment.BottomEnd).padding(24.dp),
-                        )
-                    }
-
-                    ChapterActionMenu(
-                        visible = isSelectionMode || selectedChapterIds.isNotEmpty(),
-                        selectedChapterIds = selectedChapterIds,
-                        displayedChapterItems = displayedChapterItems,
-                        downloadedChapterIds = state.downloadedChapterIds,
-                        onSelectedChapterIdsChange = { selectedChapterIds = it },
-                        onBatchBookmarkChapters = onBatchBookmarkChapters,
-                        onBatchMarkChaptersRead = onBatchMarkChaptersRead,
-                        onMarkPreviousRead = onMarkPreviousRead,
-                        onBatchDownloadChapters = onBatchDownloadChapters,
-                        onBatchDeleteDownloads = onBatchDeleteDownloads,
-                        onCloseSelection = {
-                            isSelectionMode = false
-                            selectedChapterIds = emptySet()
-                        },
-                        modifier = Modifier.align(Alignment.BottomCenter),
-                    )
-                }
-
-                MangaDetailDialogs(
-                    manga = manga,
-                    strings = strings,
-                    state = state,
+            else -> MangaDetailLoaded(
+                manga = state.manga,
+                state = state,
+                entry = MangaDetailEntry(
                     sourceBaseUrl = sourceBaseUrl,
-                    hasCustomCover = hasCustomCover,
-                    isCoverDialogOpen = isCoverDialogOpen,
-                    isNotesDialogOpen = isNotesDialogOpen,
-                    onDismissCover = { isCoverDialogOpen = false },
-                    onDismissNotes = { isNotesDialogOpen = false },
-                    onCoverChanged = { coverRefreshKey++ },
-                    onSaveMangaInfo = onSaveMangaInfo,
+                    showBack = showBack,
+                    onBack = onBack,
+                    onClose = onClose,
+                    onToggleLibrary = onToggleLibrary,
+                    onRefreshSource = onRefreshSource,
+                    isLibraryActionRunning = isLibraryActionRunning,
+                    isRefreshingSource = isRefreshingSource,
+                    onOpenChapterInWebView = onOpenChapterInWebView,
+                ),
+                actions = actions.copy(
+                    onReadChapter = onReadChapter,
+                    onInstallMissingSource = onInstallMissingSource,
+                    onIgnoreMissingSource = onIgnoreMissingSource,
+                    onEditCategories = onEditCategories,
+                    onOpenTracking = onOpenTracking,
+                    onEditInfo = onEditInfo,
                     onDismissEditInfo = onDismissEditInfo,
+                    onSaveMangaInfo = onSaveMangaInfo,
                     onResetMangaInfo = onResetMangaInfo,
-                    onDismissChapterSettings = onDismissChapterSettings,
+                    onChapterFilterChange = onChapterFilterChange,
                     onChapterSortChange = onChapterSortChange,
+                    onToggleBookmark = onToggleBookmark,
+                    onToggleRead = onToggleRead,
+                    onMarkPreviousRead = onMarkPreviousRead,
+                    onDownloadChapter = onDownloadChapter,
+                    onDeleteDownload = onDeleteDownload,
+                    onDownloadBatch = onDownloadBatch,
+                    onBatchBookmarkChapters = onBatchBookmarkChapters,
+                    onBatchMarkChaptersRead = onBatchMarkChaptersRead,
+                    onBatchDownloadChapters = onBatchDownloadChapters,
+                    onBatchDeleteDownloads = onBatchDeleteDownloads,
+                    onOpenChapterSettings = onOpenChapterSettings,
+                    onDismissChapterSettings = onDismissChapterSettings,
                     onChapterDisplayModeChange = onChapterDisplayModeChange,
-                    onShowMissingChaptersChange = onShowMissingChaptersChange,
                     onExcludedScanlatorsChange = onExcludedScanlatorsChange,
+                    onShowMissingChaptersChange = onShowMissingChaptersChange,
                     onSetChapterSettingsAsDefault = onSetChapterSettingsAsDefault,
                     onResetChapterSettingsToDefault = onResetChapterSettingsToDefault,
+                    onOpenReadingSettings = onOpenReadingSettings,
                     onDismissReadingSettings = onDismissReadingSettings,
                     onSaveReadingSettings = onSaveReadingSettings,
                     onClearReadingSettings = onClearReadingSettings,
-                )
-            }
+                    onCoverLoadFailed = onCoverLoadFailed,
+                    onChapterBrowseAction = onChapterBrowseAction,
+                ),
+            )
         }
     }
 }

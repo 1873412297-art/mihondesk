@@ -155,6 +155,14 @@ class LibraryPresenter(
 
     val detailState: StateFlow<MangaDetailUiState> = detailStateFlow.detailState
 
+    private val chapterBrowseModel = ChapterBrowseModel()
+
+    /** Chapter search/selection of the open detail; hosts merge it into [detailState] when rendering. */
+    val chapterBrowse: StateFlow<ChapterBrowseState> = chapterBrowseModel.state
+
+    fun onChapterBrowseAction(action: ChapterBrowseAction) =
+        chapterBrowseModel.onAction(detailState.value.manga?.id, action)
+
     private val coverRepair = CoverRepair(
         scope = presenterScope,
         repository = repository,

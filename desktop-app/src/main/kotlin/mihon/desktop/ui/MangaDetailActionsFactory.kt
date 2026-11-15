@@ -61,6 +61,7 @@ internal fun mangaDetailActions(
     onBatchDownloadChapters = libraryPresenter::batchDownloadChapters,
     onBatchDeleteDownloads = { deleteDownloads(libraryPresenter, presenterScope, snackbarHostState, strings, it) },
     onCoverLoadFailed = libraryPresenter::onCoverLoadFailed,
+    onChapterBrowseAction = libraryPresenter::onChapterBrowseAction,
 ).withChapterSettings(libraryPresenter)
 
 private fun MangaDetailActions.withChapterSettings(presenter: LibraryPresenter): MangaDetailActions = copy(

@@ -64,13 +64,15 @@ internal fun rememberShellLiveState(app: AppSession, runtime: DesktopRuntime): S
     val libraryState by app.library.state.collectAsState()
     val libraryBatchState by app.library.batchState.collectAsState()
     val repositoryDetail by app.library.detailState.collectAsState()
+    val chapterBrowse by app.library.chapterBrowse.collectAsState()
     val downloader = runtime.downloader
     val downloadLive = app.downloadLive.liveState()
     val running = downloadLive.isRunning.value
-    val detail = remember(repositoryDetail, running, downloadLive.chapterProgressOf) {
+    val detail = remember(repositoryDetail, chapterBrowse, running, downloadLive.chapterProgressOf) {
         repositoryDetail.copy(
             downloadProgressOf = downloadLive.chapterProgressOf,
             downloadsRunning = running,
+            chapterBrowse = chapterBrowse.forManga(repositoryDetail.manga?.id),
         )
     }
     val sources = remember(runtime.sourceManager, libraryState.items) {

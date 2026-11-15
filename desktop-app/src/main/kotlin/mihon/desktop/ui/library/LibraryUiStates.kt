@@ -59,6 +59,7 @@ data class MangaDetailUiState(
     val downloadProgressOf: (Long) -> ChapterDownloadProgress? = NoChapterDownloadProgress,
     val downloadsRunning: Boolean = false,
     val missingSource: MissingSourceInfo? = null,
+    val chapterBrowse: ChapterBrowseState = ChapterBrowseState(),
 )
 
 sealed interface ChapterReaderAvailability {
