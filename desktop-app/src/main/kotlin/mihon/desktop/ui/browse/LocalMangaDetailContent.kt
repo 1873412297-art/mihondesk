@@ -1,22 +1,18 @@
 package mihon.desktop.ui.browse
 
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import mihon.desktop.DesktopRuntime
 import mihon.desktop.library.model.LibraryChapter
 import mihon.desktop.library.model.MangaDetails
 import mihon.desktop.library.reader.ReaderLibraryPort
-import mihon.desktop.ui.library.ChapterBrowseModel
+import mihon.desktop.library.repository.LibraryMutationPort
+import mihon.desktop.library.repository.LibraryRepository
+import mihon.desktop.ui.library.ChapterBrowseState
 import mihon.desktop.ui.library.ChapterFilterState
 import mihon.desktop.ui.library.ChapterReaderAvailability
 import mihon.desktop.ui.library.ChapterSortMode
@@ -38,7 +34,7 @@ internal data class LocalMangaDetailState(
 )
 
 @Composable
-fun LocalMangaDetailContent(
+internal fun LocalMangaDetailContent(
     runtime: DesktopRuntime,
     source: SourceDescriptor,
     manga: SManga,
@@ -46,153 +42,92 @@ fun LocalMangaDetailContent(
     onReadChapter: (Long) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
-    var refreshKey by remember(manga.url) { mutableStateOf(0) }
-    var detailState by remember(manga.url) { mutableStateOf(LocalMangaDetailState()) }
-    var filterState by remember(manga.url) { mutableStateOf(ChapterFilterState()) }
-    var sortState by remember(manga.url) { mutableStateOf(ChapterSortState()) }
-    val chapterBrowseModel = remember(manga.url) { ChapterBrowseModel() }
-    val chapterBrowse by chapterBrowseModel.state.collectAsState()
-
-    LaunchedEffect(manga.url, refreshKey) {
-        detailState = detailState.copy(loading = true, errorMessage = null)
-        try {
-            val localMangaId = withContext(Dispatchers.IO) {
-                runtime.library.librarySnapshot(null)
-                    .firstOrNull { it.sourceId == source.id && it.url == manga.url }
-                    ?.id
-                    ?: runtime.library.allMangaSnapshot()
-                        .firstOrNull { it.sourceId == source.id && it.url == manga.url }
-                        ?.id
-            } ?: error("Local manga is no longer in the library")
-
-            val details = withContext(Dispatchers.IO) { runtime.library.mangaSnapshot(localMangaId) }
-            val localStoragePath = withContext(Dispatchers.IO) {
-                manga.url.substringAfter("local:", missingDelimiterValue = "")
-                    .takeIf { it.isNotBlank() }
-                    ?.let { runtime.library.findLocalMangaByManifest(it)?.storagePath }
-            }
-            val detailsWithCover = details?.let { value ->
-                if (value.thumbnailUrl.isNullOrBlank() && localStoragePath != null) {
-                    value.copy(thumbnailUrl = localStoragePath)
-                } else {
-                    value
-                }
-            }
-            val chapters = withContext(Dispatchers.IO) { runtime.library.chapterSnapshot(localMangaId) }
-            val availability = chapters.associate { chapter ->
-                chapter.id to chapter.resolveReaderAvailability(runtime.library)
-            }
-            detailState = LocalMangaDetailState(
-                mangaId = localMangaId,
-                manga = detailsWithCover,
-                chapters = chapters,
-                readerAvailability = availability,
-                loading = false,
-            )
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (e: Exception) {
-            detailState = LocalMangaDetailState(
-                loading = false,
-                errorMessage = e.message ?: "Failed to load local manga",
-            )
-        }
+    val presenter = remember(source.id, manga.url) {
+        LocalMangaDetailPresenter(
+            sourceId = source.id,
+            mangaUrl = manga.url,
+            repository = runtime.library,
+            mutations = runtime.library,
+            readerLibrary = runtime.library,
+            scope = scope,
+        )
     }
-
-    val filteredChapters = remember(detailState.chapters, filterState) {
-        detailState.chapters.filter { chapter ->
-            val unreadMatch = when (filterState.unread) {
-                TriStateFilter.Disabled -> true
-                TriStateFilter.Include -> !chapter.read
-                TriStateFilter.Exclude -> chapter.read
-            }
-            val bookmarkMatch = when (filterState.bookmarked) {
-                TriStateFilter.Disabled -> true
-                TriStateFilter.Include -> chapter.bookmark
-                TriStateFilter.Exclude -> !chapter.bookmark
-            }
-            unreadMatch && bookmarkMatch
-        }
+    DisposableEffect(presenter) {
+        presenter.load()
+        onDispose { presenter.close() }
     }
-    val displayedChapters = remember(filteredChapters, sortState) {
-        when (sortState.mode) {
-            ChapterSortMode.SourceOrder -> if (sortState.ascending) {
-                filteredChapters.sortedBy { it.sourceOrder }
-            } else {
-                filteredChapters.sortedByDescending { it.sourceOrder }
-            }
-            ChapterSortMode.ChapterNumber -> if (sortState.ascending) {
-                filteredChapters.sortedBy { it.chapterNumber }
-            } else {
-                filteredChapters.sortedByDescending { it.chapterNumber }
-            }
-            ChapterSortMode.UploadDate -> if (sortState.ascending) {
-                filteredChapters.sortedBy { it.dateUpload }
-            } else {
-                filteredChapters.sortedByDescending { it.dateUpload }
-            }
-        }
-    }
+    val state by presenter.state.collectAsState()
+    val actions = remember(presenter, onReadChapter) { presenter.actions(onReadChapter) }
+    MangaDetailScreen(state = state, onBack = onBack, actions = actions, onRetry = presenter::load)
+}
 
-    MangaDetailScreen(
-        state = MangaDetailUiState(
-            manga = detailState.manga,
-            chapters = displayedChapters,
-            allChapters = detailState.chapters,
-            loading = detailState.loading,
-            errorMessage = detailState.errorMessage,
-            readerAvailability = detailState.readerAvailability,
-            chapterFilterState = filterState,
-            chapterSortState = sortState,
-            chapterBrowse = chapterBrowse,
-        ),
-        onBack = onBack,
-        onChapterBrowseAction = { chapterBrowseModel.onAction(detailState.manga?.id, it) },
-        onReadChapter = onReadChapter,
-        onRetry = { refreshKey++ },
-        onChapterFilterChange = { filterState = it },
-        onChapterSortChange = { sortState = it },
-        onToggleBookmark = { chapterId ->
-            scope.launch {
-                withContext(Dispatchers.IO) {
-                    runtime.library.allChaptersSnapshot()
-                        .firstOrNull { it.id == chapterId }
-                        ?.let { record -> runtime.library.updateChapter(record.copy(bookmark = !record.bookmark)) }
-                }
-                refreshKey++
-            }
-        },
-        onToggleRead = { chapterId ->
-            scope.launch {
-                withContext(Dispatchers.IO) {
-                    runtime.library.allChaptersSnapshot()
-                        .firstOrNull { it.id == chapterId }
-                        ?.let { record -> runtime.library.updateChapter(record.copy(read = !record.read)) }
-                }
-                refreshKey++
-            }
-        },
-        onMarkPreviousRead = { chapterId ->
-            detailState.mangaId?.let { mangaId ->
-                scope.launch {
-                    withContext(Dispatchers.IO) {
-                        val records = runtime.library.allChaptersSnapshot()
-                            .filter { it.mangaId == mangaId }
-                            .sortedBy { it.sourceOrder }
-                        val targetIndex = records.indexOfFirst { it.id == chapterId }
-                        if (targetIndex >= 0) {
-                            records.take(targetIndex + 1).forEach { record ->
-                                if (!record.read) {
-                                    runtime.library.updateChapter(record.copy(read = true))
-                                }
-                            }
-                        }
-                    }
-                    refreshKey++
-                }
-            }
-        },
+/** Finds the library entry behind a local-source manga and loads what its detail page shows. */
+internal fun loadLocalMangaDetail(
+    sourceId: Long,
+    mangaUrl: String,
+    repository: LibraryRepository,
+    mutations: LibraryMutationPort,
+    readerLibrary: ReaderLibraryPort,
+): LocalMangaDetailState {
+    val mangaId = repository.librarySnapshot(null)
+        .firstOrNull { it.sourceId == sourceId && it.url == mangaUrl }?.id
+        ?: repository.allMangaSnapshot().firstOrNull { it.sourceId == sourceId && it.url == mangaUrl }?.id
+        ?: error("Local manga is no longer in the library")
+    val storagePath = mangaUrl.substringAfter("local:", missingDelimiterValue = "")
+        .takeIf { it.isNotBlank() }
+        ?.let { mutations.findLocalMangaByManifest(it)?.storagePath }
+    val details = repository.mangaSnapshot(mangaId)?.let { value ->
+        if (value.thumbnailUrl.isNullOrBlank() && storagePath != null) value.copy(thumbnailUrl = storagePath) else value
+    }
+    val chapters = repository.chapterSnapshot(mangaId)
+    return LocalMangaDetailState(
+        mangaId = mangaId,
+        manga = details,
+        chapters = chapters,
+        readerAvailability = chapters.associate { it.id to it.resolveReaderAvailability(readerLibrary) },
+        loading = false,
     )
+}
+
+internal fun LocalMangaDetailState.toUiState(
+    filter: ChapterFilterState = ChapterFilterState(),
+    sort: ChapterSortState = ChapterSortState(),
+    browse: ChapterBrowseState = ChapterBrowseState(),
+): MangaDetailUiState = MangaDetailUiState(
+    manga = manga,
+    chapters = chapters.filter { it.matches(filter) }.sortedFor(sort),
+    allChapters = chapters,
+    loading = loading,
+    errorMessage = errorMessage,
+    readerAvailability = readerAvailability,
+    chapterFilterState = filter,
+    chapterSortState = sort,
+    chapterBrowse = browse.forManga(manga?.id),
+)
+
+private fun LibraryChapter.matches(filter: ChapterFilterState): Boolean {
+    val unreadMatch = when (filter.unread) {
+        TriStateFilter.Disabled -> true
+        TriStateFilter.Include -> !read
+        TriStateFilter.Exclude -> read
+    }
+    val bookmarkMatch = when (filter.bookmarked) {
+        TriStateFilter.Disabled -> true
+        TriStateFilter.Include -> bookmark
+        TriStateFilter.Exclude -> !bookmark
+    }
+    return unreadMatch && bookmarkMatch
+}
+
+private fun List<LibraryChapter>.sortedFor(sort: ChapterSortState): List<LibraryChapter> {
+    val key: (LibraryChapter) -> Comparable<*> = when (sort.mode) {
+        ChapterSortMode.SourceOrder -> { chapter -> chapter.sourceOrder }
+        ChapterSortMode.ChapterNumber -> { chapter -> chapter.chapterNumber }
+        ChapterSortMode.UploadDate -> { chapter -> chapter.dateUpload }
+    }
+    val comparator = compareBy(key)
+    // Stable in both directions, matching sortedBy / sortedByDescending.
+    return sortedWith(if (sort.ascending) comparator else comparator.reversed())
 }
 
 private fun LibraryChapter.resolveReaderAvailability(

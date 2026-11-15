@@ -14,7 +14,6 @@
     <ID>LongMethod:BackupStorageLocation.kt:@Composable internal fun BackupStorageLocation</ID>
     <ID>LongMethod:BatchMigrationRunner.kt:BatchMigrationRunner$suspend fun runBatchMigration</ID>
     <ID>LongMethod:BrowseContentView.kt:@Composable fun BrowseContentView</ID>
-    <ID>LongMethod:LocalMangaDetailContent.kt:@Composable fun LocalMangaDetailContent</ID>
     <ID>LongMethod:BrowsePresenterGlobalSearch.kt:internal fun BrowsePresenter.performGlobalSearch</ID>
     <ID>LongMethod:BrowsePresenterRefresh.kt:internal fun BrowsePresenter.refresh</ID>
     <ID>LongMethod:BrowsePresenterMigration.kt:internal suspend fun BrowsePresenter.performMigrationInternal: Long</ID>
@@ -84,7 +83,6 @@
     <ID>LongMethod:MangaBottomActionMenu.kt:@Composable fun MangaBottomActionMenu</ID>
     <ID>LongMethod:MangaCover.kt:@Composable fun MangaCover</ID>
     <ID>LongMethod:MangaCoverDialog.kt:@Composable fun MangaCoverDialog</ID>
-    <ID>LongMethod:MangaDetailScreen.kt:@Composable fun MangaDetailScreen</ID>
     <ID>LongMethod:MangaDetailChapterRow.kt:@Composable internal fun ChapterRow</ID>
     <ID>LongMethod:MangaNotesDialog.kt:@Composable fun MangaNotesDialog</ID>
     <ID>LongMethod:MigrateSourceScreen.kt:@Composable fun MigrateSourceScreen</ID>

@@ -151,7 +151,7 @@ class MangaDetailScreenActionsTest {
                 MangaDetailScreen(
                     state = state,
                     onBack = {},
-                    onReadChapter = { readChapterId = it },
+                    actions = MangaDetailActions(onReadChapter = { readChapterId = it }),
                 )
             }
         }
@@ -186,8 +186,7 @@ class MangaDetailScreenActionsTest {
                     MangaDetailScreen(
                         state = browseState,
                         onBack = {},
-                        onReadChapter = {},
-                        onChapterBrowseAction = onBrowse,
+                        actions = MangaDetailActions(onChapterBrowseAction = onBrowse),
                     )
                 }
             }
@@ -233,10 +232,11 @@ class MangaDetailScreenActionsTest {
                     MangaDetailScreen(
                         state = browseState,
                         onBack = {},
-                        onReadChapter = {},
-                        onBatchMarkChaptersRead = { ids, _ -> batchReadIds = ids },
-                        onBatchBookmarkChapters = { ids, _ -> batchBookmarkIds = ids },
-                        onChapterBrowseAction = onBrowse,
+                        actions = MangaDetailActions(
+                            onBatchMarkChaptersRead = { ids, _ -> batchReadIds = ids },
+                            onBatchBookmarkChapters = { ids, _ -> batchBookmarkIds = ids },
+                            onChapterBrowseAction = onBrowse,
+                        ),
                     )
                 }
             }
@@ -319,9 +319,11 @@ class MangaDetailScreenActionsTest {
                 MangaDetailScreen(
                     state = state,
                     onBack = {},
-                    onSaveMangaInfo = { _, _, _, _, _, _, notes ->
-                        savedNotesResult = notes
-                    },
+                    actions = MangaDetailActions(
+                        onSaveMangaInfo = { _, _, _, _, _, _, notes ->
+                            savedNotesResult = notes
+                        },
+                    ),
                 )
             }
         }
