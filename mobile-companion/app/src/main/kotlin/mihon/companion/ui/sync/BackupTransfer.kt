@@ -8,26 +8,18 @@ import kotlinx.coroutines.withContext
 import mihon.companion.CompanionLog
 import mihon.companion.CompanionRuntime
 import mihon.companion.R
-import mihon.companion.data.IncomingLibrary
-import mihon.companion.data.LibraryMerge
 import mihon.companion.data.MihonBackupCodec
+import mihon.companion.data.MihonImport
 import java.io.FileNotFoundException
 
 /** Moves the library in and out of Mihon `.tachibk` files picked through the system file picker. */
 internal class BackupTransfer(private val runtime: CompanionRuntime, private val resolver: ContentResolver) {
 
     suspend fun import(uri: Uri): UiMessage = guarded(R.string.import_failed) {
-        val backup = withContext(Dispatchers.IO) {
+        val stats = withContext(Dispatchers.IO) {
             val input = resolver.openInputStream(uri) ?: throw FileNotFoundException(uri.toString())
-            input.use(MihonBackupCodec::decode)
+            input.use { MihonImport.merge(runtime.library, it, runtime.sync.deviceId()) }
         }
-        val incoming = IncomingLibrary(
-            mangas = backup.backupManga,
-            categories = backup.backupCategories,
-            sources = backup.backupSources,
-            deviceId = runtime.sync.deviceId(),
-        )
-        val stats = runtime.library.update { LibraryMerge.merge(it, incoming, markDirty = true) }
         UiMessage(R.string.import_done, listOf(stats.mangaInserted, stats.mangaMerged))
     }
 

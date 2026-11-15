@@ -4,10 +4,13 @@ import android.content.Context
 import kotlinx.coroutines.Dispatchers
 import mihon.companion.data.FileSyncStateStore
 import mihon.companion.data.LibraryStore
+import mihon.companion.mihonfolder.MihonAutoImporter
+import mihon.companion.mihonfolder.SafMihonBackupSource
 import mihon.companion.sync.AuthRetryingSnapshotStore
 import mihon.companion.sync.CompanionSyncService
 import mihon.companion.sync.DriveAuthorizer
 import mihon.companion.sync.DriveTokenSource
+import mihon.companion.sync.LibraryRefresher
 import mihon.companion.sync.SyncScheduler
 import mihon.sync.transport.gdrive.DriveRestSnapshotStore
 import mihon.sync.transport.gdrive.GoogleDriveTransport
@@ -15,13 +18,15 @@ import okhttp3.OkHttpClient
 import java.io.File
 import java.util.concurrent.TimeUnit
 
-/** Composition root: wires storage, Google authorization and the shared Drive transport. */
+/** Composition root: wires storage, the Mihon folder, Google authorization and the shared Drive transport. */
 class CompanionRuntime(
     val library: LibraryStore,
     val sync: CompanionSyncService,
     val authorizer: DriveAuthorizer,
     val scheduler: SyncScheduler,
-    val http: OkHttpClient,
+    val mihonFolder: MihonAutoImporter,
+    val mihonSource: SafMihonBackupSource,
+    val refresher: LibraryRefresher,
 ) {
     companion object {
         fun create(context: Context): CompanionRuntime {
@@ -42,7 +47,23 @@ class CompanionRuntime(
                     GoogleDriveTransport(AuthRetryingSnapshotStore(drive, tokens::invalidate))
                 },
             )
-            return CompanionRuntime(library, sync, authorizer, SyncScheduler(context.applicationContext), http)
+            val mihonSource = SafMihonBackupSource(context.applicationContext)
+            val mihonFolder = MihonAutoImporter(
+                store = library,
+                source = mihonSource,
+                stateFile = File(dir, "mihon-folder.json"),
+                deviceId = sync::deviceId,
+                io = Dispatchers.IO,
+            )
+            return CompanionRuntime(
+                library = library,
+                sync = sync,
+                authorizer = authorizer,
+                scheduler = SyncScheduler(context.applicationContext),
+                mihonFolder = mihonFolder,
+                mihonSource = mihonSource,
+                refresher = LibraryRefresher(mihonFolder, sync),
+            )
         }
     }
 }

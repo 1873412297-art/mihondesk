@@ -13,8 +13,8 @@ enum class Tab { Library, History, Sync }
 
 data class NavState(val tab: Tab = Tab.Library, val openManga: MangaKey? = null)
 
-/** App-level navigation plus the start-up sync; screens only see their own presenter. */
-class AppNavigator(runtime: CompanionRuntime) : ViewModel() {
+/** App-level navigation plus the foreground refresh; screens only see their own presenter. */
+class AppNavigator(private val runtime: CompanionRuntime) : ViewModel() {
     private val state = MutableStateFlow(NavState())
     val nav: StateFlow<NavState> = state.asStateFlow()
 
@@ -23,7 +23,14 @@ class AppNavigator(runtime: CompanionRuntime) : ViewModel() {
             runtime.library.load()
             val status = runtime.sync.status.value
             runtime.scheduler.apply(status.signedIn && status.autoSync)
-            runtime.sync.syncNow()
+        }
+    }
+
+    /** Every time the app comes to the foreground: read Mihon's newest backup, then sync with Drive. */
+    fun onForeground() {
+        viewModelScope.launch {
+            runtime.library.load()
+            runtime.refresher.refreshOnForeground()
         }
     }
 

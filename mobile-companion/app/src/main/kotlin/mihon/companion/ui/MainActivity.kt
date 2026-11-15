@@ -24,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import mihon.companion.CompanionApp
@@ -54,6 +55,10 @@ private fun CompanionAppContent(runtime: CompanionRuntime) {
     val navigator = viewModel { AppNavigator(runtime) }
     val nav by navigator.nav.collectAsStateWithLifecycle()
     BackHandler(enabled = nav.openManga != null) { navigator.back() }
+    LifecycleStartEffect(navigator) {
+        navigator.onForeground()
+        onStopOrDispose { }
+    }
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         bottomBar = { if (nav.openManga == null) BottomBar(nav.tab, navigator::select) },

@@ -31,7 +31,7 @@ import mihon.companion.ui.components.SectionLabel
 import mihon.companion.ui.relativeTime
 
 @Composable
-private fun Card(content: @Composable () -> Unit) {
+internal fun Card(content: @Composable () -> Unit) {
     Surface(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
         shape = MaterialTheme.shapes.medium,
@@ -169,7 +169,7 @@ internal fun AdvancedSection(deviceId: String, onRepull: () -> Unit) {
 }
 
 @Composable
-private fun SettingRow(
+internal fun SettingRow(
     title: String,
     body: String,
     icon: ImageVector? = null,
