@@ -7,7 +7,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.v2.runComposeUiTest
 import androidx.compose.ui.unit.dp
 import io.kotest.matchers.collections.shouldContainExactly
@@ -214,9 +213,9 @@ class LibraryBatchActionsTest {
         onNodeWithTag("batch-mark-unread").performClick()
         markReadValue shouldBe false
 
-        // The actions sit in a horizontally scrolling row; with wider fallback fonts (Linux) the last
-        // one is outside the 1000 dp viewport, so scroll to it as a user would before clicking.
-        onNodeWithTag("batch-exit-button").performScrollTo().performClick()
+        // Done sits outside the scrolling actions, so it is clickable without scrolling even when
+        // wide fallback fonts (Linux) push the last actions past the 1000 dp viewport.
+        onNodeWithTag("batch-exit-button").performClick()
         exitCalled shouldBe true
     }
 

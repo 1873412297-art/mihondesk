@@ -82,89 +82,96 @@ fun LibraryBatchActionBar(
             }
 
             Row(
-                modifier = Modifier.horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.weight(1f, fill = false),
+                horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                // Change Category
-                FilledTonalButton(
-                    onClick = onChangeCategories,
-                    enabled = selectedCount > 0,
-                    modifier = Modifier.testTag("batch-change-category"),
+                Row(
+                    // Only the actions shrink (and scroll) when the bar is narrow.
+                    modifier = Modifier.weight(1f, fill = false).horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(strings.libraryBatchChangeCategory)
-                }
-
-                // Mark Read
-                FilledTonalButton(
-                    onClick = { onMarkRead(true) },
-                    enabled = selectedCount > 0,
-                    modifier = Modifier.testTag("batch-mark-read"),
-                ) {
-                    Text(strings.libraryBatchMarkRead)
-                }
-
-                // Mark Unread
-                FilledTonalButton(
-                    onClick = { onMarkRead(false) },
-                    enabled = selectedCount > 0,
-                    modifier = Modifier.testTag("batch-mark-unread"),
-                ) {
-                    Text(strings.libraryBatchMarkUnread)
-                }
-
-                // Download Dropdown
-                Box {
+                    // Change Category
                     FilledTonalButton(
-                        onClick = { downloadMenuOpen = true },
+                        onClick = onChangeCategories,
                         enabled = selectedCount > 0,
-                        modifier = Modifier.testTag("batch-download-button"),
+                        modifier = Modifier.testTag("batch-change-category"),
                     ) {
-                        Text(strings.libraryBatchDownload)
+                        Text(strings.libraryBatchChangeCategory)
                     }
 
-                    DropdownMenu(
-                        expanded = downloadMenuOpen,
-                        onDismissRequest = { downloadMenuOpen = false },
+                    // Mark Read
+                    FilledTonalButton(
+                        onClick = { onMarkRead(true) },
+                        enabled = selectedCount > 0,
+                        modifier = Modifier.testTag("batch-mark-read"),
                     ) {
-                        DropdownMenuItem(
-                            text = { Text(strings.libraryBatchDownloadNext1) },
-                            onClick = {
-                                downloadMenuOpen = false
-                                onDownloadChapters(1)
-                            },
-                            modifier = Modifier.testTag("batch-download-next1"),
-                        )
-                        DropdownMenuItem(
-                            text = { Text(strings.libraryBatchDownloadNext5) },
-                            onClick = {
-                                downloadMenuOpen = false
-                                onDownloadChapters(5)
-                            },
-                            modifier = Modifier.testTag("batch-download-next5"),
-                        )
-                        DropdownMenuItem(
-                            text = { Text(strings.libraryBatchDownloadAllUnread) },
-                            onClick = {
-                                downloadMenuOpen = false
-                                onDownloadChapters(-1)
-                            },
-                            modifier = Modifier.testTag("batch-download-all-unread"),
-                        )
+                        Text(strings.libraryBatchMarkRead)
+                    }
+
+                    // Mark Unread
+                    FilledTonalButton(
+                        onClick = { onMarkRead(false) },
+                        enabled = selectedCount > 0,
+                        modifier = Modifier.testTag("batch-mark-unread"),
+                    ) {
+                        Text(strings.libraryBatchMarkUnread)
+                    }
+
+                    // Download Dropdown
+                    Box {
+                        FilledTonalButton(
+                            onClick = { downloadMenuOpen = true },
+                            enabled = selectedCount > 0,
+                            modifier = Modifier.testTag("batch-download-button"),
+                        ) {
+                            Text(strings.libraryBatchDownload)
+                        }
+
+                        DropdownMenu(
+                            expanded = downloadMenuOpen,
+                            onDismissRequest = { downloadMenuOpen = false },
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text(strings.libraryBatchDownloadNext1) },
+                                onClick = {
+                                    downloadMenuOpen = false
+                                    onDownloadChapters(1)
+                                },
+                                modifier = Modifier.testTag("batch-download-next1"),
+                            )
+                            DropdownMenuItem(
+                                text = { Text(strings.libraryBatchDownloadNext5) },
+                                onClick = {
+                                    downloadMenuOpen = false
+                                    onDownloadChapters(5)
+                                },
+                                modifier = Modifier.testTag("batch-download-next5"),
+                            )
+                            DropdownMenuItem(
+                                text = { Text(strings.libraryBatchDownloadAllUnread) },
+                                onClick = {
+                                    downloadMenuOpen = false
+                                    onDownloadChapters(-1)
+                                },
+                                modifier = Modifier.testTag("batch-download-all-unread"),
+                            )
+                        }
+                    }
+
+                    // Remove from library
+                    Button(
+                        onClick = { confirmRemoveOpen = true },
+                        enabled = selectedCount > 0,
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                        modifier = Modifier.testTag("batch-remove-button"),
+                    ) {
+                        Text(strings.libraryBatchRemove)
                     }
                 }
-
-                // Remove from library
-                Button(
-                    onClick = { confirmRemoveOpen = true },
-                    enabled = selectedCount > 0,
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                    modifier = Modifier.testTag("batch-remove-button"),
-                ) {
-                    Text(strings.libraryBatchRemove)
-                }
-
-                // Done
+                Spacer(modifier = Modifier.width(8.dp))
+                // Done stays outside the scrolling actions so leaving selection never needs a scroll.
                 OutlinedButton(onClick = onExitSelection, modifier = Modifier.testTag("batch-exit-button")) {
                     Text(strings.libraryBatchDone)
                 }
