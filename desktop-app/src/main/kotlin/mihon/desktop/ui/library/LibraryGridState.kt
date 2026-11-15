@@ -1,7 +1,7 @@
 package mihon.desktop.ui.library
 
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -43,6 +43,7 @@ internal class LibraryGridState(
     private val duplicateDialog: StateFlow<DuplicateMangaDialogState?>,
     private val isBatchCategoryDialogOpen: StateFlow<Boolean>,
     private val scope: CoroutineScope,
+    private val ioDispatcher: CoroutineDispatcher,
 ) {
     private val categories: Flow<List<DesktopCategory>> = repository.observeCategories()
         .map { records ->
@@ -51,7 +52,7 @@ internal class LibraryGridState(
                 DesktopCategory(id = it.id, name = it.name, order = it.sortOrder, flags = it.flags)
             }
         }
-        .flowOn(Dispatchers.IO)
+        .flowOn(ioDispatcher)
 
     private val repositoryState: Flow<RepositoryState> = combine(
         retryRequest,
@@ -65,7 +66,7 @@ internal class LibraryGridState(
                     emit(RepositoryState.Failed(error.message ?: "Unable to load library"))
                 }
         }
-        .flowOn(Dispatchers.IO)
+        .flowOn(ioDispatcher)
         .onEach { result ->
             if (result is RepositoryState.Loaded) {
                 selectedMangaId.update { selected ->
@@ -186,7 +187,7 @@ internal class LibraryGridState(
             }
         }
     }
-        .flowOn(Dispatchers.IO)
+        .flowOn(ioDispatcher)
         .stateIn(
             scope = scope,
             started = SharingStarted.Eagerly,

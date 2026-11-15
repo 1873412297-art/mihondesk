@@ -1,6 +1,8 @@
 package mihon.desktop.ui.library
 
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -33,6 +35,8 @@ class LibraryPresenter(
     private val extensionStoreService: ExtensionStoreService? = null,
     private val mangaRefreshHandler: (suspend (Long) -> Unit)? = null,
     private val coverFailures: mihon.desktop.image.CoverFailureRegistry = mihon.desktop.image.CoverFailureRegistry(),
+    /** Where repository and download work runs; tests pass a test dispatcher. */
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : AutoCloseable {
     var mangaRefreshDelegate: (suspend (Long) -> Unit)? = mangaRefreshHandler
 
@@ -58,6 +62,7 @@ class LibraryPresenter(
         batchState = _batchState,
         onSelectionCleared = { clearSelection() },
         onBatchFinished = { retry() },
+        ioDispatcher = ioDispatcher,
     )
 
     private val detailActions = MangaDetailMutations(
@@ -71,6 +76,7 @@ class LibraryPresenter(
         onChanged = { detailRetryRequest.value = System.currentTimeMillis() },
         onEditInfoClosed = { isEditInfoDialogOpenState.value = false },
         onLibraryChanged = { retry() },
+        ioDispatcher = ioDispatcher,
     )
 
     private val duplicates = DuplicateMangaWatcher(
@@ -79,6 +85,7 @@ class LibraryPresenter(
         mutationPort = mutationPort,
         selectedCategoryId = selectedCategoryId,
         onMigrated = { retry() },
+        ioDispatcher = ioDispatcher,
     )
     private val selection = LibrarySelection()
 
@@ -103,6 +110,7 @@ class LibraryPresenter(
         duplicateDialog = duplicates.dialogState,
         isBatchCategoryDialogOpen = isBatchCategoryDialogOpenState,
         scope = presenterScope,
+        ioDispatcher = ioDispatcher,
     )
 
     val state: StateFlow<LibraryUiState> = gridState.state
@@ -117,6 +125,7 @@ class LibraryPresenter(
         retryRequest = retryRequest,
         detailRetryRequest = detailRetryRequest,
         items = { state.value.items },
+        ioDispatcher = ioDispatcher,
     )
 
     private val isEditInfoDialogOpenState = MutableStateFlow(false)
@@ -124,7 +133,7 @@ class LibraryPresenter(
     private val isReadingSettingsDialogOpenState = MutableStateFlow(false)
     private val ignoredMissingSourceMangaIds = MutableStateFlow<Set<Long>>(emptySet())
     private val cachedAvailableExtensions = MutableStateFlow<List<ExtensionStoreItem>>(emptyList())
-    private val chapterSettings = ChapterSettingsCoordinator(
+    internal val chapterSettings = ChapterSettingsCoordinator(
         scope = presenterScope,
         repository = repository,
         mutationPort = mutationPort,
@@ -132,6 +141,7 @@ class LibraryPresenter(
         detailMangaId = { detailMangaId.value },
         detailManga = { detailState.value.manga },
         onPersisted = { detailRetryRequest.value = System.currentTimeMillis() },
+        ioDispatcher = ioDispatcher,
     )
 
     private val detailStateFlow = MangaDetailState(
@@ -151,6 +161,7 @@ class LibraryPresenter(
         isEditInfoDialogOpen = isEditInfoDialogOpenState,
         isChapterSettingsDialogOpen = isChapterSettingsDialogOpenState,
         isReadingSettingsDialogOpen = isReadingSettingsDialogOpenState,
+        ioDispatcher = ioDispatcher,
     )
 
     val detailState: StateFlow<MangaDetailUiState> = detailStateFlow.detailState
@@ -171,6 +182,7 @@ class LibraryPresenter(
         refreshDetails = { refreshDetails() },
         refreshDelegate = { mangaRefreshDelegate },
         coverFailures = coverFailures,
+        ioDispatcher = ioDispatcher,
     )
 
     val isRepairingCovers: StateFlow<Boolean> = coverRepair.isRepairingCovers
@@ -193,34 +205,6 @@ class LibraryPresenter(
         cachedAvailableExtensions.value = extensions
     }
 
-    fun setChapterFilter(filter: ChapterFilterState) {
-        chapterSettings.updateCurrent { current ->
-            current.copy(
-                unreadFilter = filter.unread,
-                downloadedFilter = filter.downloaded,
-                bookmarkedFilter = filter.bookmarked,
-            )
-        }
-    }
-
-    fun setChapterSort(sort: ChapterSortState) {
-        chapterSettings.updateCurrent { current ->
-            current.copy(sortMode = sort.mode, sortAscending = sort.ascending)
-        }
-    }
-
-    fun setChapterDisplayMode(mode: ChapterDisplayMode) {
-        chapterSettings.updateCurrent { it.copy(displayMode = mode) }
-    }
-
-    fun setExcludedScanlators(excludedScanlators: Set<String>) {
-        chapterSettings.updateCurrent { it.copy(excludedScanlators = excludedScanlators) }
-    }
-
-    fun setShowMissingChapters(show: Boolean) {
-        chapterSettings.updateCurrent { it.copy(showMissingChapters = show) }
-    }
-
     fun setChapterSettingsDialogOpen(open: Boolean) {
         isChapterSettingsDialogOpenState.value = open
     }
@@ -228,14 +212,6 @@ class LibraryPresenter(
     fun setReadingSettingsDialogOpen(open: Boolean) {
         isReadingSettingsDialogOpenState.value = open
     }
-
-    fun saveReadingSettingsOverride(override: MangaReaderSettingsOverride) = chapterSettings.saveOverride(override)
-
-    fun clearReadingSettingsOverride() = chapterSettings.clearOverride()
-
-    fun setChapterSettingsAsDefault(applyToExisting: Boolean) = chapterSettings.setAsDefault(applyToExisting)
-
-    fun resetChapterSettingsToDefault() = chapterSettings.resetToDefault()
 
     fun dismissDuplicateDialog() = duplicates.advance(markDismissed = true)
 

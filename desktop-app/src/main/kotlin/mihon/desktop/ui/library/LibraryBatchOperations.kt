@@ -1,8 +1,8 @@
 package mihon.desktop.ui.library
 
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -22,6 +22,7 @@ internal class LibraryBatchOperations(
     private val batchState: MutableStateFlow<LibraryBatchState>,
     private val onSelectionCleared: () -> Unit,
     private val onBatchFinished: () -> Unit,
+    private val ioDispatcher: CoroutineDispatcher,
 ) {
     private val lock = AtomicBoolean(false)
 
@@ -50,7 +51,7 @@ internal class LibraryBatchOperations(
     fun download(chaptersCount: Int) {
         val dl = downloader ?: return
         val selected = selected()
-        scope.launch(Dispatchers.IO) {
+        scope.launch(ioDispatcher) {
             val allManga = repository.librarySnapshot(null).associateBy { it.id }
             for (mangaId in selected) {
                 val manga = allManga[mangaId] ?: continue
@@ -149,7 +150,7 @@ internal class LibraryBatchOperations(
 
     fun downloadMangaChapters(mangaId: Long, amount: Int = 1) {
         val dl = downloader ?: return
-        scope.launch(Dispatchers.IO) {
+        scope.launch(ioDispatcher) {
             val allManga = repository.librarySnapshot(null).associateBy { it.id }
             val manga = allManga[mangaId] ?: return@launch
             val chapters = repository.chapterSnapshot(mangaId).filter { !it.read }
@@ -164,7 +165,7 @@ internal class LibraryBatchOperations(
         val mutations = mutationPort ?: return
         if (selected.isEmpty() || !lock.compareAndSet(false, true)) return
         batchState.value = LibraryBatchState(running = true, total = selected.size)
-        scope.launch(Dispatchers.IO) {
+        scope.launch(ioDispatcher) {
             try {
                 val context = kotlinx.coroutines.currentCoroutineContext()
                 mutations.transaction {

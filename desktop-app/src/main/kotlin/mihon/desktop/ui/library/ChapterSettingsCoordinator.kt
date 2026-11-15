@@ -1,7 +1,7 @@
 package mihon.desktop.ui.library
 
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
@@ -25,6 +25,7 @@ internal class ChapterSettingsCoordinator(
     private val detailMangaId: () -> Long?,
     private val detailManga: () -> MangaDetails?,
     private val onPersisted: () -> Unit,
+    private val ioDispatcher: CoroutineDispatcher,
 ) : AutoCloseable {
     val overrides = MutableStateFlow(ChapterSettingsOverrides())
 
@@ -35,7 +36,7 @@ internal class ChapterSettingsCoordinator(
 
     fun saveOverride(override: MangaReaderSettingsOverride) {
         val mangaId = detailMangaId() ?: return
-        scope.launch(Dispatchers.IO) {
+        scope.launch(ioDispatcher) {
             val currentManga = runCatching { repository.mangaSnapshot(mangaId) }.getOrNull()
                 ?: detailManga()?.takeIf { it.id == mangaId }
                 ?: return@launch
@@ -55,7 +56,7 @@ internal class ChapterSettingsCoordinator(
 
     fun clearOverride() {
         val mangaId = detailMangaId() ?: return
-        scope.launch(Dispatchers.IO) {
+        scope.launch(ioDispatcher) {
             val currentManga = runCatching { repository.mangaSnapshot(mangaId) }.getOrNull()
                 ?: detailManga()?.takeIf { it.id == mangaId }
                 ?: return@launch
@@ -85,7 +86,7 @@ internal class ChapterSettingsCoordinator(
             }
         }
         if (applyToExisting || inMemorySettings == null) {
-            scope.launch(Dispatchers.IO) {
+            scope.launch(ioDispatcher) {
                 val settings = inMemorySettings ?: currentChapterSettings(mangaId)
                 if (inMemorySettings == null) {
                     preferences?.update {
@@ -132,7 +133,7 @@ internal class ChapterSettingsCoordinator(
     private val writes = Channel<Pair<Long, ChapterSettings>>(Channel.UNLIMITED)
 
     init {
-        scope.launch(Dispatchers.IO) {
+        scope.launch(ioDispatcher) {
             for ((mangaId, settings) in writes) {
                 persistChapterSettings(mangaId, settings)
             }

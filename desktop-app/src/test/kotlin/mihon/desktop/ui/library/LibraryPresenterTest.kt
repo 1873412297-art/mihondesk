@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.withTimeout
 import mihon.desktop.extension.DesktopSourceManager
 import mihon.desktop.extension.builtin.BundledLocalSource
@@ -54,6 +55,26 @@ class LibraryPresenterTest {
 
         presenter.awaitState { !it.loading && it.items.size == 2 }.items.map(LibraryManga::id)
             .shouldContainExactly(2L, 1L)
+        presenter.close()
+    }
+
+    @Test
+    fun `an injected test dispatcher makes the presenter run on virtual time`() = kotlinx.coroutines.test.runTest {
+        val rows = MutableStateFlow(listOf(manga(1, "Alpha"), manga(2, "Beta")))
+        val presenter = LibraryPresenter(
+            repository = FakeLibraryRepository { rows },
+            scope = backgroundScope,
+            ioDispatcher = kotlinx.coroutines.test.StandardTestDispatcher(testScheduler),
+        )
+
+        // No polling or wall-clock waits: running the scheduler settles every load.
+        runCurrent()
+        presenter.state.value.loading shouldBe false
+        presenter.state.value.items.map(LibraryManga::id).shouldContainExactly(1L, 2L)
+
+        presenter.setQuery("beta")
+        runCurrent()
+        presenter.state.value.items.single().id shouldBe 2L
         presenter.close()
     }
 

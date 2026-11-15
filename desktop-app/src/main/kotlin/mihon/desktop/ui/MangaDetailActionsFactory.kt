@@ -17,6 +17,15 @@ import mihon.desktop.ui.common.formatNetworkErrorMessage
 import mihon.desktop.ui.library.LibraryPresenter
 import mihon.desktop.ui.library.MangaDetailActions
 import mihon.desktop.ui.library.MangaDetailUiState
+import mihon.desktop.ui.library.clearReadingSettingsOverride
+import mihon.desktop.ui.library.resetChapterSettingsToDefault
+import mihon.desktop.ui.library.saveReadingSettingsOverride
+import mihon.desktop.ui.library.setChapterDisplayMode
+import mihon.desktop.ui.library.setChapterFilter
+import mihon.desktop.ui.library.setChapterSettingsAsDefault
+import mihon.desktop.ui.library.setChapterSort
+import mihon.desktop.ui.library.setExcludedScanlators
+import mihon.desktop.ui.library.setShowMissingChapters
 
 /** Detail callbacks shared by library and Browse, including consistent undo recovery. */
 internal fun mangaDetailActions(

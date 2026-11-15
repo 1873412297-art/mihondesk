@@ -1,8 +1,8 @@
 package mihon.desktop.ui.library
 
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,6 +25,7 @@ internal class CoverRepair(
     private val refreshDetails: () -> Unit,
     private val refreshDelegate: () -> (suspend (Long) -> Unit)?,
     private val coverFailures: CoverFailureRegistry = CoverFailureRegistry(),
+    private val ioDispatcher: CoroutineDispatcher,
 ) : AutoCloseable {
     private val autoRefreshedMangaIds: MutableSet<Long> = Collections.synchronizedSet(mutableSetOf<Long>())
     private var job: Job? = null
@@ -39,7 +40,7 @@ internal class CoverRepair(
             detailManga != null -> detailManga.id
             else -> return
         }
-        scope.launch(Dispatchers.IO) {
+        scope.launch(ioDispatcher) {
             val sourceId = when {
                 detailManga != null && detailManga.id == mangaId -> detailManga.sourceId
                 else -> repository.allMangaSnapshot().find { it.id == mangaId }?.sourceId ?: return@launch

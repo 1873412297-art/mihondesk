@@ -1,7 +1,7 @@
 package mihon.desktop.ui.library
 
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -24,10 +24,11 @@ internal class MangaDetailMutations(
     private val onChanged: () -> Unit,
     private val onEditInfoClosed: () -> Unit,
     private val onLibraryChanged: () -> Unit,
+    private val ioDispatcher: CoroutineDispatcher,
 ) {
     fun toggleChapterBookmark(chapterId: Long) {
         val mangaId = detailMangaId() ?: return
-        scope.launch(Dispatchers.IO) {
+        scope.launch(ioDispatcher) {
             val chapter = repository.chapterSnapshot(mangaId).find { it.id == chapterId } ?: return@launch
             val updated = chapter.copy(bookmark = !chapter.bookmark)
             mutationPort?.updateChapter(updated.toChapterRecord())
@@ -37,7 +38,7 @@ internal class MangaDetailMutations(
 
     fun toggleChapterRead(chapterId: Long) {
         val mangaId = detailMangaId() ?: return
-        scope.launch(Dispatchers.IO) {
+        scope.launch(ioDispatcher) {
             val chapter = repository.chapterSnapshot(mangaId).find { it.id == chapterId } ?: return@launch
             val newRead = !chapter.read
             val updated = chapter.copy(
@@ -52,7 +53,7 @@ internal class MangaDetailMutations(
 
     fun batchBookmarkChapters(chapterIds: Set<Long>, bookmark: Boolean) {
         val mangaId = detailMangaId() ?: return
-        scope.launch(Dispatchers.IO) {
+        scope.launch(ioDispatcher) {
             val currentChapters = repository.chapterSnapshot(mangaId)
             val toUpdate = currentChapters.filter { it.id in chapterIds && it.bookmark != bookmark }
             if (toUpdate.isEmpty()) return@launch
@@ -67,7 +68,7 @@ internal class MangaDetailMutations(
 
     fun batchMarkChaptersRead(chapterIds: Set<Long>, read: Boolean) {
         val mangaId = detailMangaId() ?: return
-        scope.launch(Dispatchers.IO) {
+        scope.launch(ioDispatcher) {
             val currentChapters = repository.chapterSnapshot(mangaId)
             val toUpdate = currentChapters.filter { it.id in chapterIds && it.read != read }
             if (toUpdate.isEmpty()) return@launch
@@ -106,7 +107,7 @@ internal class MangaDetailMutations(
 
     fun markPreviousChaptersRead(chapterId: Long) {
         val mangaId = detailMangaId() ?: return
-        scope.launch(Dispatchers.IO) {
+        scope.launch(ioDispatcher) {
             val currentChapters = repository.chapterSnapshot(mangaId)
             val target = currentChapters.find { it.id == chapterId } ?: return@launch
             val now = System.currentTimeMillis()
@@ -159,7 +160,7 @@ internal class MangaDetailMutations(
 
     /** Marks a chapter read from surfaces that do not have the detail page open (e.g. Updates). */
     fun markChapterRead(mangaId: Long, chapterId: Long) {
-        scope.launch(Dispatchers.IO) {
+        scope.launch(ioDispatcher) {
             val chapter = repository.chapterSnapshot(mangaId).find { it.id == chapterId } ?: return@launch
             if (chapter.read) return@launch
             mutationPort?.updateChapter(
@@ -170,7 +171,7 @@ internal class MangaDetailMutations(
 
     /** Enqueues a chapter download from surfaces that do not have the detail page open. */
     fun enqueueChapterDownload(mangaId: Long, chapterId: Long) {
-        scope.launch(Dispatchers.IO) {
+        scope.launch(ioDispatcher) {
             val manga = repository.librarySnapshot().firstOrNull { it.id == mangaId } ?: return@launch
             val chapter = repository.chapterSnapshot(mangaId).find { it.id == chapterId } ?: return@launch
             downloader?.enqueue(
@@ -192,7 +193,7 @@ internal class MangaDetailMutations(
         status: Long,
         notes: String,
     ) {
-        scope.launch(Dispatchers.IO) {
+        scope.launch(ioDispatcher) {
             val existing = repository.allMangaSnapshot().find { it.id == mangaId } ?: return@launch
             val genreJson = Json.encodeToString(genres)
             val now = System.currentTimeMillis()
@@ -213,7 +214,7 @@ internal class MangaDetailMutations(
     }
 
     fun resetMangaInfo(mangaId: Long) {
-        scope.launch(Dispatchers.IO) {
+        scope.launch(ioDispatcher) {
             val existing = repository.allMangaSnapshot().find { it.id == mangaId } ?: return@launch
             val now = System.currentTimeMillis()
             val updated = existing.copy(
@@ -250,7 +251,7 @@ internal class MangaDetailMutations(
             onResult(false)
             return
         }
-        scope.launch(Dispatchers.IO) {
+        scope.launch(ioDispatcher) {
             val success = runSuspendCatching {
                 val record = repository.allMangaSnapshot().firstOrNull { it.id == mangaId }
                     ?: return@runSuspendCatching false

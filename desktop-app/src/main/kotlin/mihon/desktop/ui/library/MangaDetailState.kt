@@ -1,7 +1,7 @@
 package mihon.desktop.ui.library
 
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -50,6 +50,7 @@ internal class MangaDetailState(
     private val isEditInfoDialogOpen: StateFlow<Boolean>,
     private val isChapterSettingsDialogOpen: StateFlow<Boolean>,
     private val isReadingSettingsDialogOpen: StateFlow<Boolean>,
+    private val ioDispatcher: CoroutineDispatcher,
 ) {
     // Shared so the detail state and the missing-source detector observe ONE upstream
     // subscription - two cold collectors would race over the retry signal and starve
@@ -86,7 +87,7 @@ internal class MangaDetailState(
                     }
             }
         }
-        .flowOn(Dispatchers.IO)
+        .flowOn(ioDispatcher)
         .onEach { result ->
             if (result is SelectedRepositoryState.Loaded && result.selectedId != null && result.manga == null) {
                 detailMangaId.compareAndSet(result.selectedId, null)
@@ -141,7 +142,7 @@ internal class MangaDetailState(
                 extension = ext,
             )
         }
-    }.flowOn(Dispatchers.IO)
+    }.flowOn(ioDispatcher)
 
     val detailState: StateFlow<MangaDetailUiState> = combine(
         selectedRepositoryState,
@@ -224,7 +225,7 @@ internal class MangaDetailState(
             }
         }
     }
-        .flowOn(Dispatchers.IO)
+        .flowOn(ioDispatcher)
         .stateIn(
             scope = scope,
             started = SharingStarted.Eagerly,

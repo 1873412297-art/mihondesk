@@ -1,7 +1,7 @@
 package mihon.desktop.ui.library
 
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.catch
@@ -24,6 +24,7 @@ internal class DuplicateMangaWatcher(
     private val mutationPort: LibraryMutationPort?,
     selectedCategoryId: Flow<Long>,
     private val onMigrated: () -> Unit,
+    private val ioDispatcher: CoroutineDispatcher,
 ) : AutoCloseable {
     val dialogState = MutableStateFlow<DuplicateMangaDialogState?>(null)
     private val lock = Any()
@@ -40,7 +41,7 @@ internal class DuplicateMangaWatcher(
                     emptyFlow()
                 } else {
                     repository.observeLibrary(null)
-                        .flowOn(Dispatchers.IO)
+                        .flowOn(ioDispatcher)
                         .catch { }
                 }
             }
@@ -148,7 +149,7 @@ internal class DuplicateMangaWatcher(
             return
         }
         // Migrating rewrites every chapter of the source manga, so it must not run on the UI thread.
-        scope.launch(Dispatchers.IO) {
+        scope.launch(ioDispatcher) {
             migrateManga(sourceMangaId, existingMangaId)
             onMigrated()
         }

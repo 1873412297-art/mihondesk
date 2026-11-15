@@ -1,7 +1,7 @@
 package mihon.desktop.ui.library
 
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -20,6 +20,7 @@ internal class LibraryCommands(
     private val retryRequest: MutableStateFlow<Long>,
     private val detailRetryRequest: MutableStateFlow<Long>,
     private val items: () -> List<LibraryManga>,
+    private val ioDispatcher: CoroutineDispatcher,
 ) {
     fun setQuery(value: String) {
         query.value = value
@@ -32,7 +33,7 @@ internal class LibraryCommands(
     fun continueReading(mangaId: Long, openChapter: (Long) -> Unit) {
         scope.launch {
             val chapterId = runCatching {
-                withContext(Dispatchers.IO) { nextChapterToRead(repository.chapterSnapshot(mangaId))?.id }
+                withContext(ioDispatcher) { nextChapterToRead(repository.chapterSnapshot(mangaId))?.id }
             }.getOrNull()
             if (chapterId != null) openChapter(chapterId)
         }
