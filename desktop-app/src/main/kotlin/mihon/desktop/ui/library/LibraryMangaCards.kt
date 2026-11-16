@@ -1,7 +1,6 @@
 package mihon.desktop.ui.library
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -45,6 +44,7 @@ import mihon.desktop.i18n.text
 import mihon.desktop.library.model.LibraryManga
 import mihon.desktop.ui.common.MangaCover
 import mihon.desktop.ui.common.coverHeaders
+import mihon.desktop.ui.motion.liftingClickable
 
 /**
  * In selection mode a card toggles membership instead of opening the manga, so expose that
@@ -88,7 +88,7 @@ internal fun ComfortableMangaCard(
         modifier = Modifier
             .fillMaxWidth()
             .testTag("library-item-${manga.id}")
-            .clickable(role = Role.Button, onClick = onClick)
+            .liftingClickable(onClick = onClick)
             .librarySelectionSemantics(isSelectionMode, isSelected, strings)
             .focusable(),
         color = containerColor,
@@ -196,7 +196,7 @@ internal fun CompactMangaCard(
             .fillMaxWidth()
             .aspectRatio(0.7f)
             .testTag("library-item-${manga.id}")
-            .clickable(role = Role.Button, onClick = onClick)
+            .liftingClickable(onClick = onClick)
             .librarySelectionSemantics(isSelectionMode, isSelected, LocalStrings.current),
         shape = RoundedCornerShape(10.dp),
         tonalElevation = if (isSelected) 6.dp else 2.dp,
@@ -299,7 +299,7 @@ internal fun CoverOnlyMangaCard(
             .fillMaxWidth()
             .aspectRatio(0.68f)
             .testTag("library-item-${manga.id}")
-            .clickable(role = Role.Button, onClick = onClick)
+            .liftingClickable(onClick = onClick)
             .librarySelectionSemantics(isSelectionMode, isSelected, LocalStrings.current),
         shape = RoundedCornerShape(8.dp),
         tonalElevation = if (isSelected) 6.dp else 1.dp,

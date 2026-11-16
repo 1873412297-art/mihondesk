@@ -23,6 +23,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -112,8 +113,24 @@ internal fun DetailPaneCard(
 ) {
     val focus = remember { androidx.compose.ui.focus.FocusRequester() }
     LaunchedEffect(selectedMangaId) { runCatching { focus.requestFocus() } }
+    // Slides in from the trailing edge when the pane opens; switching books inside it cross-fades.
+    val reduced = mihon.desktop.ui.motion.LocalReducedMotion.current
+    val appear = remember { androidx.compose.animation.core.Animatable(if (reduced) 1f else 0f) }
+    LaunchedEffect(Unit) {
+        appear.animateTo(
+            1f,
+            androidx.compose.animation.core.tween(
+                mihon.desktop.ui.motion.MotionTokens.LONG,
+                easing = mihon.desktop.ui.motion.MotionTokens.EmphasizedDecelerate,
+            ),
+        )
+    }
     Surface(
         modifier = modifier
+            .graphicsLayer {
+                alpha = appear.value
+                translationX = (1f - appear.value) * 48.dp.toPx()
+            }
             .focusRequester(focus)
             .focusable()
             .onPreviewKeyEvent { event ->

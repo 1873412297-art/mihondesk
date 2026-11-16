@@ -51,42 +51,58 @@ fun MangaDetailScreen(
     onOpenChapterInWebView: ((Long) -> Unit)? = null,
 ) {
     val strings = LocalStrings.current
+    val reduced = mihon.desktop.ui.motion.LocalReducedMotion.current
     Surface(
         modifier = modifier.testTag("manga-detail-pane"),
         color = MaterialTheme.colorScheme.surface,
     ) {
-        when {
-            state.loading -> DetailLoading(showBack, onBack)
-            state.errorMessage != null -> DetailMessage(
-                message = formatNetworkErrorMessage(state.errorMessage, strings),
-                tag = "manga-detail-error",
-                onBack = onBack,
-                showBack = showBack,
-                onRetry = onRetry,
-            )
-            state.manga == null -> DetailMessage(
-                message = strings.text(UiText.MangaRemoved),
-                tag = "manga-detail-missing",
-                onBack = onBack,
-                showBack = showBack,
-                onRetry = null,
-            )
-            else -> MangaDetailLoaded(
-                manga = state.manga,
-                state = state,
-                entry = MangaDetailEntry(
-                    sourceBaseUrl = sourceBaseUrl,
-                    showBack = showBack,
+        // Loading, error and content cross-fade instead of popping; each phase keeps drawing the state
+        // it was shown with while it fades out. Another manga is a new phase too.
+        androidx.compose.animation.AnimatedContent(
+            targetState = state,
+            transitionSpec = { mihon.desktop.ui.motion.crossFade(reduced) },
+            contentKey = ::detailPhase,
+            label = "detailPhase",
+        ) { state ->
+            when {
+                state.loading -> DetailLoading(showBack, onBack)
+                state.errorMessage != null -> DetailMessage(
+                    message = formatNetworkErrorMessage(state.errorMessage, strings),
+                    tag = "manga-detail-error",
                     onBack = onBack,
-                    onClose = onClose,
-                    onToggleLibrary = onToggleLibrary,
-                    onRefreshSource = onRefreshSource,
-                    isLibraryActionRunning = isLibraryActionRunning,
-                    isRefreshingSource = isRefreshingSource,
-                    onOpenChapterInWebView = onOpenChapterInWebView,
-                ),
-                actions = actions,
-            )
+                    showBack = showBack,
+                    onRetry = onRetry,
+                )
+                state.manga == null -> DetailMessage(
+                    message = strings.text(UiText.MangaRemoved),
+                    tag = "manga-detail-missing",
+                    onBack = onBack,
+                    showBack = showBack,
+                    onRetry = null,
+                )
+                else -> MangaDetailLoaded(
+                    manga = state.manga,
+                    state = state,
+                    entry = MangaDetailEntry(
+                        sourceBaseUrl = sourceBaseUrl,
+                        showBack = showBack,
+                        onBack = onBack,
+                        onClose = onClose,
+                        onToggleLibrary = onToggleLibrary,
+                        onRefreshSource = onRefreshSource,
+                        isLibraryActionRunning = isLibraryActionRunning,
+                        isRefreshingSource = isRefreshingSource,
+                        onOpenChapterInWebView = onOpenChapterInWebView,
+                    ),
+                    actions = actions,
+                )
+            }
         }
     }
+}
+
+private fun detailPhase(state: MangaDetailUiState): Any = when {
+    state.loading -> "loading"
+    state.errorMessage != null -> "error"
+    else -> state.manga?.id ?: "missing"
 }

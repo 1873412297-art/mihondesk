@@ -208,18 +208,20 @@ private fun AppDestinationRoute(
     }
     OnlineMangaCacheRetention(destination, live.mangaDetailState, runtime)
     val backupState by app.backup.state.collectAsState()
-    if (destination is DesktopDestination.Reader) {
-        ReaderRoute(
-            destination,
-            runtime,
-            live.mangaDetailState,
-            app.library,
-            app.navigator,
-            app.scope,
-            windowController,
-        )
-    } else {
-        MainShellRoute(ctx, destination, live, updates, app.upcoming, app.updates)
+    // Entering or leaving the reader cross-fades; chapter changes inside the reader and page changes
+    // inside the shell keep their own (or no) transitions because the key only says "reader or not".
+    val reduced = mihon.desktop.ui.motion.LocalReducedMotion.current
+    androidx.compose.animation.AnimatedContent(
+        targetState = destination,
+        transitionSpec = { mihon.desktop.ui.motion.crossFade(reduced) },
+        contentKey = { it is DesktopDestination.Reader },
+        label = "reader",
+    ) { target ->
+        if (target is DesktopDestination.Reader) {
+            ReaderRoute(target, runtime, live.mangaDetailState, app.library, app.navigator, app.scope, windowController)
+        } else {
+            MainShellRoute(ctx, target, live, updates, app.upcoming, app.updates)
+        }
     }
     MangaOrganizationDialogs(ctx, live.mangaDetailState, live.libraryState, live.categories)
     BackupDialogs(ctx, backupState)
