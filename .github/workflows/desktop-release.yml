@@ -15,6 +15,10 @@ on:
         description: Also build and attach the Apple Silicon DMG
         type: boolean
         default: true
+      replace:
+        description: Rebuild a version that already has a release (it is deleted, with its tag, only after the new build passed its checks)
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -31,6 +35,7 @@ jobs:
       contents: write
     env:
       VERSION: ${{ inputs.version }}
+      REPLACE: ${{ inputs.replace }}
       GH_TOKEN: ${{ github.token }}
     steps:
       - name: Checkout
@@ -46,7 +51,9 @@ jobs:
             throw "Missing docs/desktop-release-notes-$env:VERSION.md"
           }
           gh release view "v$env:VERSION" --repo $env:GITHUB_REPOSITORY *> $null
-          if ($LASTEXITCODE -eq 0) { throw "Release v$env:VERSION already exists (draft or published)" }
+          if ($LASTEXITCODE -eq 0 -and $env:REPLACE -ne 'true') {
+            throw "Release v$env:VERSION already exists (draft or published); rerun with replace to rebuild it"
+          }
           $global:LASTEXITCODE = 0
 
       - name: Set up JDK
@@ -93,6 +100,14 @@ jobs:
           $notes = $notes.TrimEnd() + "`n`n### 构建与验证`n`n本版安装包由 [发布构建]($run) 生成，同一构建中通过了发行包洁净检查、MSI 门禁、便携版冒烟与便携更新器故障注入测试。`n"
           Set-Content -LiteralPath release-notes.md -Value $notes -Encoding utf8NoBOM
           $files = Get-ChildItem -LiteralPath release-upload -File | ForEach-Object { $_.FullName }
+          if ($env:REPLACE -eq 'true') {
+            gh release view "v$env:VERSION" --repo $env:GITHUB_REPOSITORY *> $null
+            if ($LASTEXITCODE -eq 0) {
+              gh release delete "v$env:VERSION" --repo $env:GITHUB_REPOSITORY --cleanup-tag --yes
+              if ($LASTEXITCODE -ne 0) { throw 'Could not delete the release being replaced' }
+            }
+            $global:LASTEXITCODE = 0
+          }
           gh release create "v$env:VERSION" @files --repo $env:GITHUB_REPOSITORY --draft `
             --target $env:GITHUB_SHA --title "mihondesk $env:VERSION" --notes-file release-notes.md
           if ($LASTEXITCODE -ne 0) { throw 'gh release create failed' }
