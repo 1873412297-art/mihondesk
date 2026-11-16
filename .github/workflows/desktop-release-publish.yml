@@ -1,0 +1,40 @@
+name: Desktop release (publish)
+# Publishes the draft made by desktop-release.yml as the latest release, then runs
+# scripts/verify-release-assets.ps1 (checklist 2D) against the published release.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version whose draft release to publish (e.g. 0.5.0)
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-release
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ inputs.version }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Publish the draft as the latest release
+        run: |
+          set -euo pipefail
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Not a version: $VERSION"; exit 1; }
+          draft=$(gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)
+          [ "$draft" = "true" ] || { echo "v$VERSION is not a draft (already published?)"; exit 1; }
+          gh release edit "v$VERSION" --repo "$GITHUB_REPOSITORY" --draft=false --latest
+
+      - name: Verify release assets (2D)
+        shell: pwsh
+        run: ./scripts/verify-release-assets.ps1 -Tag "v$env:VERSION" -Repository $env:GITHUB_REPOSITORY
