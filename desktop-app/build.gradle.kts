@@ -270,7 +270,7 @@ compose.desktop {
             targetFormats(TargetFormat.Exe, TargetFormat.Msi, TargetFormat.Dmg)
             packageName = "mihondesk"
             // jpackage's macOS bundler rejects a leading zero in app-version; the app's own
-            // version resource remains desktopVersion (0.4.0).
+            // version resource remains desktopVersion (desktop-version.txt).
             packageVersion = if (System.getProperty("os.name").orEmpty().startsWith("Mac", ignoreCase = true)) {
                 "1.0.0"
             } else {
