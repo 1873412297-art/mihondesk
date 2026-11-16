@@ -14,6 +14,10 @@ on:
         description: Write the companion section into the release notes
         type: boolean
         default: true
+      from_tag:
+        description: Copy the companion APKs already attached to this release (e.g. v0.4.0) instead of using mobile-companion/dist/
+        required: false
+        default: ''
 
 permissions:
   contents: write
@@ -24,6 +28,16 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Copy APKs from another release
+        if: inputs.from_tag != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FROM_TAG: ${{ inputs.from_tag }}
+        run: |
+          # The same signed files, byte for byte, so installs keep updating in place.
+          mkdir -p mobile-companion/dist
+          gh release download "$FROM_TAG" --pattern 'mihondesk-companion-*.apk' --dir mobile-companion/dist --clobber
 
       - name: Upload APKs
         env:
