@@ -1,6 +1,7 @@
 name: Attach companion APK to release
 # Manually attaches the prebuilt Android companion APKs in mobile-companion/dist/ to an existing
-# release. The APKs are signed outside CI, so this workflow only uploads them.
+# release and writes the companion section of its notes from mobile-companion/RELEASE_NOTES.md.
+# The APKs are signed outside CI, so this workflow only uploads them.
 on:
   workflow_dispatch:
     inputs:
@@ -8,6 +9,10 @@ on:
         description: Release tag to attach the APKs to
         required: true
         default: v0.4.0
+      update_notes:
+        description: Write the companion section into the release notes
+        type: boolean
+        default: true
 
 permissions:
   contents: write
@@ -26,3 +31,24 @@ jobs:
         run: |
           ls -l mobile-companion/dist/*.apk
           gh release upload "$TAG" mobile-companion/dist/*.apk --clobber
+
+      - name: Update release notes
+        if: inputs.update_notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          begin='<!-- companion-notes:begin -->'
+          end='<!-- companion-notes:end -->'
+          gh release view "$TAG" --json body --jq .body > body.md
+          # Drop a previous companion section so re-runs replace it instead of appending twice.
+          awk -v b="$begin" -v e="$end" '$0==b{skip=1} !skip{print} $0==e{skip=0}' body.md > rest.md
+          {
+            sed -e :a -e '/^\n*$/{$d;N;ba' -e '}' rest.md
+            printf '\n\n%s\n' "$begin"
+            cat mobile-companion/RELEASE_NOTES.md
+            printf '\n**SHA-256**\n\n```\n'
+            (cd mobile-companion/dist && sha256sum *.apk)
+            printf '```\n%s\n' "$end"
+          } > notes.md
+          gh release edit "$TAG" --notes-file notes.md
