@@ -6,168 +6,73 @@
 
 **从书架到每一页，在 Windows 上阅读漫画。**
 
-AI 辅助开发的开源项目 · 基于 Mihon · Kotlin / Compose Desktop
-
-![AI 辅助开发项目](https://img.shields.io/badge/AI-assisted%20development-B0623B)
+基于 Mihon 的桌面漫画阅读器 · Kotlin / Compose Desktop · AI 辅助开发
 
 [![最新版本](https://img.shields.io/github/v/release/1873412297-art/mihondesk?label=Release&color=B0623B)](https://github.com/1873412297-art/mihondesk/releases/latest)
 [![下载量](https://img.shields.io/github/downloads/1873412297-art/mihondesk/total?label=Downloads&color=B0623B)](https://github.com/1873412297-art/mihondesk/releases)
 ![Windows x64](https://img.shields.io/badge/Windows-x64-B0623B)
 [![Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-64748b)](LICENSE)
 
-**[下载 Windows 版](https://github.com/1873412297-art/mihondesk/releases/latest)** · [更新日志](CHANGELOG.md) · [使用说明](docs/WINDOWS_RELEASE.md) · [反馈问题](https://github.com/1873412297-art/mihondesk/issues/new/choose)
+**[下载最新版](https://github.com/1873412297-art/mihondesk/releases/latest)** · [更新日志](CHANGELOG.md) · [反馈问题](https://github.com/1873412297-art/mihondesk/issues/new/choose)
 
 </div>
 
-**AI 项目说明**：本仓库的 Windows 移植、功能迭代、问题修复和文档维护使用 AI 编程助手协助完成。上游 Mihon、Suwayomi 及其他第三方项目的贡献与许可归属见文末。
+## 下载
 
-## 下载与安装
+当前版本 **0.5.0**，支持 Windows 10 22H2 / Windows 11（x64），已内置 Java 运行时，无需另装。
 
-当前版本：**0.5.0**。Windows 面向 **Windows 10 22H2 / Windows 11，x64**，发行包已内置 JetBrains Runtime 21（JBR），无需另装 Java；另提供 macOS（Apple Silicon）DMG。
-
-程序、安装包和快捷方式现已统一命名为 **mihondesk**。安装版继续使用原有数据目录，支持从 MihonW 升级。
-
-| 下载 | 适用方式 |
+| 下载 | 说明 |
 | --- | --- |
-| **[EXE 安装包](https://github.com/1873412297-art/mihondesk/releases/download/v0.5.0/mihondesk-0.5.0.exe)** | 推荐使用，下载后按向导安装 |
-| [MSI 安装包](https://github.com/1873412297-art/mihondesk/releases/download/v0.5.0/mihondesk-0.5.0.msi) | 需要 MSI 安装方式时使用 |
-| [便携 ZIP](https://github.com/1873412297-art/mihondesk/releases/download/v0.5.0/mihondesk-0.5.0-windows-x64-portable.zip) | 完整解压到可写目录，运行其中的 `mihondesk.exe` |
-| [macOS DMG（Apple Silicon）](https://github.com/1873412297-art/mihondesk/releases/download/v0.5.0/mihondesk-0.5.0-macos-arm64.dmg) | 未签名的 arm64 构建；首次打开请在 Finder 中右键“打开” |
-| [SHA-256 校验文件](https://github.com/1873412297-art/mihondesk/releases/download/v0.5.0/SHA256SUMS.txt) | 校验下载文件的完整性 |
+| **[EXE 安装包](https://github.com/1873412297-art/mihondesk/releases/download/v0.5.0/mihondesk-0.5.0.exe)** | 推荐，按向导安装 |
+| [MSI 安装包](https://github.com/1873412297-art/mihondesk/releases/download/v0.5.0/mihondesk-0.5.0.msi) | 需要 MSI 时使用 |
+| [便携 ZIP](https://github.com/1873412297-art/mihondesk/releases/download/v0.5.0/mihondesk-0.5.0-windows-x64-portable.zip) | 解压到可写目录后运行 `mihondesk.exe` |
+| [macOS DMG](https://github.com/1873412297-art/mihondesk/releases/download/v0.5.0/mihondesk-0.5.0-macos-arm64.dmg) | Apple Silicon，未签名；首次打开请在 Finder 中右键“打开” |
 
-**首次使用**：发行包不预装在线图源或扩展仓库，请自行添加仓库或安装扩展。本地文件阅读无需安装图源。升级会保留已有书架、设置和阅读数据。
-
-安装版默认将数据保存在 `%APPDATA%\MihonW`；便携版保存在 `mihondesk.exe` 同目录下的 `data` 文件夹。迁移便携版时请一并保留该文件夹。
+可用 [SHA256SUMS.txt](https://github.com/1873412297-art/mihondesk/releases/download/v0.5.0/SHA256SUMS.txt) 校验下载文件。装好后，新版本发布时应用会自动提醒。
 
 ## 界面预览
 
-| 浏览：图源（扩展图标、语言分组、星标固定） | 设置：分组侧栏与即时生效选项 |
+| 浏览图源 | 设置 |
 | --- | --- |
 | <img src="docs/images/browse-sources.png" alt="mihondesk 浏览页图源列表" width="100%" /> | <img src="docs/images/settings.png" alt="mihondesk 设置页（深色主题）" width="100%" /> |
 
-## 可以做什么
+## 功能
 
-| 功能 | 说明 |
-| --- | --- |
-| 本地阅读 | 导入图片目录，以及 ZIP / CBZ、RAR / CBR、7z / CB7、TAR 和图片型 EPUB 等文件 |
-| 桌面阅读器 | 单页、双页、纵向和条漫模式，阅读方向切换、缩放、键盘与鼠标操作；阅读中直达书籍详情 |
-| 书架管理 | 分类、搜索、阅读进度和历史；在线漫画通过明确的加入书架操作收藏 |
-| 图源浏览 | 安装扩展，浏览、搜索漫画并查看章节；卡片式图源 / 扩展列表显示真实扩展图标（安装时从 APK 解析）；支持部分 Mihon / Tachiyomi 扩展的转换与兼容运行 |
-| 离线与更新 | 章节下载、下载队列恢复、从下载页直接阅读已完成内容，以及书库章节更新 |
-| 备份与恢复 | 导入、导出 Mihon 兼容备份；具体字段支持范围见下方兼容说明 |
-| 界面与操作 | 浅色 / 深色 / AMOLED 主题与 Ink 配色、可折叠导航栏、界面密度、可自定义键盘快捷键、简体 / 繁体中文与英文界面 |
-| 书架同步 | 通过 Google Drive 中仅本应用可见的文件夹，同步书架、分类和阅读进度。桌面端在浏览器登录，手机端使用系统账号授权（手机端见 [mihondesk 伴侣](mobile-companion/README.md)，也可导入 / 导出 Mihon 备份） |
+- **本地阅读**：图片目录，以及 ZIP / CBZ、RAR / CBR、7z / CB7、TAR 和图片型 EPUB。
+- **阅读器**：单页、双页、纵向与条漫模式，键盘和鼠标操作，缩放与滤镜。
+- **书架**：分类、搜索、阅读进度与历史，书架更新与章节下载。
+- **在线图源**：安装扩展浏览和搜索，兼容部分 Mihon / Tachiyomi 扩展。
+- **备份与同步**：导入、导出 Mihon 兼容备份；通过 Google Drive 同步书架和阅读进度，手机端见 [Android 伴侣应用](mobile-companion/README.md)。
+- **界面**：浅色 / 深色 / AMOLED 主题、可自定义快捷键，简体中文、繁体中文与英文界面。
 
 ## 开始使用
 
-1. **安装或解压程序**，运行 `mihondesk.exe`。
-2. **阅读本地文件**：使用本地导入入口选择漫画文件或图片目录。
-3. **阅读在线内容**：在浏览页安装扩展包，再选择图源。安装入口支持 `.mext`，也可尝试转换受支持的扩展 `.apk`。
-4. **保留阅读数据**：使用备份功能定期导出。备份不包含已下载的漫画图片。
+1. 安装或解压后运行 `mihondesk.exe`。
+2. 阅读本地漫画：使用本地导入选择文件或图片目录。
+3. 阅读在线漫画：发行包不预装图源，请在浏览页添加扩展仓库或安装扩展。
+4. 定期导出备份。备份不包含已下载的图片。
 
-## 0.5.0 更新
-
-- **新版本提醒**：启动后和每天检查一次新版本，发现后弹出系统通知，并在活动中心和「设置 → 关于」里提示；只提醒、不自动下载，可以关闭。更新卡片会显示这一版的更新内容；
-- **界面与动效**：切换页面、进出阅读器、打开详情侧栏都有过渡动画，书架卡片悬停时轻微浮起；各页面标题对齐，书架工具栏更紧凑。Windows 关闭「显示动画」时一律跳过；
-- **稳定性**：取消操作不再被吞掉后继续执行；浏览器相关调用设置上限，不会无限等待；失败会写入日志；
-- **Android 伴侣应用（测试版）**：通过 Google Drive 与桌面端同步书架和阅读进度。
-
-详见[本版发布说明](https://github.com/1873412297-art/mihondesk/releases/tag/v0.5.0)和[更新日志](CHANGELOG.md)。
-
-## 0.4.0 更新
-
-- **架构与质量**：桌面端所有 Kotlin 文件重新拆分到 400 行以内，设置、书库、阅读器、下载与扩展逻辑按职责拆到独立文件；新增 detekt、文件长度门禁和编码约束；
-- **安全**：拒绝扩展包 ZIP 路径穿越；签名包内所有条目必须由同一签名者签名；扩展宿主与父进程共享受限的 broker 临时目录；扩展包解压上限改为流式检查，避免压缩炸弹；
-- **稳定性**：修复下载队列保存死锁、取消/暂停仍发布章节、孤儿清理误删已登记下载、分片缺尾、阅读器打开失败后重试上一章、单飞取消悬挂、输入流与内存租约泄漏、后台任务开关竞态、Drive 同步 busy 卡死、自动备份与延迟启动静默失败；
-- **体验**：切换章节清理旧解码缓存、双页设置即时生效、命令面板 NSFW 过滤失败时保守隐藏、分类 ID 输入框不再吞分隔符、标题栏无障碍文案跟随语言、清理图片缓存不再删除浏览器数据与运行时文件。
-
-详见[本版发布说明](https://github.com/1873412297-art/mihondesk/releases/tag/v0.4.0)和[更新日志](CHANGELOG.md)。
-
-## 0.3.26 更新
-
-- **图源网页**：登录过程中的跳转不再把窗口关掉。登录留下的 Cookie 会记住，之后的请求继续带上。扩展只给了残缺的 User-Agent（只有 `Mozilla/5.0`）时，改用完整的浏览器标识，避免网站直接拒绝访问；
-- **阅读器**：翻到上一话或下一话时不再整章重开，往回翻会落在上一话的最后一页。当前漫画的在线图片会临时缓存下一话和上一话末尾，离开这本漫画或退出后清掉。还没下完的第一张图仍然取决于图床速度；
-- 说明：0.3.18–0.3.25 为未发布的本地迭代版本，内容随本版一并发布（同版本号 MSI 会被 Windows Installer 拒绝覆盖）。
-
-详见[本版发布说明](https://github.com/1873412297-art/mihondesk/releases/tag/v0.3.26)和[更新日志](CHANGELOG.md)。
-
-## 0.3.17 更新
-
-- **同步**：局域网同步和扫码配对已移除，只保留 Google Drive。桌面端用浏览器登录，Android 用系统账号授权；
-- **阅读器**：网站拒绝访问（例如嗨皮漫画 HTTP 403）现在显示「网站拒绝访问」，不再误报成图源或本地章节不可用。另有条漫自动滚动、跨页合图、优先扫描组和卷标题；
-- **图源与扩展**：默认可信任 Keiyoushi 官方签名，可安装本地 Tachiyomi APK。站点可注册域的子域名会被放行。TLS 默认使用现代套件，握手被重置时按主机回退。WebView 验证通过后，后续请求会带上该验证会话；
-- **界面与启动**：启动页每次启动播放（可关闭）；主窗口先出现，同步和扫描延后到界面可交互之后。活动中心、更新提醒、缺扩展提示、更新/历史重做、书架详情栏，以及浏览筛选的下拉和分组芯片；
-- 说明：0.3.8–0.3.16 为未发布的本地迭代版本，内容随本版一并发布（同版本号 MSI 会被 Windows Installer 拒绝覆盖）。
-
-详见[本版发布说明](https://github.com/1873412297-art/mihondesk/releases/tag/v0.3.17)和[更新日志](CHANGELOG.md)。
-
-## 0.3.7 更新
-
-- **界面与品牌**：暖纸 + 赭墨（Ink）默认配色与新图标、首次运行启动页、JBR 自定义标题栏、可折叠导航栏（Ctrl+B）与界面密度、设置侧栏分组、可自定义键盘快捷键；
-- **阅读器**：控件显示快捷键提示、缩放 HUD 与页码播报、延迟加载圈（命中缓存不闪烁）与单页内联重试；
-- **浏览页**：图源 / 扩展改为卡片列表，固定改为星标、操作收进溢出菜单、语言分组可折叠；
-- **真实扩展图标**：安装时从 APK 解析启动图标（兼容资源混淆与自适应图标），已安装扩展启动后自动补齐；图标经 jsDelivr / raw GitHub 镜像加载并记住可用镜像，弱网下也能快速显示；
-- **网络**：「系统代理」模式现在读取 Windows 系统代理，代理不可达时回退直连；
-- **修复**：在搜索框等文本框中按 Backspace / Esc 不再触发「后退」；
-- 说明：0.3.0–0.3.6 为未发布的本地迭代版本，内容随本版一并发布（同版本号 MSI 会被 Windows Installer 拒绝覆盖）。
-
-详见[本版发布说明](https://github.com/1873412297-art/mihondesk/releases/tag/v0.3.7)和[更新日志](CHANGELOG.md)。
-
-## 0.2.24 更新
-
-- **阅读器**：双页跨页拆分（关闭 / 始终 / 仅宽图）与宽图旋转适配、翻页过渡动画（无 / 淡入 / 滑动）、自定义色相·亮度·对比度滤镜、翻页闪屏与 Webtoon 偏好；
-- **设置与数据**：设置内搜索、按来源清除非书库数据、存储占用明细、智能更新「非更新周期」过滤、自动下载仅未读与分类条件；
-- **下载**：可选「章节保存为 CBZ」与「下载时拆分长图」（两项**默认关闭**，与 Android 默认值不同）；
-- **扩展**：显示扩展来源商店；安装失败按原因分类提示（下载失败 / 签名被拒 / 商店已不再提供 / 其他）；
-- **健壮性**：书库读写移出 UI 线程、章节设置后台串行化、同步服务器按令牌限流、删除下载的文件占用重试；**命令行运行不再登记系统托盘图标**（此前每次 CLI 运行都会在系统托盘留下一条永久记录，累积成多个重复图标）；
-- 说明：0.2.23 未发布，本版直接以 0.2.24 编号发布（同版本号 MSI 会被 Windows Installer 拒绝覆盖）。
-
-详见[本版发布说明](https://github.com/1873412297-art/mihondesk/releases/tag/v0.2.24)和[更新日志](CHANGELOG.md)。
-
-更早版本的更新内容见[更新日志](CHANGELOG.md)与 [GitHub Releases](https://github.com/1873412297-art/mihondesk/releases)。
+数据位置：安装版在 `%APPDATA%\MihonW`，便携版在程序旁的 `data` 文件夹（迁移便携版时一并带走）。升级会保留书架、设置和阅读数据。
 
 ## 当前限制
 
-mihondesk 仍在持续开发，桌面端尚未覆盖 Mihon 的全部功能。当前版本号为独立序列（`0.x`，现为 0.5.0），与上游 mihon `0.20.x` 无对应关系。以下限制基于[功能覆盖快照](docs/superpowers/evidence/suwayomi-feature-coverage.md)与原设计完成标准，会随验证进展持续收敛：
+mihondesk 仍在开发中，尚未覆盖 Mihon 的全部功能，版本号（`0.x`）与上游 Mihon 无关。
 
-- **扩展与图源兼容性**：扩展可安装并加载，不代表该图源的浏览→详情→章节→图片全链可用。部分站点需要验证码或登录。详见[扩展兼容矩阵](docs/suwayomi-extension-compatibility.md)。
-- **Tracker 账户**：11 个服务均有实现与本地契约测试。2026-09-22 生产实测：**Bangumi** 与 **AniList** 已完成登录→搜索绑定→进度写入→重进保持→解绑全链验证；其余服务（MyAnimeList、Kitsu、Shikimori、MangaUpdates、Hikka、MangaBaka 及自托管 Komga / Kavita / Suwayomi）尚待账户或实例就绪后继续联调，新增服务的 OAuth 自动登录配置也未完成。
-- **备份互通**：桌面端可导入/导出 Mihon 兼容备份。2026-09-20 已完成双向往返验证：真实 Android 编码器备份→桌面导入（字段级对照）、桌面导出→Android 解码器契约测试、桌面导出→Android 应用恢复→应用再导出→桌面再导入，六类字段无丢失；下载图片、密钥、SyncYomi uid、Suwayomi 私有设置不随备份迁移。详见[备份往返证据](docs/superpowers/evidence/2026-09-20-backup-roundtrip.md)。
-- **安装与升级**：MSI / EXE / 便携三种形态已在干净 Windows 11 虚拟机上完成实测（14/14 验收格）：三种形态的干净安装、0.2.10→0.2.18 向导覆盖升级、卸载（保留数据 / 删除数据）与损坏回滚。其中 EXE 安装器的 `/S` 静默安装不受支持，请在图形向导中安装。三种发行形态均**不注册控制面板卸载项**，卸载请使用原安装包或便携目录删除。Win10 22H2 干净机矩阵因宿主为异构大小核平台、Windows 10 客户机内核无法完成初始化而未完成（Win11 正常），详见[干净机矩阵证据](docs/superpowers/evidence/2026-09-21-clean-machine-matrix.md)。
-- **性能与稳定性**：六种阅读模式、万部库搜索等已可用。2026-09-20 四项 SLO 实测：冷启动 P95 1.24 s（目标 ≤5 s）、空闲内存中位 463 MiB（目标 <500 MB）、30 分钟阅读内存两次 1800 秒 soak 均有界、帧时间 P95 10.22 ms（真实阅读窗口负载，目标 ≤33 ms）。详见[性能证据](docs/superpowers/evidence/2026-09-20-performance-slo.md)。
-- **故障恢复**：数据库迁移前快照、备份恢复事务回滚等已实现；安装过程中断已用断电注入方式实测——断电后重启系统与应用数据均完好，可重新安装。满盘、拔盘等其余场景尚未实测。
-- **备份格式**：仓库里不再包含上游 Android 工程。与 Mihon 备份的字段兼容由桌面端契约测试覆盖，不在这里编译或发布 APK。
+- **图源**：扩展能安装不代表整条阅读链可用，需要验证码或登录的站点可能受限，见[扩展兼容矩阵](docs/suwayomi-extension-compatibility.md)。
+- **Tracker**：Bangumi 与 AniList 已完成实测，其余服务仍在联调。
+- **安装**：EXE 安装器不支持 `/S` 静默安装；三种形态都不注册控制面板卸载项。
+- **备份**：下载的图片、密钥等不随备份迁移。
 
-**旧版本升级**：0.2.4 及更早版本的内置更新检查指向旧仓库，首次升级请从[本仓库 Releases](https://github.com/1873412297-art/mihondesk/releases/latest)手动下载。
+完整的验证范围与证据见[功能覆盖快照](docs/superpowers/evidence/suwayomi-feature-coverage.md)和 [Windows 发行说明](docs/WINDOWS_RELEASE.md)。
 
-遇到图源、tracker 或备份问题请在 Issues 反馈，附上 mihondesk 版本、Windows 版本、扩展名称/版本、复现步骤和错误信息。
+## 反馈与参与
 
-## 反馈与开发
+遇到问题请在 [Issues](https://github.com/1873412297-art/mihondesk/issues) 反馈，附上 mihondesk 与 Windows 版本、复现步骤和错误信息；图源问题请附扩展名称与版本。欢迎提交改进，见[贡献指南](CONTRIBUTING.md)与[开发环境说明](docs/windows-development.md)。
 
-遇到问题请在[本仓库 Issues](https://github.com/1873412297-art/mihondesk/issues)反馈，附上 mihondesk 版本、Windows 版本、复现步骤和错误信息。图源问题请同时提供扩展名称及版本。
+## 致谢与许可
 
-欢迎提交改进，参见[贡献指南](CONTRIBUTING.md)。开发资料：
+mihondesk 是 [Mihon](https://github.com/mihonapp/mihon) 的独立桌面移植，参考了 [Suwayomi-Server](https://github.com/Suwayomi/Suwayomi-Server) 的扩展兼容实现，感谢 Mihon、[Tachiyomi](https://github.com/tachiyomiorg) 与 Suwayomi 的贡献者。本项目的问题请在本仓库反馈，不要提交到上游。项目的移植、迭代与文档由作者 [@1873412297-art](https://github.com/1873412297-art) 借助 AI 编程助手完成。
 
-- [扩展兼容矩阵](docs/suwayomi-extension-compatibility.md)
-- [功能覆盖与验证范围](docs/superpowers/evidence/suwayomi-feature-coverage.md)
-- [Windows 发行与升级说明](docs/WINDOWS_RELEASE.md)
-- [开发环境与构建](docs/windows-development.md)
-- [图标与品牌资源](docs/BRANDING.md)
+采用 [Apache License 2.0](LICENSE)，第三方组件许可见 [THIRD-PARTY-DESKTOP.txt](THIRD-PARTY-DESKTOP.txt)。程序本身不提供或托管漫画内容。
 
-## 作者
-
-[@1873412297-art](https://github.com/1873412297-art)
-
-## 致谢上游
-
-感谢 [Mihon](https://github.com/mihonapp/mihon)、[Tachiyomi](https://github.com/tachiyomiorg) 与 [Suwayomi-Server](https://github.com/Suwayomi/Suwayomi-Server) 及其贡献者。上游代码的版权归原作者所有；mihondesk 的问题请在本仓库反馈，不要提交到上游。
-
-## 上游与许可
-
-本项目是 [Mihon](https://github.com/mihonapp/mihon) 的独立 Windows 移植项目，基于其阅读与备份相关实现，并参考 [Suwayomi-Server](https://github.com/Suwayomi/Suwayomi-Server) 的扩展兼容与后台服务实现。Android 原版请访问 [Mihon 官网](https://mihon.app)。
-
-项目采用 [Apache License 2.0](LICENSE)。桌面端第三方组件及许可见 [THIRD-PARTY-DESKTOP.txt](THIRD-PARTY-DESKTOP.txt)。程序本身不提供或托管漫画内容。
-
-Copyright © 2015 Javier Tomás
-
-Copyright © 2024 Mihon Open Source Project
+Copyright © 2015 Javier Tomás · Copyright © 2024 Mihon Open Source Project
