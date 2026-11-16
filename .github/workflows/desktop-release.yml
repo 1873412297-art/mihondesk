@@ -1,0 +1,143 @@
+name: Desktop release (draft)
+# Builds the Windows (and Apple Silicon) packages for the version in desktop-version.txt, runs the
+# release checks that can run unattended, and creates a DRAFT GitHub Release with the uploaded file
+# set from scripts/stage-release-upload.ps1 plus the DMG. Nothing is published: the checks that need
+# a VM (MSI N-1 -> N upgrade and uninstall, clean-machine install, real-channel in-app update) stay
+# manual per docs/WINDOWS_RELEASE.md, after which the draft is published by hand and
+# scripts/verify-release-assets.ps1 -Tag v<version> is run against it.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to release (must match desktop-version.txt)
+        required: true
+      macos:
+        description: Also build and attach the Apple Silicon DMG
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-release
+  cancel-in-progress: false
+
+jobs:
+  windows:
+    name: Build, verify and draft (Windows)
+    runs-on: windows-2025
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ inputs.version }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Check version and that the release does not exist yet
+        shell: pwsh
+        run: |
+          if ($env:VERSION -notmatch '^[0-9]+\.[0-9]+\.[0-9]+$') { throw "Not a version: $env:VERSION" }
+          $declared = (Get-Content -LiteralPath desktop-version.txt -Raw).Trim()
+          if ($declared -ne $env:VERSION) { throw "desktop-version.txt says $declared, not $env:VERSION" }
+          if (-not (Test-Path -LiteralPath "docs/desktop-release-notes-$env:VERSION.md")) {
+            throw "Missing docs/desktop-release-notes-$env:VERSION.md"
+          }
+          gh release view "v$env:VERSION" --repo $env:GITHUB_REPOSITORY *> $null
+          if ($LASTEXITCODE -eq 0) { throw "Release v$env:VERSION already exists (draft or published)" }
+          $global:LASTEXITCODE = 0
+
+      - name: Set up JDK
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          java-version-file: .github/.java-version
+          distribution: temurin
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+
+      - name: Build release artifacts
+        shell: pwsh
+        run: .\gradlew.bat :desktop-app:assembleWindowsRelease --console=plain
+
+      - name: Verify clean application image
+        shell: pwsh
+        run: .\scripts\verify-release-clean.ps1 -ImagePath "desktop-app/build/releases/$env:VERSION/app-image/mihondesk"
+
+      - name: Verify MSI package (2A static gate)
+        shell: pwsh
+        run: .\scripts\verify-msi-package.ps1 -MsiPath "desktop-app/build/releases/$env:VERSION/mihondesk-$env:VERSION.msi"
+
+      - name: Portable smoke test (isolated directory)
+        shell: pwsh
+        run: >-
+          .\scripts\verify-desktop-clean-machine.ps1
+          -PortableZip "desktop-app/build/releases/$env:VERSION/mihondesk-$env:VERSION-windows-x64-portable.zip"
+          -SkipBuild
+
+      - name: Portable updater fault injection (2B)
+        shell: pwsh
+        run: .\scripts\tests\portable-updater.tests.ps1
+
+      - name: Stage the uploaded file set
+        shell: pwsh
+        run: .\scripts\stage-release-upload.ps1 -Version $env:VERSION -OutputDirectory release-upload
+
+      - name: Create draft release
+        shell: pwsh
+        run: |
+          $notes = Get-Content -LiteralPath "docs/desktop-release-notes-$env:VERSION.md" -Raw
+          $run = "$env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID"
+          $notes = $notes.TrimEnd() + "`n`n### 构建与验证`n`n本版安装包由 [发布构建]($run) 生成，同一构建中通过了发行包洁净检查、MSI 门禁、便携版冒烟与便携更新器故障注入测试。`n"
+          Set-Content -LiteralPath release-notes.md -Value $notes -Encoding utf8NoBOM
+          $files = Get-ChildItem -LiteralPath release-upload -File | ForEach-Object { $_.FullName }
+          gh release create "v$env:VERSION" @files --repo $env:GITHUB_REPOSITORY --draft `
+            --target $env:GITHUB_SHA --title "mihondesk $env:VERSION" --notes-file release-notes.md
+          if ($LASTEXITCODE -ne 0) { throw 'gh release create failed' }
+
+      - name: Upload build evidence
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: mihondesk-release-failure-${{ github.sha }}
+          path: |
+            desktop-app/build/releases
+            !desktop-app/build/releases/**/app-image/**
+
+  macos:
+    name: Build and attach DMG (Apple Silicon)
+    needs: windows
+    if: inputs.macos
+    runs-on: macos-15
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ inputs.version }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up JDK
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          java-version-file: .github/.java-version
+          distribution: temurin
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+
+      - name: Build DMG
+        run: ./gradlew :desktop-app:packageDmg --console=plain
+
+      - name: Attach DMG to the draft
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          dmgs=(desktop-app/build/compose/binaries/main/dmg/*.dmg)
+          if [ ${#dmgs[@]} -ne 1 ]; then echo "Expected one DMG, found ${#dmgs[@]}"; exit 1; fi
+          target="mihondesk-${VERSION}-macos-arm64.dmg"
+          cp "${dmgs[0]}" "$target"
+          gh release upload "v${VERSION}" "$target" --repo "$GITHUB_REPOSITORY"
