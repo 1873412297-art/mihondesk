@@ -24,7 +24,7 @@ class InstallerUpdateHandoffWindowsTest {
     ) {
         val windows = Path.of(System.getenv("WINDIR"))
         // A quote and non-ASCII characters in the path must survive the hand-over unexpanded.
-        val folder = Files.createDirectories(root.resolve("it's 中文 \$env:TEMP"))
+        val folder = Files.createDirectories(root.resolve("it's 中文 \$(whoami)"))
         val setup = Files.copy(windows.resolve("System32").resolve(standIn), folder.resolve("mihondesk-9.9.0.exe"))
         val app = Files.createDirectories(folder.resolve("app"))
         Files.copy(windows.resolve("System32/whoami.exe"), app.resolve("mihondesk.exe"))
