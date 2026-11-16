@@ -257,4 +257,5 @@ internal val UI_TEXT_TRADITIONAL_B: Map<UiText, String> = mapOf(
     UiText.AppUpdateNotificationTitle to "MihonDesk 有新版本",
     UiText.AppUpdateNotificationMessage to "{0} 版本已發布，點擊查看更新內容",
     UiText.AppUpdateAutoCheck to "自動檢查更新（啟動時和每天一次）",
+    UiText.AppUpdateWhatsNew to "更新內容",
 )

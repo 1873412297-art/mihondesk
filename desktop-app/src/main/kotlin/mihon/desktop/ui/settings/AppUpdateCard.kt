@@ -87,14 +87,7 @@ fun AppUpdateCard(
             }
             state.release?.let { release ->
                 Text(strings.text(UiText.AppUpdateAvailable, release.release.version))
-                if (release.release.releaseNotes.isNotBlank()) {
-                    SelectionContainer {
-                        Text(
-                            release.release.releaseNotes,
-                            Modifier.heightIn(max = 180.dp).verticalScroll(rememberScrollState()),
-                        )
-                    }
-                }
+                ReleaseNotesView(release.release.releaseNotes)
                 if (release.matchedAsset == null) {
                     Text(strings.text(UiText.AppUpdateUnsupported))
                 } else {

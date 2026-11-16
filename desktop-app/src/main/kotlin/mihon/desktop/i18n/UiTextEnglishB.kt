@@ -267,4 +267,5 @@ internal val UI_TEXT_ENGLISH_B: Map<UiText, String> = mapOf(
     UiText.AppUpdateNotificationTitle to "MihonDesk update available",
     UiText.AppUpdateNotificationMessage to "Version {0} is ready to download. Click to see what's new.",
     UiText.AppUpdateAutoCheck to "Check for updates automatically (at startup and once a day)",
+    UiText.AppUpdateWhatsNew to "What's new",
 )
