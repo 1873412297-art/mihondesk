@@ -28,15 +28,19 @@ class InstallerUpdateHandoffWindowsTest {
         val setup = Files.copy(windows.resolve("System32").resolve(standIn), folder.resolve("mihondesk-9.9.0.exe"))
         val app = Files.createDirectories(folder.resolve("app"))
         Files.copy(windows.resolve("System32/whoami.exe"), app.resolve("mihondesk.exe"))
-        val state = folder.resolve("state")
+        // prepare() creates this folder before the helper ever runs.
+        val state = Files.createDirectories(folder.resolve("state"))
         val handoff = InstallerUpdateHandoff(app, state, windowsDirectory = windows)
         val caller = ProcessBuilder(windows.resolve("System32/whoami.exe").toString()).start()
         caller.waitFor(30, TimeUnit.SECONDS) shouldBe true
 
         val helper = ProcessBuilder(handoff.helperCommand(setup, caller.pid())).redirectErrorStream(true).start()
+        val output = helper.inputStream.bufferedReader().readText()
         helper.waitFor(120, TimeUnit.SECONDS) shouldBe true
 
-        Files.readString(state.resolve("installer-update.log")).trim() shouldBe expected
+        val log = state.resolve("installer-update.log")
+        check(Files.exists(log)) { "Helper wrote no result. Output:\n$output" }
+        Files.readString(log).trim() shouldBe expected
         handoff.lastOutcome()?.succeeded shouldBe (expected == "exit=0")
     }
 }
