@@ -26,6 +26,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withTimeout
 import mihon.desktop.category.DesktopCategory
 import mihon.desktop.category.DesktopCategoryService
@@ -93,7 +95,7 @@ class CategoryManagementTest {
     }
 
     @Test
-    fun `category selection switches repository query and keeps the system all category id`() = runBlocking {
+    fun `category selection switches repository query and keeps the system all category id`() = runTest {
         val fake = FakeCategoryLibrary()
         fake.libraryItemsForCategory = { categoryId ->
             when (categoryId) {
@@ -102,21 +104,21 @@ class CategoryManagementTest {
                 else -> emptyList()
             }
         }
-        val presenter = LibraryPresenter(fake, scope)
+        val presenter = LibraryPresenter(fake, backgroundScope, ioDispatcher = StandardTestDispatcher(testScheduler))
 
-        val all = presenter.awaitState {
+        val all = settledState(presenter) {
             !it.loading && it.selectedCategoryId == SYSTEM_ALL_CATEGORY.id && it.items.size == 2
         }
         all.selectedCategoryId shouldBe SYSTEM_ALL_CATEGORY.id
         fake.observedCategoryIds.last() shouldBe SYSTEM_ALL_CATEGORY.id
 
         presenter.selectCategory(10L)
-        val filtered = presenter.awaitState { it.selectedCategoryId == 10L && it.items.size == 1 }
+        val filtered = settledState(presenter) { it.selectedCategoryId == 10L && it.items.size == 1 }
         filtered.items.single().id shouldBe 1L
         fake.observedCategoryIds shouldContain 10L
 
         presenter.selectCategory(SYSTEM_ALL_CATEGORY.id)
-        presenter.awaitState { it.selectedCategoryId == SYSTEM_ALL_CATEGORY.id && it.items.size == 2 }
+        settledState(presenter) { it.selectedCategoryId == SYSTEM_ALL_CATEGORY.id && it.items.size == 2 }
         fake.observedCategoryIds.last() shouldBe SYSTEM_ALL_CATEGORY.id
 
         presenter.close()
@@ -199,9 +201,6 @@ class CategoryManagementTest {
 
         savedIds?.sorted() shouldBe listOf(1L, 2L)
     }
-
-    private suspend fun LibraryPresenter.awaitState(predicate: (LibraryUiState) -> Boolean): LibraryUiState =
-        withTimeout(5_000) { state.first(predicate) }
 
     private suspend fun DesktopCategoryService.awaitCategories(
         predicate: (List<DesktopCategory>) -> Boolean,

@@ -2,15 +2,9 @@ package mihon.desktop.ui.library
 
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonObject
@@ -19,19 +13,10 @@ import mihon.desktop.library.model.ChapterRecord
 import mihon.desktop.library.model.LibraryChapter
 import mihon.desktop.library.model.MangaRecord
 import mihon.desktop.preferences.DesktopPreferenceStore
-import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import java.nio.file.Files
 
 class ChapterSettingsTest {
-    private val parentJob = SupervisorJob()
-    private val scope = CoroutineScope(parentJob + Dispatchers.Default)
-
-    @AfterEach
-    fun tearDown() {
-        scope.cancel()
-    }
-
     @Test
     fun `default settings match the android chapter defaults`() {
         val defaults = ChapterSettings()
@@ -128,7 +113,7 @@ class ChapterSettingsTest {
     }
 
     @Test
-    fun `presenter persists per manga chapter settings and applies them to the detail list`() = runBlocking {
+    fun `presenter persists per manga chapter settings and applies them to the detail list`() = runTest {
         val repository = TestLibraryRepository()
         repository.addManga(
             mangaRecord(1, "One Piece", sourceId = 100),
@@ -138,10 +123,11 @@ class ChapterSettingsTest {
                 chapterRecord(13, 1, "/c", "Group A", 4.0),
             ),
         )
-        val presenter = LibraryPresenter(repository, scope)
-        presenter.awaitState { !it.loading && it.items.size == 1 }
+        val presenter =
+            LibraryPresenter(repository, backgroundScope, ioDispatcher = StandardTestDispatcher(testScheduler))
+        settledState(presenter) { !it.loading && it.items.size == 1 }
         presenter.selectManga(1)
-        val initial = presenter.awaitDetail { it.manga?.id == 1L && it.chapters.size == 3 }
+        val initial = settledDetail(presenter) { it.manga?.id == 1L && it.chapters.size == 3 }
         initial.availableScanlators shouldBe setOf("Group A", "Group B")
 
         presenter.setExcludedScanlators(setOf("Group B"))
@@ -149,7 +135,7 @@ class ChapterSettingsTest {
         presenter.setChapterSort(ChapterSortState(ChapterSortMode.ChapterNumber, ascending = true))
         presenter.setShowMissingChapters(false)
 
-        val updated = presenter.awaitDetail {
+        val updated = settledDetail(presenter) {
             it.chapters.size == 2 &&
                 it.chapterSettings.displayMode == ChapterDisplayMode.Number &&
                 it.chapterSettings.sortMode == ChapterSortMode.ChapterNumber &&
@@ -171,12 +157,8 @@ class ChapterSettingsTest {
                 showMissingChapters = false,
             ),
         )
-        // Settings persist off the UI thread, so wait for the write before reading it back.
-        withTimeout(5_000) {
-            while (repository.mangaSnapshot(1)?.chapterFlags != expectedFlags) {
-                delay(10)
-            }
-        }
+        // Settings persist on the io dispatcher in call order; runCurrent() drains every queued write.
+        runCurrent()
 
         val persisted = repository.mangaSnapshot(1) ?: error("missing manga")
         persisted.excludedScanlatorsJson shouldBe encodeExcludedScanlators(setOf("Group B"))
@@ -186,16 +168,21 @@ class ChapterSettingsTest {
     }
 
     @Test
-    fun `set as default persists defaults and can apply them to existing manga`() = runBlocking {
+    fun `set as default persists defaults and can apply them to existing manga`() = runTest {
         val repository = TestLibraryRepository()
         repository.addManga(mangaRecord(1, "One Piece", sourceId = 100))
         repository.addManga(mangaRecord(2, "Naruto", sourceId = 200))
         val preferenceFile = Files.createTempFile("chapter-settings", ".properties")
         val preferences = DesktopPreferenceStore(preferenceFile)
-        val presenter = LibraryPresenter(repository, scope, preferences = preferences)
-        presenter.awaitState { !it.loading && it.items.size == 2 }
+        val presenter = LibraryPresenter(
+            repository,
+            backgroundScope,
+            preferences = preferences,
+            ioDispatcher = StandardTestDispatcher(testScheduler),
+        )
+        settledState(presenter) { !it.loading && it.items.size == 2 }
         presenter.selectManga(1)
-        presenter.awaitDetail { it.manga?.id == 1L }
+        settledDetail(presenter) { it.manga?.id == 1L }
 
         presenter.setChapterDisplayMode(ChapterDisplayMode.Number)
         presenter.setShowMissingChapters(false)
@@ -208,11 +195,7 @@ class ChapterSettingsTest {
                 showMissingChapters = false,
             ),
         )
-        withTimeout(5_000) {
-            while (repository.mangaSnapshot(2)?.chapterFlags != expectedFlags) {
-                delay(10)
-            }
-        }
+        runCurrent()
         val first = repository.mangaSnapshot(1) ?: error("missing manga 1")
         val second = repository.mangaSnapshot(2) ?: error("missing manga 2")
         first.chapterFlags shouldBe expectedFlags
@@ -224,7 +207,7 @@ class ChapterSettingsTest {
     }
 
     @Test
-    fun `reset restores persisted defaults and clears the scanlator filter`() = runBlocking {
+    fun `reset restores persisted defaults and clears the scanlator filter`() = runTest {
         val repository = TestLibraryRepository()
         repository.addManga(
             mangaRecord(1, "One Piece", sourceId = 100),
@@ -236,17 +219,22 @@ class ChapterSettingsTest {
             setProperty(CHAPTER_DEFAULT_FLAGS_KEY, CHAPTER_DISPLAY_NUMBER.toString())
             setProperty(CHAPTER_DEFAULT_SHOW_MISSING_KEY, "false")
         }
-        val presenter = LibraryPresenter(repository, scope, preferences = preferences)
-        presenter.awaitState { !it.loading && it.items.size == 1 }
+        val presenter = LibraryPresenter(
+            repository,
+            backgroundScope,
+            preferences = preferences,
+            ioDispatcher = StandardTestDispatcher(testScheduler),
+        )
+        settledState(presenter) { !it.loading && it.items.size == 1 }
         presenter.selectManga(1)
-        presenter.awaitDetail { it.manga?.id == 1L }
+        settledDetail(presenter) { it.manga?.id == 1L }
 
         presenter.setExcludedScanlators(setOf("Group A"))
         presenter.setChapterDisplayMode(ChapterDisplayMode.SourceOrder)
         presenter.setShowMissingChapters(true)
         presenter.resetChapterSettingsToDefault()
 
-        val reset = presenter.awaitDetail {
+        val reset = settledDetail(presenter) {
             it.chapterSettings.displayMode == ChapterDisplayMode.Number &&
                 !it.chapterSettings.showMissingChapters &&
                 it.chapterSettings.excludedScanlators.isEmpty() &&
@@ -254,26 +242,14 @@ class ChapterSettingsTest {
         }
         reset.chapterSettings.sortMode shouldBe ChapterSortMode.SourceOrder
         reset.chapterSettings.sortAscending shouldBe false
-        // The reset is persisted off the UI thread, so wait for the row before reading it back.
-        withTimeout(5_000) {
-            while (repository.mangaSnapshot(1)?.chapterFlags != CHAPTER_DISPLAY_NUMBER ||
-                repository.mangaSnapshot(1)?.excludedScanlatorsJson != "[]"
-            ) {
-                delay(10)
-            }
-        }
+        // The reset is persisted on the io dispatcher; runCurrent() drains it before reading the row back.
+        runCurrent()
         val persisted = repository.mangaSnapshot(1) ?: error("missing manga")
         persisted.excludedScanlatorsJson shouldBe "[]"
         persisted.chapterFlags shouldBe CHAPTER_DISPLAY_NUMBER
         persisted.memoJson shouldBe encodeShowMissingChapters("{}", showMissingChapters = false)
         presenter.close()
     }
-
-    private suspend fun LibraryPresenter.awaitState(predicate: (LibraryUiState) -> Boolean): LibraryUiState =
-        withTimeout(5_000) { state.first(predicate) }
-
-    private suspend fun LibraryPresenter.awaitDetail(predicate: (MangaDetailUiState) -> Boolean): MangaDetailUiState =
-        withTimeout(5_000) { detailState.first(predicate) }
 
     private fun mangaRecord(id: Long, title: String, sourceId: Long) = MangaRecord(
         id = id,

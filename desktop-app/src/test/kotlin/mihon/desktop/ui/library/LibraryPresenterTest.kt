@@ -2,18 +2,14 @@ package mihon.desktop.ui.library
 
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runCurrent
-import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.test.runTest
 import mihon.desktop.extension.DesktopSourceManager
 import mihon.desktop.extension.builtin.BundledLocalSource
 import mihon.desktop.extension.registerBuiltinSource
@@ -30,30 +26,32 @@ import mihon.reader.session.ProgressWriteResult
 import mihon.reader.session.ReaderProgressUpdate
 import mihon.reader.source.ChapterDirection
 import mihon.reader.source.ReaderChapterAsset
-import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.atomic.AtomicInteger
 
 class LibraryPresenterTest {
-    private val parentJob = SupervisorJob()
-    private val scope = CoroutineScope(parentJob + Dispatchers.Default)
-
-    @AfterEach
-    fun tearDown() {
-        scope.cancel()
-    }
+    /** The presenter under test on virtual time; see [settledState]. */
+    private fun TestScope.presenter(
+        repository: LibraryRepository,
+        readerLibrary: ReaderLibraryPort? = repository as? ReaderLibraryPort,
+    ) = LibraryPresenter(
+        repository = repository,
+        scope = backgroundScope,
+        readerLibrary = readerLibrary,
+        ioDispatcher = StandardTestDispatcher(testScheduler),
+    )
 
     @Test
-    fun `starts loading then exposes database rows without changing their order`() = kotlinx.coroutines.test.runTest {
+    fun `starts loading then exposes database rows without changing their order`() = runTest {
         val rows = MutableStateFlow<List<LibraryManga>>(emptyList())
         // Virtual time: on a real dispatcher the first (empty) emission could land before the
         // "still loading" assertion and make this test flaky.
         val presenter = LibraryPresenter(
             repository = FakeLibraryRepository { rows },
             scope = backgroundScope,
-            ioDispatcher = kotlinx.coroutines.test.StandardTestDispatcher(testScheduler),
+            ioDispatcher = StandardTestDispatcher(testScheduler),
         )
 
         presenter.state.value.loading shouldBe true
@@ -66,12 +64,12 @@ class LibraryPresenterTest {
     }
 
     @Test
-    fun `an injected test dispatcher makes the presenter run on virtual time`() = kotlinx.coroutines.test.runTest {
+    fun `an injected test dispatcher makes the presenter run on virtual time`() = runTest {
         val rows = MutableStateFlow(listOf(manga(1, "Alpha"), manga(2, "Beta")))
         val presenter = LibraryPresenter(
             repository = FakeLibraryRepository { rows },
             scope = backgroundScope,
-            ioDispatcher = kotlinx.coroutines.test.StandardTestDispatcher(testScheduler),
+            ioDispatcher = StandardTestDispatcher(testScheduler),
         )
 
         // No polling or wall-clock waits: running the scheduler settles every load.
@@ -86,7 +84,7 @@ class LibraryPresenterTest {
     }
 
     @Test
-    fun `query matches title and author case insensitively and preserves Unicode`() = runBlocking {
+    fun `query matches title and author case insensitively and preserves Unicode`() = runTest {
         val rows = MutableStateFlow(
             listOf(
                 manga(1, "The Apothecary Diaries", author = "Natsu Hyuuga"),
@@ -94,47 +92,47 @@ class LibraryPresenterTest {
                 manga(3, "Other", author = "Someone"),
             ),
         )
-        val presenter = LibraryPresenter(FakeLibraryRepository { rows }, scope)
-        presenter.awaitState { !it.loading && it.items.size == 3 }
+        val presenter = presenter(FakeLibraryRepository { rows })
+        settledState(presenter) { !it.loading && it.items.size == 3 }
 
         presenter.setQuery("HYUUGA")
-        presenter.awaitState { it.query == "HYUUGA" && it.items.size == 1 }.items.single().id shouldBe 1L
+        settledState(presenter) { it.query == "HYUUGA" && it.items.size == 1 }.items.single().id shouldBe 1L
         presenter.setQuery("芙莉莲")
-        presenter.awaitState { it.query == "芙莉莲" && it.items.size == 1 }.items.single().title shouldBe "葬送的芙莉莲"
+        settledState(presenter) { it.query == "芙莉莲" && it.items.size == 1 }.items.single().title shouldBe "葬送的芙莉莲"
         presenter.close()
     }
 
     @Test
-    fun `selected manga is retained only while its row remains present`() = runBlocking {
+    fun `selected manga is retained only while its row remains present`() = runTest {
         val rows = MutableStateFlow(listOf(manga(1, "One"), manga(2, "Two")))
-        val presenter = LibraryPresenter(FakeLibraryRepository { rows }, scope)
-        presenter.awaitState { !it.loading && it.items.size == 2 }
+        val presenter = presenter(FakeLibraryRepository { rows })
+        settledState(presenter) { !it.loading && it.items.size == 2 }
 
         presenter.selectManga(2)
-        presenter.awaitState { it.selectedMangaId == 2L }
+        settledState(presenter) { it.selectedMangaId == 2L }
         rows.value = listOf(manga(1, "One"))
-        presenter.awaitState { it.items.size == 1 && it.selectedMangaId == null }
+        settledState(presenter) { it.items.size == 1 && it.selectedMangaId == null }
         rows.value = listOf(manga(1, "One"), manga(2, "Two"))
 
-        presenter.awaitState { it.items.size == 2 }.selectedMangaId shouldBe null
+        settledState(presenter) { it.items.size == 2 }.selectedMangaId shouldBe null
         presenter.close()
     }
 
     @Test
-    fun `selection request for a missing row is not restored if that id appears later`() = runBlocking {
+    fun `selection request for a missing row is not restored if that id appears later`() = runTest {
         val rows = MutableStateFlow(listOf(manga(1, "One")))
-        val presenter = LibraryPresenter(FakeLibraryRepository { rows }, scope)
-        presenter.awaitState { !it.loading && it.items.size == 1 }
+        val presenter = presenter(FakeLibraryRepository { rows })
+        settledState(presenter) { !it.loading && it.items.size == 1 }
 
         presenter.selectManga(99)
         rows.value = listOf(manga(1, "One"), manga(99, "Later"))
 
-        presenter.awaitState { it.items.size == 2 }.selectedMangaId shouldBe null
+        settledState(presenter) { it.items.size == 2 }.selectedMangaId shouldBe null
         presenter.close()
     }
 
     @Test
-    fun `repository exception is visible and retry resubscribes without fallback rows`() = runBlocking {
+    fun `repository exception is visible and retry resubscribes without fallback rows`() = runTest {
         val attempts = AtomicInteger()
         val repository = FakeLibraryRepository {
             flow {
@@ -142,27 +140,26 @@ class LibraryPresenterTest {
                 emit(listOf(manga(7, "Recovered")))
             }
         }
-        val presenter = LibraryPresenter(repository, scope)
+        val presenter = presenter(repository)
 
-        val failed = presenter.awaitState { it.errorMessage != null }
+        val failed = settledState(presenter) { it.errorMessage != null }
         failed.items shouldBe emptyList()
         failed.errorMessage shouldBe "database unavailable"
         presenter.retry()
 
-        val recovered = presenter.awaitState { !it.loading && it.items.singleOrNull()?.id == 7L }
+        val recovered = settledState(presenter) { !it.loading && it.items.singleOrNull()?.id == 7L }
         recovered.errorMessage shouldBe null
         attempts.get() shouldBe 2
         presenter.close()
     }
 
     @Test
-    fun `exception while creating repository flow is visible`() = runBlocking {
-        val presenter = LibraryPresenter(
+    fun `exception while creating repository flow is visible`() = runTest {
+        val presenter = presenter(
             FakeLibraryRepository { error("database already closed") },
-            scope,
         )
 
-        val failed = presenter.awaitState { it.errorMessage != null }
+        val failed = settledState(presenter) { it.errorMessage != null }
 
         failed.errorMessage shouldBe "database already closed"
         failed.items shouldBe emptyList()
@@ -170,18 +167,18 @@ class LibraryPresenterTest {
     }
 
     @Test
-    fun `close cancels only presenter work`(): Unit = runBlocking {
+    fun `close cancels only presenter work`() = runTest {
         val rows = MutableStateFlow(listOf(manga(1, "One")))
-        val presenter = LibraryPresenter(FakeLibraryRepository { rows }, scope)
-        presenter.awaitState { !it.loading }
+        val presenter = presenter(FakeLibraryRepository { rows })
+        settledState(presenter) { !it.loading }
 
         presenter.close()
 
-        parentJob.isActive shouldBe true
+        backgroundScope.isActive shouldBe true
     }
 
     @Test
-    fun `selection observes matching manga and chapters and preserves repository chapter order`() = runBlocking {
+    fun `selection observes matching manga and chapters and preserves repository chapter order`() = runTest {
         val rows = MutableStateFlow(listOf(manga(1, "One"), manga(2, "Two")))
         val details = mapOf(
             1L to MutableStateFlow(details(1, "One")),
@@ -191,37 +188,35 @@ class LibraryPresenterTest {
             1L to MutableStateFlow(listOf(chapter(12, 1), chapter(11, 1))),
             2L to MutableStateFlow(listOf(chapter(22, 2), chapter(21, 2))),
         )
-        val presenter = LibraryPresenter(
+        val presenter = presenter(
             FakeLibraryRepository(details = details, chapters = chapters, libraryFlow = { rows }),
-            scope,
         )
-        presenter.awaitState { !it.loading && it.items.size == 2 }
+        settledState(presenter) { !it.loading && it.items.size == 2 }
 
         presenter.selectManga(2)
 
-        val selected = presenter.awaitDetail { it.manga?.id == 2L && it.chapters.size == 2 }
+        val selected = settledDetail(presenter) { it.manga?.id == 2L && it.chapters.size == 2 }
         selected.manga?.title shouldBe "Two"
         selected.chapters.map(LibraryChapter::id).shouldContainExactly(22L, 21L)
         presenter.close()
     }
 
     @Test
-    fun `online backing record opens in detail without selecting a library row`() = runBlocking {
+    fun `online backing record opens in detail without selecting a library row`() = runTest {
         val rows = MutableStateFlow<List<LibraryManga>>(emptyList())
         val onlineDetails = details(9, "Online only").copy(favorite = false)
-        val presenter = LibraryPresenter(
+        val presenter = presenter(
             FakeLibraryRepository(
                 details = mapOf(9L to MutableStateFlow(onlineDetails)),
                 chapters = mapOf(9L to MutableStateFlow(listOf(chapter(91, 9)))),
                 libraryFlow = { rows },
             ),
-            scope,
         )
-        presenter.awaitState { !it.loading }
+        settledState(presenter) { !it.loading }
 
         presenter.openMangaDetail(9)
 
-        val detail = presenter.awaitDetail { it.manga?.id == 9L && it.chapters.size == 1 }
+        val detail = settledDetail(presenter) { it.manga?.id == 9L && it.chapters.size == 1 }
         detail.manga?.favorite shouldBe false
         detail.chapters.single().id shouldBe 91L
         presenter.state.value.selectedMangaId shouldBe null
@@ -229,7 +224,7 @@ class LibraryPresenterTest {
     }
 
     @Test
-    fun `explicit favorite toggle promotes an online backing record into the library`() = runBlocking {
+    fun `explicit favorite toggle promotes an online backing record into the library`() = runTest {
         val repository = TestLibraryRepository()
         val mangaId = repository.addManga(
             MangaRecord(
@@ -240,76 +235,74 @@ class LibraryPresenterTest {
                 initialized = true,
             ),
         )
-        val presenter = LibraryPresenter(repository, scope)
+        val presenter = presenter(repository)
         presenter.openMangaDetail(mangaId)
-        presenter.awaitDetail { it.manga?.id == mangaId }
+        settledDetail(presenter) { it.manga?.id == mangaId }
 
         val reported = MutableStateFlow<Boolean?>(null)
         presenter.setDetailFavorite(true) { reported.value = it }
 
-        presenter.awaitDetail { it.manga?.favorite == true }
+        settledDetail(presenter) { it.manga?.favorite == true }
         repository.librarySnapshot(null).single().id shouldBe mangaId
-        reported.first { it != null } shouldBe true
+        reported.value shouldBe true
         presenter.close()
     }
 
     @Test
-    fun `switching selection detaches old detail flow and missing selected manga clears selection`() = runBlocking {
+    fun `switching selection detaches old detail flow and missing selected manga clears selection`() = runTest {
         val rows = MutableStateFlow(listOf(manga(1, "One"), manga(2, "Two")))
         val first = MutableStateFlow<MangaDetails?>(details(1, "One"))
         val second = MutableStateFlow<MangaDetails?>(details(2, "Two"))
-        val presenter = LibraryPresenter(
+        val presenter = presenter(
             FakeLibraryRepository(
                 details = mapOf(1L to first, 2L to second),
                 chapters = mapOf(1L to MutableStateFlow(emptyList()), 2L to MutableStateFlow(emptyList())),
                 libraryFlow = { rows },
             ),
-            scope,
         )
-        presenter.awaitState { !it.loading }
+        settledState(presenter) { !it.loading }
         presenter.selectManga(1)
-        presenter.awaitDetail { it.manga?.id == 1L }
+        settledDetail(presenter) { it.manga?.id == 1L }
 
         presenter.selectManga(2)
-        presenter.awaitDetail { it.manga?.id == 2L }
+        settledDetail(presenter) { it.manga?.id == 2L }
         first.value = null
-        presenter.awaitDetail { it.manga?.id == 2L }.manga?.title shouldBe "Two"
+        settledDetail(presenter) { it.manga?.id == 2L }.manga?.title shouldBe "Two"
         second.value = null
 
-        presenter.awaitState { it.selectedMangaId == null }
-        presenter.awaitDetail { !it.loading && it.manga == null }.chapters shouldBe emptyList()
+        settledState(presenter) { it.selectedMangaId == null }
+        settledDetail(presenter) { !it.loading && it.manga == null }.chapters shouldBe emptyList()
         presenter.close()
     }
 
     @Test
-    fun `detail flow failure is visible and retry resubscribes for the selected id`() = runBlocking {
+    fun `detail flow failure is visible and retry resubscribes for the selected id`() = runTest {
         val rows = MutableStateFlow(listOf(manga(1, "One")))
         val attempts = AtomicInteger()
         val detailFlow = flow<MangaDetails?> {
             if (attempts.incrementAndGet() == 1) error("detail database unavailable")
             emit(details(1, "Recovered detail"))
         }
-        val presenter = LibraryPresenter(
+        val presenter = presenter(
             FakeLibraryRepository(
                 details = mapOf(1L to detailFlow),
                 chapters = mapOf(1L to MutableStateFlow(emptyList())),
                 libraryFlow = { rows },
             ),
-            scope,
         )
-        presenter.awaitState { !it.loading }
+        settledState(presenter) { !it.loading }
         presenter.selectManga(1)
 
-        presenter.awaitDetail { it.errorMessage == "detail database unavailable" }
+        settledDetail(presenter) { it.errorMessage == "detail database unavailable" }
         presenter.retryDetail()
 
-        presenter.awaitDetail { it.manga?.title == "Recovered detail" }
+        settledDetail(presenter) { it.manga?.title == "Recovered detail" }
         attempts.get() shouldBe 2
         presenter.close()
     }
 
     @Test
-    fun `local reader availability and returned progress are derived off the detail flow`() = runBlocking {
+    fun `local reader availability and returned progress are derived off the detail flow`() = runTest {
         val file = Files.createTempFile("reader-presenter", ".cbz")
         val chapters = MutableStateFlow(listOf(chapter(12, 1)))
         val asset = ReaderChapterAsset(
@@ -325,26 +318,25 @@ class LibraryPresenterTest {
             lastPageRead = 0,
             read = false,
         )
-        val presenter = LibraryPresenter(
+        val presenter = presenter(
             FakeLibraryRepository(
                 details = mapOf(1L to MutableStateFlow(details(1, "One"))),
                 chapters = mapOf(1L to chapters),
                 libraryFlow = { MutableStateFlow(listOf(manga(1, "One"))) },
             ),
-            scope,
-            FakeReaderLibraryPort(mapOf(12L to asset)),
+            readerLibrary = FakeReaderLibraryPort(mapOf(12L to asset)),
         )
-        presenter.awaitState { !it.loading }
+        settledState(presenter) { !it.loading }
         presenter.selectManga(1)
 
-        presenter.awaitDetail { it.readerAvailability[12L] == ChapterReaderAvailability.Readable }
+        settledDetail(presenter) { it.readerAvailability[12L] == ChapterReaderAvailability.Readable }
         chapters.value = listOf(chapter(12, 1).copy(lastPageRead = 4, read = true))
-        presenter.awaitDetail { it.chapters.singleOrNull()?.lastPageRead == 4L }.chapters.single().read shouldBe true
+        settledDetail(presenter) { it.chapters.singleOrNull()?.lastPageRead == 4L }.chapters.single().read shouldBe true
         presenter.close()
     }
 
     @Test
-    fun `online chapters without local assets are readable and fall back from a missing local file`() = runBlocking {
+    fun `online chapters without local assets are readable and fall back from a missing local file`() = runTest {
         val missingLocal = ReaderChapterAsset(
             mangaId = 1,
             chapterId = 12,
@@ -372,27 +364,23 @@ class LibraryPresenterTest {
             lastPageRead = 0,
             read = false,
         )
-        val presenter = LibraryPresenter(
+        val presenter = presenter(
             FakeLibraryRepository(
                 details = mapOf(1L to MutableStateFlow(details(1, "One"))),
                 chapters = mapOf(1L to MutableStateFlow(listOf(chapter(12, 1)))),
                 libraryFlow = { MutableStateFlow(listOf(manga(1, "One"))) },
             ),
-            scope,
-            FakeReaderLibraryPort(assets = mapOf(12L to missingLocal), online = mapOf(12L to online)),
+            readerLibrary = FakeReaderLibraryPort(assets = mapOf(12L to missingLocal), online = mapOf(12L to online)),
         )
-        presenter.awaitState { !it.loading }
+        settledState(presenter) { !it.loading }
         presenter.selectManga(1)
 
-        presenter.awaitDetail { it.readerAvailability[12L] == ChapterReaderAvailability.Readable }
+        settledDetail(presenter) { it.readerAvailability[12L] == ChapterReaderAvailability.Readable }
         presenter.close()
     }
 
-    private suspend fun LibraryPresenter.awaitState(predicate: (LibraryUiState) -> Boolean): LibraryUiState =
-        withTimeout(5_000) { state.first(predicate) }
-
     @Test
-    fun `onCoverLoadFailed refreshes once per manga and skips missing source`() = runBlocking {
+    fun `onCoverLoadFailed refreshes once per manga and skips missing source`() = runTest {
         val rows = MutableStateFlow(listOf(manga(1, "One"), manga(2, "Two")))
         val details = mapOf(
             1L to MutableStateFlow(details(1, "One")),
@@ -414,58 +402,50 @@ class LibraryPresenterTest {
 
         val presenter = LibraryPresenter(
             repository = FakeLibraryRepository(details = details, chapters = chapters, libraryFlow = { rows }),
-            scope = scope,
+            scope = backgroundScope,
             sourceManager = sourceManager,
             mangaRefreshHandler = { refreshCount.incrementAndGet() },
+            ioDispatcher = StandardTestDispatcher(testScheduler),
         )
-        presenter.awaitState { !it.loading && it.items.size == 2 }
+        settledState(presenter) { !it.loading && it.items.size == 2 }
 
         // 1. Select manga 1 (installed source 101)
         presenter.selectManga(1)
-        presenter.awaitDetail { it.manga?.id == 1L }
+        settledDetail(presenter) { it.manga?.id == 1L }
 
         // 404 triggers refresh
         presenter.onCoverLoadFailed(404)
-        // give coroutine a moment if launched
-        withTimeout(2_000) {
-            while (refreshCount.get() != 1) {
-                kotlinx.coroutines.delay(20)
-            }
-        }
+        runCurrent()
         refreshCount.get() shouldBe 1
 
         // Calling again with 404 for same id does NOT trigger duplicate refresh (anti-loop)
         presenter.onCoverLoadFailed(404)
-        kotlinx.coroutines.delay(50)
+        runCurrent()
         refreshCount.get() shouldBe 1
 
         // 2. Select manga 2 (sourceId = 0, local source) -> does NOT trigger
         presenter.selectManga(2)
-        presenter.awaitDetail { it.manga?.id == 2L }
+        settledDetail(presenter) { it.manga?.id == 2L }
         presenter.onCoverLoadFailed(404)
-        kotlinx.coroutines.delay(50)
+        runCurrent()
         refreshCount.get() shouldBe 1
 
         // 3. Open manga 3 (sourceId = 999, missing source) -> does NOT trigger
         presenter.openMangaDetail(3)
-        presenter.awaitDetail { it.manga?.id == 3L }
+        settledDetail(presenter) { it.manga?.id == 3L }
         presenter.onCoverLoadFailed(404)
-        kotlinx.coroutines.delay(50)
+        runCurrent()
         refreshCount.get() shouldBe 1
 
         // Non-404/410 code (e.g. 500) -> does NOT trigger
         presenter.selectManga(1)
-        presenter.awaitDetail { it.manga?.id == 1L }
+        settledDetail(presenter) { it.manga?.id == 1L }
         presenter.onCoverLoadFailed(500)
-        kotlinx.coroutines.delay(50)
+        runCurrent()
         refreshCount.get() shouldBe 1
 
         presenter.close()
     }
-
-    private suspend fun LibraryPresenter.awaitDetail(
-        predicate: (MangaDetailUiState) -> Boolean,
-    ): MangaDetailUiState = withTimeout(5_000) { detailState.first(predicate) }
 
     private fun manga(
         id: Long,
