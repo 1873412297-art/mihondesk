@@ -1,0 +1,28 @@
+name: Attach companion APK to release
+# Manually attaches the prebuilt Android companion APKs in mobile-companion/dist/ to an existing
+# release. The APKs are signed outside CI, so this workflow only uploads them.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to attach the APKs to
+        required: true
+        default: v0.4.0
+
+permissions:
+  contents: write
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Upload APKs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          ls -l mobile-companion/dist/*.apk
+          gh release upload "$TAG" mobile-companion/dist/*.apk --clobber
