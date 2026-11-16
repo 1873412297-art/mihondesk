@@ -17,6 +17,7 @@ internal fun Properties.readDesktopPreferences(): DesktopPreferences = DesktopPr
     .let { readSecurity(it) }
     .let { readBackground(it) }
     .let { readSyncAndBrowse(it) }
+    .let { readAppUpdates(it) }
 
 private fun Properties.readAppearance(into: DesktopPreferences): DesktopPreferences = into.copy(
     themeMode = enumValueOrDefault(getProperty("theme"), ThemeMode.System),
@@ -157,6 +158,7 @@ internal fun Properties.writeDesktopPreferences(preferences: DesktopPreferences)
     writeSecurity(preferences)
     writeBackground(preferences)
     writeSyncAndBrowse(preferences)
+    writeAppUpdates(preferences)
 }
 
 private fun Properties.writeAppearance(preferences: DesktopPreferences) {
@@ -296,4 +298,14 @@ private fun Properties.writeSyncAndBrowse(preferences: DesktopPreferences) {
     setProperty("browse.show_nsfw", preferences.showNsfwSources.toString())
     setProperty("browse.hidden_sources", preferences.hiddenSourceIds.encodeLongSet())
     setProperty("browse.global_search_only_pinned", preferences.globalSearchOnlyPinned.toString())
+}
+
+private fun Properties.readAppUpdates(into: DesktopPreferences): DesktopPreferences = into.copy(
+    appUpdateAutoCheck = getProperty("updates.auto_check")?.toBooleanStrictOrNull() ?: true,
+    appUpdateNotifiedVersion = getProperty("updates.notified_version") ?: "",
+)
+
+private fun Properties.writeAppUpdates(preferences: DesktopPreferences) {
+    setProperty("updates.auto_check", preferences.appUpdateAutoCheck.toString())
+    setProperty("updates.notified_version", preferences.appUpdateNotifiedVersion)
 }

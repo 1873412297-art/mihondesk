@@ -1,6 +1,7 @@
 package mihon.desktop.ui
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.WindowPosition
@@ -49,6 +50,10 @@ internal fun rememberAppWindowSetup(
         mihon.desktop.updates.AppUpdatePresenter(runtime.appUpdateService, app.scope, runtime.appUpdateInstaller) {
             close(true)
         }.also { runtime.onShutdown(it::shutdown) }
+    }
+    // A release found by the background check shows up on the update card right away.
+    LaunchedEffect(updates, runtime.appUpdateWatcher) {
+        runtime.appUpdateWatcher?.latest?.collect { release -> release?.let(updates::offer) }
     }
     return AppWindowSetup(controller, screen, tray, updates, ::close)
 }

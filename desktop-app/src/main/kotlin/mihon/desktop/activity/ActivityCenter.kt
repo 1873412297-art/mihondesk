@@ -6,7 +6,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
-enum class ActivityKind { DOWNLOAD, LIBRARY_UPDATE, EXTENSION_INSTALL, SYNC }
+enum class ActivityKind { DOWNLOAD, LIBRARY_UPDATE, EXTENSION_INSTALL, SYNC, APP_UPDATE }
 
 enum class ActivityState { RUNNING, FAILED, SUCCEEDED }
 
@@ -27,8 +27,10 @@ data class ActivityItem(
     val failureReason: String? = null,
     val updatedAt: Long = 0L,
     val retry: (() -> Unit)? = null,
-    /** Extra one-click actions rendered under the failure reason. */
+    /** Extra one-click actions rendered under the failure reason (or under [detail] when not failed). */
     val actions: List<ActivityAction> = emptyList(),
+    /** Shown instead of the generic "done" text for a finished entry, e.g. "0.5.0 is available". */
+    val detail: String? = null,
 )
 
 data class ActivityAction(val id: String, val label: String, val run: () -> Unit)

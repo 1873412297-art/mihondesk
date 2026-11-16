@@ -105,6 +105,7 @@ internal fun buildDeferredServices(
     localLibraryRoot: Path,
     backupScheduler: mihon.desktop.backup.DesktopBackupScheduler,
     extensionUpdateChecker: mihon.desktop.extension.ExtensionUpdateChecker,
+    appUpdateWatcher: mihon.desktop.updates.AppUpdateWatcher?,
     syncScheduler: mihon.desktop.sync.DesktopSyncScheduler,
     preferences: DesktopPreferenceStore,
     backgroundScheduler: mihon.desktop.platform.WindowsBackgroundScheduler?,
@@ -113,6 +114,7 @@ internal fun buildDeferredServices(
         runDeferredStep("local orphan scan") { cleanupOrphans(localImporter, localLibraryRoot) }
         runDeferredStep("backup scheduler") { backupScheduler.start() }
         runDeferredStep("extension update check") { extensionUpdateChecker.start() }
+        runDeferredStep("app update check") { appUpdateWatcher?.start() }
         runDeferredStep("sync scheduler") {
             syncScheduler.start()
             syncScheduler.googleDrive?.requestSync()

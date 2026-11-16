@@ -251,4 +251,10 @@ internal val UI_TEXT_SIMPLIFIED_B: Map<UiText, String> = mapOf(
     UiText.BrowseRemoveFromLibraryDone to "已将“{0}”移出书架",
     UiText.BrowseLibraryActionFailed to "无法更新书架：{0}",
     UiText.BrowseOpenDetails to "打开详情",
+    UiText.ActivityAppUpdate to "应用更新",
+    UiText.AppUpdateAvailableDetail to "新版本 {0} 已发布（当前 {1}）",
+    UiText.AppUpdateView to "查看更新",
+    UiText.AppUpdateNotificationTitle to "MihonDesk 有新版本",
+    UiText.AppUpdateNotificationMessage to "{0} 版本已发布，点击查看更新内容",
+    UiText.AppUpdateAutoCheck to "自动检查更新（启动时和每天一次）",
 )

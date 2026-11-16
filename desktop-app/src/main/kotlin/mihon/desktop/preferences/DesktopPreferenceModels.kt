@@ -88,4 +88,8 @@ data class DesktopPreferences(
     val showNsfwSources: Boolean = false,
     val hiddenSourceIds: Set<Long> = emptySet(),
     val globalSearchOnlyPinned: Boolean = false,
+    /** Check GitHub for a new MihonDesk release at startup and every 24 hours, and notify once per version. */
+    val appUpdateAutoCheck: Boolean = true,
+    /** Newest release tag the user was already notified about; it is not announced again. */
+    val appUpdateNotifiedVersion: String = "",
 )

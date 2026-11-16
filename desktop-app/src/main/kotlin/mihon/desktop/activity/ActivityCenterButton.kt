@@ -24,6 +24,7 @@ import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Extension
 import androidx.compose.material.icons.rounded.LibraryBooks
+import androidx.compose.material.icons.rounded.NewReleases
 import androidx.compose.material.icons.rounded.Sync
 import androidx.compose.material.icons.rounded.TaskAlt
 import androidx.compose.material3.CircularProgressIndicator
@@ -194,6 +195,7 @@ private fun ActivityKind.icon(): ImageVector = when (this) {
     ActivityKind.LIBRARY_UPDATE -> Icons.Rounded.LibraryBooks
     ActivityKind.EXTENSION_INSTALL -> Icons.Rounded.Extension
     ActivityKind.SYNC -> Icons.Rounded.Sync
+    ActivityKind.APP_UPDATE -> Icons.Rounded.NewReleases
 }
 
 private fun ActivityKind.label(strings: DesktopStrings): String = when (this) {
@@ -201,6 +203,7 @@ private fun ActivityKind.label(strings: DesktopStrings): String = when (this) {
     ActivityKind.LIBRARY_UPDATE -> strings.text(UiText.ActivityLibraryUpdate)
     ActivityKind.EXTENSION_INSTALL -> strings.text(UiText.ActivityExtensionInstall)
     ActivityKind.SYNC -> strings.text(UiText.ActivitySync)
+    ActivityKind.APP_UPDATE -> strings.text(UiText.ActivityAppUpdate)
 }
 
 @Composable
@@ -261,36 +264,16 @@ private fun ActivityRow(item: ActivityItem, strings: DesktopStrings, onRetry: ()
                             overflow = TextOverflow.Ellipsis,
                         )
                     }
-                    if (item.retry != null || item.actions.isNotEmpty()) {
-                        Row {
-                            if (item.retry != null) {
-                                TextButton(
-                                    onClick = onRetry,
-                                    modifier = Modifier.height(30.dp).testTag("activity-retry-${item.id}"),
-                                ) {
-                                    Text(
-                                        strings.text(UiText.ActivityRetry),
-                                        style = MaterialTheme.typography.labelMedium,
-                                    )
-                                }
-                            }
-                            item.actions.forEach { action ->
-                                TextButton(
-                                    onClick = action.run,
-                                    modifier = Modifier.height(30.dp)
-                                        .testTag("activity-action-${item.id}-${action.id}"),
-                                ) {
-                                    Text(action.label, style = MaterialTheme.typography.labelMedium)
-                                }
-                            }
-                        }
-                    }
+                    ActivityButtons(item, strings, onRetry)
                 }
-                ActivityState.SUCCEEDED -> Text(
-                    strings.text(UiText.ActivityDone),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = colors.onSurfaceVariant,
-                )
+                ActivityState.SUCCEEDED -> {
+                    Text(
+                        item.detail ?: strings.text(UiText.ActivityDone),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colors.onSurfaceVariant,
+                    )
+                    ActivityButtons(item, strings, onRetry)
+                }
             }
         }
         if (item.state != ActivityState.RUNNING) {
@@ -304,6 +287,27 @@ private fun ActivityRow(item: ActivityItem, strings: DesktopStrings, onRetry: ()
             }
         } else {
             Spacer(Modifier.size(24.dp))
+        }
+    }
+}
+
+/** Retry plus any one-click actions of [item]; nothing when it has neither. */
+@Composable
+private fun ActivityButtons(item: ActivityItem, strings: DesktopStrings, onRetry: () -> Unit) {
+    if (item.retry == null && item.actions.isEmpty()) return
+    Row {
+        if (item.retry != null) {
+            TextButton(onClick = onRetry, modifier = Modifier.height(30.dp).testTag("activity-retry-${item.id}")) {
+                Text(strings.text(UiText.ActivityRetry), style = MaterialTheme.typography.labelMedium)
+            }
+        }
+        item.actions.forEach { action ->
+            TextButton(
+                onClick = action.run,
+                modifier = Modifier.height(30.dp).testTag("activity-action-${item.id}-${action.id}"),
+            ) {
+                Text(action.label, style = MaterialTheme.typography.labelMedium)
+            }
         }
     }
 }

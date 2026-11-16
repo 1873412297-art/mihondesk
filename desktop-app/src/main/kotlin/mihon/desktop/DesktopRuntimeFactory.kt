@@ -302,6 +302,15 @@ object DesktopRuntimeFactory {
                 mihon.desktop.activity.bindActivitySources(activityCenter, appScope, downloader, libraryUpdateScheduler)
             }
             val backgroundScheduler = resolveBackgroundScheduler(directories)
+            val updateDelivery = resolveUpdateDelivery(layout, isPortable, executableDirectory, directories)
+            val appUpdateWatcher = mihon.desktop.updates.createAppUpdateWatcher(
+                launchUi,
+                updateDelivery.service,
+                preferences,
+                libraryUpdateAlerts,
+                activityCenter,
+                appScope,
+            )
             val deferredServices = buildDeferredServices(
                 launchUi = launchUi,
                 cleanupOrphans = cleanupOrphans,
@@ -309,11 +318,11 @@ object DesktopRuntimeFactory {
                 localLibraryRoot = localLibraryRoot,
                 backupScheduler = backupScheduler,
                 extensionUpdateChecker = extensionUpdateChecker,
+                appUpdateWatcher = appUpdateWatcher,
                 syncScheduler = syncScheduler,
                 preferences = preferences,
                 backgroundScheduler = backgroundScheduler,
             )
-            val updateDelivery = resolveUpdateDelivery(layout, isPortable, executableDirectory, directories)
             return DesktopRuntime(
                 directories = directories,
                 preferences = preferences,
@@ -344,6 +353,7 @@ object DesktopRuntimeFactory {
                 libraryUpdateService = libraryUpdateService,
                 libraryUpdateScheduler = libraryUpdateScheduler,
                 extensionUpdateChecker = extensionUpdateChecker,
+                appUpdateWatcher = appUpdateWatcher,
                 backgroundScheduler = backgroundScheduler,
                 webViews = webViews,
                 activityCenter = activityCenter,
@@ -359,6 +369,7 @@ object DesktopRuntimeFactory {
                     backupScheduler.stop()
                     syncScheduler.stop()
                     extensionUpdateChecker.stop()
+                    appUpdateWatcher?.close()
                     libraryUpdateScheduler.stop()
                     trackSyncService.close()
                     runBlocking { downloader.shutdown() }

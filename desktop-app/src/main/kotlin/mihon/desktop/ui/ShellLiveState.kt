@@ -137,14 +137,10 @@ internal fun ShellActivityEffects(app: AppSession, runtime: DesktopRuntime, wind
         alerts.clicks.collect { target ->
             target ?: return@collect
             window.showMainWindow()
-            when (target) {
-                is mihon.desktop.notification.LibraryUpdateTarget.Chapter ->
-                    navigator.navigate(DesktopDestination.Reader(target.chapterId))
-                mihon.desktop.notification.LibraryUpdateTarget.Updates ->
-                    navigator.navigate(DesktopDestination.Updates)
-            }
+            navigator.navigate(target.destination())
             alerts.clickHandled()
-            alerts.markSeen()
+            // The chapter badge is only cleared by opening new chapters, not by an app-update click.
+            if (target != mihon.desktop.notification.LibraryUpdateTarget.AppUpdate) alerts.markSeen()
         }
     }
     LaunchedEffect(runtime.libraryUpdateAlerts, destination) {
@@ -153,3 +149,11 @@ internal fun ShellActivityEffects(app: AppSession, runtime: DesktopRuntime, wind
         if (destination != DesktopDestination.Settings) app.state.settingsSectionRequest = null
     }
 }
+
+/** Where a clicked update notification (or its activity-center action) leads. */
+private fun mihon.desktop.notification.LibraryUpdateTarget.destination(): mihon.desktop.navigation.DesktopRoute =
+    when (this) {
+        is mihon.desktop.notification.LibraryUpdateTarget.Chapter -> DesktopDestination.Reader(chapterId)
+        mihon.desktop.notification.LibraryUpdateTarget.Updates -> DesktopDestination.Updates
+        mihon.desktop.notification.LibraryUpdateTarget.AppUpdate -> DesktopDestination.About
+    }

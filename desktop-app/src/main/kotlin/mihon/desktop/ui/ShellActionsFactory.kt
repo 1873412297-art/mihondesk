@@ -22,7 +22,16 @@ internal fun shellActions(
 ): DesktopShellActions = DesktopShellActions(
     library = libraryActions(ctx, live),
     appUpdateContent = {
-        mihon.desktop.ui.settings.AppUpdatePanel(appUpdates, ctx.runtime.appUpdateService)
+        mihon.desktop.ui.settings.AppUpdatePanel(
+            presenter = appUpdates,
+            service = ctx.runtime.appUpdateService,
+            autoCheck = ctx.session.preferences.appUpdateAutoCheck,
+            onAutoCheckChange = { enabled ->
+                ctx.session.preferences = ctx.runtime.preferences.updatePreferences {
+                    it.copy(appUpdateAutoCheck = enabled)
+                }
+            },
+        )
     },
     upcomingContent = upcomingContent(ctx, upcoming),
     browseContent = browseContent(ctx, live),

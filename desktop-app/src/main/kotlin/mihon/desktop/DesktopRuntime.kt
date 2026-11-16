@@ -64,6 +64,8 @@ class DesktopRuntime(
     val libraryUpdateService: mihon.desktop.library.update.LibraryUpdateService? = null,
     val libraryUpdateScheduler: mihon.desktop.library.update.LibraryUpdateScheduler? = null,
     val extensionUpdateChecker: mihon.desktop.extension.ExtensionUpdateChecker? = null,
+    /** Background check for a new MihonDesk release; null where no release package exists. */
+    val appUpdateWatcher: mihon.desktop.updates.AppUpdateWatcher? = null,
     val backgroundScheduler: mihon.desktop.platform.WindowsBackgroundScheduler? = null,
     val webViews: mihon.desktop.webview.DesktopWebViewManager? = null,
     val activityCenter: mihon.desktop.activity.ActivityCenter = mihon.desktop.activity.ActivityCenter(),

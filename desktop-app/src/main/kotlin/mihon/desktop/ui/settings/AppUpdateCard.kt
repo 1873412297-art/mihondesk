@@ -5,21 +5,26 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import mihon.desktop.i18n.LocalStrings
 import mihon.desktop.i18n.UiText
@@ -43,6 +48,9 @@ fun AppUpdateCard(
     canInstall: Boolean = false,
     onInstall: () -> Unit = {},
     onOpenLog: () -> Unit = {},
+    /** Whether the app checks for releases on its own; null hides the switch. */
+    autoCheck: Boolean? = null,
+    onAutoCheckChange: (Boolean) -> Unit = {},
 ) {
     val strings = LocalStrings.current
     Card(Modifier.fillMaxWidth().animateContentSize().testTag("app-update-card")) {
@@ -53,6 +61,7 @@ fun AppUpdateCard(
                     state.release?.currentVersion ?: mihon.desktop.updates.DesktopAppUpdateService.CURRENT_VERSION,
                 ),
             )
+            if (autoCheck != null) AutoCheckRow(autoCheck, onAutoCheckChange)
             val status = when (state.phase) {
                 AppUpdatePhase.Idle, AppUpdatePhase.Available -> null
                 AppUpdatePhase.Checking -> UiText.AppUpdateChecking
@@ -182,5 +191,27 @@ fun chooseAppUpdateDestination(name: String, title: String): Path? {
         Path.of(directory, if (selected.endsWith(extension, ignoreCase = true)) selected else selected + extension)
     } finally {
         dialog.dispose()
+    }
+}
+
+@Composable
+private fun AutoCheckRow(checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+    val strings = LocalStrings.current
+    Row(
+        modifier = Modifier.fillMaxWidth().toggleable(
+            value = checked,
+            role = Role.Switch,
+            onValueChange = onCheckedChange,
+        )
+            .testTag("app-update-auto-check"),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text(
+            strings.text(UiText.AppUpdateAutoCheck),
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.weight(1f),
+        )
+        Switch(checked = checked, onCheckedChange = null)
     }
 }

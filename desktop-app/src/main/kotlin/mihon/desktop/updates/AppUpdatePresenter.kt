@@ -63,6 +63,17 @@ class AppUpdatePresenter(
     private var operation: Job? = null
     private val uiContext = scope.coroutineContext.minusKey(Job)
 
+    /** Shows a release found by the background check, unless an update flow is already under way. */
+    fun offer(release: UpdateCheckResult.UpdateAvailable) {
+        val current = state.value
+        if (current.phase !in OFFERABLE_PHASES) return
+        mutableState.value = AppUpdateState(
+            phase = AppUpdatePhase.Available,
+            release = release,
+            previousOutcome = current.previousOutcome,
+        )
+    }
+
     fun check() {
         if (state.value.busy) return
         mutableState.value = AppUpdateState(phase = AppUpdatePhase.Checking)
@@ -180,3 +191,10 @@ class AppUpdatePresenter(
             .onFailure { mihon.desktop.logging.DesktopLogger.warn("AppUpdate", "Unable to abort prepared update", it) }
     }
 }
+
+private val OFFERABLE_PHASES = setOf(
+    AppUpdatePhase.Idle,
+    AppUpdatePhase.Current,
+    AppUpdatePhase.Failed,
+    AppUpdatePhase.Cancelled,
+)

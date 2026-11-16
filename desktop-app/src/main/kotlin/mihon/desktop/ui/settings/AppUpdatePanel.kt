@@ -17,7 +17,12 @@ import java.awt.Desktop
 import java.net.URI
 
 @Composable
-fun AppUpdatePanel(presenter: AppUpdatePresenter, service: DesktopAppUpdateService) {
+fun AppUpdatePanel(
+    presenter: AppUpdatePresenter,
+    service: DesktopAppUpdateService,
+    autoCheck: Boolean? = null,
+    onAutoCheckChange: (Boolean) -> Unit = {},
+) {
     // Releases currently publish Windows packages only; an update check on another host would
     // only ever report "no matching package".
     if (!mihon.desktop.platform.DesktopPlatform.isWindows) return
@@ -43,6 +48,8 @@ fun AppUpdatePanel(presenter: AppUpdatePresenter, service: DesktopAppUpdateServi
         onInstall = presenter::install,
         onOpenLog = { state.previousOutcome?.logFile?.let { log -> open { Desktop.getDesktop().open(log.toFile()) } } },
         onCheck = presenter::check,
+        autoCheck = autoCheck,
+        onAutoCheckChange = onAutoCheckChange,
         onCancel = presenter::cancel,
         onDownload = {
             try {

@@ -103,4 +103,10 @@ open class UiTextCatalogE : UiTextCatalogD() {
     val BrowseRemoveFromLibraryDone = UiText()
     val BrowseLibraryActionFailed = UiText()
     val BrowseOpenDetails = UiText()
+    val ActivityAppUpdate = UiText()
+    val AppUpdateAvailableDetail = UiText()
+    val AppUpdateView = UiText()
+    val AppUpdateNotificationTitle = UiText()
+    val AppUpdateNotificationMessage = UiText()
+    val AppUpdateAutoCheck = UiText()
 }

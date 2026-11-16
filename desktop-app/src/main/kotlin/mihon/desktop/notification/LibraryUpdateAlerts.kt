@@ -8,10 +8,13 @@ import mihon.desktop.i18n.UiText
 import mihon.desktop.i18n.text
 import mihon.desktop.library.update.LibraryUpdateReport
 
-/** Where clicking a library-update notification takes the user. */
+/** Where clicking an update notification (new chapters or a new app release) takes the user. */
 sealed interface LibraryUpdateTarget {
     data class Chapter(val chapterId: Long, val mangaId: Long) : LibraryUpdateTarget
     data object Updates : LibraryUpdateTarget
+
+    /** Settings > About, where the update card offers download and install. */
+    data object AppUpdate : LibraryUpdateTarget
 }
 
 data class LibraryUpdateNotice(
@@ -82,6 +85,18 @@ class LibraryUpdateAlerts(
         badge(_unseenCount.value)
         pendingTarget = notice.target
         if (enabled()) display(notice.title, notice.message)
+    }
+
+    /** A new app release: the balloon (when notifications are on) opens the update card. */
+    @Synchronized
+    fun onAppUpdate(title: String, message: String) {
+        pendingTarget = LibraryUpdateTarget.AppUpdate
+        if (enabled()) display(title, message)
+    }
+
+    /** Opens [target] as if its notification had been clicked (e.g. from the activity center). */
+    fun open(target: LibraryUpdateTarget) {
+        _clicks.value = target
     }
 
     /** Called by the tray when the balloon is clicked: hands the target to the UI once. */
