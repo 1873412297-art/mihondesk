@@ -1,9 +1,10 @@
 package mihon.desktop.updates
 
 import io.kotest.matchers.shouldBe
+import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.condition.EnabledOnOs
 import org.junit.jupiter.api.condition.OS
-import org.junit.jupiter.api.io.TempDir
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
 import java.nio.file.Files
@@ -13,8 +14,24 @@ import java.util.concurrent.TimeUnit
 /** Runs the real PowerShell helper against stand-in setup programs from System32. */
 @EnabledOnOs(OS.WINDOWS)
 class InstallerUpdateHandoffWindowsTest {
-    @TempDir
-    lateinit var root: Path
+    private lateinit var root: Path
+
+    @BeforeEach
+    fun createRoot() {
+        root = Files.createTempDirectory("installer-handoff")
+    }
+
+    /** The relaunched stand-in may still hold its EXE for a moment, so deletion retries. */
+    @AfterEach
+    fun deleteRoot() {
+        repeat(50) {
+            val deleted = runCatching {
+                Files.walk(root).use { paths -> paths.sorted(Comparator.reverseOrder()).forEach(Files::deleteIfExists) }
+            }.isSuccess
+            if (deleted) return
+            Thread.sleep(200)
+        }
+    }
 
     @ParameterizedTest
     @CsvSource("whoami.exe, exit=0", "where.exe, exit=2")
