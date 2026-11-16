@@ -90,6 +90,8 @@ data class DesktopPreferences(
     val globalSearchOnlyPinned: Boolean = false,
     /** Check GitHub for a new MihonDesk release at startup and every 24 hours, and notify once per version. */
     val appUpdateAutoCheck: Boolean = true,
+    /** Download a release found by the automatic check in the background, ready to install. */
+    val appUpdateAutoDownload: Boolean = false,
     /** Newest release tag the user was already notified about; it is not announced again. */
     val appUpdateNotifiedVersion: String = "",
 )

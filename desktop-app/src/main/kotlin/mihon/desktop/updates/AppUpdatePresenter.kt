@@ -58,18 +58,29 @@ class AppUpdatePresenter(
     private val onExit: () -> Unit = {},
 ) {
     val canInstall: Boolean get() = installer?.available == true
+
+    /** True when installing hands over to the setup wizard instead of replacing files in place. */
+    val installsWithWizard: Boolean get() = installer?.wizard == true
     private val mutableState = MutableStateFlow(AppUpdateState(previousOutcome = installer?.lastOutcome()))
     val state = mutableState.asStateFlow()
     private var operation: Job? = null
     private val uiContext = scope.coroutineContext.minusKey(Job)
 
-    /** Shows a release found by the background check, unless an update flow is already under way. */
-    fun offer(release: UpdateCheckResult.UpdateAvailable) {
+    /**
+     * Shows a release found by the background check, unless an update flow is already under way.
+     * A package the check already downloaded and verified goes straight to the install step.
+     */
+    fun offer(discovery: AppUpdateDiscovery) {
         val current = state.value
-        if (current.phase !in OFFERABLE_PHASES) return
+        val downloaded = discovery.download
+        val sameRelease = current.release?.release?.tagName == discovery.update.release.tagName
+        val upgrade = current.phase == AppUpdatePhase.Available && downloaded != null && sameRelease
+        if (current.phase !in OFFERABLE_PHASES && !upgrade) return
         mutableState.value = AppUpdateState(
-            phase = AppUpdatePhase.Available,
-            release = release,
+            phase = if (downloaded == null) AppUpdatePhase.Available else AppUpdatePhase.Ready,
+            release = discovery.update,
+            savedFile = downloaded?.file,
+            verifiedSha256 = downloaded?.sha256,
             previousOutcome = current.previousOutcome,
         )
     }

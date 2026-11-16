@@ -45,7 +45,7 @@ class AppUpdateWatcherTest {
         check = { results.removeFirstOrNull() ?: UpdateCheckResult.UpToDate("0.4.0") },
         preferences = store,
         scope = backgroundScope,
-        onNewRelease = { announced += it.release.tagName },
+        onNewRelease = { announced += it.update.release.tagName },
         initialDelay = 1.minutes,
         interval = 24.hours,
         ioDispatcher = StandardTestDispatcher(testScheduler),
@@ -117,6 +117,53 @@ class AppUpdateWatcherTest {
         announced shouldBe emptyList()
         // The turned-off check did not consume the queued release.
         store.updatePreferences { it.copy(appUpdateAutoCheck = true) }
-        watcher.checkOnce()?.release?.tagName shouldBe "v0.6.0"
+        watcher.checkOnce()?.update?.release?.tagName shouldBe "v0.6.0"
+    }
+
+    @Test
+    fun `with automatic downloads on, the announced release carries its verified package`() = runTest {
+        val announced = mutableListOf<AppUpdateDiscovery>()
+        val downloads = mutableListOf<String>()
+        val package050 = DownloadedAppUpdate(tempDir.resolve("mihondesk-v0.5.0.msi"), "a".repeat(64))
+        val watcher = AppUpdateWatcher(
+            check = { available("v0.5.0") },
+            preferences = store,
+            scope = backgroundScope,
+            onNewRelease = { announced += it },
+            download = { update ->
+                downloads += update.release.tagName
+                package050
+            },
+            ioDispatcher = StandardTestDispatcher(testScheduler),
+        )
+
+        // Off by default: the release is announced without downloading anything.
+        watcher.checkOnce()?.download shouldBe null
+        downloads shouldBe emptyList()
+
+        store.updatePreferences { it.copy(appUpdateAutoDownload = true, appUpdateNotifiedVersion = "") }
+        watcher.checkOnce()?.download shouldBe package050
+        downloads shouldContainExactly listOf("v0.5.0")
+        announced.map { it.download } shouldContainExactly listOf(null, package050)
+
+        // Already announced: not announced again, but the card still gets the downloaded package.
+        watcher.checkOnce() shouldBe null
+        watcher.latest.value?.download shouldBe package050
+    }
+
+    @Test
+    fun `a failed background download still announces the release`() = runTest {
+        val announced = mutableListOf<AppUpdateDiscovery>()
+        store.updatePreferences { it.copy(appUpdateAutoDownload = true) }
+        val watcher = AppUpdateWatcher(
+            check = { available("v0.5.0") },
+            preferences = store,
+            scope = backgroundScope,
+            onNewRelease = { announced += it },
+            download = { error("network down") },
+            ioDispatcher = StandardTestDispatcher(testScheduler),
+        )
+        watcher.checkOnce()?.update?.release?.tagName shouldBe "v0.5.0"
+        announced.single().download shouldBe null
     }
 }

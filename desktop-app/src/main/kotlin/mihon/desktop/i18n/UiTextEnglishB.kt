@@ -268,4 +268,10 @@ internal val UI_TEXT_ENGLISH_B: Map<UiText, String> = mapOf(
     UiText.AppUpdateNotificationMessage to "Version {0} is ready to download. Click to see what's new.",
     UiText.AppUpdateAutoCheck to "Check for updates automatically (at startup and once a day)",
     UiText.AppUpdateWhatsNew to "What's new",
+    UiText.AppUpdateAutoDownload to "Download updates in the background, ready to install",
+    UiText.AppUpdateDownloadedTitle to "MihonDesk update ready to install",
+    UiText.AppUpdateDownloadedMessage to "Version {0} has been downloaded and verified. Click to install.",
+    UiText.AppUpdateDownloadedDetail to "Version {0} is downloaded and ready to install (installed: {1})",
+    UiText.AppUpdateWizardHint to
+        "MihonDesk closes, then the setup wizard opens. Finish it and MihonDesk reopens on the new version.",
 )

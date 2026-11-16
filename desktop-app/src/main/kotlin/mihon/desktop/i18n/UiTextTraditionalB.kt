@@ -258,4 +258,9 @@ internal val UI_TEXT_TRADITIONAL_B: Map<UiText, String> = mapOf(
     UiText.AppUpdateNotificationMessage to "{0} 版本已發布，點擊查看更新內容",
     UiText.AppUpdateAutoCheck to "自動檢查更新（啟動時和每天一次）",
     UiText.AppUpdateWhatsNew to "更新內容",
+    UiText.AppUpdateAutoDownload to "在背景自動下載更新，下載完成後再由你決定安裝",
+    UiText.AppUpdateDownloadedTitle to "MihonDesk 新版本已下載",
+    UiText.AppUpdateDownloadedMessage to "{0} 版本已下載並驗證完成，點擊安裝",
+    UiText.AppUpdateDownloadedDetail to "新版本 {0} 已下載，可以安裝（目前 {1}）",
+    UiText.AppUpdateWizardHint to "MihonDesk 會先結束，然後開啟安裝精靈；完成安裝後會自動重新開啟新版本。",
 )

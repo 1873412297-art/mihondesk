@@ -22,6 +22,8 @@ fun AppUpdatePanel(
     service: DesktopAppUpdateService,
     autoCheck: Boolean? = null,
     onAutoCheckChange: (Boolean) -> Unit = {},
+    autoDownload: Boolean? = null,
+    onAutoDownloadChange: (Boolean) -> Unit = {},
 ) {
     // Releases currently publish Windows packages only; an update check on another host would
     // only ever report "no matching package".
@@ -50,6 +52,9 @@ fun AppUpdatePanel(
         onCheck = presenter::check,
         autoCheck = autoCheck,
         onAutoCheckChange = onAutoCheckChange,
+        autoDownload = autoDownload,
+        onAutoDownloadChange = onAutoDownloadChange,
+        installsWithWizard = presenter.installsWithWizard,
         onCancel = presenter::cancel,
         onDownload = {
             try {

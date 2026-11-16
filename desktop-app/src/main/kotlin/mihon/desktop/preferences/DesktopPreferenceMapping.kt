@@ -302,10 +302,12 @@ private fun Properties.writeSyncAndBrowse(preferences: DesktopPreferences) {
 
 private fun Properties.readAppUpdates(into: DesktopPreferences): DesktopPreferences = into.copy(
     appUpdateAutoCheck = getProperty("updates.auto_check")?.toBooleanStrictOrNull() ?: true,
+    appUpdateAutoDownload = getProperty("updates.auto_download")?.toBooleanStrictOrNull() ?: false,
     appUpdateNotifiedVersion = getProperty("updates.notified_version") ?: "",
 )
 
 private fun Properties.writeAppUpdates(preferences: DesktopPreferences) {
     setProperty("updates.auto_check", preferences.appUpdateAutoCheck.toString())
+    setProperty("updates.auto_download", preferences.appUpdateAutoDownload.toString())
     setProperty("updates.notified_version", preferences.appUpdateNotifiedVersion)
 }

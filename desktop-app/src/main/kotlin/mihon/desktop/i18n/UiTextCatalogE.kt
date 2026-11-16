@@ -110,4 +110,9 @@ open class UiTextCatalogE : UiTextCatalogD() {
     val AppUpdateNotificationMessage = UiText()
     val AppUpdateAutoCheck = UiText()
     val AppUpdateWhatsNew = UiText()
+    val AppUpdateAutoDownload = UiText()
+    val AppUpdateDownloadedTitle = UiText()
+    val AppUpdateDownloadedMessage = UiText()
+    val AppUpdateDownloadedDetail = UiText()
+    val AppUpdateWizardHint = UiText()
 }

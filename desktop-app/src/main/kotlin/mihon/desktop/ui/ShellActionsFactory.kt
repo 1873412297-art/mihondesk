@@ -31,6 +31,12 @@ internal fun shellActions(
                     it.copy(appUpdateAutoCheck = enabled)
                 }
             },
+            autoDownload = ctx.session.preferences.appUpdateAutoDownload,
+            onAutoDownloadChange = { enabled ->
+                ctx.session.preferences = ctx.runtime.preferences.updatePreferences {
+                    it.copy(appUpdateAutoDownload = enabled)
+                }
+            },
         )
     },
     upcomingContent = upcomingContent(ctx, upcoming),

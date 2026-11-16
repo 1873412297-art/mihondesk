@@ -51,6 +51,11 @@ fun AppUpdateCard(
     /** Whether the app checks for releases on its own; null hides the switch. */
     autoCheck: Boolean? = null,
     onAutoCheckChange: (Boolean) -> Unit = {},
+    /** Whether a found release is downloaded in the background; null hides the switch. */
+    autoDownload: Boolean? = null,
+    onAutoDownloadChange: (Boolean) -> Unit = {},
+    /** Installing opens the setup wizard (installed builds) instead of replacing files in place. */
+    installsWithWizard: Boolean = false,
 ) {
     val strings = LocalStrings.current
     Card(Modifier.fillMaxWidth().animateContentSize().testTag("app-update-card")) {
@@ -61,7 +66,18 @@ fun AppUpdateCard(
                     state.release?.currentVersion ?: mihon.desktop.updates.DesktopAppUpdateService.CURRENT_VERSION,
                 ),
             )
-            if (autoCheck != null) AutoCheckRow(autoCheck, onAutoCheckChange)
+            if (autoCheck != null) {
+                UpdateSwitchRow(UiText.AppUpdateAutoCheck, "app-update-auto-check", autoCheck, true, onAutoCheckChange)
+            }
+            if (autoCheck != null && autoDownload != null) {
+                UpdateSwitchRow(
+                    UiText.AppUpdateAutoDownload,
+                    "app-update-auto-download",
+                    autoDownload,
+                    enabled = autoCheck,
+                    onCheckedChange = onAutoDownloadChange,
+                )
+            }
             val status = when (state.phase) {
                 AppUpdatePhase.Idle, AppUpdatePhase.Available -> null
                 AppUpdatePhase.Checking -> UiText.AppUpdateChecking
@@ -108,7 +124,7 @@ fun AppUpdateCard(
                 SelectionContainer {
                     Text(strings.text(UiText.AppUpdateReady, file), Modifier.testTag("app-update-saved"))
                 }
-                Text(strings.text(if (canInstall) UiText.AppUpdateAutomaticHint else UiText.AppUpdateManual))
+                Text(strings.text(installHint(canInstall, installsWithWizard)))
             }
             if (state.installFailed) {
                 Text(
@@ -187,24 +203,37 @@ fun chooseAppUpdateDestination(name: String, title: String): Path? {
     }
 }
 
+private fun installHint(canInstall: Boolean, wizard: Boolean): UiText = when {
+    !canInstall -> UiText.AppUpdateManual
+    wizard -> UiText.AppUpdateWizardHint
+    else -> UiText.AppUpdateAutomaticHint
+}
+
 @Composable
-private fun AutoCheckRow(checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+private fun UpdateSwitchRow(
+    label: UiText,
+    tag: String,
+    checked: Boolean,
+    enabled: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
     val strings = LocalStrings.current
     Row(
         modifier = Modifier.fillMaxWidth().toggleable(
             value = checked,
+            enabled = enabled,
             role = Role.Switch,
             onValueChange = onCheckedChange,
         )
-            .testTag("app-update-auto-check"),
+            .testTag(tag),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text(
-            strings.text(UiText.AppUpdateAutoCheck),
+            strings.text(label),
             style = MaterialTheme.typography.bodyMedium,
             modifier = Modifier.weight(1f),
         )
-        Switch(checked = checked, onCheckedChange = null)
+        Switch(checked = checked, onCheckedChange = null, enabled = enabled)
     }
 }

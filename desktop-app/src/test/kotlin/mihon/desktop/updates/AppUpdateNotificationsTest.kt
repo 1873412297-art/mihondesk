@@ -1,7 +1,12 @@
 package mihon.desktop.updates
 
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
@@ -62,7 +67,7 @@ class AppUpdateNotificationsTest {
     @Test
     fun `the activity entry names the version and its action opens the update card`() {
         var opened = 0
-        val item = appUpdateActivity(release, EnglishStrings) { opened++ }
+        val item = appUpdateActivity(AppUpdateDiscovery(release), EnglishStrings) { opened++ }
 
         item.id shouldBe APP_UPDATE_ACTIVITY_ID
         item.kind shouldBe ActivityKind.APP_UPDATE
@@ -71,6 +76,10 @@ class AppUpdateNotificationsTest {
         item.detail shouldBe "Version 0.5.0 is available (installed: 0.4.0)"
         item.actions.single().run()
         opened shouldBe 1
+
+        val downloaded = DownloadedAppUpdate(java.nio.file.Path.of("mihondesk-0.5.0.exe"), "b".repeat(64))
+        appUpdateActivity(AppUpdateDiscovery(release, downloaded), EnglishStrings) {}.detail shouldBe
+            "Version 0.5.0 is downloaded and ready to install (installed: 0.4.0)"
     }
 
     @Test
@@ -78,14 +87,21 @@ class AppUpdateNotificationsTest {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
         try {
             val presenter = AppUpdatePresenter(DesktopAppUpdateService(), scope)
-            presenter.offer(release)
+            presenter.offer(AppUpdateDiscovery(release))
             presenter.state.value.phase shouldBe AppUpdatePhase.Available
             presenter.state.value.release shouldBe release
 
             // Already showing a release: a later offer does not replace it mid-flow.
             val newer = release.copy(release = release.release.copy(version = "0.6.0", tagName = "v0.6.0"))
-            presenter.offer(newer)
+            presenter.offer(AppUpdateDiscovery(newer))
             presenter.state.value.release shouldBe release
+
+            // The same release, now downloaded in the background, goes straight to the install step.
+            val downloaded = DownloadedAppUpdate(java.nio.file.Path.of("mihondesk-0.5.0.msi"), "c".repeat(64))
+            presenter.offer(AppUpdateDiscovery(release, downloaded))
+            presenter.state.value.phase shouldBe AppUpdatePhase.Ready
+            presenter.state.value.savedFile shouldBe downloaded.file
+            presenter.state.value.verifiedSha256 shouldBe downloaded.sha256
         } finally {
             scope.cancel()
         }
@@ -128,5 +144,32 @@ class AppUpdateNotificationsTest {
             }
         }
         onNodeWithTag("app-update-auto-check").assertDoesNotExist()
+    }
+
+    @Test
+    fun `the auto-download switch follows the auto-check switch`() = runComposeUiTest {
+        val changes = mutableListOf<Boolean>()
+        var autoCheck by mutableStateOf(true)
+        setContent {
+            MaterialTheme {
+                AppUpdateCard(
+                    state = AppUpdateState(),
+                    onCheck = {},
+                    onDownload = {},
+                    onCancel = {},
+                    onOpenFolder = {},
+                    onOpenRelease = {},
+                    autoCheck = autoCheck,
+                    autoDownload = false,
+                    onAutoDownloadChange = { changes += it },
+                )
+            }
+        }
+        onNodeWithTag("app-update-auto-download").assertIsOff().performClick()
+        changes shouldContainExactly listOf(true)
+
+        // Without automatic checks there is nothing to download in the background.
+        autoCheck = false
+        onNodeWithTag("app-update-auto-download").assertIsNotEnabled()
     }
 }

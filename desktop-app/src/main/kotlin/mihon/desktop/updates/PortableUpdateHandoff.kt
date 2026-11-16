@@ -21,6 +21,9 @@ interface PreparedAppUpdate {
 
 interface AppUpdateInstaller {
     val available: Boolean
+
+    /** Whether the install runs the release's setup wizard (installed builds) rather than in place. */
+    val wizard: Boolean get() = false
     fun lastOutcome(): AppUpdateOutcome?
     suspend fun prepare(archive: Path, expectedSha256: String): PreparedAppUpdate
 }

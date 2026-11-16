@@ -236,6 +236,6 @@ internal fun resolveUpdateDelivery(
     installer = if (isPortable) {
         mihon.desktop.updates.PortableUpdateHandoff(executableDirectory, directories.root)
     } else {
-        null
+        mihon.desktop.updates.InstallerUpdateHandoff(executableDirectory, directories.root.resolve("updates"))
     },
 )
