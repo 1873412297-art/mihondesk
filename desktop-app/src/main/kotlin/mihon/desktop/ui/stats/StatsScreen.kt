@@ -52,7 +52,6 @@ fun StatsScreen(
         modifier = modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(16.dp)
             .testTag(STATS_SCREEN_TEST_TAG),
         verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {

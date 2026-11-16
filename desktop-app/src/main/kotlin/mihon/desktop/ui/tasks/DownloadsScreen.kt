@@ -141,8 +141,8 @@ fun DownloadsScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .testTag(DOWNLOADS_SCREEN_TEST_TAG)
-                .padding(16.dp),
+                // The shell already pads every page; a second inset pushed this page off the others' grid.
+                .testTag(DOWNLOADS_SCREEN_TEST_TAG),
         ) {
             // Top Header
             FlowRow(

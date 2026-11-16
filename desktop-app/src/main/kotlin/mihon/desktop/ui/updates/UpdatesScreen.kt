@@ -99,8 +99,8 @@ fun UpdatesScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .testTag(UPDATES_SCREEN_TEST_TAG)
-            .padding(16.dp),
+            // The shell already pads every page; a second inset pushed this page off the others' grid.
+            .testTag(UPDATES_SCREEN_TEST_TAG),
     ) {
         // Header
         Row(

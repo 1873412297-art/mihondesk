@@ -94,6 +94,8 @@ internal fun LibraryPane(
 
     BoxWithConstraints(modifier = modifier) {
         val useNarrowControls = maxWidth < 900.dp
+        // Title and its actions share one row unless the pane is genuinely narrow.
+        val stackHeader = maxWidth < 600.dp
         val headerActions: @Composable () -> Unit = {
             LibraryHeaderActions(
                 state = state,
@@ -120,7 +122,7 @@ internal fun LibraryPane(
             modifier = Modifier.fillMaxSize(),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            if (useNarrowControls) {
+            if (stackHeader) {
                 Column(
                     modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -156,7 +158,7 @@ internal fun LibraryPane(
 
             if (useNarrowControls) {
                 FlowRow(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp),
+                    modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {

@@ -24,6 +24,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -235,13 +238,19 @@ internal fun LibraryDisplayModeControls(
         LibraryDisplayMode.CoverOnly to strings.libraryDisplayCoverOnly,
         LibraryDisplayMode.List to strings.libraryDisplayList,
     )
-    for ((mode, label) in modes) {
-        FilterChip(
-            selected = state.displayMode == mode,
-            onClick = { onDisplayModeChange(mode) },
-            label = { Text(label, style = MaterialTheme.typography.labelMedium) },
-            modifier = Modifier.testTag("display-mode-${mode.name}"),
-        )
+    // One segmented control: the modes are mutually exclusive, so they read as a single choice.
+    SingleChoiceSegmentedButtonRow(modifier = Modifier.testTag("library-display-modes")) {
+        modes.forEachIndexed { index, (mode, label) ->
+            SegmentedButton(
+                selected = state.displayMode == mode,
+                onClick = { onDisplayModeChange(mode) },
+                shape = SegmentedButtonDefaults.itemShape(index, modes.size),
+                // No check mark: the filled segment already shows the choice and keeps widths steady.
+                icon = {},
+                label = { Text(label, style = MaterialTheme.typography.labelMedium) },
+                modifier = Modifier.testTag("display-mode-${mode.name}"),
+            )
+        }
     }
 }
 
@@ -252,45 +261,39 @@ internal fun LibraryActionControls(
     onOpenDisplayOptions: () -> Unit,
     onOpenFilterDialog: () -> Unit,
 ) {
-    Surface(
-        shape = RoundedCornerShape(8.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            DesktopTooltipBox(text = strings.text(UiText.LibraryDisplayOptions)) {
-                IconButton(onClick = onOpenDisplayOptions, modifier = Modifier.testTag("library-display-options")) {
-                    Icon(
-                        imageVector = Icons.Rounded.Tune,
-                        contentDescription = strings.text(UiText.LibraryDisplayOptions),
-                    )
-                }
+        DesktopTooltipBox(text = strings.text(UiText.LibraryDisplayOptions)) {
+            IconButton(onClick = onOpenDisplayOptions, modifier = Modifier.testTag("library-display-options")) {
+                Icon(
+                    imageVector = Icons.Rounded.Tune,
+                    contentDescription = strings.text(UiText.LibraryDisplayOptions),
+                )
             }
-            BadgedBox(
-                badge = {
-                    if (state.filterState.hasActiveFilters) {
-                        Badge(modifier = Modifier.testTag("filter-active-badge")) {
-                            Text(state.filterState.activeCount.toString())
-                        }
+        }
+        BadgedBox(
+            badge = {
+                if (state.filterState.hasActiveFilters) {
+                    Badge(modifier = Modifier.testTag("filter-active-badge")) {
+                        Text(state.filterState.activeCount.toString())
                     }
-                },
-            ) {
-                DesktopTooltipBox(text = strings.libraryFilterAndSort) {
-                    OutlinedButton(
-                        onClick = onOpenFilterDialog,
-                        modifier = Modifier.testTag("library-filter-sort-button"),
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.FilterList,
-                            contentDescription = strings.libraryFilterAndSort,
-                            modifier = Modifier.size(18.dp),
-                        )
-                        Spacer(Modifier.width(6.dp))
-                        Text(strings.libraryFilterAndSort)
-                    }
+                }
+            },
+        ) {
+            DesktopTooltipBox(text = strings.libraryFilterAndSort) {
+                OutlinedButton(
+                    onClick = onOpenFilterDialog,
+                    modifier = Modifier.testTag("library-filter-sort-button"),
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.FilterList,
+                        contentDescription = strings.libraryFilterAndSort,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(strings.libraryFilterAndSort)
                 }
             }
         }
