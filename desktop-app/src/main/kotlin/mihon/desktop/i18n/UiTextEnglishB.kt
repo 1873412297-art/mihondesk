@@ -221,8 +221,9 @@ internal val UI_TEXT_ENGLISH_B: Map<UiText, String> = mapOf(
     UiText.StartImportLocalDescription to "Add comic folders or archives that are already on this PC.",
     UiText.StartRestoreBackupTitle to "Restore Mihon backup",
     UiText.StartRestoreBackupDescription to "Bring over your library from a Mihon / Tachiyomi .tachibk backup.",
-    UiText.StartPairPhoneTitle to "Pair phone sync",
-    UiText.StartPairPhoneDescription to "Open sync settings and scan the pairing QR code with Mihon on your phone.",
+    UiText.StartPairPhoneTitle to "Sync with your phone",
+    UiText.StartPairPhoneDescription to
+        "Sign in to Google Drive to sync your library and reading progress with the phone companion app.",
     UiText.StartSkipStep to "Skip this step",
     UiText.ReaderPageSlider to "Page",
     UiText.ReaderPagePosition to "Page {0} of {1}",
