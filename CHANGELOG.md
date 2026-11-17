@@ -2,6 +2,10 @@
 
 这里记录 mihondesk Windows 版的更新。安装包与完整发布说明见 [GitHub Releases](https://github.com/1873412297-art/mihondesk/releases)。继承自 Android 上游的历史日志保留在 [Mihon 更新日志](docs/upstream/MIHON_CHANGELOG.md)。
 
+## 未发布（0.5.1）
+
+- **文案修正**：首页 / 空书架的「与手机同步书架」卡片改为说明通过 Google Drive 与手机伴侣应用同步，不再提已移除的扫码配对。
+
 ## [0.5.0](https://github.com/1873412297-art/mihondesk/releases/tag/v0.5.0)
 
 - **新版本提醒**：启动一分钟后和之后每 24 小时检查一次新版本，发现后弹出系统通知，并在活动中心和「设置 → 关于」的更新卡片里提示，点击直接打开更新卡片；同一版本只提醒一次，可在更新卡片上关闭自动检查。更新卡片会显示这一版的更新内容（不再原样显示整段发布说明）；
