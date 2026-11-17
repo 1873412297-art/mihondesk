@@ -37,6 +37,8 @@ jobs:
       VERSION: ${{ inputs.version }}
       REPLACE: ${{ inputs.replace }}
       GH_TOKEN: ${{ github.token }}
+      # Baked into the package as the Google Drive OAuth client; never committed.
+      GDRIVE_CLIENT_SECRET: ${{ secrets.GDRIVE_CLIENT_SECRET }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -45,6 +47,8 @@ jobs:
         shell: pwsh
         run: |
           if ($env:VERSION -notmatch '^[0-9]+\.[0-9]+\.[0-9]+$') { throw "Not a version: $env:VERSION" }
+          # Without it Google Drive sync ships as "not configured".
+          if (-not $env:GDRIVE_CLIENT_SECRET) { throw 'Repository secret GDRIVE_CLIENT_SECRET is not set' }
           $declared = (Get-Content -LiteralPath desktop-version.txt -Raw).Trim()
           if ($declared -ne $env:VERSION) { throw "desktop-version.txt says $declared, not $env:VERSION" }
           if (-not (Test-Path -LiteralPath "docs/desktop-release-notes-$env:VERSION.md")) {
@@ -131,6 +135,7 @@ jobs:
     env:
       VERSION: ${{ inputs.version }}
       GH_TOKEN: ${{ github.token }}
+      GDRIVE_CLIENT_SECRET: ${{ secrets.GDRIVE_CLIENT_SECRET }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
