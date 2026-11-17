@@ -19,16 +19,16 @@
 
 ## 下载
 
-当前版本 **0.5.0**，支持 Windows 10 22H2 / Windows 11（x64），已内置 Java 运行时，无需另装。
+当前版本 **0.5.1**，支持 Windows 10 22H2 / Windows 11（x64），已内置 Java 运行时，无需另装。
 
 | 下载 | 说明 |
 | --- | --- |
-| **[EXE 安装包](https://github.com/1873412297-art/mihondesk/releases/download/v0.5.0/mihondesk-0.5.0.exe)** | 推荐，按向导安装 |
-| [MSI 安装包](https://github.com/1873412297-art/mihondesk/releases/download/v0.5.0/mihondesk-0.5.0.msi) | 需要 MSI 时使用 |
-| [便携 ZIP](https://github.com/1873412297-art/mihondesk/releases/download/v0.5.0/mihondesk-0.5.0-windows-x64-portable.zip) | 解压到可写目录后运行 `mihondesk.exe` |
-| [macOS DMG](https://github.com/1873412297-art/mihondesk/releases/download/v0.5.0/mihondesk-0.5.0-macos-arm64.dmg) | Apple Silicon，未签名；首次打开请在 Finder 中右键“打开” |
+| **[EXE 安装包](https://github.com/1873412297-art/mihondesk/releases/download/v0.5.1/mihondesk-0.5.1.exe)** | 推荐，按向导安装 |
+| [MSI 安装包](https://github.com/1873412297-art/mihondesk/releases/download/v0.5.1/mihondesk-0.5.1.msi) | 需要 MSI 时使用 |
+| [便携 ZIP](https://github.com/1873412297-art/mihondesk/releases/download/v0.5.1/mihondesk-0.5.1-windows-x64-portable.zip) | 解压到可写目录后运行 `mihondesk.exe` |
+| [macOS DMG](https://github.com/1873412297-art/mihondesk/releases/download/v0.5.1/mihondesk-0.5.1-macos-arm64.dmg) | Apple Silicon，未签名；首次打开请在 Finder 中右键“打开” |
 
-可用 [SHA256SUMS.txt](https://github.com/1873412297-art/mihondesk/releases/download/v0.5.0/SHA256SUMS.txt) 校验下载文件。装好后，新版本发布时应用会自动提醒。
+可用 [SHA256SUMS.txt](https://github.com/1873412297-art/mihondesk/releases/download/v0.5.1/SHA256SUMS.txt) 校验下载文件。装好后，新版本发布时应用会自动提醒。
 
 ## 界面预览
 
