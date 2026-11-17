@@ -110,8 +110,14 @@ jobs:
           if ($env:REPLACE -eq 'true') {
             gh release view "v$env:VERSION" --repo $env:GITHUB_REPOSITORY *> $null
             if ($LASTEXITCODE -eq 0) {
-              gh release delete "v$env:VERSION" --repo $env:GITHUB_REPOSITORY --cleanup-tag --yes
+              gh release delete "v$env:VERSION" --repo $env:GITHUB_REPOSITORY --yes
               if ($LASTEXITCODE -ne 0) { throw 'Could not delete the release being replaced' }
+            }
+            # A draft has no tag yet; only a published release leaves one behind.
+            gh api "repos/$env:GITHUB_REPOSITORY/git/ref/tags/v$env:VERSION" *> $null
+            if ($LASTEXITCODE -eq 0) {
+              gh api -X DELETE "repos/$env:GITHUB_REPOSITORY/git/refs/tags/v$env:VERSION"
+              if ($LASTEXITCODE -ne 0) { throw 'Could not delete the tag being replaced' }
             }
             $global:LASTEXITCODE = 0
           }
