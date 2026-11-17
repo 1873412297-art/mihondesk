@@ -2,8 +2,9 @@
 
 这里记录 mihondesk Windows 版的更新。安装包与完整发布说明见 [GitHub Releases](https://github.com/1873412297-art/mihondesk/releases)。继承自 Android 上游的历史日志保留在 [Mihon 更新日志](docs/upstream/MIHON_CHANGELOG.md)。
 
-## 未发布（0.5.1）
+## [0.5.1](https://github.com/1873412297-art/mihondesk/releases/tag/v0.5.1)
 
+- **修复 Google Drive 同步**：0.5.0 发行包缺少 Google Drive 客户端密钥，同步页显示“此版本未配置 Google Drive”，无法登录。0.5.1 恢复正常；发布构建现在缺少密钥时会直接失败，不会再发出无法同步的版本；
 - **文案修正**：首页 / 空书架的「与手机同步书架」卡片改为说明通过 Google Drive 与手机伴侣应用同步，不再提已移除的扫码配对。
 
 ## [0.5.0](https://github.com/1873412297-art/mihondesk/releases/tag/v0.5.0)
