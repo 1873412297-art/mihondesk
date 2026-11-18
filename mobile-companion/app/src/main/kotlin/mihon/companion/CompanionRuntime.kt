@@ -32,9 +32,12 @@ class CompanionRuntime(
     companion object {
         fun create(context: Context): CompanionRuntime {
             val dir = File(context.filesDir, "library")
+            // A first sync uploads the whole library (several MB). OkHttp's default 10 s write
+            // timeout cut such uploads off on slow links, so allow minutes per transfer.
             val http = OkHttpClient.Builder()
-                .connectTimeout(20, TimeUnit.SECONDS)
-                .readTimeout(60, TimeUnit.SECONDS)
+                .connectTimeout(30, TimeUnit.SECONDS)
+                .writeTimeout(5, TimeUnit.MINUTES)
+                .readTimeout(2, TimeUnit.MINUTES)
                 .build()
             val library = LibraryStore(File(dir, "library.pb"), Dispatchers.IO)
             val authorizer = DriveAuthorizer(context.applicationContext)

@@ -82,4 +82,7 @@
     <string name="sign_in_error_code">Google sign-in failed (error %1$d): %2$s</string>
     <string name="action_failed">Failed: %1$s</string>
     <string name="signing_info">Google Cloud registration — package: %1$s · SHA-1: %2$s</string>
+    <string name="sync_error_timeout">Sync failed: the connection to Google Drive timed out. Check the network or proxy (Google must be reachable from this app) and sync again; a large first upload can take a few minutes.</string>
+    <string name="sync_error_network">Sync failed: cannot reach Google Drive (%1$s). Check the network or proxy.</string>
+    <string name="sync_error_sign_in">Sync failed: Google sign-in expired. Sign out and sign in again.</string>
 </resources>

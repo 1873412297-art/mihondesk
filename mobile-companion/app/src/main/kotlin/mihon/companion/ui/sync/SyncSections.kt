@@ -122,7 +122,7 @@ private fun StatusLine(state: SyncUiState) {
     }
     status.lastError?.let {
         Text(
-            stringResource(R.string.sync_error, it),
+            SyncErrors.describe(it).let { msg -> stringResource(msg.text, *msg.args.toTypedArray()) },
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.error,
         )

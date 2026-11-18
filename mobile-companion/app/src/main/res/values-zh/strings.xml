@@ -82,4 +82,7 @@
     <string name="sign_in_error_code">Google 登录失败（错误 %1$d）：%2$s</string>
     <string name="action_failed">操作失败：%1$s</string>
     <string name="signing_info">Google Cloud 登记信息 — 包名：%1$s · SHA-1：%2$s</string>
+    <string name="sync_error_timeout">同步失败：连接 Google Drive 超时。请检查网络或代理（本应用需要能访问 Google），然后重新同步；首次上传整个书架可能需要几分钟。</string>
+    <string name="sync_error_network">同步失败：无法连接 Google Drive（%1$s），请检查网络或代理。</string>
+    <string name="sync_error_sign_in">同步失败：Google 登录已失效，请退出登录后重新登录。</string>
 </resources>

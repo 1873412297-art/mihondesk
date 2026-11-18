@@ -52,6 +52,13 @@ jobs:
           fi
           ls -l "${apks[@]}"
           gh release upload "$TAG" "${apks[@]}" --clobber
+          # Remove companion APKs of older versions so the release offers only the current one.
+          keep=" $(for a in "${apks[@]}"; do printf '%s ' "$(basename "$a")"; done)"
+          gh release view "$TAG" --json assets \
+            --jq '.assets[].name | select(test("^mihondesk-companion-.*\\.apk$"))' |
+            while read -r name; do
+              case "$keep" in *" $name "*) ;; *) echo "Removing old asset $name"; gh release delete-asset "$TAG" "$name" --yes ;; esac
+            done
 
       - name: Update release notes
         if: inputs.update_notes

@@ -1,7 +1,7 @@
 ### Android 伴侣应用（测试版）
 
-- `mihondesk-companion-0.2.1.apk`（约 2.2 MB）：手机端伴侣应用。自动读取 Mihon 的备份，通过 Google Drive 与桌面端同步书架、分类和阅读进度；也可以手动导入 / 导出 Mihon 备份（`.tachibk`）。
-- `mihondesk-companion-0.2.1-debug.apk`（约 21 MB）：未压缩版，小安装包无法打开时使用。
+- `mihondesk-companion-0.2.2.apk`（约 2.2 MB）：手机端伴侣应用。自动读取 Mihon 的备份，通过 Google Drive 与桌面端同步书架、分类和阅读进度；也可以手动导入 / 导出 Mihon 备份（`.tachibk`）。
+- `mihondesk-companion-0.2.2-debug.apk`（约 21 MB）：未压缩版，小安装包无法打开时使用。
 
 **使用方法**
 
