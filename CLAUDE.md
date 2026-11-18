@@ -55,6 +55,22 @@ detekt 已把其中可机器检查的部分设为构建失败项（见 `config/d
   通过 `./gradlew -p mobile-companion ...` 构建；它复用 `:sync` 模块做 Google Drive 书架同步。它不是上游 Mihon 模块，
   不要把它并入根构建，也不要让桌面端模块依赖它。修改 `sync` 时要同时跑 `./gradlew -p mobile-companion :app:testDebugUnitTest`。
 
+## 版本号规则（桌面端与手机伴侣应用相同）
+
+版本号固定为三段 `大.中.小`，每段按整数比较（更新检查 `DesktopAppUpdateService.isNewerVersion` 和 Windows MSI 都这样比较）：
+
+| 更新类型 | 怎么改 | 例子 |
+| --- | --- | --- |
+| 小更新（修 Bug、小调整） | 最后一段个位 +1 | 0.2.20 → 0.2.21 → 0.2.22 … 最多到 0.2.29 |
+| 中版本（新功能） | 最后一段十位 +1，个位归 0 | 0.2.2x → 0.2.30 |
+| 大版本（大改动） | 中间一段 +1，最后一段归 0 | 0.2.x → 0.3.0 |
+
+- 中版本写成 `0.2.30`，**不要写成 `0.2.3`**：按整数比较 3 < 21，`0.2.3` 会被当成比 `0.2.21` 旧，
+  更新检查不会提示升级，MSI 也会把它当成降级。
+- 不要用四段版本号（`0.2.2.1`）：Windows Installer 只比较前三段。
+- 新版本号必须比上一个发布的版本大。手机端 `versionCode` 是独立的整数，每次发布 +1。
+- 版本号位置：桌面端 `desktop-version.txt`；手机端 `mobile-companion/app/build.gradle.kts` 的 `versionName` / `versionCode`。
+
 ## 提交前
 
 Windows（与 CI 的 Windows job 一致，`desktop-app` 的测试依赖打包的 codec 和 Win32 API）：
