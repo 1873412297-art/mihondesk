@@ -21,7 +21,6 @@
     <string name="detail_add">加入书架</string>
     <string name="detail_source">图源：%1$s</string>
     <string name="detail_source_id">图源 #%1$d</string>
-    <string name="detail_unread_note">取消已读只在本机生效，其他设备上的已读记录同步后会保留。</string>
     <string name="detail_last_read">上次阅读 %1$s</string>
     <string name="detail_read">已读</string>
     <string name="detail_bookmark">书签</string>

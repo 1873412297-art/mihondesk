@@ -17,6 +17,7 @@ import mihon.desktop.library.repository.LibraryMutationPort
 
 internal class SqlDelightLibraryMutationDelegate(
     private val database: DesktopLibraryDatabase,
+    private val clock: () -> Long = System::currentTimeMillis,
 ) : LibraryMutationPort {
     private val queries = database.libraryQueries
 
@@ -109,22 +110,24 @@ internal class SqlDelightLibraryMutationDelegate(
     }
 
     override fun updateChapter(value: ChapterRecord) {
+        val stored = queries.selectChapterByIdentity(value.mangaId, value.url).executeAsOneOrNull()
+        val row = value.stampReadChange(stored?.toChapterRecord(), clock())
         queries.updateChapter(
-            manga_id = value.mangaId,
-            url = value.url,
-            name = value.name,
-            scanlator = value.scanlator,
-            read = value.read,
-            bookmark = value.bookmark,
-            last_page_read = value.lastPageRead,
-            date_fetch = value.dateFetch,
-            date_upload = value.dateUpload,
-            chapter_number = value.chapterNumber,
-            source_order = value.sourceOrder,
-            last_modified_at = value.lastModifiedAt,
-            version = value.version,
-            memo_json = value.memoJson,
-            id = value.id,
+            manga_id = row.mangaId,
+            url = row.url,
+            name = row.name,
+            scanlator = row.scanlator,
+            read = row.read,
+            bookmark = row.bookmark,
+            last_page_read = row.lastPageRead,
+            date_fetch = row.dateFetch,
+            date_upload = row.dateUpload,
+            chapter_number = row.chapterNumber,
+            source_order = row.sourceOrder,
+            last_modified_at = row.lastModifiedAt,
+            version = row.version,
+            memo_json = row.memoJson,
+            id = row.id,
         )
     }
 

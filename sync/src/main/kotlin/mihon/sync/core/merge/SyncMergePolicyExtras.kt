@@ -78,3 +78,24 @@ fun SyncMergePolicy.maxNullable(existing: Long?, incoming: Long?): Long? = when 
 
 fun SyncMergePolicy.unionStringLists(existing: List<String>, incoming: List<String>): List<String> =
     (existing + incoming).distinct().sortedWith(UNICODE_CODE_POINT_COMPARATOR)
+
+/** [ReadIntent] applied to two wire chapters. */
+fun SyncMergePolicy.mergeChapterRead(
+    existing: AndroidBackupChapter,
+    incoming: AndroidBackupChapter,
+): ReadIntent.Merged =
+    ReadIntent.merge(
+        ReadIntent.Side(existing.read, existing.lastModifiedAt, existing.memo.decodeToString()),
+        ReadIntent.Side(incoming.read, incoming.lastModifiedAt, incoming.memo.decodeToString()),
+    )
+
+/** The winning side's memo with the merged read/unread times written into it. */
+fun SyncMergePolicy.mergedChapterMemo(
+    existing: AndroidBackupChapter,
+    incoming: AndroidBackupChapter,
+    incomingWins: Boolean,
+    readState: ReadIntent.Merged,
+): ByteArray = ReadIntent.withMerged(
+    selectedByteArray(existing.memo, incoming.memo, incomingWins).decodeToString(),
+    readState,
+).encodeToByteArray()

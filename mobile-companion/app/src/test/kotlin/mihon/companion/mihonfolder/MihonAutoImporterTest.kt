@@ -95,4 +95,34 @@ class MihonAutoImporterTest {
         importer.importIfNewer().shouldBeInstanceOf<MihonImportOutcome.Failed>()
         importer.status.value.problem.shouldBeInstanceOf<MihonImportOutcome.Failed>()
     }
+
+    @Test
+    fun `unread and shelf removal in Mihon reach the library through the next backup`(): Unit = runBlocking {
+        val importer = importer()
+        importer.setFolder("content://mihon", "Mihon")
+        folder.write(
+            "b1.tachibk",
+            // Real-world units: Mihon stores modification times in seconds, file times are millis.
+            1_700_000_100_000,
+            MihonBackup(
+                listOf(
+                    manga("/a", chapters = listOf(chapter("c1", read = true, modified = 1_700_000_000))),
+                    manga("/b"),
+                ),
+            ),
+        )
+        importer.importIfNewer()
+
+        // In Mihon: c1 marked unread, /b removed from the shelf; then the next auto-backup.
+        folder.write(
+            "b2.tachibk",
+            1_700_000_600_000,
+            MihonBackup(listOf(manga("/a", chapters = listOf(chapter("c1", read = false, modified = 1_700_000_500))))),
+        )
+        importer.importIfNewer()
+
+        val library = store.load()
+        library.mangas.first { it.manga.url == "/a" }.manga.chapters.single().read shouldBe false
+        library.mangas.first { it.manga.url == "/b" }.manga.favorite shouldBe false
+    }
 }

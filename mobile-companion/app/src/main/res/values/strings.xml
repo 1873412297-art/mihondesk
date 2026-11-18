@@ -21,7 +21,6 @@
     <string name="detail_add">Add to library</string>
     <string name="detail_source">Source: %1$s</string>
     <string name="detail_source_id">Source #%1$d</string>
-    <string name="detail_unread_note">Marking a chapter unread only applies on this phone; other devices keep it read.</string>
     <string name="detail_last_read">Last read %1$s</string>
     <string name="detail_read">Read</string>
     <string name="detail_bookmark">Bookmarked</string>

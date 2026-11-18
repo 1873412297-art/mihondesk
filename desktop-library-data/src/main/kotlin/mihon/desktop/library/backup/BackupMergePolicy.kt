@@ -7,6 +7,7 @@ import mihon.desktop.library.model.ChapterRecord
 import mihon.desktop.library.model.HistoryRecord
 import mihon.desktop.library.model.MangaRecord
 import mihon.desktop.library.model.TrackingRecord
+import mihon.sync.core.merge.ReadIntent
 import mihon.sync.core.merge.SyncMergePolicy
 import mihon.sync.core.merge.earliestNonzero
 import mihon.sync.core.merge.maxNullable
@@ -113,12 +114,15 @@ object BackupMergePolicy {
             incomingDeviceId = effIncomingDeviceId,
         )
         val selected = if (incomingWins) incoming else existing
+        val readState = ReadIntent.merge(
+            ReadIntent.Side(existing.read, existing.lastModifiedAt, existing.memoJson),
+            ReadIntent.Side(incoming.read, incoming.lastModifiedAt, incoming.memoJson),
+        )
         return existing.copy(
             name = SyncMergePolicy.selectedString(existing.name, incoming.name, incomingWins),
             scanlator = SyncMergePolicy.selectedNullableString(existing.scanlator, incoming.scanlator, incomingWins),
-            // Note: Chapter read and bookmark retain OR semantics for now because individual chapter
-            // read/bookmark change timestamps are not tracked in the current schema (only lastPageRead / lastModifiedAt).
-            read = existing.read || incoming.read,
+            // Read: furthest progress unless a later deliberate unread (ReadIntent). Bookmarks stay OR.
+            read = readState.read,
             bookmark = existing.bookmark || incoming.bookmark,
             lastPageRead = maxOf(existing.lastPageRead, incoming.lastPageRead),
             dateFetch = maxOf(existing.dateFetch, incoming.dateFetch),
@@ -127,7 +131,10 @@ object BackupMergePolicy {
             sourceOrder = selected.sourceOrder,
             lastModifiedAt = maxOf(existing.lastModifiedAt, incoming.lastModifiedAt),
             version = maxOf(existing.version, incoming.version),
-            memoJson = SyncMergePolicy.selectedString(existing.memoJson, incoming.memoJson, incomingWins),
+            memoJson = ReadIntent.withMerged(
+                SyncMergePolicy.selectedString(existing.memoJson, incoming.memoJson, incomingWins),
+                readState,
+            ),
         )
     }
 

@@ -185,13 +185,12 @@ object SyncMergePolicy {
             incomingDeviceId = effIncomingDeviceId,
         )
         val selected = if (incomingWins) incoming else existing
+        val readState = mergeChapterRead(existing, incoming)
         return existing.copy(
             name = selectedString(existing.name, incoming.name, incomingWins),
             scanlator = selectedNullableString(existing.scanlator, incoming.scanlator, incomingWins),
-            // Note: Chapter read and bookmark retain OR semantics for now because individual chapter
-            // read/bookmark change timestamps are not tracked in the current schema (only lastPageRead / lastModifiedAt).
-            // Un-reading or un-bookmarking across sync is not yet supported without dedicated per-field timestamps.
-            read = existing.read || incoming.read,
+            // Read: furthest progress unless a later deliberate unread (ReadIntent). Bookmarks stay OR.
+            read = readState.read,
             bookmark = existing.bookmark || incoming.bookmark,
             lastPageRead = maxOf(existing.lastPageRead, incoming.lastPageRead),
             dateFetch = maxOf(existing.dateFetch, incoming.dateFetch),
@@ -200,7 +199,7 @@ object SyncMergePolicy {
             sourceOrder = selected.sourceOrder,
             lastModifiedAt = maxOf(existing.lastModifiedAt, incoming.lastModifiedAt),
             version = maxOf(existing.version, incoming.version),
-            memo = selectedByteArray(existing.memo, incoming.memo, incomingWins),
+            memo = mergedChapterMemo(existing, incoming, incomingWins, readState),
         )
     }
 

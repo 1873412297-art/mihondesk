@@ -18,7 +18,8 @@ internal class BackupTransfer(private val runtime: CompanionRuntime, private val
     suspend fun import(uri: Uri): UiMessage = guarded(R.string.import_failed) {
         val stats = withContext(Dispatchers.IO) {
             val input = resolver.openInputStream(uri) ?: throw FileNotFoundException(uri.toString())
-            input.use { MihonImport.merge(runtime.library, it, runtime.sync.deviceId()) }
+            val backup = input.use(MihonBackupCodec::decode)
+            MihonImport.merge(runtime.library, backup, runtime.sync.deviceId())
         }
         UiMessage(R.string.import_done, listOf(stats.mangaInserted, stats.mangaMerged))
     }

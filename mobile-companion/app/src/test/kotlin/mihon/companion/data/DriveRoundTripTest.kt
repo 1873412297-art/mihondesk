@@ -76,4 +76,32 @@ class DriveRoundTripTest {
         b.sync().pushedChangeset shouldBe null
         a.sync().pushedChangeset shouldBe null
     }
+
+    @Test
+    fun `marking unread on one device reaches the other`(): Unit = runBlocking {
+        val phone = Peer("phone")
+        val desktop = Peer("desktop")
+        phone.store.update {
+            LibraryMerge.merge(
+                it,
+                IncomingLibrary(
+                    listOf(manga("/a", chapters = listOf(chapter("c1", read = true, modified = 100)))),
+                    emptyList(),
+                    deviceId = "phone",
+                ),
+                markDirty = true,
+            )
+        }
+        phone.sync()
+        desktop.sync()
+        desktop.store.load().mangas.single().manga.chapters.single().read shouldBe true
+
+        phone.store.edit {
+            LibraryEdits.setChaptersRead(it, key, setOf("c1"), read = false, now = 5_000, deviceId = "phone")
+        }
+        phone.sync()
+        desktop.sync()
+
+        desktop.store.load().mangas.single().manga.chapters.single().read shouldBe false
+    }
 }

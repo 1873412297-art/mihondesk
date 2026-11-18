@@ -11,6 +11,8 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import mihon.companion.CompanionLog
 import mihon.companion.data.LibraryStore
+import mihon.companion.data.MihonBackupCodec
+import mihon.companion.data.MihonBackupDiff
 import mihon.companion.data.MihonImport
 import java.io.File
 
@@ -30,6 +32,7 @@ class MihonAutoImporter(
 ) {
     private val json = Json { ignoreUnknownKeys = true }
     private val mutex = Mutex()
+    private val snapshots = MihonShelfSnapshotFile(File(stateFile.parentFile, "mihon-shelf.pb"))
 
     @Volatile
     private var state = readState()
@@ -41,11 +44,16 @@ class MihonAutoImporter(
     fun folderUri(): String? = state.folderUri
 
     suspend fun setFolder(uri: String, name: String) = mutex.withLock {
-        // A different folder starts over: its newest backup must be read even if it is old.
+        // A different folder starts over: its newest backup must be read even if it is old, and
+        // it is not compared with the old folder's backups.
+        snapshots.clear()
         save(MihonFolderState(folderUri = uri, folderName = name), problem = null)
     }
 
-    suspend fun clearFolder() = mutex.withLock { save(MihonFolderState(), problem = null) }
+    suspend fun clearFolder() = mutex.withLock {
+        snapshots.clear()
+        save(MihonFolderState(), problem = null)
+    }
 
     suspend fun importIfNewer(): MihonImportOutcome = mutex.withLock {
         val folder = state.folderUri ?: return@withLock MihonImportOutcome.NotConfigured
@@ -72,7 +80,14 @@ class MihonAutoImporter(
             is NewestBackup.Found -> newest.file
         }
         if (file.name == state.lastFile && file.lastModified == state.lastModified) return MihonImportOutcome.UpToDate
-        val stats = source.open(file).use { MihonImport.merge(store, it, deviceId()) }
+        val backup = source.open(file).use(MihonBackupCodec::decode)
+        val stats = MihonImport.merge(store, backup, deviceId())
+        // Undo detection needs a previous backup; the very first import only sets the baseline.
+        snapshots.read()?.let { previous ->
+            val at = file.lastModified.takeIf { it > 0 } ?: clock()
+            store.edit { MihonBackupDiff.apply(it, MihonBackupDiff.changes(previous, backup), at) }
+        }
+        snapshots.write(MihonBackupDiff.snapshot(backup))
         save(state.copy(lastFile = file.name, lastModified = file.lastModified, lastReadAt = clock()), problem = null)
         return MihonImportOutcome.Imported(file.name, stats)
     }

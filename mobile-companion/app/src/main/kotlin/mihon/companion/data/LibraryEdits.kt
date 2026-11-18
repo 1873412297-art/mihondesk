@@ -1,5 +1,6 @@
 package mihon.companion.data
 
+import mihon.sync.core.merge.ReadIntent
 import mihon.sync.core.merge.SyncMergePolicy
 import mihon.sync.core.model.AndroidBackupHistory
 import mihon.sync.core.model.MangaKey
@@ -23,7 +24,11 @@ object LibraryEdits {
                     read = read,
                     lastPageRead = if (read) chapter.lastPageRead else 0,
                     lastModifiedAt = now,
-                    memo = SyncMergePolicy.injectDeviceIdIntoMemoBytes(chapter.memo, deviceId),
+                    memo = ReadIntent.stamp(
+                        SyncMergePolicy.injectDeviceIdIntoMemoBytes(chapter.memo, deviceId).decodeToString(),
+                        read,
+                        now,
+                    ).encodeToByteArray(),
                 )
             }
         }

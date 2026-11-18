@@ -113,8 +113,7 @@ private fun ChaptersHeader(state: DetailUiState) {
     Column(Modifier.padding(top = 8.dp)) {
         SectionLabel(stringResource(R.string.detail_chapters, state.chapters.size))
         Text(
-            text = stringResource(R.string.detail_progress, state.readCount, state.chapters.size) + " · " +
-                stringResource(R.string.detail_unread_note),
+            text = stringResource(R.string.detail_progress, state.readCount, state.chapters.size),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 20.dp).padding(bottom = 4.dp),
